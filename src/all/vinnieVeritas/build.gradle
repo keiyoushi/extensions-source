@@ -1,0 +1,14 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Vinne Veritas - CCC'
+    pkgNameSuffix = 'all.vinnieVeritas'
+    extClass = '.vinnieVeritasFactory'
+    extVersionCode = 2
+}
+
+dependencies {
+}
+
+apply from: "$rootDir/common.gradle"

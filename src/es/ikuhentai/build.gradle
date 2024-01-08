@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Ikuhentai'
+    pkgNameSuffix = 'es.ikuhentai'
+    extClass = '.Ikuhentai'
+    extVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

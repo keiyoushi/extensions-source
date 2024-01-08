@@ -1,0 +1,13 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'BoyLove'
+    pkgNameSuffix = 'zh.boylove'
+    extClass = '.BoyLove'
+    extVersionCode = 9
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

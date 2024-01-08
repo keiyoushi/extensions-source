@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Mangalay'
+    pkgNameSuffix = 'id.mangalay'
+    extClass = '.Mangalay'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

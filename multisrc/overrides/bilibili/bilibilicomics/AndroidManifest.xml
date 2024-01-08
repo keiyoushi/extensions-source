@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name="eu.kanade.tachiyomi.multisrc.bilibili.BilibiliUrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" />
+
+                <data android:host="bilibilicomics.com" />
+                <data android:host="m.bilibilicomics.com" />
+                <data android:host="www.bilibilicomics.com" />
+
+                <data android:pathPattern="/detail/mc..*" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

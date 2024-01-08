@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'MikuDoujin'
+    pkgNameSuffix = 'th.mikudoujin'
+    extClass = '.MikuDoujin'
+    extVersionCode = 5
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

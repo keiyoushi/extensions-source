@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Grrl Power Comic'
+    pkgNameSuffix = 'en.grrlpower'
+    extClass = '.GrrlPower'
+    extVersionCode = 2
+}
+
+dependencies {
+    implementation(project(':lib-textinterceptor'))
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'TMOHentai'
+    pkgNameSuffix = 'es.tmohentai'
+    extClass = '.TMOHentai'
+    extVersionCode = 8
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

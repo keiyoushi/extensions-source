@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'vgperson'
+    pkgNameSuffix = 'en.vgperson'
+    extClass = '.Vgperson'
+    extVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

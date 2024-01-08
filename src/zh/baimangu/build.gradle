@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Baimangu (Darpou)'
+    pkgNameSuffix = 'zh.baimangu'
+    extClass = '.Baimangu'
+    extVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

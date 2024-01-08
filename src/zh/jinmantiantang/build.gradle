@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Jinman Tiantang'
+    pkgNameSuffix = 'zh.jinmantiantang'
+    extClass = '.Jinmantiantang'
+    extVersionCode = 40
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

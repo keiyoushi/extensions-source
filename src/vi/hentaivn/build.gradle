@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'HentaiVN'
+    pkgNameSuffix = 'vi.hentaivn'
+    extClass = '.HentaiVN'
+    extVersionCode = 31
+    isNsfw = true
+}
+
+dependencies {
+    implementation(project(":lib-randomua"))
+}
+
+apply from: "$rootDir/common.gradle"

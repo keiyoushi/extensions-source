@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Kouhai Work'
+    pkgNameSuffix = 'en.kouhaiwork'
+    extClass = '.KouhaiWork'
+    extVersionCode = 8
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Buon Dua'
+    pkgNameSuffix = 'all.buondua'
+    extClass = '.BuonDua'
+    extVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

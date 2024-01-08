@@ -1,0 +1,63 @@
+name: ❌ Dead source report
+description: Source is down and website is closed
+labels: [Source is down]
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ### Notice
+        If you have a lot of dead sources to report, please go back and submit a single meta request.
+
+  - type: input
+    id: source
+    attributes:
+      label: Source name
+      description: |
+        You can find the extension name in **Browse → Extensions**.
+      placeholder: |
+        Example: "NotRealScans"
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: Source language
+      placeholder: |
+        Example: "English"
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: Source link
+      placeholder: |
+        Example: "https://notrealscans.org"
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+      placeholder: |
+        Additional details and attachments.
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      description: Your issue will be closed if you haven't done these steps.
+      options:
+        - label: I have updated all installed extensions.
+          required: true
+        - label: I have opened WebView and checked that the source website is down.
+          required: true
+        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+          required: true
+        - label: I have written a meaningful title with the source name.
+          required: true
+        - label: I will fill out all of the requested information in this form.
+          required: true

@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Toomics'
+    pkgNameSuffix = 'all.toomics'
+    extClass = '.ToomicsFactory'
+    extVersionCode = 7
+}
+
+apply from: "$rootDir/common.gradle"

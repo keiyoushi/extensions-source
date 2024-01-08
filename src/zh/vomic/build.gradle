@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'vomic'
+    pkgNameSuffix = 'zh.vomic'
+    extClass = '.Vomic'
+    extVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

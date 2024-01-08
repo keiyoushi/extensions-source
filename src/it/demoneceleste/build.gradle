@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'DemoneCeleste'
+    pkgNameSuffix = 'it.demoneceleste'
+    extClass = '.DemoneCeleste'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

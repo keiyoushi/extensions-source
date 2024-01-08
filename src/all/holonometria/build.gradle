@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'HOLONOMETRIA'
+    pkgNameSuffix = 'all.holonometria'
+    extClass = '.HolonometriaFactory'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

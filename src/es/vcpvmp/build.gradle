@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'VCPVMP'
+    pkgNameSuffix = "es.vcpvmp"
+    extClass = '.VCPVMPFactory'
+    extVersionCode = 9
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

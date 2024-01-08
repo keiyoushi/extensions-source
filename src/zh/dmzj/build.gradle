@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'DMZJ'
+    pkgNameSuffix = 'zh.dmzj'
+    extClass = '.Dmzj'
+    extVersionCode = 41
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'WNACG'
+    pkgNameSuffix = 'zh.wnacg'
+    extClass = '.wnacg'
+    extVersionCode = 14
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

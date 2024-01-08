@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'LectorManga'
+    pkgNameSuffix = 'es.lectormanga'
+    extClass = '.LectorManga'
+    extVersionCode = 31
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

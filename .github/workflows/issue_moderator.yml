@@ -1,0 +1,47 @@
+name: Issue moderator
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  autoclose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Moderate issues
+        uses: tachiyomiorg/issue-moderator-action@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          duplicate-label: Duplicate
+
+          duplicate-check-enabled: true
+          duplicate-check-labels: |
+            ["Source request", "Domain changed"]
+
+          existing-check-enabled: true
+          existing-check-labels: |
+            ["Source request", "Domain changed"]
+
+          auto-close-rules: |
+            [
+              {
+                "type": "body",
+                "regex": ".*\\* (Tachiyomi version|Android version|Device): \\?.*",
+                "message": "Requested information in the template was not filled out."
+              },
+              {
+                "type": "title",
+                "regex": ".*(Source name|Short description).*",
+                "message": "You did not fill out the description in the title."
+              },
+              {
+                "type": "both",
+                "regex": ".*(?:fail(?:ed|ure|s)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?(?:get past|by ?pass|penetrate)?.*cloud ?fl?are.*",
+                "ignoreCase": true,
+                "labels": ["Cloudflare protected"],
+                "message": "Refer to the **Solving Cloudflare issues** section at https://tachiyomi.org/docs/guides/troubleshooting/#cloudflare. If it doesn't work, migrate to other sources or wait until they lower their protection."
+              }
+            ]
+          auto-close-ignore-label: do-not-autoclose

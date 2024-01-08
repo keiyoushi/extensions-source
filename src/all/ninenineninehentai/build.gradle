@@ -1,0 +1,13 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = '999Hentai'
+    pkgNameSuffix = 'all.ninenineninehentai'
+    extClass = '.NineNineNineHentaiFactory'
+    extVersionCode = 5
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

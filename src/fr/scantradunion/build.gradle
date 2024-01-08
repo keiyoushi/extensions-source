@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Scantrad Union'
+    pkgNameSuffix = 'fr.scantradunion'
+    extClass = '.ScantradUnion'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

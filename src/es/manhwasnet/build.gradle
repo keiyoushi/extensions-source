@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Manhwas.net'
+    pkgNameSuffix = 'es.manhwasnet'
+    extClass = '.ManhwasNet'
+    extVersionCode = 10
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

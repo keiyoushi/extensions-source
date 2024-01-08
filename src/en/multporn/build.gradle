@@ -1,0 +1,13 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Multporn'
+    pkgNameSuffix = 'en.multporn'
+    extClass = '.Multporn'
+    extVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,12 @@
+
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'UniComics'
+    pkgNameSuffix = 'ru.unicomics'
+    extClass = '.UniComics'
+    extVersionCode = 6
+}
+
+apply from: "$rootDir/common.gradle"

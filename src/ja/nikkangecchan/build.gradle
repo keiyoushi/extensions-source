@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Nikkangecchan'
+    pkgNameSuffix = 'ja.nikkangecchan'
+    extClass = '.Nikkangecchan'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

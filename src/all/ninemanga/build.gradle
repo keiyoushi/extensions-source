@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'NineManga'
+    pkgNameSuffix = "all.ninemanga"
+    extClass = '.NineMangaFactory'
+    extVersionCode = 19
+}
+
+apply from: "$rootDir/common.gradle"

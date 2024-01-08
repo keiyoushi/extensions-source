@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Cubari'
+    pkgNameSuffix = "all.cubari"
+    extClass = '.CubariFactory'
+    extVersionCode = 23
+}
+
+apply from: "$rootDir/common.gradle"

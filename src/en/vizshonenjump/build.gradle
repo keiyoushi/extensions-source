@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'VIZ'
+    pkgNameSuffix = 'en.vizshonenjump'
+    extClass = '.VizFactory'
+    extVersionCode = 20
+}
+
+dependencies {
+    implementation 'com.drewnoakes:metadata-extractor:2.18.0'
+}
+
+apply from: "$rootDir/common.gradle"

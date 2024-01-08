@@ -1,0 +1,59 @@
+name: ⭐ Feature request
+description: Suggest a feature to improve an existing source
+labels: [Feature request]
+body:
+
+  - type: input
+    id: source
+    attributes:
+      label: Source name
+      description: |
+        You can find the extension name in **Browse → Extensions**.
+      placeholder: |
+        Example: "Mangahere"
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: Source language
+      placeholder: |
+        Example: "English"
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Describe your suggested feature
+      description: How can an existing extension be improved?
+      placeholder: |
+        Example:
+          "It should work like this..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+      placeholder: |
+        Additional details and attachments.
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      description: Your issue will be closed if you haven't done these steps.
+      options:
+        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+          required: true
+        - label: I have written a short but informative title.
+          required: true
+        - label: If this is an issue with the app itself, I should be opening an issue in the [app repository](https://github.com/tachiyomiorg/tachiyomi/issues/new/choose).
+          required: true
+        - label: I have updated the app to version **[0.15.1](https://github.com/tachiyomiorg/tachiyomi/releases/latest)**.
+          required: true
+        - label: I will fill out all of the requested information in this form.
+          required: true

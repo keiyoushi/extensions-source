@@ -1,0 +1,157 @@
+name: PR build check
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/issue_moderator.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  CI_CHUNK_SIZE: 65
+
+jobs:
+  prepare:
+    name: Prepare job
+    runs-on: ubuntu-latest
+    outputs:
+      individualMatrix: ${{ steps.generate-matrices.outputs.individualMatrix }}
+      multisrcMatrix: ${{ steps.generate-matrices.outputs.multisrcMatrix }}
+      isIndividualChanged: ${{ steps.parse-changed-files.outputs.isIndividualChanged }}
+      isMultisrcChanged: ${{ steps.parse-changed-files.outputs.isMultisrcChanged }}
+    env:
+      CI_MODULE_GEN: true
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/wrapper-validation-action@v1
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 11
+          distribution: adopt
+
+      - id: get-changed-files
+        name: Get changed files
+        uses: Ana06/get-changed-files@v2.2.0
+
+      - id: parse-changed-files
+        name: Parse changed files
+        run: |
+          isIndividualChanged=0
+          isMultisrcChanged=0
+          for changedFile in ${{ steps.get-changed-files.outputs.all }}; do
+            if [[ ${changedFile} == src/* ]]; then
+              isIndividualChanged=1
+            elif [[ ${changedFile} == multisrc/* ]]; then
+              isMultisrcChanged=1
+            elif [[ ${changedFile} == .github/workflows/issue_moderator.yml ]]; then
+              true
+            elif [[ ${changedFile} == *.md ]]; then
+              true
+            else
+              isIndividualChanged=1
+              isMultisrcChanged=1
+              break
+            fi
+          done
+          echo "isIndividualChanged=$isIndividualChanged" >> $GITHUB_OUTPUT
+          echo "isMultisrcChanged=$isMultisrcChanged" >> $GITHUB_OUTPUT
+
+      - name: Generate multisrc sources
+        if: ${{ steps.parse-changed-files.outputs.isMultisrcChanged == '1' }}
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: :multisrc:generateExtensions
+
+      - name: Get number of modules
+        run: |
+          set -x
+          ./gradlew -q projects | grep '.*extensions\:\(individual\|multisrc\)\:.*\:.*' > projects.txt
+
+          echo "NUM_INDIVIDUAL_MODULES=$(cat projects.txt | grep '.*\:individual\:.*' | wc -l)" >> $GITHUB_ENV
+          echo "NUM_MULTISRC_MODULES=$(cat projects.txt | grep '.*\:multisrc\:.*' | wc -l)" >> $GITHUB_ENV
+
+      - id: generate-matrices
+        name: Create output matrices
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const numIndividualModules = process.env.NUM_INDIVIDUAL_MODULES;
+            const numMultisrcModules = process.env.NUM_MULTISRC_MODULES;
+            const chunkSize = process.env.CI_CHUNK_SIZE;
+
+            const numIndividualChunks = Math.ceil(numIndividualModules / chunkSize);
+            const numMultisrcChunks = Math.ceil(numMultisrcModules / chunkSize);
+
+            console.log(`Individual modules: ${numIndividualModules} (${numIndividualChunks} chunks of ${chunkSize})`);
+            console.log(`Multi-source modules: ${numMultisrcModules} (${numMultisrcChunks} chunks of ${chunkSize})`);
+
+            core.setOutput('individualMatrix', { 'chunk': [...Array(numIndividualChunks).keys()] });
+            core.setOutput('multisrcMatrix', { 'chunk': [...Array(numMultisrcChunks).keys()] });
+
+  build_multisrc:
+    name: Build multisrc modules
+    needs: prepare
+    if: ${{ needs.prepare.outputs.isMultisrcChanged == '1' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.multisrcMatrix) }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 11
+          distribution: adopt
+
+      - name: Generate sources from the multi-source library
+        uses: gradle/gradle-build-action@v2
+        env:
+          CI_MODULE_GEN: "true"
+        with:
+          arguments: :multisrc:generateExtensions
+          cache-read-only: true
+
+      - name: Build extensions (chunk ${{ matrix.chunk }})
+        uses: gradle/gradle-build-action@v2
+        env:
+          CI_MULTISRC: "true"
+          CI_CHUNK_NUM: ${{ matrix.chunk }}
+        with:
+          arguments: assembleDebug
+          cache-read-only: true
+
+  build_individual:
+    name: Build individual modules
+    needs: prepare
+    if: ${{ needs.prepare.outputs.isIndividualChanged == '1' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.individualMatrix) }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 11
+          distribution: adopt
+
+      - name: Build extensions (chunk ${{ matrix.chunk }})
+        uses: gradle/gradle-build-action@v2
+        env:
+          CI_MULTISRC: "false"
+          CI_CHUNK_NUM: ${{ matrix.chunk }}
+        with:
+          arguments: assembleDebug
+          cache-read-only: true

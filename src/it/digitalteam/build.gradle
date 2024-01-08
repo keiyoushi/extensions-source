@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'DigitalTeam'
+    pkgNameSuffix = 'it.digitalteam'
+    extClass = '.DigitalTeam'
+    extVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

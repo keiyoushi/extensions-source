@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Collected Curios'
+    pkgNameSuffix = 'en.collectedcurios'
+    extClass = '.Collectedcurios'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

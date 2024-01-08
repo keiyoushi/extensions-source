@@ -1,0 +1,55 @@
+name: 🌐 Source request
+description: Suggest a new source for Tachiyomi
+labels: [Source request]
+body:
+
+  - type: input
+    id: name
+    attributes:
+      label: Source name
+      placeholder: |
+        Example: "Not Real Scans"
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: Source link
+      placeholder: |
+        Example: "https://notrealscans.org"
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: Source language
+      placeholder: |
+        Example: "English"
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+      placeholder: |
+        Additional details and attachments.
+            Example:
+                "18+/NSFW = yes"
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      description: Your issue will be closed if you haven't done these steps.
+      options:
+        - label: I have checked that the extension does not already exist by searching the [GitHub repository](https://github.com/keiyoushi/extensions-source/) and verified it does not appear in the code base.
+          required: true
+        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+          required: true
+        - label: I have written a meaningful title with the source name.
+          required: true
+        - label: I will fill out all of the requested information in this form.
+          required: true

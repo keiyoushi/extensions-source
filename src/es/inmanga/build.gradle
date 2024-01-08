@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'InManga'
+    pkgNameSuffix = 'es.inmanga'
+    extClass = '.InManga'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

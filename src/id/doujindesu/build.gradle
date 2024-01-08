@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'DoujinDesu'
+    pkgNameSuffix = 'id.doujindesu'
+    extClass = '.DoujinDesu'
+    extVersionCode = 6
+    isNsfw = true
+}
+
+dependencies {
+    implementation(project(":lib-randomua"))
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Tencent Comics (ac.qq.com)'
+    pkgNameSuffix = 'zh.tencentcomics'
+    extClass = '.TencentComics'
+    extVersionCode = 6
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,17 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'MangaDex'
+    pkgNameSuffix = 'all.mangadex'
+    extClass = '.MangaDexFactory'
+    extVersionCode = 192
+    isNsfw = true
+}
+
+dependencies {
+    implementation(project(":lib-i18n"))
+}
+
+apply from: "$rootDir/common.gradle"

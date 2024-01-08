@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'MangaRok'
+    pkgNameSuffix = 'en.mangarok'
+    extClass = '.MangaRok'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

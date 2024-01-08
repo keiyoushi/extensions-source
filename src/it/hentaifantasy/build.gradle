@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'HentaiFantasy'
+    pkgNameSuffix = 'it.hentaifantasy'
+    extClass = '.HentaiFantasy'
+    extVersionCode = 4
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

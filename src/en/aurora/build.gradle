@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'aurora'
+    pkgNameSuffix = 'en.aurora'
+    extClass = '.Aurora'
+    extVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

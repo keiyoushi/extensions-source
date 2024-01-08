@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Mangafreak'
+    pkgNameSuffix = 'en.mangafreak'
+    extClass = '.Mangafreak'
+    extVersionCode = 9
+}
+
+
+apply from: "$rootDir/common.gradle"

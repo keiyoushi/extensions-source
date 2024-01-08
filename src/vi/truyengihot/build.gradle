@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'TruyenGiHot'
+    pkgNameSuffix = 'vi.truyengihot'
+    extClass = '.TruyenGiHot'
+    extVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

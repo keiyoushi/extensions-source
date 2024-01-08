@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Dragon Ball Multiverse'
+    pkgNameSuffix = 'all.dragonballmultiverse'
+    extClass = '.DbMFactory'
+    extVersionCode = 5
+}
+
+apply from: "$rootDir/common.gradle"

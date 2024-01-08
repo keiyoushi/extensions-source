@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Disaster Scans'
+    pkgNameSuffix = 'en.disasterscans'
+    extClass = '.DisasterScans'
+    extVersionCode = 32
+}
+
+apply from: "$rootDir/common.gradle"

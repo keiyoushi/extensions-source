@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Meitua.top'
+    pkgNameSuffix = 'all.meituatop'
+    extClass = '.MeituaTop'
+    extVersionCode = 5
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
