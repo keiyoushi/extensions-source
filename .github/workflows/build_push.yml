@@ -196,7 +196,7 @@ jobs:
       - name: Checkout repo branch
         uses: actions/checkout@v4
         with:
-          repository: keiyoushi/tachiyomi-extensions
+          repository: keiyoushi/extensions
           token: ${{ secrets.BOT_PAT }}
           ref: repo
           path: repo
