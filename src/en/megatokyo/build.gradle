@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Megatokyo'
+    pkgNameSuffix = 'en.megatokyo'
+    extClass = '.Megatokyo'
+    extVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

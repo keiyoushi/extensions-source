@@ -1,0 +1,14 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+
+ext {
+    extName = 'Ikigai Mangas'
+    pkgNameSuffix = 'es.ikigaimangas'
+    extClass = '.IkigaiMangas'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

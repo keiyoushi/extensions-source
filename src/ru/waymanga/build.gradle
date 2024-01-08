@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'WayManga'
+    pkgNameSuffix = 'ru.waymanga'
+    extClass = '.WayManga'
+    extVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

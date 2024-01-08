@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Digital Comic Museum'
+    pkgNameSuffix = 'en.digitalcomicmuseum'
+    extClass = '.DigitalComicMuseum'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

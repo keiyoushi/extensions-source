@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Mangabz'
+    pkgNameSuffix = 'zh.mangabz'
+    extClass = '.Mangabz'
+    extVersionCode = 7
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib-unpacker')
+}

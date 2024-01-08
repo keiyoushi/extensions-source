@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'HeavenManga'
+    pkgNameSuffix = 'es.heavenmanga'
+    extClass = '.HeavenManga'
+    extVersionCode = 6
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

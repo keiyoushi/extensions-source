@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Manga Sect'
+    pkgNameSuffix = 'en.mangasect'
+    extClass = '.MangaSect'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

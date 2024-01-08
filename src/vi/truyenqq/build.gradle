@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'TruyenQQ'
+    pkgNameSuffix = 'vi.truyenqq'
+    extClass = '.TruyenQQ'
+    extVersionCode = 12
+}
+
+apply from: "$rootDir/common.gradle"

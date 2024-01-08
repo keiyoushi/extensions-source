@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'ManhuaDB'
+    pkgNameSuffix = 'zh.manhuadb'
+    extClass = '.ManhuaDB'
+    extVersionCode = 6
+}
+
+apply from: "$rootDir/common.gradle"
