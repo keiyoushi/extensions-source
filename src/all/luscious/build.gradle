@@ -1,0 +1,13 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Luscious'
+    pkgNameSuffix = 'all.luscious'
+    extClass = '.LusciousFactory'
+    extVersionCode = 19
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

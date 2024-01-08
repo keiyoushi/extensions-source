@@ -1,0 +1,48 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'NewToki / ManaToki'
+    pkgNameSuffix = 'ko.newtoki'
+    extClass = '.TokiFactory'
+    extVersionCode = 29
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+def domainNumberFileName = "src/ko/newtoki/src/eu/kanade/tachiyomi/extension/ko/newtoki/FallbackDomainNumber.kt"
+def domainNumberFile = new File(domainNumberFileName)
+def backupFile = new File(domainNumberFileName + "_bak")
+
+task updateDomainNumber {
+    doLast {
+        def domainNumberUrl = "https://stevenyomi.github.io/source-domains/newtoki.txt"
+        def number = new URL(domainNumberUrl).withInputStream { it.readLines()[0] }
+        println("[NewToki] Updating domain number to $number")
+        domainNumberFile.renameTo(backupFile)
+        domainNumberFile.withPrintWriter {
+            it.println("// THIS FILE IS AUTO-GENERATED, DO NOT COMMIT")
+            it.println("package eu.kanade.tachiyomi.extension.ko.newtoki")
+            it.println("const val fallbackDomainNumber = \"$number\"")
+        }
+    }
+}
+
+preBuild.dependsOn updateDomainNumber
+
+task restoreBackup {
+    doLast {
+        if (backupFile.exists()) {
+            println("[NewToki] Restoring placeholder file")
+            domainNumberFile.delete()
+            backupFile.renameTo(domainNumberFile)
+        }
+    }
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name == "assembleDebug" || task.name == "assembleRelease") {
+        task.finalizedBy(restoreBackup)
+    }
+}

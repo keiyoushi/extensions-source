@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Terra Historicus'
+    pkgNameSuffix = 'zh.terrahistoricus'
+    extClass = '.TerraHistoricus'
+    extVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

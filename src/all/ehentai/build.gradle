@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'E-Hentai'
+    pkgNameSuffix = 'all.ehentai'
+    extClass = '.EHFactory'
+    extVersionCode = 20
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

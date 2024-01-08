@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'MangaJar'
+    pkgNameSuffix = 'en.mangajar'
+    extClass = '.MangaJar'
+    extVersionCode = 9
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

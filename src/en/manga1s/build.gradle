@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Manga1s'
+    pkgNameSuffix = 'en.manga1s'
+    extClass = '.manga1s'
+    extVersionCode = 4
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

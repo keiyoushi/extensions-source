@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Kings Of Darkness'
+    pkgNameSuffix = 'es.kingsofdarkness'
+    extClass = '.KingsOfDarkness'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

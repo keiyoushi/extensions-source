@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Twi4'
+    pkgNameSuffix = 'ja.twi4'
+    extClass = '.Twi4'
+    extVersionCode = 5
+}
+
+apply from: "$rootDir/common.gradle"

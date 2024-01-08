@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Everia.club'
+    pkgNameSuffix = 'all.everiaclub'
+    extClass = '.EveriaClub'
+    extVersionCode = 9
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

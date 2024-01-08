@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'ReadMangaToday'
+    pkgNameSuffix = 'en.readmangatoday'
+    extClass = '.Readmangatoday'
+    extVersionCode = 10
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Gunnerkrigg Court'
+    pkgNameSuffix = 'en.gunnerkriggcourt'
+    extClass = '.GunnerkriggCourt'
+    extVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

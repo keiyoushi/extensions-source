@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Commit Strip'
+    pkgNameSuffix = 'all.commitstrip'
+    extClass = '.CommitStripFactory'
+    extVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

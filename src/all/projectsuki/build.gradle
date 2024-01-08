@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Project Suki'
+    pkgNameSuffix = 'all.projectsuki'
+    extClass = '.ProjectSuki'
+    extVersionCode = 3
+}
+
+dependencies {
+    implementation project(":lib-randomua")
+}
+
+apply from: "$rootDir/common.gradle"

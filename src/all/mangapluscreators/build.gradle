@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'MANGA Plus Creators by SHUEISHA'
+    pkgNameSuffix = 'all.mangapluscreators'
+    extClass = '.MangaPlusCreatorsFactory'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

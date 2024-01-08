@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Hiveworks Comics'
+    pkgNameSuffix = 'en.hiveworks'
+    extClass = '.Hiveworks'
+    extVersionCode = 8
+}
+
+apply from: "$rootDir/common.gradle"

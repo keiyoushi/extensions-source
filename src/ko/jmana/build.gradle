@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'JMana'
+    pkgNameSuffix = 'ko.jmana'
+    extClass = '.JMana'
+    extVersionCode = 15
+}
+
+apply from: "$rootDir/common.gradle"

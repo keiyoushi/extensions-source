@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'The Property of Hate'
+    pkgNameSuffix = 'en.thepropertyofhate'
+    extClass = '.ThePropertyOfHate'
+    extVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

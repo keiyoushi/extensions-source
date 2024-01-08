@@ -1,0 +1,13 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Tsumino'
+    pkgNameSuffix = 'en.tsumino'
+    extClass = '.Tsumino'
+    extVersionCode = 7
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Yaoi Manga Online'
+    pkgNameSuffix = 'all.yaoimangaonline'
+    extClass = '.YaoiMangaOnline'
+    extVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

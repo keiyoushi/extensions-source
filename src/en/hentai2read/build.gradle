@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Hentai2Read'
+    pkgNameSuffix = 'en.hentai2read'
+    extClass = '.Hentai2Read'
+    extVersionCode = 14
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

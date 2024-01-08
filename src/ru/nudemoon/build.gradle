@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Nude-Moon'
+    pkgNameSuffix = 'ru.nudemoon'
+    extClass = '.Nudemoon'
+    extVersionCode = 16
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
