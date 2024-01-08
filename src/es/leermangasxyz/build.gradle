@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'LeerMangasXYZ'
+    pkgNameSuffix = 'es.leermangasxyz'
+    extClass = '.LeerMangasXYZ'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

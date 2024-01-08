@@ -1,0 +1,15 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'A Pair of 2+'
+    pkgNameSuffix = 'en.apairof2'
+    extClass = '.APairOf2'
+    extVersionCode = 31
+}
+
+dependencies {
+    implementation project(':lib-dataimage')
+}
+
+apply from: "$rootDir/common.gradle"

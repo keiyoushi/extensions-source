@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Questionable Content'
+    pkgNameSuffix = 'en.questionablecontent'
+    extClass = '.QuestionableContent'
+    extVersionCode = 7
+}
+
+dependencies {
+    implementation(project(':lib-textinterceptor'))
+}
+
+
+apply from: "$rootDir/common.gradle"

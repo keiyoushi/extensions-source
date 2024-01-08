@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Remanga'
+    pkgNameSuffix = 'ru.remanga'
+    extClass = '.Remanga'
+    extVersionCode = 82
+}
+
+dependencies {
+    implementation project(':lib-dataimage')
+}
+
+apply from: "$rootDir/common.gradle"

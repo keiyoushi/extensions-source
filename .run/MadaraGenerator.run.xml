@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="MadaraGenerator" type="JetRunConfigurationType" nameIsGenerated="true">
+    <module name="tachiyomi-extensions.multisrc.main" />
+    <option name="MAIN_CLASS_NAME" value="eu.kanade.tachiyomi.multisrc.madara.MadaraGenerator" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+      <option name="Gradle.BeforeRunTask" enabled="true" tasks="ktFormat" externalProjectPath="$PROJECT_DIR$/multisrc" vmOptions="" scriptParameters="-Ptheme=madara" />
+      <option name="Gradle.BeforeRunTask" enabled="true" tasks="ktLint" externalProjectPath="$PROJECT_DIR$/multisrc" vmOptions="" scriptParameters="-Ptheme=madara" />
+    </method>
+  </configuration>
+</component>

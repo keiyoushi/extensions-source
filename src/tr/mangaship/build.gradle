@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Manga Ship'
+    pkgNameSuffix = 'tr.mangaship'
+    extClass = '.MangaShip'
+    extVersionCode = 3
+}
+
+dependencies {
+    implementation project(':lib-dataimage')
+}
+
+apply from: "$rootDir/common.gradle"
+

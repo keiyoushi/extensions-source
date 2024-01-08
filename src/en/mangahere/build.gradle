@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Mangahere'
+    pkgNameSuffix = 'en.mangahere'
+    extClass = '.Mangahere'
+    extVersionCode = 19
+}
+
+apply from: "$rootDir/common.gradle"

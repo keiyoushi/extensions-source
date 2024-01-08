@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Anime GDR Club'
+    pkgNameSuffix = 'it.animegdrclub'
+    extClass = '.AnimeGDRClub'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

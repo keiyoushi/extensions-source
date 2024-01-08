@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Baozimh.org'
+    pkgNameSuffix = 'zh.baozimhorg'
+    extClass = '.BaozimhOrg'
+    extVersionCode = 28
+}
+
+apply from: "$rootDir/common.gradle"

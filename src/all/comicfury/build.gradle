@@ -1,0 +1,17 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'Comic Fury'
+    pkgNameSuffix = 'all.comicfury'
+    extClass = '.ComicFuryFactory'
+    extVersionCode = 2
+    isNsfw = true
+}
+
+dependencies {
+    implementation(project(':lib-textinterceptor'))
+}
+
+apply from: "$rootDir/common.gradle"

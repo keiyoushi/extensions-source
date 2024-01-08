@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Mangakawaii'
+    pkgNameSuffix = 'fr.mangakawaii'
+    extClass = '.MangaKawaii'
+    extVersionCode = 37
+}
+
+apply from: "$rootDir/common.gradle"

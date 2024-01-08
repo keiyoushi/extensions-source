@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'MangaGeko'
+    pkgNameSuffix = 'en.mangarawclub'
+    extClass = '.MangaRawClub'
+    extVersionCode = 20
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

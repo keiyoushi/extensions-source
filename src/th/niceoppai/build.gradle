@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'Niceoppai'
+    pkgNameSuffix = 'th.niceoppai'
+    extClass = '.Niceoppai'
+    extVersionCode = 28
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<application>
+    <activity
+        android:name=".all.batoto.BatoToUrlActivity"
+        android:excludeFromRecents="true"
+        android:exported="true"
+        android:theme="@android:style/Theme.NoDisplay">
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+
+            <data android:host="*.bato.to" />
+            <data android:host="bato.to" />
+            <data android:host="*.batocc.com" />
+            <data android:host="batocc.com" />
+            <data android:host="*.batotoo.com" />
+            <data android:host="batotoo.com" />
+            <data android:host="*.batotwo.com" />
+            <data android:host="batotwo.com" />
+            <data android:host="*.battwo.com" />
+            <data android:host="battwo.com" />
+            <data android:host="*.comiko.net" />
+            <data android:host="comiko.net" />
+            <data android:host="*.mangatoto.com" />
+            <data android:host="mangatoto.com" />
+            <data android:host="*.mangatoto.net" />
+            <data android:host="mangatoto.net" />
+            <data android:host="*.mangatoto.org" />
+            <data android:host="mangatoto.org" />
+            <data android:host="*.mycordant.co.uk" />
+            <data android:host="mycordant.co.uk" />
+            <data android:host="*.dto.to" />
+            <data android:host="dto.to" />
+            <data android:host="*.hto.to" />
+            <data android:host="hto.to" />
+            <data android:host="*.mto.to" />
+            <data android:host="mto.to" />
+            <data android:host="*.wto.to" />
+            <data android:host="wto.to" />
+
+            <data
+                android:pathPattern="/series/..*"
+                android:scheme="https" />
+            <data
+                android:pathPattern="/subject-overview/..*"
+                android:scheme="https" />
+        </intent-filter>
+    </activity>
+</application>
+</manifest>

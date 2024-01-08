@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'KomikFan'
+    pkgNameSuffix = 'id.komikfan'
+    extClass = '.KomikFan'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
