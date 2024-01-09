@@ -12,7 +12,7 @@ import uy.kohesive.injekt.api.get
 import java.io.IOException
 import kotlin.random.Random
 
-private const val DEFAULT_LIST = "https://www.htmanga9.top,https://www.htmanga7.top,https://www.htmanga6.top,https://www.htmanga3.top,https://www.htmanga4.top,https://www.htmanga5.top"
+private const val DEFAULT_LIST = "https://www.hm08.lol,https://www.hm09.lol,https://www.hm10.lol,https://www.hm06.lol,https://www.hm07.lol,https://www.hm05.lol,https://www.hm04.lol,https://www.hm01.lol,https://www.hm02.lol,https://www.hm03.lol,https://www.hm1.lol,https://www.hm2.lol,https://www.hm3.lol"
 
 fun getPreferencesInternal(
     context: Context,
@@ -40,7 +40,7 @@ val SharedPreferences.baseUrl: String
 val SharedPreferences.urlIndex get() = getString(URL_INDEX_PREF, "-1")!!.toInt()
 val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.split(",")
 
-fun getCiBaseUrl() = DEFAULT_LIST.replace(",", ", ")
+fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
 fun getSharedPreferences(id: Long): SharedPreferences {
     val preferences: SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
