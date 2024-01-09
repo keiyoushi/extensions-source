@@ -136,7 +136,7 @@ class Nartag : ParsedHttpSource() {
         "En emisión", "Ongoing" -> SManga.ONGOING
         "Finalizado" -> SManga.COMPLETED
         "Publishing finished" -> SManga.PUBLISHING_FINISHED
-        "En paisa" -> SManga.ON_HIATUS
+        "En pausa" -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 
