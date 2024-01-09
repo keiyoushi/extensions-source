@@ -460,8 +460,8 @@ open class BatoTo(
         val script = document.selectFirst("script:containsData(imgHttps):containsData(batoWord):containsData(batoPass)")?.html()
             ?: throw RuntimeException("Couldn't find script with image data.")
 
-        val imgHttpLisString = script.substringAfter("const imgHttps =").substringBefore(";").trim()
-        val imgHttpLis = json.parseToJsonElement(imgHttpLisString).jsonArray.map { it.jsonPrimitive.content }
+        val imgHttpsString = script.substringAfter("const imgHttps =").substringBefore(";").trim()
+        val imageUrls = json.parseToJsonElement(imgHttpsString).jsonArray.map { it.jsonPrimitive.content }
         val batoWord = script.substringAfter("const batoWord =").substringBefore(";").trim()
         val batoPass = script.substringAfter("const batoPass =").substringBefore(";").trim()
 
@@ -469,7 +469,7 @@ open class BatoTo(
         val imgAccListString = CryptoAES.decrypt(batoWord.removeSurrounding("\""), evaluatedPass)
         val imgAccList = json.parseToJsonElement(imgAccListString).jsonArray.map { it.jsonPrimitive.content }
 
-        return imgHttpLis.zip(imgAccList).mapIndexed { i, (imgUrl, imgAcc) ->
+        return imageUrls.zip(imgAccList).mapIndexed { i, (imgUrl, imgAcc) ->
             Page(i, imageUrl = "$imgUrl?$imgAcc")
         }
     }
