@@ -216,7 +216,7 @@ class TuMangaOnline : ConfigurableSource, ParsedHttpSource() {
             it.text()
         }
         description = document.select("p.element-description").text()
-        status = parseStatus(document.select("span.book-status").text().orEmpty())
+        status = parseStatus(document.select("span.book-status").text())
         thumbnail_url = document.select(".book-thumbnail").attr("src")
     }
     private fun parseStatus(status: String) = when {
@@ -303,6 +303,7 @@ class TuMangaOnline : ConfigurableSource, ParsedHttpSource() {
     private fun redirectToReadPage(document: Document): Document {
         val script1 = document.selectFirst("script:containsData(uniqid)")
         val script2 = document.selectFirst("script:containsData(window.location.replace)")
+        val script3 = document.selectFirst("script:containsData(redirectUrl)")
 
         val redirectHeaders = Headers.Builder()
             .add("Referer", document.baseUri())
@@ -326,6 +327,14 @@ class TuMangaOnline : ConfigurableSource, ParsedHttpSource() {
         if (script2 != null) {
             val data = script2.data()
             val regexRedirect = """window\.location\.replace\('(.+)'\)""".toRegex()
+            val url = regexRedirect.find(data)!!.groupValues[1]
+
+            return redirectToReadPage(client.newCall(GET(url, redirectHeaders)).execute().asJsoup())
+        }
+
+        if (script3 != null) {
+            val data = script3.data()
+            val regexRedirect = """redirectUrl\s?=\s?'(.+)'""".toRegex()
             val url = regexRedirect.find(data)!!.groupValues[1]
 
             return redirectToReadPage(client.newCall(GET(url, redirectHeaders)).execute().asJsoup())
