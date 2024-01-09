@@ -13,7 +13,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class XoxoComics : WPComics("XOXO Comics", "https://xoxocomics.net", "en", SimpleDateFormat("MM/dd/yyyy", Locale.US), null) {
+class XoxoComics : WPComics("XOXO Comics", "https://xoxocomic.com", "en", SimpleDateFormat("MM/dd/yyyy", Locale.US), null) {
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comic-updates?page=$page", headers)
     override fun latestUpdatesSelector() = "li.row"
     override fun latestUpdatesFromElement(element: Element): SManga {
