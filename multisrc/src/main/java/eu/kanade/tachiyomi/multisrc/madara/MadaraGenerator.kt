@@ -65,7 +65,6 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Cat300", "https://cat300.com", "th", isNsfw = true, className = "Cat300", overrideVersionCode = 1),
         SingleLang("CatOnHeadTranslations", "https://catonhead.com", "en", overrideVersionCode = 2),
         SingleLang("Cerise Scan", "https://cerisescan.com", "pt-BR", pkgName = "cerisescans", isNsfw = true, overrideVersionCode = 7),
-        SingleLang("Chibi Manga", "https://www.cmreader.info", "en", overrideVersionCode = 1),
         SingleLang("Clover Manga", "https://clover-manga.com", "tr", overrideVersionCode = 2),
         SingleLang("Coco Rip", "https://cocorip.net", "es"),
         SingleLang("Coffee Manga", "https://coffeemanga.io", "en", isNsfw = false, overrideVersionCode = 2),
