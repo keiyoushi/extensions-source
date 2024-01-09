@@ -25,7 +25,7 @@ import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class Shinigami : Madara("Shinigami", "https://shinigami.moe", "id") {
+class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
