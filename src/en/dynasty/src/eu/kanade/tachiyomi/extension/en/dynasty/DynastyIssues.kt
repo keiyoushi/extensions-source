@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 
 class DynastyIssues : DynastyScans() {
@@ -12,7 +13,9 @@ class DynastyIssues : DynastyScans() {
 
     override val searchPrefix = "issues"
 
-    override fun popularMangaInitialUrl() = "$baseUrl/issues?view=cover"
+    override fun popularMangaInitialUrl() = ""
+
+    private fun popularMangaInitialUrl(page: Int) = "$baseUrl/search?q=&classes%5B%5D=Issue&page=$page=$&sort="
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return GET("$baseUrl/search?q=$query&classes%5B%5D=Issue&sort=&page=$page", headers)
@@ -26,4 +29,14 @@ class DynastyIssues : DynastyScans() {
         parseDescription(document, manga)
         return manga
     }
+
+    override fun popularMangaRequest(page: Int): Request {
+        return GET(popularMangaInitialUrl(page), headers)
+    }
+
+    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+
+    override fun popularMangaSelector() = searchMangaSelector()
+
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 }

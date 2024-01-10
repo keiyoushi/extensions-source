@@ -17,7 +17,9 @@ class DynastyDoujins : DynastyScans() {
 
     override val searchPrefix = "doujins"
 
-    override fun popularMangaInitialUrl() = "$baseUrl/doujins?view=cover"
+    override fun popularMangaInitialUrl() = ""
+
+    private fun popularMangaInitialUrl(page: Int) = "$baseUrl/search?q=&classes%5B%5D=Doujin&page=$page=$&sort="
 
     override fun popularMangaFromElement(element: Element): SManga {
         return super.popularMangaFromElement(element).apply {
@@ -80,4 +82,14 @@ class DynastyDoujins : DynastyScans() {
     override fun imageUrlParse(document: Document): String {
         return document.select("div.image img").attr("abs:src")
     }
+
+    override fun popularMangaRequest(page: Int): Request {
+        return GET(popularMangaInitialUrl(page), headers)
+    }
+
+    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+
+    override fun popularMangaSelector() = searchMangaSelector()
+
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 }
