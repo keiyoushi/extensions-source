@@ -88,7 +88,7 @@ class Nartag : ParsedHttpSource() {
                         }
                     }
                     if (includeArray.isNotEmpty()) {
-                        url.addQueryParameter("category", includeArray.joinToString(","))
+                        url.addQueryParameter("categories", includeArray.joinToString(","))
                     }
                     if (excludeArray.isNotEmpty()) {
                         url.addQueryParameter("excategories", excludeArray.joinToString(","))
