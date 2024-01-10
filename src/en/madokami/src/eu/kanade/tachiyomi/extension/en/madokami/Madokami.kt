@@ -69,6 +69,7 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         manga.url = element.attr("href")
         val pathSegments = element.attr("href").split("/")
         var i = pathSegments.size
+        manga.description = URLDecoder.decode(pathSegments[i - 1], "UTF-8")
         do { i--; manga.title = URLDecoder.decode(pathSegments[i], "UTF-8") } while (URLDecoder.decode(pathSegments[i], "UTF-8").startsWith("!"))
         return manga
     }
@@ -111,8 +112,7 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.author = document.select("a[itemprop=\"author\"]").joinToString(", ") { it.text() }
-        manga.description = "Tags: " + document.select("div.genres[itemprop=\"keywords\"] a.tag.tag-category").joinToString(", ") { it.text() }
-        manga.genre = document.select("div.genres a.tag[itemprop=\"genre\"]").joinToString(", ") { it.text() }
+        manga.genre = document.select("div.genres a.tag").joinToString(", ") { it.text() }
         manga.status = if (document.select("span.scanstatus").text() == "Yes") SManga.COMPLETED else SManga.UNKNOWN
         manga.thumbnail_url = document.select("div.manga-info img[itemprop=\"image\"]").attr("src")
         return manga
