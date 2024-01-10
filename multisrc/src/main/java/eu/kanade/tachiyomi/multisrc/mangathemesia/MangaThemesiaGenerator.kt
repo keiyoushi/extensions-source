@@ -75,7 +75,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Legacy Scans", "https://legacy-scans.com", "fr", pkgName = "flamescansfr"),
         SingleLang("Lelmanga", "https://www.lelmanga.com", "fr"),
         SingleLang("LianScans", "https://www.lianscans.my.id", "id", isNsfw = true),
-        SingleLang("Luminous Scans", "https://luminousscans.net", "en"),
+        SingleLang("Luminous Scans", "https://luminousscans.net", "en", overrideVersionCode = 1),
         SingleLang("Lunar Scans", "https://lunarscan.org", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("LynxScans", "https://lynxscans.com", "en"),
         SingleLang("Lyra Scans", "https://lyrascans.com", "en"),
