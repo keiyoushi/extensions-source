@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 
-class WestManga : MangaThemesia("West Manga", "https://westmanga.org", "id") {
+class WestManga : MangaThemesia("West Manga", "https://westmanga.fun", "id") {
     // Formerly "West Manga (WP Manga Stream)"
     override val id = 8883916630998758688
 
