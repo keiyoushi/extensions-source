@@ -6,7 +6,7 @@ ext {
     extName = 'LeerCapitulo'
     pkgNameSuffix = 'es.leercapitulo'
     extClass = '.LeerCapitulo'
-    extVersionCode = 1
+    extVersionCode = 6
 }
 
 dependencies {
