@@ -112,11 +112,6 @@ class LeerCapitulo : ParsedHttpSource() {
         val a = element.selectFirst("a.xanh")!!
         setUrlWithoutDomain(a.attr("abs:href"))
         name = a.text()
-        chapter_number = name
-            .substringAfter("Capitulo ")
-            .substringBefore(":")
-            .toFloatOrNull()
-            ?: -1f
     }
 
     override fun pageListParse(document: Document): List<Page> {
