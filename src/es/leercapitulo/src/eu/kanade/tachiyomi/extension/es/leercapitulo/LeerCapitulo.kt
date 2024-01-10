@@ -39,11 +39,9 @@ class LeerCapitulo : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaSelector(): String =
-        ".hot-manga > .thumbnails > a"
+    override fun popularMangaSelector(): String = ".hot-manga > .thumbnails > a"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.attr("abs:href"))
@@ -78,8 +76,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        popularMangaRequest(page)
+    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun latestUpdatesSelector(): String = ".mainpage-manga"
 
@@ -109,9 +106,10 @@ class LeerCapitulo : ParsedHttpSource() {
     override fun chapterListSelector(): String = ".chapter-list > ul > li"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val a = element.selectFirst("a.xanh")!!
-        setUrlWithoutDomain(a.attr("abs:href"))
-        name = a.text()
+        with(element.selectFirst("a.xanh")!!) {
+            setUrlWithoutDomain(attr("abs:href"))
+            name = text()
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
