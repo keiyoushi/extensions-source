@@ -279,7 +279,10 @@ class TuMangaOnline : ConfigurableSource, ParsedHttpSource() {
         }
 
         if (currentUrl != newUrl) {
-            doc = client.newCall(GET(newUrl, headers)).execute().asJsoup()
+            val redirectHeaders = super.headersBuilder()
+                .set("Referer", doc.location())
+                .build()
+            doc = client.newCall(GET(newUrl, redirectHeaders)).execute().asJsoup()
         }
 
         doc.select("div.viewer-container img:not(noscript img)").forEach {
@@ -299,48 +302,78 @@ class TuMangaOnline : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    // Some chapters uses JavaScript to redirect to read page
     private fun redirectToReadPage(document: Document): Document {
         val script1 = document.selectFirst("script:containsData(uniqid)")
         val script2 = document.selectFirst("script:containsData(window.location.replace)")
         val script3 = document.selectFirst("script:containsData(redirectUrl)")
+        val script4 = document.selectFirst("input#redir")
+        val script5 = document.selectFirst("script:containsData(window.opener):containsData(location.replace)")
 
-        val redirectHeaders = Headers.Builder()
-            .add("Referer", document.baseUri())
+        val redirectHeaders = super.headersBuilder()
+            .set("Referer", document.location())
             .build()
 
         if (script1 != null) {
             val data = script1.data()
             val regexParams = """\{uniqid:'(.+)',cascade:(.+)\}""".toRegex()
             val regexAction = """form\.action\s?=\s?'(.+)'""".toRegex()
-            val params = regexParams.find(data)!!
-            val action = regexAction.find(data)!!.groupValues[1]
+            val params = regexParams.find(data)
+            val action = regexAction.find(data)?.groupValues?.get(1)?.unescapeUrl()
 
-            val formBody = FormBody.Builder()
-                .add("uniqid", params.groupValues[1])
-                .add("cascade", params.groupValues[2])
-                .build()
-
-            return redirectToReadPage(client.newCall(POST(action, redirectHeaders, formBody)).execute().asJsoup())
+            if (params != null && action != null) {
+                val formBody = FormBody.Builder()
+                    .add("uniqid", params.groupValues[1])
+                    .add("cascade", params.groupValues[2])
+                    .build()
+                return redirectToReadPage(client.newCall(POST(action, redirectHeaders, formBody)).execute().asJsoup())
+            }
         }
 
         if (script2 != null) {
             val data = script2.data()
-            val regexRedirect = """window\.location\.replace\('(.+)'\)""".toRegex()
-            val url = regexRedirect.find(data)!!.groupValues[1]
+            val regexRedirect = """window\.location\.replace\(['"](.+)['"]\)""".toRegex()
+            val url = regexRedirect.find(data)?.groupValues?.get(1)?.unescapeUrl()
 
-            return redirectToReadPage(client.newCall(GET(url, redirectHeaders)).execute().asJsoup())
+            if (url != null) {
+                return redirectToReadPage(client.newCall(GET(url, redirectHeaders)).execute().asJsoup())
+            }
         }
 
         if (script3 != null) {
             val data = script3.data()
             val regexRedirect = """redirectUrl\s?=\s?'(.+)'""".toRegex()
-            val url = regexRedirect.find(data)!!.groupValues[1]
+            val url = regexRedirect.find(data)?.groupValues?.get(1)?.unescapeUrl()
+
+            if (url != null) {
+                return redirectToReadPage(client.newCall(GET(url, redirectHeaders)).execute().asJsoup())
+            }
+        }
+
+        if (script4 != null) {
+            val url = script4.attr("value").unescapeUrl()
 
             return redirectToReadPage(client.newCall(GET(url, redirectHeaders)).execute().asJsoup())
         }
 
+        if (script5 != null) {
+            val data = script5.data()
+            val regexRedirect = """;[^.]location\.replace\(['"](.+)['"]\)""".toRegex()
+            val url = regexRedirect.find(data)?.groupValues?.get(1)?.unescapeUrl()
+
+            if (url != null) {
+                return redirectToReadPage(client.newCall(GET(url, redirectHeaders)).execute().asJsoup())
+            }
+        }
+
         return document
+    }
+
+    private fun String.unescapeUrl(): String {
+        return if (this.startsWith("http:\\/\\/") || this.startsWith("https:\\/\\/")) {
+            this.replace("\\/", "/")
+        } else {
+            this
+        }
     }
 
     // Note: At this moment (05/04/2023) it's necessary to make the image request with headers to prevent 403.
