@@ -12,7 +12,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
 import java.net.URL
 
 class Nicomanga : HttpSource() {
@@ -53,7 +52,7 @@ class Nicomanga : HttpSource() {
                 val relURL = manga.selectFirst(".series-title a")?.attr("href") ?: ""
                 setUrlWithoutDomain(URL(URL(baseUrl), relURL).toString())
                 title = manga.selectFirst(".series-title")?.text() ?: ""
-                thumbnail_url = Nicomanga.thumbnailURLRegex.find(manga.selectFirst(".img-in-ratio.lazyloaded")?.attr("style") ?: "")?.groupValues?.get(1)
+                thumbnail_url = thumbnailURLRegex.find(manga.selectFirst(".img-in-ratio.lazyloaded")?.attr("style") ?: "")?.groupValues?.get(1)
             }
         }
         return MangasPage(mangas, hasNextPage)
@@ -104,7 +103,7 @@ class Nicomanga : HttpSource() {
         val doc = Jsoup.parse(response.body.string())
         author = doc.select("ul.manga-info a[href^=\"manga-author\"]").joinToString { it.text() }
         genre = doc.select("ul.manga-info a[href^=\"manga-list-genre\"]").joinToString { it.text() }
-        val statusText = Nicomanga.statusRegex.find(doc.select(".manga-info li:has(i.fa-spinner) a").attr("href"))?.groupValues?.get(0) ?: ""
+        val statusText = statusRegex.find(doc.select(".manga-info li:has(i.fa-spinner) a").attr("href"))?.groupValues?.get(0) ?: ""
         status = when (statusText) {
             "on-going" -> {
                 SManga.ONGOING
@@ -119,7 +118,7 @@ class Nicomanga : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = Nicomanga.urlRegex.find(manga.url)?.groupValues?.get(0) ?: ""
+        val slug = urlRegex.find(manga.url)?.groupValues?.get(0) ?: ""
         return GET("$baseUrl/app/manga/controllers/cont.Listchapterapi.php?slug=$slug")
     }
 
@@ -131,7 +130,7 @@ class Nicomanga : HttpSource() {
             SChapter.create().apply {
                 name = chapter.attr("title").trim()
                 setUrlWithoutDomain(URL(URL(baseUrl), chapter.attr("href")).toString())
-                chapter_number = Nicomanga.floatRegex.find(chapter.attr("title").trim())?.groupValues?.get(0)?.toFloat() ?: (lastNum + 0.01f)
+                chapter_number = floatRegex.find(chapter.attr("title").trim())?.groupValues?.get(0)?.toFloat() ?: (lastNum + 0.01f)
                 lastNum = chapter_number
             }
         }
@@ -139,16 +138,15 @@ class Nicomanga : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val r = client.newCall(GET(getChapterUrl(chapter))).execute()
-        val id = Nicomanga.chapterIdRegex.find(r.body.string())?.groupValues?.get(0) ?: throw Exception("chapter-id not found")
-        val headers = headersBuilder().set("referer", getChapterUrl(chapter)).build()
-        return GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$id", headers)
+        return GET(getChapterUrl(chapter))
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val doc = Jsoup.parse(response.body.string())
+        val id = chapterIdRegex.find(response.body.string())?.groupValues?.get(0) ?: throw Exception("chapter-id not found")
+        val headers = headersBuilder().set("referer", response.request.url.toUrl().toString()).build()
+        val r = client.newCall(GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$id", headers)).execute()
+        val doc = Jsoup.parse(r.body.string())
         val pages = ArrayList<Page>()
-        // Nicovideo will refuse to serve any pages if the user has not logged in
         val pageList = doc.select("img.chapter-img")
         for ((i, page) in pageList.withIndex()) {
             val url = page.attr("data-src")
