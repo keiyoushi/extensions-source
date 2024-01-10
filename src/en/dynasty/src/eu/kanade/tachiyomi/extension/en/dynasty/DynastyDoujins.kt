@@ -17,7 +17,8 @@ class DynastyDoujins : DynastyScans() {
 
     override val searchPrefix = "doujins"
 
-    override fun popularMangaInitialUrl() = "$baseUrl/doujins?view=cover"
+    override val categoryPrefix = "Doujin"
+    override fun popularMangaInitialUrl() = ""
 
     override fun popularMangaFromElement(element: Element): SManga {
         return super.popularMangaFromElement(element).apply {
@@ -51,7 +52,7 @@ class DynastyDoujins : DynastyScans() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        val chapters = document.select(chapterListSelector()).map { chapterFromElement(it) }.toMutableList()
+        val chapters = try { document.select(chapterListSelector()).map { chapterFromElement(it) }.toMutableList() } catch (e: IndexOutOfBoundsException) { mutableListOf() }
 
         document.select("a.thumbnail img").let { images ->
             if (images.isNotEmpty()) {
