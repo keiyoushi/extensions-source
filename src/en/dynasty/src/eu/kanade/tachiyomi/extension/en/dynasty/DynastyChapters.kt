@@ -13,9 +13,9 @@ import org.jsoup.nodes.Element
 class DynastyChapters : DynastyScans() {
     override val name = "Dynasty-Chapters"
     override val searchPrefix = "chapters"
+    override val categoryPrefix = "Chapter"
     override fun popularMangaInitialUrl() = ""
 
-    private fun popularMangaInitialUrl(page: Int) = "$baseUrl/search?q=&classes%5B%5D=Chapter&page=$page=$&sort="
     private fun latestUpdatesInitialUrl(page: Int) = "$baseUrl/search?q=&classes%5B%5D=Chapter&page=$page=$&sort=created_at"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -76,23 +76,15 @@ class DynastyChapters : DynastyScans() {
         return chapter
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(popularMangaInitialUrl(page), headers)
-    }
-
     override fun latestUpdatesRequest(page: Int): Request {
         return GET(latestUpdatesInitialUrl(page), headers)
     }
 
-    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun popularMangaSelector() = searchMangaSelector()
     override fun latestUpdatesSelector() = searchMangaSelector()
 
-    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
     override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
 
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 }
