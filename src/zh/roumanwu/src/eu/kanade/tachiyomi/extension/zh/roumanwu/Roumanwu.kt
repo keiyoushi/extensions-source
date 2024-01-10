@@ -116,8 +116,8 @@ class Roumanwu : HttpSource(), ConfigurableSource {
         private const val MIRROR_PREF_SUMMARY = "使用镜像网址。重启软件生效。"
 
         // 地址: https://rou.pub/dizhi
-        private val MIRRORS = arrayOf("https://rouman5.com", "https://roum2.xyz")
-        private val MIRRORS_DESC = arrayOf("主站", "镜像")
+        private val MIRRORS = arrayOf("https://rouman5.com")
+        private val MIRRORS_DESC = arrayOf("主站")
         private const val MIRROR_DEFAULT = 1.toString() // use mirror
 
         private val TAGS = arrayOf("全部", "正妹", "恋爱", "出版漫画", "肉慾", "浪漫", "大尺度", "巨乳", "有夫之婦", "女大生", "狗血劇", "同居", "好友", "調教", "动作", "後宮", "不倫")
