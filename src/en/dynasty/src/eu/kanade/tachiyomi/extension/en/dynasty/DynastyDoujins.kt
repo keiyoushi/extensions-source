@@ -53,7 +53,7 @@ class DynastyDoujins : DynastyScans() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        val chapters = document.select(chapterListSelector()).map { chapterFromElement(it) }.toMutableList()
+        val chapters = try { document.select(chapterListSelector()).map { chapterFromElement(it) }.toMutableList() } catch (e: IndexOutOfBoundsException) { mutableListOf() }
 
         document.select("a.thumbnail img").let { images ->
             if (images.isNotEmpty()) {
