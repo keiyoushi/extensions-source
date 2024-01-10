@@ -1,10 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.nicomanga
 
-import eu.kanade.tachiyomi.extension.ja.nicomanga.NMRegex.chapterIdRegex
-import eu.kanade.tachiyomi.extension.ja.nicomanga.NMRegex.floatRegex
-import eu.kanade.tachiyomi.extension.ja.nicomanga.NMRegex.statusRegex
-import eu.kanade.tachiyomi.extension.ja.nicomanga.NMRegex.thumbnailURLRegex
-import eu.kanade.tachiyomi.extension.ja.nicomanga.NMRegex.urlRegex
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,10 +16,26 @@ import org.jsoup.nodes.Element
 import java.net.URL
 
 class Nicomanga : HttpSource() {
+    companion object {
+        val thumbnailURLRegex: Regex = "background-image:[^;]url\\s*\\(\\s*'([^?']+)".toRegex()
+
+        val statusRegex: Regex = "(?<=-)[^.]+".toRegex()
+
+        val urlRegex: Regex = "(?<=manga-)[^/]+(?=\\.html\$)".toRegex()
+
+        val floatRegex: Regex = "\\d+(?:\\.\\d+)?".toRegex()
+
+        val chapterIdRegex: Regex = "(?<=imgsListchap\\()\\d+".toRegex()
+    }
+
     override val baseUrl: String = "https://nicomanga.com"
+
     override val lang: String = "ja"
+
     override val name: String = "Nicomanga"
+
     override val supportsLatest: Boolean = true
+
     override val client: OkHttpClient = network.cloudflareClient
 
     private fun mangaListParse(response: Response): MangasPage {
@@ -43,7 +54,7 @@ class Nicomanga : HttpSource() {
                 val relURL = manga.selectFirst(".series-title a")?.attr("href") ?: ""
                 setUrlWithoutDomain(URL(URL(baseUrl), relURL).toString())
                 title = manga.selectFirst(".series-title")?.text() ?: ""
-                thumbnail_url = thumbnailURLRegex.find(manga.selectFirst(".img-in-ratio.lazyloaded")?.attr("style") ?: "")?.groupValues?.get(1)
+                thumbnail_url = Nicomanga.thumbnailURLRegex.find(manga.selectFirst(".img-in-ratio.lazyloaded")?.attr("style") ?: "")?.groupValues?.get(1)
             }
         }
         return MangasPage(mangas, hasNextPage)
@@ -94,7 +105,7 @@ class Nicomanga : HttpSource() {
         val doc = Jsoup.parse(response.body.string())
         author = doc.select("ul.manga-info a[href^=\"manga-author\"]").joinToString { it.text() }
         genre = doc.select("ul.manga-info a[href^=\"manga-list-genre\"]").joinToString { it.text() }
-        val statusText = statusRegex.find(doc.select(".manga-info li:has(i.fa-spinner) a").attr("href"))?.groupValues?.get(0) ?: ""
+        val statusText = Nicomanga.statusRegex.find(doc.select(".manga-info li:has(i.fa-spinner) a").attr("href"))?.groupValues?.get(0) ?: ""
         status = when (statusText) {
             "on-going" -> {
                 SManga.ONGOING
@@ -116,7 +127,7 @@ class Nicomanga : HttpSource() {
             SChapter.create().apply {
                 name = chapter.attr("title").trim()
                 setUrlWithoutDomain(URL(URL(baseUrl), chapter.attr("href")).toString())
-                chapter_number = floatRegex.find(chapter.attr("title").trim())?.groupValues?.get(0)?.toFloat() ?: (lastNum + 0.01f)
+                chapter_number = Nicomanga.floatRegex.find(chapter.attr("title").trim())?.groupValues?.get(0)?.toFloat() ?: (lastNum + 0.01f)
                 lastNum = chapter_number
             }
         }
@@ -124,7 +135,7 @@ class Nicomanga : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = urlRegex.find(manga.url)?.groupValues?.get(0) ?: ""
+        val slug = Nicomanga.urlRegex.find(manga.url)?.groupValues?.get(0) ?: ""
         return GET("$baseUrl/app/manga/controllers/cont.Listchapterapi.php?slug=$slug")
     }
 
@@ -142,7 +153,7 @@ class Nicomanga : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val r = client.newCall(GET(getChapterUrl(chapter))).execute()
-        val id = chapterIdRegex.find(r.body.string())?.groupValues?.get(0) ?: throw Exception("chapter-id not found")
+        val id = Nicomanga.chapterIdRegex.find(r.body.string())?.groupValues?.get(0) ?: throw Exception("chapter-id not found")
         val headers = headersBuilder().set("referer", getChapterUrl(chapter)).build()
         return GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$id", headers)
     }
