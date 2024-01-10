@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.leercapitulo
 
 import android.util.Base64
-import eu.kanade.tachiyomi.extension.es.leercapitulo.dto.MangaDto
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -129,7 +129,7 @@ class LeerCapitulo : ParsedHttpSource() {
         val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
             ?: throw Exception("Unable to deobfuscate script")
 
-        val keyRegex = """'([a-zA-z0-9]{62})'""".toRegex()
+        val keyRegex = """'([A-Z0-9]{62})'""".toRegex(RegexOption.IGNORE_CASE)
 
         val (key1, key2) = keyRegex.findAll(deobfuscatedScript).map { it.groupValues[1] }.toList()
 
@@ -165,4 +165,12 @@ class LeerCapitulo : ParsedHttpSource() {
         "Cancelled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
+
+    @Serializable
+    data class MangaDto(
+        val label: String,
+        val link: String,
+        val thumbnail: String,
+        val value: String,
+    )
 }
