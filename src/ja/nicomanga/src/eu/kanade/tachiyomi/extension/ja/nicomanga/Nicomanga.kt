@@ -40,7 +40,6 @@ class Nicomanga : HttpSource() {
 
     private fun mangaListParse(response: Response): MangasPage {
         val doc = Jsoup.parse(response.body.string())
-        val mangaList: ArrayList<Element> = doc.select(".row > .thumb-item-flow")
         val hasNextPage =
             if (doc.select(".pagination li:last-of-type").size > 0 &&
                 doc.select(".pagination li:last-of-type")[0].text() == "»"
