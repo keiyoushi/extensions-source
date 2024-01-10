@@ -52,22 +52,17 @@ that existing contributors will not actively teach them to you.
 
 ### Cloning the repository
 
-Some alternative steps can be followed to ignore "repo" branch and skip unrelated sources, which 
-will make it faster to pull, navigate and build. This will also reduce disk usage and network traffic.
+Some alternative steps can be followed to skip unrelated sources, which  will make it faster to pull,
+navigate and build. This will also reduce disk usage and network traffic.
 
 <details><summary>Steps</summary>
 
-1. Make sure to delete "repo" branch in your fork. You may also want to disable Actions in the repo
-settings.
-
-    **Also make sure you are using the latest version of Git as many commands used here are pretty new.**
-
-2. Do a partial clone.
+1. Do a partial clone.
     ```bash
     git clone --filter=blob:none --sparse <fork-repo-url>
     cd extensions/
     ```
-3. Configure sparse checkout.
+2. Configure sparse checkout.
 
     There are two modes of pattern matching. The default is cone (🔺) mode.
     Cone mode enables significantly faster pattern matching for big monorepos
@@ -115,23 +110,20 @@ settings.
     Explanation: the rules are like `gitignore`. We first exclude all sources
     while retaining project folders, then add the needed sources back manually.
 
-4. Configure remotes.
+3. Configure remotes.
     ```bash
     # add upstream
-    git remote add upstream <tachiyomiorg-repo-url>
+    git remote add upstream <keiyoushi-repo-url>
     # optionally disable push to upstream
     git remote set-url --push upstream no_pushing
-    # ignore 'repo' branch of upstream
-    # option 1: use negative refspec
-    git config --add remote.upstream.fetch "^refs/heads/repo"
-    # option 2: fetch main only (ignore all other branches)
+    # optionally fetch main only (ignore all other branches)
     git config remote.upstream.fetch "+refs/heads/main:refs/remotes/upstream/main"
     # update remotes
     git remote update
     # track main of upstream instead of fork
     git branch main -u upstream/main
     ```
-5. Useful configurations. (optional)
+4. Useful configurations. (optional)
     ```bash
     # prune obsolete remote branches on fetch
     git config remote.origin.prune true
@@ -145,7 +137,7 @@ settings.
     # on main branch, which is not a good practice.
     git config alias.sync-main '!git switch main && git fetch upstream && git reset --keep FETCH_HEAD'
     ```
-6. Later, if you change the sparse checkout filter, run `git sparse-checkout reapply`.
+5. Later, if you change the sparse checkout filter, run `git sparse-checkout reapply`.
 
 Read more on
 [Git's object model](https://github.blog/2020-12-17-commits-are-snapshots-not-diffs/),
