@@ -97,7 +97,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Eromiau", "https://www.eromiau.com", "es", isNsfw = true),
         SingleLang("Esomanga", "https://esomanga.com", "tr", overrideVersionCode = 1),
         SingleLang("FactManga", "https://factmanga.com", "en", isNsfw = false),
-        SingleLang("Fay Scans", "https://fayscans.com.br", "pt-BR", overrideVersionCode = 1),
+        SingleLang("Fay Scans", "https://fayscans.net", "pt-BR", overrideVersionCode = 2),
         SingleLang("Final Scans", "https://finalscans.com", "pt-BR", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Fire Scans", "https://firescans.xyz", "en", overrideVersionCode = 1),
         SingleLang("Fleur Blanche", "https://fbsquads.com", "pt-BR", isNsfw = true, overrideVersionCode = 2),
