@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.es.manhuafenix
+package eu.kanade.tachiyomi.extension.es.mangafenix
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -12,6 +12,8 @@ class ManhuaFenix : Madara(
     "es",
     SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
 ) {
+
+    override val id: Long = 19158964284779393
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1)

@@ -309,7 +309,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Manhastro", "https://manhastro.com", "pt-BR"),
         SingleLang("Manhatic", "https://manhatic.com", "ar", isNsfw = true),
         SingleLang("Manhua ES", "https://manhuaes.com", "en", overrideVersionCode = 6),
-        SingleLang("Manhua Fenix", "https://visorfenix.com", "es", overrideVersionCode = 4),
+        SingleLang("Manhua Fenix", "https://visorfenix.com", "es", className = "ManhuaFenix", pkgName = "mangafenix", overrideVersionCode = 4),
         SingleLang("Manhua Kiss", "https://manhuakiss.com", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Manhua Mix", "https://manhuamix.com", "en", className = "Manhuasnet", overrideVersionCode = 3),
         SingleLang("Manhua Plus", "https://manhuaplus.com", "en", overrideVersionCode = 6),
