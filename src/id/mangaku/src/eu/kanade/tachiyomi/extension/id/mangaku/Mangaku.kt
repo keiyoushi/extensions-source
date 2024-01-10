@@ -4,6 +4,7 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
+import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -28,7 +29,7 @@ class Mangaku : ParsedHttpSource() {
 
     override val name = "Mangaku"
 
-    override val baseUrl = "https://mangaku.blog"
+    override val baseUrl = "https://mangaku.mom"
 
     override val lang = "id"
 
@@ -141,12 +142,20 @@ class Mangaku : ParsedHttpSource() {
         val wpRoutineJs = client.newCall(GET(wpRoutineUrl, headers)).execute().use {
             it.body.string()
         }
+
         val upt3 = wpRoutineJs
             .substringAfterLast("upt3(")
             .substringBefore(");")
-        val appMgk = wpRoutineJs
-            .substringAfter("const $upt3 = '")
-            .substringBefore("'")
+        val keymapJsPacked = wpRoutineJs
+            .substringAfter("eval(function(x,a,c,k,e,d)")
+            .substringBefore(".split('|'),0,{}))") + ".split('|'),0,{}))"
+        val keymapJs = Unpacker.unpack(keymapJsPacked)
+        val appMgkVariable = keymapJs
+            .substringAfter("$upt3=")
+            .substringBefore(";")
+        val appMgk = keymapJs
+            .substringAfter("let $appMgkVariable=\"")
+            .substringBefore("\";")
             .reversed()
         Log.d("mangaku", "app-mgk: $appMgk")
 
