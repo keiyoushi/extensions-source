@@ -39,6 +39,8 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     open val searchPrefix = ""
 
+    open val categoryPrefix = ""
+
     private var parent: List<Node> = ArrayList()
 
     private var list = InternalList(ArrayList(), "")
@@ -49,11 +51,13 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
+    protected fun popularMangaInitialUrl(page: Int) = "$baseUrl/search?q=&classes%5B%5D=$categoryPrefix&page=$page=$&sort="
+
     override fun popularMangaRequest(page: Int): Request {
-        return GET(popularMangaInitialUrl(), headers)
+        return GET(popularMangaInitialUrl(page), headers)
     }
 
-    override fun popularMangaSelector() = "ul.thumbnails > li.span2"
+    override fun popularMangaSelector() = searchMangaSelector()
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -62,12 +66,7 @@ abstract class DynastyScans : ParsedHttpSource() {
         return manga
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.asJsoup().select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
-        return MangasPage(mangas, false)
-    }
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("manga:")) {
@@ -249,7 +248,7 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     data class Validate(val _isManga: Boolean, val _pos: Int)
 
-    override fun popularMangaNextPageSelector() = ""
+    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
     override fun latestUpdatesSelector() = ""
     override fun latestUpdatesNextPageSelector() = ""
     override fun imageUrlParse(document: Document): String = ""
