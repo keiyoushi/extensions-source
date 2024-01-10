@@ -60,8 +60,6 @@ class Nicomanga : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
-
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -71,7 +69,7 @@ class Nicomanga : HttpSource() {
         return GET(url)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
@@ -82,7 +80,7 @@ class Nicomanga : HttpSource() {
         return GET(url)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = mangaListParse(response)
+    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
@@ -100,6 +98,8 @@ class Nicomanga : HttpSource() {
             .build()
         return GET(url, headers)
     }
+
+    override fun searchMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val doc = Jsoup.parse(response.body.string())
@@ -119,6 +119,11 @@ class Nicomanga : HttpSource() {
         }
     }
 
+    override fun chapterListRequest(manga: SManga): Request {
+        val slug = Nicomanga.urlRegex.find(manga.url)?.groupValues?.get(0) ?: ""
+        return GET("$baseUrl/app/manga/controllers/cont.Listchapterapi.php?slug=$slug")
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = Jsoup.parse(response.body.string())
         val chapterList = doc.select("ul > a")
@@ -134,9 +139,11 @@ class Nicomanga : HttpSource() {
         return chapters
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val slug = Nicomanga.urlRegex.find(manga.url)?.groupValues?.get(0) ?: ""
-        return GET("$baseUrl/app/manga/controllers/cont.Listchapterapi.php?slug=$slug")
+    override fun pageListRequest(chapter: SChapter): Request {
+        val r = client.newCall(GET(getChapterUrl(chapter))).execute()
+        val id = Nicomanga.chapterIdRegex.find(r.body.string())?.groupValues?.get(0) ?: throw Exception("chapter-id not found")
+        val headers = headersBuilder().set("referer", getChapterUrl(chapter)).build()
+        return GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$id", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -149,13 +156,6 @@ class Nicomanga : HttpSource() {
             pages.add(Page(i + 1, url, url))
         }
         return pages
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val r = client.newCall(GET(getChapterUrl(chapter))).execute()
-        val id = Nicomanga.chapterIdRegex.find(r.body.string())?.groupValues?.get(0) ?: throw Exception("chapter-id not found")
-        val headers = headersBuilder().set("referer", getChapterUrl(chapter)).build()
-        return GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$id", headers)
     }
 
     override fun imageRequest(page: Page): Request {
