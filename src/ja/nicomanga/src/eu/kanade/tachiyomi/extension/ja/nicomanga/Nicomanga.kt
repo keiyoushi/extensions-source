@@ -49,7 +49,7 @@ class Nicomanga : HttpSource() {
             } else {
                 doc.select(".pagination li:last-of-type a.active").size == 0
             }
-        val mangas = mangaList.map { manga ->
+        val mangas = doc.select(".row > .thumb-item-flow").map { manga ->
             SManga.create().apply {
                 val relURL = manga.selectFirst(".series-title a")?.attr("href") ?: ""
                 setUrlWithoutDomain(URL(URL(baseUrl), relURL).toString())
