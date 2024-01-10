@@ -38,6 +38,16 @@ open class Cubari(override val lang: String) : HttpSource() {
 
     private val json: Json by injectLazy()
 
+    override val client = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val headers = request.headers.newBuilder()
+                .removeAll("Accept-Encoding")
+                .build()
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
+        .build()
+
     override fun headersBuilder() = Headers.Builder().apply {
         add(
             "User-Agent",
