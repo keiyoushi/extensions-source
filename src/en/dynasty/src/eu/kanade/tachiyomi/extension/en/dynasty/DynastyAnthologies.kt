@@ -12,7 +12,9 @@ class DynastyAnthologies : DynastyScans() {
 
     override val searchPrefix = "anthologies"
 
-    override fun popularMangaInitialUrl() = "$baseUrl/anthologies?view=cover"
+    override val categoryPrefix = "Anthology"
+
+    override fun popularMangaInitialUrl() = ""
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return GET("$baseUrl/search?q=$query&classes%5B%5D=Anthology&sort=&page=$page", headers)
