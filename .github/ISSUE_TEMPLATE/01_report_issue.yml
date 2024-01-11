@@ -95,7 +95,7 @@ body:
           required: true
         - label: I have written a short but informative title.
           required: true
-        - label: I have updated the app to version **[0.15.1](https://github.com/tachiyomiorg/tachiyomi/releases/latest)**.
+        - label: I have updated the app to version **[0.15.2](https://github.com/tachiyomiorg/tachiyomi/releases/latest)**.
           required: true
         - label: I have updated all installed extensions.
           required: true
