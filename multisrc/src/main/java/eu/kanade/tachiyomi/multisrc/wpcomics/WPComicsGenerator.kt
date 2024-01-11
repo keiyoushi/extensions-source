@@ -15,7 +15,7 @@ class WPComicsGenerator : ThemeSourceGenerator {
         SingleLang("NetTruyen", "https://www.nettruyenclub.com", "vi", overrideVersionCode = 21),
         SingleLang("NhatTruyen", "https://nhattruyenmax.com", "vi", overrideVersionCode = 13),
         SingleLang("TruyenChon", "http://truyenchon.com", "vi", overrideVersionCode = 3),
-        SingleLang("XOXO Comics", "https://xoxocomic.com", "en", className = "XoxoComics", overrideVersionCode = 3),
+        SingleLang("XOXO Comics", "https://xoxocomic.com", "en", className = "XoxoComics", overrideVersionCode = 4),
     )
 
     companion object {
