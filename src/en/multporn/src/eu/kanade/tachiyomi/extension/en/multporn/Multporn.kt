@@ -39,7 +39,7 @@ class Multporn : ParsedHttpSource() {
     // Popular
 
     private fun buildPopularMangaRequest(page: Int, filters: FilterList = FilterList()): Request {
-        val url = "$baseUrl/best".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/best".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
         (if (filters.isEmpty()) getFilterList(POPULAR_DEFAULT_SORT_BY_FILTER_STATE) else filters).forEach {
