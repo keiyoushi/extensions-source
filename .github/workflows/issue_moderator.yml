@@ -13,8 +13,20 @@ jobs:
       - name: Moderate issues
         uses: tachiyomiorg/issue-moderator-action@v2
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: ${{ secrets.ISSUE_MODERATOR_PAT }}
           duplicate-label: Duplicate
+
+          blurbs: |
+            [
+              {
+                "keywords": ["cf", "cloudflare"],
+                "message": "Refer to the **Solving Cloudflare issues** section at https://tachiyomi.org/docs/guides/troubleshooting/#cloudflare. If it doesn't work, migrate to other sources or wait until they lower their protection."
+              },
+              {
+                "keywords": ["uninstall"],
+                "message": "Uninstall the extension before updating. If that does not work, uninstall it from your device's settings by navigating to your device's Settings -> Apps and uninstall it from there by looking for `Tachiyomi: <extension name>`.\n\nThis is usually caused your previous extension having a different signature from the updated extension, making Android refuse to update it."
+              }
+            ]
 
           duplicate-check-enabled: true
           duplicate-check-labels: |
@@ -23,6 +35,7 @@ jobs:
           existing-check-enabled: true
           existing-check-labels: |
             ["Source request", "Domain changed"]
+          existing-check-repo-url: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json
 
           auto-close-rules: |
             [
@@ -38,10 +51,16 @@ jobs:
               },
               {
                 "type": "both",
-                "regex": ".*(?:fail(?:ed|ure|s)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?(?:get past|by ?pass|penetrate)?.*cloud ?fl?are.*",
+                "regex": ".*(?:fail(?:ed|ure|s)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?(?:get past|by ?pass|penetrate)?.*cl[oa]ud ?fl?[ai]re.*",
                 "ignoreCase": true,
                 "labels": ["Cloudflare protected"],
                 "message": "Refer to the **Solving Cloudflare issues** section at https://tachiyomi.org/docs/guides/troubleshooting/#cloudflare. If it doesn't work, migrate to other sources or wait until they lower their protection."
+              },
+              {
+                "type": "both",
+                "regex": ".*(?:fail(?:ed|ure|s|ing)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?.*install(?: updated)?(?: extensions?)?",
+                "ignoreCase": true,
+                "message": "Uninstall the extension before updating. If that does not work, uninstall it from your device's settings by navigating to your device's Settings -> Apps and uninstall it from there by looking for `Tachiyomi: <extension name>`.\n\nThis is usually caused your previous extension having a different signature from the updated extension, making Android refuse to update it."
               }
             ]
           auto-close-ignore-label: do-not-autoclose

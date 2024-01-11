@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class FayScans : Madara(
     "Fay Scans",
-    "https://fayscans.com.br",
+    "https://fayscans.net",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
