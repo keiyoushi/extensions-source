@@ -42,6 +42,12 @@ jobs:
                 "ignoreCase": true,
                 "labels": ["Cloudflare protected"],
                 "message": "Refer to the **Solving Cloudflare issues** section at https://tachiyomi.org/docs/guides/troubleshooting/#cloudflare. If it doesn't work, migrate to other sources or wait until they lower their protection."
+              },
+              {
+                "type": "both",
+                "regex": ".*(?:fail(?:ed|ure|s|ing)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?.*install(?: updated)?(?: extensions?)?",
+                "ignoreCase": true,
+                "message": "Uninstall the extension before updating. If that does not work, uninstall it from your device's settings by navigating to your device's Settings -> Apps and uninstall it from there by looking for `Tachiyomi: <extension name>`."
               }
             ]
           auto-close-ignore-label: do-not-autoclose
