@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.multporn
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
@@ -12,18 +11,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -47,36 +39,22 @@ class Multporn : ParsedHttpSource() {
     // Popular
 
     private fun buildPopularMangaRequest(page: Int, filters: FilterList = FilterList()): Request {
-        val body = FormBody.Builder()
-            .addEncoded("page", page.toString())
-            .addEncoded("view_name", "top")
-            .addEncoded("view_display_id", "page")
+        val url = "$baseUrl/best".toHttpUrlOrNull()!!.newBuilder()
+            .addQueryParameter("page", page.toString())
 
         (if (filters.isEmpty()) getFilterList(POPULAR_DEFAULT_SORT_BY_FILTER_STATE) else filters).forEach {
             when (it) {
-                is SortBySelectFilter -> body.addEncoded("sort_by", it.selected.uri)
-                is SortOrderSelectFilter -> body.addEncoded("sort_order", it.selected.uri)
-                is PopularTypeSelectFilter -> body.addEncoded("type", it.selected.uri)
+                is SortBySelectFilter -> url.addQueryParameter("sort_by", it.selected.uri)
+                is SortOrderSelectFilter -> url.addQueryParameter("sort_order", it.selected.uri)
+                is PopularTypeSelectFilter -> url.addQueryParameter("type", it.selected.uri)
                 else -> { }
             }
         }
 
-        return POST("$baseUrl/views/ajax", headers, body.build())
+        return GET(url.toString(), headers)
     }
 
     override fun popularMangaRequest(page: Int) = buildPopularMangaRequest(page - 1)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val html = json.decodeFromString<JsonArray>(response.body.string())
-            .last { it.jsonObject["command"]!!.jsonPrimitive.content == "insert" }.jsonObject["data"]!!.jsonPrimitive.content
-
-        return super.popularMangaParse(
-            response.newBuilder()
-                .body(html.toResponseBody("text/html; charset=UTF-8".toMediaTypeOrNull()))
-                .build(),
-        )
-    }
-
     override fun popularMangaSelector() = ".masonry-item"
     override fun popularMangaNextPageSelector() = ".pager-next a"
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
