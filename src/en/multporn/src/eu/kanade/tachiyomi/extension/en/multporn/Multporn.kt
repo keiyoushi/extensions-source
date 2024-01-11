@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -66,7 +66,7 @@ class Multporn : ParsedHttpSource() {
     // Latest
 
     private fun buildLatestMangaRequest(page: Int, filters: FilterList = FilterList()): Request {
-        val url = "$baseUrl/new".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/new".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
         (if (filters.isEmpty()) getFilterList(LATEST_DEFAULT_SORT_BY_FILTER_STATE) else filters).forEach {
@@ -104,7 +104,7 @@ class Multporn : ParsedHttpSource() {
     }
 
     private fun buildSearchMangaRequest(page: Int, query: String, filtersArg: FilterList = FilterList()): Request {
-        val url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("views_fulltext", query)
 
