@@ -56,7 +56,7 @@ class MundoHentai : ParsedHttpSource() {
         return GET("$baseUrl/category/doujinshi/$pageStr", newHeaders)
     }
 
-    override fun popularMangaSelector(): String = "div.lista > ul > li div.thumb-conteudo:has(a[href^=$baseUrl]:has(span.thumb-imagem)):not(:contains(Tufos))"
+    override fun popularMangaSelector(): String = "div.lista > ul > li div.thumb-conteudo:has(a[href^=$baseUrl]):not(:contains(Tufos))"
 
     override fun popularMangaFromElement(element: Element): SManga = genericMangaFromElement(element)
 
