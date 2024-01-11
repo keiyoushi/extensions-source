@@ -455,7 +455,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("The Guild", "https://theguildscans.com", "en"),
         SingleLang("Time Naight", "https://timenaight.com", "tr"),
         SingleLang("Todaymic", "https://todaymic.com", "en", overrideVersionCode = 1),
-        SingleLang("TonizuToon", "https://tonizutoon.com", "tr", isNsfw = true),
+        SingleLang("TonizuToon", "https://tonizu.com", "tr", isNsfw = true, overrideVersionCode = 1),
         SingleLang("ToonChill", "https://toonchill.com", "en", overrideVersionCode = 1),
         SingleLang("ToonGod", "https://www.toongod.org", "en", isNsfw = true, overrideVersionCode = 5),
         SingleLang("Toonily", "https://toonily.com", "en", isNsfw = true, overrideVersionCode = 11),
