@@ -14,7 +14,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class XoxoComics : WPComics("XOXO Comics", "https://xoxocomic.com", "en", SimpleDateFormat("MM/dd/yyyy", Locale.US), null) {
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comic-updates?page=$page", headers)
+    override val popularPath = "hot-comic"
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comic-update?page=$page", headers)
     override fun latestUpdatesSelector() = "li.row"
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
@@ -26,7 +27,7 @@ class XoxoComics : WPComics("XOXO Comics", "https://xoxocomic.com", "en", Simple
         }
     }
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search?keyword=$query&page=$page", headers)
+        return GET("$baseUrl/search-comic?keyword=$query&page=$page", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
