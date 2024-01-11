@@ -49,10 +49,20 @@ class DynastyDoujins : DynastyScans() {
 
     override fun chapterListSelector() = "div#main > dl.chapter-list > dd"
 
+    private fun doujinChapterParse(document: Document): List<SChapter> {
+        return try {
+            document.select(chapterListSelector()).map { chapterFromElement(it) }.toMutableList()
+        } catch (e: IndexOutOfBoundsException) {
+            mutableListOf()
+        }
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-
-        val chapters = try { document.select(chapterListSelector()).map { chapterFromElement(it) }.toMutableList() } catch (e: IndexOutOfBoundsException) { mutableListOf() }
+        val chapters = mutableListOf<SChapter>()
+        var page = 1
+        val maxRetry = 10
+        var retry = 0
 
         document.select("a.thumbnail img").let { images ->
             if (images.isNotEmpty()) {
@@ -64,7 +74,31 @@ class DynastyDoujins : DynastyScans() {
                 )
             }
         }
+        chapters.addAll(doujinChapterParse(document))
 
+        var hasNextPage = popularMangaNextPageSelector().let { selector ->
+            document.select(selector).first()
+        } != null
+
+        while (hasNextPage) {
+            page += 1
+            val doujinURL = document.location() + "?page=$page"
+
+            val newRequest = GET(doujinURL, headers)
+            val newResponse = client.newCall(newRequest).execute()
+
+            if (!newResponse.isSuccessful) {
+                retry += 1
+                if (retry > maxRetry) { break } else { continue }
+            }
+
+            val newDocument = newResponse.asJsoup()
+            chapters.addAll(doujinChapterParse(newDocument))
+
+            hasNextPage = popularMangaNextPageSelector().let { selector ->
+                newDocument.select(selector).first()
+            } != null
+        }
         return chapters
     }
 
