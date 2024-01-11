@@ -6,7 +6,17 @@ import java.util.Locale
 
 class TonizuToon : Madara(
     "TonizuToon",
-    "https://tonizutoon.com",
+    "https://tonizu.com",
     "tr",
-    SimpleDateFormat("MMMMM d, yyyy", Locale("tr")),
-)
+    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+) {
+    override val useNewChapterEndpoint = true
+
+    override val mangaDetailsSelectorTitle = "#manga-title"
+
+    override val mangaDetailsSelectorAuthor = ".summary-heading:contains(Yazar) ~ .summary-content"
+
+    override val mangaDetailsSelectorStatus = ".summary-heading:contains(Durumu) ~ .summary-content"
+
+    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
+}
