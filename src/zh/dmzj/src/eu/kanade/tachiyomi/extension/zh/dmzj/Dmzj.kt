@@ -27,7 +27,7 @@ class Dmzj : ConfigurableSource, HttpSource() {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "动漫之家"
-    override val baseUrl = "https://m.dmzj.com"
+    override val baseUrl = "https://m.idmzj.com"
 
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -36,6 +36,13 @@ class Dmzj : ConfigurableSource, HttpSource() {
         .addInterceptor(ImageUrlInterceptor)
         .addInterceptor(CommentsInterceptor)
         .rateLimit(4)
+        .apply {
+            val interceptors = interceptors()
+            val index = interceptors.indexOfFirst { "Brotli" in it.javaClass.simpleName }
+            if (index >= 0) {
+                interceptors.add(interceptors.removeAt(index))
+            }
+        }
         .build()
 
     // API v4 randomly fails
