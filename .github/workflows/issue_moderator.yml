@@ -13,8 +13,16 @@ jobs:
       - name: Moderate issues
         uses: tachiyomiorg/issue-moderator-action@v2
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: ${{ secrets.ISSUE_MODERATOR_PAT }}
           duplicate-label: Duplicate
+
+          blurbs: |
+            [
+              {
+                "keywords": ["cf", "cloudflare"],
+                "message": "Refer to the **Solving Cloudflare issues** section at https://tachiyomi.org/docs/guides/troubleshooting/#cloudflare. If it doesn't work, migrate to other sources or wait until they lower their protection."
+              }
+            ]
 
           duplicate-check-enabled: true
           duplicate-check-labels: |
@@ -23,6 +31,7 @@ jobs:
           existing-check-enabled: true
           existing-check-labels: |
             ["Source request", "Domain changed"]
+          existing-check-repo-url: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json
 
           auto-close-rules: |
             [
