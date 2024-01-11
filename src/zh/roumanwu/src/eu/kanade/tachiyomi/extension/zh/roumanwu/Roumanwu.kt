@@ -116,7 +116,7 @@ class Roumanwu : HttpSource(), ConfigurableSource {
         private const val MIRROR_PREF_SUMMARY = "使用镜像网址。重启软件生效。"
 
         // 地址: https://rou.pub/dizhi
-        private val MIRRORS = arrayOf("https://rouman5.com", "https://roum2.xyz")
+        private val MIRRORS = arrayOf("https://rouman5.com", "https://roum10.xyz")
         private val MIRRORS_DESC = arrayOf("主站", "镜像")
         private const val MIRROR_DEFAULT = 1.toString() // use mirror
 
