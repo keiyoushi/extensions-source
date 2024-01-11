@@ -51,7 +51,7 @@ class Multporn : ParsedHttpSource() {
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun popularMangaRequest(page: Int) = buildPopularMangaRequest(page - 1)
