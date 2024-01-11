@@ -9,13 +9,13 @@ class WPComicsGenerator : ThemeSourceGenerator {
 
     override val themeClass = "WPComics"
 
-    override val baseVersionCode: Int = 2
+    override val baseVersionCode: Int = 3
 
     override val sources = listOf(
         SingleLang("NetTruyen", "https://www.nettruyenclub.com", "vi", overrideVersionCode = 21),
         SingleLang("NhatTruyen", "https://nhattruyenmax.com", "vi", overrideVersionCode = 13),
         SingleLang("TruyenChon", "http://truyenchon.com", "vi", overrideVersionCode = 3),
-        SingleLang("XOXO Comics", "https://xoxocomic.com", "en", className = "XoxoComics", overrideVersionCode = 4),
+        SingleLang("XOXO Comics", "https://xoxocomic.com", "en", className = "XoxoComics", overrideVersionCode = 3),
     )
 
     companion object {
