@@ -7,24 +7,23 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
-import java.net.URL
 
 class Nicomanga : HttpSource() {
     companion object {
-        val thumbnailURLRegex: Regex = "background-image:[^;]url\\s*\\(\\s*'([^?']+)".toRegex()
+        private val thumbnailURLRegex: Regex = "background-image:[^;]url\\s*\\(\\s*'([^?']+)".toRegex()
 
-        val statusRegex: Regex = "(?<=-)[^.]+".toRegex()
+        private val statusRegex: Regex = "-([^.]+)".toRegex()
 
-        val urlRegex: Regex = "(?<=manga-)[^/]+(?=\\.html\$)".toRegex()
+        private val urlRegex: Regex = "manga-([^/]+)\\.html\$".toRegex()
 
-        val floatRegex: Regex = "\\d+(?:\\.\\d+)?".toRegex()
+        private val floatRegex: Regex = "\\d+(?:\\.\\d+)?".toRegex()
 
-        val chapterIdRegex: Regex = "(?<=imgsListchap\\()\\d+".toRegex()
+        private val chapterIdRegex: Regex = "imgsListchap\\((\\d+)".toRegex()
     }
 
     override val baseUrl: String = "https://nicomanga.com"
@@ -38,21 +37,18 @@ class Nicomanga : HttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     private fun mangaListParse(response: Response): MangasPage {
-        val doc = Jsoup.parse(response.body.string())
-        val hasNextPage =
-            if (doc.select(".pagination li:last-of-type").size > 0 &&
-                doc.select(".pagination li:last-of-type")[0].text() == "»"
-            ) {
+        val doc = response.asJsoup()
+        val hasNextPage = (
+            doc.select(".pagination li:last-of-type").size > 0 &&
+                doc.select(".pagination li:last-of-type")[0].text() == "»" &&
                 doc.select(".pagination li:last-of-type a.disabled").size == 0
-            } else {
-                doc.select(".pagination li:last-of-type a.active").size == 0
-            }
+            ) || doc.select(".pagination li:last-of-type a.active").size == 0
+
         val mangas = doc.select(".row > .thumb-item-flow").map { manga ->
             SManga.create().apply {
-                val relURL = manga.selectFirst(".series-title a")?.attr("href") ?: ""
-                setUrlWithoutDomain(URL(URL(baseUrl), relURL).toString())
-                title = manga.selectFirst(".series-title")?.text() ?: ""
-                thumbnail_url = thumbnailURLRegex.find(manga.selectFirst(".img-in-ratio.lazyloaded")?.attr("style") ?: "")?.groupValues?.get(1)
+                setUrlWithoutDomain(manga.selectFirst(".series-title a")!!.absUrl("href"))
+                title = manga.selectFirst(".series-title")?.text()!!
+                thumbnail_url = thumbnailURLRegex.find(manga.selectFirst(".img-in-ratio.lazyloaded")!!.attr("style"))!!.groupValues[1]
             }
         }
         return MangasPage(mangas, hasNextPage)
@@ -64,7 +60,7 @@ class Nicomanga : HttpSource() {
             .addQueryParameter("sort", "last_update")
             .addQueryParameter("sort_type", "DESC")
             .build()
-        return GET(url)
+        return GET(url, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
@@ -75,7 +71,7 @@ class Nicomanga : HttpSource() {
             .addQueryParameter("sort", "views")
             .addQueryParameter("sort_type", "DESC")
             .build()
-        return GET(url)
+        return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
@@ -100,36 +96,30 @@ class Nicomanga : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         author = doc.select("ul.manga-info a[href^=\"manga-author\"]").joinToString { it.text() }
         genre = doc.select("ul.manga-info a[href^=\"manga-list-genre\"]").joinToString { it.text() }
-        val statusText = statusRegex.find(doc.select(".manga-info li:has(i.fa-spinner) a").attr("href"))?.groupValues?.get(0) ?: ""
+        val statusText = statusRegex.find(doc.select(".manga-info li:has(i.fa-spinner) a").attr("href"))?.run { groupValues[1] }
         status = when (statusText) {
-            "on-going" -> {
-                SManga.ONGOING
-            }
-            "completed" -> {
-                SManga.COMPLETED
-            }
-            else -> {
-                SManga.UNKNOWN
-            }
+            "on-going" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = urlRegex.find(manga.url)?.groupValues?.get(0) ?: ""
+        val slug = urlRegex.find(manga.url)!!.groupValues[1]
         return GET("$baseUrl/app/manga/controllers/cont.Listchapterapi.php?slug=$slug")
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         val chapterList = doc.select("ul > a")
         var lastNum = 0f
         val chapters = chapterList.map { chapter ->
             SChapter.create().apply {
                 name = chapter.attr("title").trim()
-                setUrlWithoutDomain(URL(URL(baseUrl), chapter.attr("href")).toString())
+                setUrlWithoutDomain(chapter.absUrl("href"))
                 chapter_number = floatRegex.find(chapter.attr("title").trim())?.groupValues?.get(0)?.toFloat() ?: (lastNum + 0.01f)
                 lastNum = chapter_number
             }
@@ -137,22 +127,14 @@ class Nicomanga : HttpSource() {
         return chapters
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(getChapterUrl(chapter))
-    }
-
     override fun pageListParse(response: Response): List<Page> {
-        val id = chapterIdRegex.find(response.body.string())?.groupValues?.get(0) ?: throw Exception("chapter-id not found")
-        val headers = headersBuilder().set("referer", response.request.url.toUrl().toString()).build()
+        val id = chapterIdRegex.find(response.body.string())?.groupValues?.get(1) ?: throw Exception("chapter-id not found")
+        val headers = headersBuilder().set("referer", response.request.url.toString()).build()
         val r = client.newCall(GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$id", headers)).execute()
-        val doc = Jsoup.parse(r.body.string())
-        val pages = ArrayList<Page>()
-        val pageList = doc.select("img.chapter-img")
-        for ((i, page) in pageList.withIndex()) {
-            val url = page.attr("data-src")
-            pages.add(Page(i + 1, url, url))
+        val doc = r.asJsoup()
+        return doc.select("img.chapter-img").mapIndexed { i, page ->
+            Page(i + 1, page.attr("data-src"))
         }
-        return pages
     }
 
     override fun imageRequest(page: Page): Request {
