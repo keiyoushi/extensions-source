@@ -1,12 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.anchira
 
+import android.util.Base64
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.ResponseBody
 import okio.ByteString.Companion.decodeBase64
 
 object AnchiraHelper {
-    const val KEY = "fuck niggers and faggots, and death to all jews"
+    const val KEY = "ZnVjayBuaWdnZXJzIGFuZCBmYWdnb3RzLCBhbmQgZGVhdGggdG8gYWxsIGpld3M="
 
     val json = Json { ignoreUnknownKeys = true }
 
@@ -17,7 +18,7 @@ object AnchiraHelper {
         return json.decodeFromString(
             XXTEA.decryptToString(
                 encryptedText.toByteArray(),
-                key = KEY,
+                key = Base64.decode(KEY, Base64.DEFAULT).decodeToString(),
             )!!,
         )
     }
