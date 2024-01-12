@@ -17,9 +17,9 @@ if (System.getenv("CI") == null || System.getenv("CI_MODULE_GEN") == "true") {
      * Add or remove modules to load as needed for local development here.
      * To generate multisrc extensions first, run the `:multisrc:generateExtensions` task first.
      */
-    //loadAllIndividualExtensions()
-    //loadAllGeneratedMultisrcExtensions()
-    loadIndividualExtension("en", "supermega")
+    loadAllIndividualExtensions()
+    loadAllGeneratedMultisrcExtensions()
+    // loadIndividualExtension("all", "mangadex")
     // loadGeneratedMultisrcExtension("en", "guya")
 } else {
     // Running in CI (GitHub Actions)
