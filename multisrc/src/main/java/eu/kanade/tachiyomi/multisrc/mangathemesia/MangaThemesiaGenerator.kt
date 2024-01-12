@@ -142,7 +142,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Snudae Scans", "https://snudaescans.com", "en", isNsfw = true, className = "BatotoScans", overrideVersionCode = 1),
         SingleLang("Soul Scans", "https://soulscans.my.id", "id", overrideVersionCode = 1),
         SingleLang("SSS Hentais", "https://hentais.sssscanlator.com", "pt-BR", isNsfw = true, className = "SssHentais", overrideVersionCode = 1),
-        SingleLang("SSSScanlator", "https://sssscanlator.com", "pt-BR", overrideVersionCode = 1),
+        SingleLang("SSSScanlator", "https://sssscanlator.br", "pt-BR", overrideVersionCode = 2),
         SingleLang("Starlight Scan", "https://starligthscan.com", "pt-BR", isNsfw = true),
         SingleLang("Summer Fansub", "https://smmr.in", "pt-BR", isNsfw = true),
         SingleLang("SummerToon", "https://summertoon.com", "tr"),
