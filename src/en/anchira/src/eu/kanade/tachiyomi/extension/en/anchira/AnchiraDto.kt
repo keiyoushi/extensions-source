@@ -8,13 +8,8 @@ data class ListEntry(
     val id: Int,
     val key: String,
     val title: String,
-    val cover: Image,
+    @SerialName("thumb_index") val thumbnailIndex: Int,
     val tags: List<Tag> = emptyList(),
-)
-
-@Serializable
-data class Image(
-    @SerialName("n") val name: String,
 )
 
 @Serializable
@@ -38,7 +33,6 @@ data class Entry(
     @SerialName("published_at") val publishedAt: Long,
     val title: String,
     @SerialName("thumb_index") val thumbnailIndex: Int,
-    val data: List<Image>,
     val tags: List<Tag> = emptyList(),
     val url: String? = null,
 )
@@ -48,6 +42,7 @@ data class ImageData(
     val id: Int,
     val key: String,
     val hash: String,
+    val names: List<String>,
 )
 
 @Serializable
@@ -56,6 +51,7 @@ data class EntryKey(
     val key: String,
     val hash: String,
     val url: String?,
+    val names: List<String> = emptyList(),
 )
 
 @Serializable

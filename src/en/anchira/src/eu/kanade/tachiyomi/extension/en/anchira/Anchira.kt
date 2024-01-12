@@ -70,7 +70,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                 SManga.create().apply {
                     url = "/g/${it.id}/${it.key}"
                     title = it.title
-                    thumbnail_url = "$cdnUrl/${it.id}/${it.key}/m/${it.cover.name}"
+                    thumbnail_url = "$cdnUrl/${it.id}/${it.key}/m/${it.thumbnailIndex + 1}"
                     artist = it.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
                     author = it.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
                     genre = prepareTags(it.tags)
@@ -160,7 +160,7 @@ class Anchira : HttpSource(), ConfigurableSource {
             url = "/g/${data.id}/${data.key}"
             title = data.title
             thumbnail_url =
-                "$cdnUrl/${data.id}/${data.key}/b/${data.data[data.thumbnailIndex].name}"
+                "$cdnUrl/${data.id}/${data.key}/b/${data.thumbnailIndex + 1}"
             artist = data.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
             author = data.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
             genre = prepareTags(data.tags)
@@ -205,10 +205,10 @@ class Anchira : HttpSource(), ConfigurableSource {
         val data = decodeBytes<Entry>(response.body, anchiraData.key)
         val imageData = getImageData(data)
 
-        return data.data.mapIndexed { i, img ->
+        return imageData.names.mapIndexed { i, name ->
             Page(
                 i,
-                imageUrl = "$cdnUrl/${data.id}/${imageData.key}/${imageData.hash}/b/${img.name}",
+                imageUrl = "$cdnUrl/${imageData.id}/${imageData.key}/${imageData.hash}/b/$name",
             )
         }
     }
@@ -217,7 +217,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         val keys = anchiraData.galleries.find { it.id == entry.id }
 
         if (keys != null) {
-            return ImageData(keys.id, keys.key, keys.hash)
+            return ImageData(keys.id, keys.key, keys.hash, keys.names)
         }
 
         try {
