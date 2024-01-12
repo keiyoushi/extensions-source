@@ -21,8 +21,6 @@ class Nicomanga : HttpSource() {
 
         private val urlRegex: Regex = "manga-([^/]+)\\.html\$".toRegex()
 
-        private val floatRegex: Regex = "\\d+(?:\\.\\d+)?".toRegex()
-
         private val chapterIdRegex: Regex = "imgsListchap\\((\\d+)".toRegex()
     }
 
@@ -115,13 +113,10 @@ class Nicomanga : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = response.asJsoup()
         val chapterList = doc.select("ul > a")
-        var lastNum = 0f
         val chapters = chapterList.map { chapter ->
             SChapter.create().apply {
                 name = chapter.attr("title").trim()
                 setUrlWithoutDomain(chapter.absUrl("href"))
-                chapter_number = floatRegex.find(chapter.attr("title").trim())?.groupValues?.get(0)?.toFloat() ?: (lastNum + 0.01f)
-                lastNum = chapter_number
             }
         }
         return chapters
