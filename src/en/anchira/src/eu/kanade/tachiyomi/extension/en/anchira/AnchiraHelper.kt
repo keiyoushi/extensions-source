@@ -7,18 +7,18 @@ import okhttp3.ResponseBody
 import okio.ByteString.Companion.decodeBase64
 
 object AnchiraHelper {
-    const val KEY = "ZnVjayBuaWdnZXJzIGFuZCBmYWdnb3RzLCBhbmQgZGVhdGggdG8gYWxsIGpld3M="
+    const val KEY = "ZnVja19uaWdnZXJzX2FuZF9mYWdnb3RzLF9hbmRfZGVhdGhfdG9fYWxsX2pld3M="
 
     val json = Json { ignoreUnknownKeys = true }
 
     fun getPathFromUrl(url: String) = "${url.split("/").reversed()[1]}/${url.split("/").last()}"
 
-    inline fun <reified T> decodeBytes(body: ResponseBody): T {
+    inline fun <reified T> decodeBytes(body: ResponseBody, key: String = KEY): T {
         val encryptedText = body.string().decodeBase64()!!
         return json.decodeFromString(
             XXTEA.decryptToString(
                 encryptedText.toByteArray(),
-                key = Base64.decode(KEY, Base64.DEFAULT).decodeToString(),
+                key = Base64.decode(key, Base64.DEFAULT).decodeToString(),
             )!!,
         )
     }
