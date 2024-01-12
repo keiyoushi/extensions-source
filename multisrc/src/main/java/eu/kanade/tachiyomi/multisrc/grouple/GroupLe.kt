@@ -286,11 +286,7 @@ abstract class GroupLe(
 
         val html = document.html()
 
-        var readerMark = "rm_h.initReader( ["
-
-        if (!html.contains(readerMark)) {
-            readerMark = "rm_h.readerInit( 0,["
-        }
+        var readerMark = "rm_h.readerDoInit(["
 
         if (!html.contains(readerMark)) {
             if (document.select(".input-lg").isNotEmpty() || (document.select(".user-avatar").isNullOrEmpty() && document.select("img.logo").first()?.attr("title")?.contains("Allhentai") == true)) {
