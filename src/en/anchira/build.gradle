@@ -10,8 +10,4 @@ ext {
     isNsfw = true
 }
 
-dependencies {
-    implementation "com.ensarsarajcic.kotlinx:serialization-msgpack:0.5.5"
-}
-
 apply from: "$rootDir/common.gradle"
