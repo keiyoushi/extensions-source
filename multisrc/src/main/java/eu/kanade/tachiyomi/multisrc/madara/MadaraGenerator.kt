@@ -428,6 +428,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Scan Hentai Menu", "https://scan.hentai.menu", "fr", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Scantrad-VF", "https://scantrad-vf.co", "fr", className = "ScantradVF"),
         SingleLang("Sdl scans", "https://sdlscans.com", "es", className = "SdlScans"),
+        SingleLang("Setsu Scans", "https://setsuscans.com", "en"),
         SingleLang("Shadowtrad", "https://shadowtrad.net", "fr"),
         SingleLang("ShavelProiection", "https://www.shavelproiection.com", "it", true),
         SingleLang("Shayami", "https://shayami.com", "es"),
