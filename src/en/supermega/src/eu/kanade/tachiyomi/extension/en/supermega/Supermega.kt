@@ -7,15 +7,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.security.cert.X509Certificate
-import java.text.SimpleDateFormat
-import java.util.Locale
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
@@ -49,14 +47,16 @@ class Supermega : ParsedHttpSource() {
         .map { it.mangas.first().apply { initialized = true } }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val latestComicNumber = client.newCall(GET(baseUrl)).execute().asJsoup().select("[name='bigbuttonprevious']").first()!!.parent()!!.attr("href").substringAfter("?i=").toInt()+1
-        Observable.just(latestComicNumber.let{ IntRange(1, it) }.map {
-            SChapter.create().apply {
-                name = it.toString()
-                chapter_number = it.toFloat()
-                setUrlWithoutDomain("?i=$it")
-            }
-        })
+        val latestComicNumber = client.newCall(GET(baseUrl)).execute().asJsoup().select("[name='bigbuttonprevious']").first()!!.parent()!!.attr("href").substringAfter("?i=").toInt() + 1
+        return Observable.just(
+            latestComicNumber.let { it -> IntRange(1, it) }.map { it ->
+                SChapter.create().apply {
+                    name = it.toString()
+                    chapter_number = it.toFloat()
+                    setUrlWithoutDomain("?i=$it")
+                }
+            },
+        )
     }
 
     override fun pageListParse(document: Document) =
@@ -91,6 +91,9 @@ class Supermega : ParsedHttpSource() {
             .hostnameVerifier { _, _ -> true }.build()
     }
 
+    override fun chapterListSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Not used")
 
     override fun imageUrlRequest(page: Page) = GET(page.url)
@@ -123,5 +126,4 @@ class Supermega : ParsedHttpSource() {
     override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
 
     override fun latestUpdatesSelector(): String = throw Exception("Not used")
-
 }
