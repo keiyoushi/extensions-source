@@ -12,19 +12,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 
 class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
 
@@ -46,7 +41,6 @@ class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
 
         return KEY_REGEX.find(deobfuscatedScript)?.groupValues?.get(1)
             ?: throw Exception("No se pudo encontrar la clave")
-
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
