@@ -42,10 +42,10 @@ class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
     private fun getKey(): String {
         val script = client.newCall(GET("$baseUrl/js/datachs.js")).execute().body.string()
         val deobfuscatedScript = Deobfuscator.deobfuscateScript(script)
-            ?: throw Exception("Could not deobfuscate script")
+            ?: throw Exception("No se pudo desofuscar el script")
 
         return KEY_REGEX.find(deobfuscatedScript)?.groupValues?.get(1)
-            ?: throw Exception("Could not find keys")
+            ?: throw Exception("No se pudo encontrar la clave")
 
     }
 
