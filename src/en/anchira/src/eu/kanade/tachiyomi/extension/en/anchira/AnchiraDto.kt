@@ -51,9 +51,15 @@ data class ImageData(
 )
 
 @Serializable
-data class ExtraData(
+data class EntryKey(
     val id: Int,
     val key: String,
     val hash: String,
     val url: String?,
+)
+
+@Serializable
+data class AnchiraData(
+    val key: String,
+    val galleries: List<EntryKey>,
 )

@@ -63,7 +63,7 @@ class Anchira : HttpSource(), ConfigurableSource {
     override fun latestUpdatesRequest(page: Int) = GET("$libraryUrl?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = decodeBytes<LibraryResponse>(response.body)
+        val data = decodeBytes<LibraryResponse>(response.body, anchiraData.key)
 
         return MangasPage(
             data.entries.map {
@@ -154,7 +154,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         GET("$libraryUrl/${getPathFromUrl(manga.url)}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = decodeBytes<Entry>(response.body)
+        val data = decodeBytes<Entry>(response.body, anchiraData.key)
 
         return SManga.create().apply {
             url = "/g/${data.id}/${data.key}"
@@ -171,7 +171,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     override fun getMangaUrl(manga: SManga) = if (preferences.openSource) {
         val id = manga.url.split("/").reversed()[1].toInt()
-        entryExtraData.find { it.id == id }?.url ?: "$baseUrl${manga.url}"
+        anchiraData.galleries.find { it.id == id }?.url ?: "$baseUrl${manga.url}"
     } else {
         "$baseUrl${manga.url}"
     }
@@ -182,7 +182,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         GET("$libraryUrl/${getPathFromUrl(manga.url)}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = decodeBytes<Entry>(response.body)
+        val data = decodeBytes<Entry>(response.body, anchiraData.key)
 
         return listOf(
             SChapter.create().apply {
@@ -202,7 +202,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         GET("$libraryUrl/${getPathFromUrl(chapter.url)}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = decodeBytes<Entry>(response.body)
+        val data = decodeBytes<Entry>(response.body, anchiraData.key)
         val imageData = getImageData(data)
 
         return data.data.mapIndexed { i, img ->
@@ -214,7 +214,7 @@ class Anchira : HttpSource(), ConfigurableSource {
     }
 
     private fun getImageData(entry: Entry): ImageData {
-        val keys = entryExtraData.find { it.id == entry.id }
+        val keys = anchiraData.galleries.find { it.id == entry.id }
 
         if (keys != null) {
             return ImageData(keys.id, keys.key, keys.hash)
@@ -225,7 +225,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                 client.newCall(GET("$libraryUrl/${entry.id}/${entry.key}/data", headers)).execute()
             val body = response.body
 
-            return decodeBytes(body)
+            return decodeBytes(body, anchiraData.key)
         } catch (_: IOException) {
             throw IOException("Complete a Captcha in the site to continue")
         }
@@ -323,15 +323,15 @@ class Anchira : HttpSource(), ConfigurableSource {
         it.name == "session"
     }
 
-    private val entryExtraData by lazy {
-        client.newCall(GET(KEYS_JSON, headers)).execute()
-            .use { json.decodeFromStream<List<ExtraData>>(it.body.byteStream()) }
+    private val anchiraData by lazy {
+        client.newCall(GET(DATA_JSON, headers)).execute()
+            .use { json.decodeFromStream<AnchiraData>(it.body.byteStream()) }
     }
 
     companion object {
         private const val IMAGE_QUALITY_PREF = "image_quality"
         private const val OPEN_SOURCE_PREF = "use_manga_source"
-        private const val KEYS_JSON =
-            "https://gist.githubusercontent.com/LetrixZ/2b559cc5829d1c221c701e02ecd81411/raw/keys.json"
+        private const val DATA_JSON =
+            "https://gist.githubusercontent.com/LetrixZ/2b559cc5829d1c221c701e02ecd81411/raw/site_data.json"
     }
 }
