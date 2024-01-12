@@ -108,28 +108,25 @@ class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
     }
 
     private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this) {
-            it.groupValues[1]
-        }
+        return UNESCAPE_REGEX.replace(this, "$1")
     }
 
     private fun String.unescapeJava(): String {
         var escaped = this
         if (!escaped.contains("\\u")) return escaped
-
-        var processed = ""
+        val builder = StringBuilder()
         var position = escaped.indexOf("\\u")
         while (position != -1) {
             if (position != 0) {
-                processed += escaped.substring(0, position)
+                builder.append(escaped, 0, position)
             }
             val token = escaped.substring(position + 2, position + 6)
             escaped = escaped.substring(position + 6)
-            processed += Integer.parseInt(token, 16).toChar()
+            builder.append(Integer.parseInt(token, 16).toChar())
             position = escaped.indexOf("\\u")
         }
-        processed += escaped
-        return processed
+        builder.append(escaped)
+        return builder.toString()
     }
 
     private fun String.parseDate(): Long {
