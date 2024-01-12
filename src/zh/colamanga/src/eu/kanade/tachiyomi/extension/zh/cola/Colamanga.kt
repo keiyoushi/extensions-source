@@ -6,13 +6,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class Colamanga : ParsedHttpSource() {
@@ -25,14 +21,16 @@ class Colamanga : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .retryOnConnectionFailure(true)
-        .followRedirects(true)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(1, TimeUnit.MINUTES)
+            .retryOnConnectionFailure(true)
+            .followRedirects(true)
+            .build()
 
-    private val json: Json by injectLazy()
+    override fun headersBuilder() = super.headersBuilder().add("Referer", baseUrl)
 
     override fun popularMangaSelector() = "li.fed-list-item"
 
@@ -52,7 +50,8 @@ class Colamanga : ParsedHttpSource() {
 
     override fun latestUpdatesRequest(page: Int) = throw Exception("Not Used")
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw Exception("No search")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+        throw Exception("No search")
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
 
@@ -81,17 +80,15 @@ class Colamanga : ParsedHttpSource() {
         }
     }
 
-    private fun parseDate(date: String): Long {
-        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0L
-    }
-
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        println("mangaDetailsParse")
-        println(document)
-        thumbnail_url = document.select("dt.fed-deta-images a.fed-list-pics").attr("data-original")
-        description = document.select("p.fed-part-both").text().trim()
-        title = document.select("h1").text().trim()
-    }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            println("mangaDetailsParse")
+            println(document)
+            thumbnail_url =
+                document.select("dt.fed-deta-images a.fed-list-pics").attr("data-original")
+            description = document.select("p.fed-part-both").text().trim()
+            title = document.select("h1").text().trim()
+        }
 
     override fun pageListParse(document: Document): List<Page> {
         println("pageListParse")
