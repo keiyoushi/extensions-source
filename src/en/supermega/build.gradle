@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 ext {
-    extName = 'Supermega'
+    extName = 'SUPER MEGA'
     pkgNameSuffix = 'en.supermega'
     extClass = '.Supermega'
     extVersionCode = 3
