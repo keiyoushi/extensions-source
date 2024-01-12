@@ -21,14 +21,19 @@ or fixing it directly by submitting a Pull Request.
    4. [Extension call flow](#extension-call-flow)
    5. [Misc notes](#misc-notes)
    6. [Advanced extension features](#advanced-extension-features)
-4. [Running](#running)
-5. [Debugging](#debugging)
+4. [Multi-source themes](#multi-source-themes)
+   1. [The directory structure](#the-directory-structure)
+   2. [Development workflow](#development-workflow)
+   3. [Scaffolding overrides](#scaffolding-overrides)
+   4. [Additional Notes](#additional-notes)
+5. [Running](#running)
+6. [Debugging](#debugging)
    1. [Android Debugger](#android-debugger)
    2. [Logs](#logs)
    3. [Inspecting network calls](#inspecting-network-calls)
    4. [Using external network inspecting tools](#using-external-network-inspecting-tools)
-6. [Building](#building)
-7. [Submitting the changes](#submitting-the-changes)
+7. [Building](#building)
+8. [Submitting the changes](#submitting-the-changes)
    1. [Pull Request checklist](#pull-request-checklist)
 
 ## Prerequisites
@@ -52,8 +57,11 @@ that existing contributors will not actively teach them to you.
 
 ### Cloning the repository
 
-Some alternative steps can be followed to skip unrelated sources, which  will make it faster to pull,
+Some alternative steps can be followed to skip unrelated sources, which will make it faster to pull,
 navigate and build. This will also reduce disk usage and network traffic.
+
+**These steps are only needed when the repo is huge and contains a lot of sources. If the repo is
+small, just do a normal full clone instead.**
 
 <details><summary>Steps</summary>
 
@@ -78,9 +86,12 @@ navigate and build. This will also reduce disk usage and network traffic.
     ```bash
     git sparse-checkout set --cone --sparse-index
     # add project folders
-    git sparse-checkout add .run buildSrc core gradle lib
+    git sparse-checkout add .run buildSrc core gradle lib multisrc/src/main/java/generator
     # add a single source
     git sparse-checkout add src/<lang>/<source>
+    # add a multisrc theme
+    git sparse-checkout add multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
+    git sparse-checkout add multisrc/overrides/<source>
     ```
 
     To remove a source, open `.git/info/sparse-checkout` and delete the exact
@@ -101,8 +112,13 @@ navigate and build. This will also reduce disk usage and network traffic.
     ```bash
     /*
     !/src/*
+    !/multisrc/overrides/*
+    !/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*
     # allow a single source
     /src/<lang>/<source>
+    # allow a multisrc theme
+    /multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
+    /multisrc/overrides/<source>
     # or type the source name directly
     <source>
     ```
@@ -150,7 +166,7 @@ and [negative refspecs](https://github.blog/2020-10-19-git-2-29-released/#user-c
 ## Getting help
 
 - Join [the Discord server](https://discord.gg/3FbCpdKbdY) for online help and to ask questions while 
-developing your extension.
+developing your extension. When doing so, please ask it in the `#programming` channel.
 - There are some features and tricks that are not explored in this document. Refer to existing 
 extension code for examples.
 
@@ -170,7 +186,7 @@ the full locale string instead.
 
 ### Loading a subset of Gradle modules
 
-By default, all individual extensions are loaded for local development.
+By default, all individual and generated multisrc extensions are loaded for local development.
 This may be inconvenient if you only need to work on one extension at a time.
 
 To adjust which modules are loaded, make adjustments to the `settings.gradle.kts` file as needed.
@@ -249,12 +265,12 @@ With the example used above, the version would be `1.4.1`.
 
 Extensions rely on [extensions-lib](https://github.com/tachiyomiorg/extensions-lib), which provides
 some interfaces and stubs from the [app](https://github.com/tachiyomiorg/tachiyomi) for compilation
-purposes. The actual implementations can be found [here](https://github.com/tachiyomiorg/tachiyomi/tree/main/app/src/main/java/eu/kanade/tachiyomi/source).
+purposes. The actual implementations can be found [here](https://github.com/tachiyomiorg/tachiyomi/tree/master/app/src/main/java/eu/kanade/tachiyomi/source).
 Referencing the actual implementation will help with understanding extensions' call flow.
 
 #### DataImage library
 
-[`lib-dataimage`](https://github.com/tachiyomiorg/extensions/tree/main/lib/dataimage) is a library 
+[`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage) is a library 
 for handling [base 64 encoded image data](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs)
 using an [OkHttp interceptor](https://square.github.io/okhttp/interceptors/).
 
@@ -266,7 +282,7 @@ dependencies {
 
 #### i18n library
 
-[`lib-i18n`](https://github.com/tachiyomiorg/extensions/tree/main/lib/i18n) is a library for handling
+[`lib-i18n`](https://github.com/keiyoushi/extensions-source/tree/main/lib/i18n) is a library for handling
 internationalization in the sources. It allows loading `.properties` files with messages located under
 the `assets/i18n` folder of each extension, that can be used to translate strings under the source.
 
@@ -279,7 +295,7 @@ dependencies {
 #### Additional dependencies
 
 If you find yourself needing additional functionality, you can add more dependencies to your `build.gradle` 
-file. Many of [the dependencies](https://github.com/tachiyomiorg/tachiyomi/blob/main/app/build.gradle.kts) 
+file. Many of [the dependencies](https://github.com/tachiyomiorg/tachiyomi/blob/master/app/build.gradle.kts) 
 from the main Tachiyomi app are exposed to extensions by default.
 
 > [!NOTE]
@@ -350,7 +366,7 @@ is similar to what happens with `fetchPopularManga`.
 The search flow have support to filters that can be added to a `FilterList` inside the `getFilterList`
 method. When the user changes the filters' state, they will be passed to the `searchRequest`, and they
 can be iterated to create the request (by getting the `filter.state` value, where the type varies
-depending on the `Filter` used). You can check the filter types available [here](https://github.com/tachiyomiorg/tachiyomi/blob/main/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/model/Filter.kt)
+depending on the `Filter` used). You can check the filter types available [here](https://github.com/tachiyomiorg/tachiyomi/blob/master/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/model/Filter.kt)
 and in the table below.
 
 | Filter             | State type  | Description                                                                                                                                                              |
@@ -386,7 +402,7 @@ will be cached.
     - `SManga.initialized` tells the app if it should call `getMangaDetails`. If you are overriding
     `getMangaDetails`, make sure to pass it as `true`.
     - `SManga.genre` is a string containing list of all genres separated with `", "`.
-    - `SManga.status` is an "enum" value. Refer to [the values in the `SManga` companion object](https://github.com/tachiyomiorg/extensions-lib/blob/main/library/src/main/java/eu/kanade/tachiyomi/source/model/SManga.kt#L24).
+    - `SManga.status` is an "enum" value. Refer to [the values in the `SManga` companion object](https://github.com/tachiyomiorg/extensions-lib/blob/master/library/src/main/java/eu/kanade/tachiyomi/source/model/SManga.kt#L26).
     - During a backup, only `url` and `title` are stored. To restore the rest of the manga data, the
     app calls `getMangaDetails`, so all fields should be (re)filled in if possible.
     - If a `SManga` is cached, `getMangaDetails` will be only called when the user does a manual
@@ -507,7 +523,7 @@ There is some cases where existing sources changes their name on the website. To
 these changes in the extension, you need to explicity set the `id` to the same old value, otherwise
 it will get changed by the new `name` value and users will be forced to migrate back to the source.
 
-To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://github.com/tachiyomiorg/extensions/blob/repo/index.json)
+To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://github.com/keiyoushi/extensions/blob/repo/index.json)
 by looking into the `sources` attribute of the extension. When you have the `id` copied, you can
 override it in the source:
 
@@ -528,6 +544,160 @@ The `id` also needs to be explicity set to the old value if you're changing the 
 > If the source has also changed their theme you can instead just change
 > the `name` field in the source class and in the Gradle file. By doing so
 > a new `id` will be generated and users will be forced to migrate.
+
+## Multi-source themes
+The `multisrc` module houses source code for generating extensions for cases where multiple source
+sites use the same site generator tool (usually a CMS) for bootsraping their website and this makes
+them similar enough to prompt code reuse through inheritance/composition; which from now on we will
+use the general **theme** term to refer to.
+
+This module contains the *default implementation* for each theme and definitions for each source that
+builds upon that default implementation and also it's overrides upon that default implementation,
+all of this becomes a set of source code which then is used to generate individual extensions from.
+
+### The directory structure
+```console
+$ tree multisrc
+multisrc
+├── build.gradle.kts
+├── overrides
+│   └── <themepkg>
+│       ├── default
+│       │   ├── additional.gradle
+│       │   └── res
+│       │       ├── mipmap-hdpi
+│       │       │   └── ic_launcher.png
+│       │       ├── mipmap-mdpi
+│       │       │   └── ic_launcher.png
+│       │       ├── mipmap-xhdpi
+│       │       │   └── ic_launcher.png
+│       │       ├── mipmap-xxhdpi
+│       │       │   └── ic_launcher.png
+│       │       ├── mipmap-xxxhdpi
+│       │       │   └── ic_launcher.png
+│       │       └── web_hi_res_512.png
+│       └── <sourcepkg>
+│           ├── additional.gradle
+│           ├── AndroidManifest.xml
+│           ├── res
+│           │   ├── mipmap-hdpi
+│           │   │   └── ic_launcher.png
+│           │   ├── mipmap-mdpi
+│           │   │   └── ic_launcher.png
+│           │   ├── mipmap-xhdpi
+│           │   │   └── ic_launcher.png
+│           │   ├── mipmap-xxhdpi
+│           │   │   └── ic_launcher.png
+│           │   ├── mipmap-xxxhdpi
+│           │   │   └── ic_launcher.png
+│           │   └── web_hi_res_512.png
+│           └── src
+│               └── <SourceName>.kt
+└── src
+    └── main
+        ├── AndroidManifest.xml
+        └── java
+            ├── eu
+            │   └── kanade
+            │       └── tachiyomi
+            │           └── multisrc
+            │               └── <themepkg>
+            │                   ├── <ThemeName>Generator.kt
+            │                   └── <ThemeName>.kt
+            └── generator
+                ├── GeneratorMain.kt
+                ├── IntelijConfigurationGeneratorMain.kt
+                └── ThemeSourceGenerator.kt
+```
+
+- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<themepkg>/<Theme>.kt` defines the the theme's
+default implementation.
+- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/<Theme>Generator.kt` defines the the
+theme's generator class, this is similar to a `SourceFactory` class.
+- `multisrc/overrides/<themepkg>/default/res` is the theme's default icons, if a source doesn't have
+overrides for `res`, then default icons will be used.
+- `multisrc/overrides/<themepkg>/default/additional.gradle` defines additional gradle code, this will
+be copied at the end of all generated sources from this theme.
+- `multisrc/overrides/<themepkg>/<sourcepkg>` contains overrides for a source that is defined inside
+the `<Theme>Generator.kt` class.
+- `multisrc/overrides/<themepkg>/<sourcepkg>/src` contains source overrides.
+- `multisrc/overrides/<themepkg>/<sourcepkg>/res` contains override for icons.
+- `multisrc/overrides/<themepkg>/<sourcepkg>/additional.gradle` defines additional gradle code, this
+will be copied at the end of the generated gradle file below the theme's `additional.gradle`.
+- `multisrc/overrides/<themepkg>/<sourcepkg>/AndroidManifest.xml` is copied as an override to the
+default `AndroidManifest.xml` generation if it exists.
+
+> [!NOTE]
+> Files ending with `Gen.kt` (i.e. `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/XxxGen.kt`)
+> are considered helper files and won't be copied to generated sources.
+
+### Development workflow
+There are three steps in running and testing a theme source:
+
+1. Generate the sources
+    - **Option 1: Only generate sources from one theme**
+        - **Method 1:** Find and run `<ThemeName>Generator` run configuration from the
+        `Run/Debug Configuration` menu.
+        - **Method 2:** Directly run `<themepkg>.<ThemeName>Generator.main` by pressing the play
+        button in front of the method shown inside Android Studio's Code Editor to generate sources
+        from the said theme.
+    - **Option 2: Generate sources from all themes**
+        - **Method 1:** Run `./gradlew multisrc:generateExtensions` from a terminal window to
+        generate all sources.
+        - **Method 2:** Directly run `Generator.GeneratorMain.main` by pressing the play button
+        in front of the method shown inside Android Studio's Code Editor to generate all sources.
+2. Sync gradle to import the new generated sources inside `generated-src`
+    - **Method 1:** Android Studio might prompt to sync the gradle. Click on `Sync Now`.
+    - **Method 2:** Manually re-sync by opening `File` -> `Sync Project with Gradle Files` or by
+    pressing `Alt+f` then `g`.
+3. Build and test the generated Extention like normal `src` sources.
+    - It's recommended to make changes here to skip going through step 1 and 2 multiple times, and
+    when you are done, copying the changes back to `multisrc`.
+
+### Scaffolding overrides
+You can use this python script to generate scaffolds for source overrides.
+Put it inside `multisrc/overrides/<themepkg>/` as `scaffold.py`.
+```python
+import os, sys
+from pathlib import Path
+
+theme = Path(os.getcwd()).parts[-1]
+
+print(f"Detected theme: {theme}")
+
+if len(sys.argv) < 3:
+    print("Must be called with a class name and lang, for Example 'python scaffold.py LeviatanScans en'")
+    exit(-1)
+
+source = sys.argv[1]
+package = source.lower()
+lang = sys.argv[2]
+
+print(f"working on {source} with lang {lang}")
+
+os.makedirs(f"{package}/src")
+os.makedirs(f"{package}/res")
+
+with open(f"{package}/src/{source}.kt", "w") as f:
+    f.write(f"package eu.kanade.tachiyomi.extension.{lang}.{package}\n\n")
+```
+
+### Additional Notes
+- Generated sources extension version code is calculated as
+`baseVersionCode + overrideVersionCode + multisrcLibraryVersion`.
+    - Currently `multisrcLibraryVersion` is `0`
+    - When a new source is added, it doesn't need to set `overrideVersionCode` as it's default is `0`.
+    - For each time a source changes in a way that should the version increase, `overrideVersionCode`
+    should be increased by one.
+    - When a theme's default implementation changes, `baseVersionCode` should be increased, the
+    initial value should be `1`.
+    - For example, for a new theme with a new source, extention version code will be `0 + 0 + 1 = 1`.
+- `IntelijConfigurationGeneratorMainKt` should be run on creating or removing a multisrc theme.
+    - On removing a theme, you can manually remove the corresponding configuration in the `.run`
+    folder instead.
+    - Be careful if you're using sparse checkout. If other configurations are accidentally removed,
+    `git add` the file you want and `git restore` the others. Another choice is to allow
+    `/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*` before running the generator.
 
 ## Running
 
