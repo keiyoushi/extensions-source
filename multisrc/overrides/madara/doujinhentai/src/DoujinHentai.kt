@@ -52,7 +52,7 @@ class DoujinHentai : Madara(
                 }
             }
         }
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = "div.c-tabs-item__content > div.c-tabs-item__content, ${popularMangaSelector()}"

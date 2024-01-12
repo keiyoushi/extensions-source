@@ -15,7 +15,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -97,7 +97,7 @@ class ComicFx : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
 
-        val url = "$baseUrl/filterList".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/filterList".toHttpUrl().newBuilder()
 
         for (filter in filterList) {
             when (filter) {
@@ -123,7 +123,7 @@ class ComicFx : ParsedHttpSource() {
 
         url.addQueryParameter("page", page.toString())
         // Unimplemented parameters: "alpha" (For filtering by alphabet) and "tag" (idk)
-        return GET(url.toString())
+        return GET(url.build())
     }
 
     override fun searchMangaSelector() = popularMangaSelector()

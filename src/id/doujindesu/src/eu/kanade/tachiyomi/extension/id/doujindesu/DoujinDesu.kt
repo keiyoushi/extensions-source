@@ -19,7 +19,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -321,7 +321,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     // Search & FIlter
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/manga/page/$page/".toHttpUrlOrNull()?.newBuilder()!!
+        val url = "$baseUrl/manga/page/$page/".toHttpUrl().newBuilder()
             .addQueryParameter("title", query)
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
@@ -349,7 +349,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaFromElement(element: Element): SManga =

@@ -27,7 +27,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -160,13 +159,13 @@ open class BatoTo(
                         else -> { /* Do Nothing */ }
                     }
                 }
-                client.newCall(GET(url.build().toString(), headers)).asObservableSuccess()
+                client.newCall(GET(url.build(), headers)).asObservableSuccess()
                     .map { response ->
                         queryParse(response)
                     }
             }
             else -> {
-                val url = "$baseUrl/browse".toHttpUrlOrNull()!!.newBuilder()
+                val url = "$baseUrl/browse".toHttpUrl().newBuilder()
                 var min = ""
                 var max = ""
                 filters.forEach { filter ->
@@ -232,7 +231,7 @@ open class BatoTo(
                     url.addQueryParameter("chapters", "$min-$max")
                 }
 
-                client.newCall(GET(url.build().toString(), headers)).asObservableSuccess()
+                client.newCall(GET(url.build(), headers)).asObservableSuccess()
                     .map { response ->
                         queryParse(response)
                     }

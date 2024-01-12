@@ -94,7 +94,7 @@ class MyHentaiGallery : ParsedHttpSource() {
             }
             url.addPathSegment("$page")
 
-            GET(url.toString(), headers)
+            GET(url.build(), headers)
         }
     }
 

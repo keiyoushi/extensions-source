@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -58,7 +58,7 @@ abstract class Gattsu(
     override fun latestUpdatesNextPageSelector(): String = "ul.paginacao li.next > a"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchUrl = "$baseUrl/page/$page/".toHttpUrlOrNull()!!.newBuilder()
+        val searchUrl = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
             .addQueryParameter("s", query)
             .addQueryParameter("post_type", "post")
             .toString()

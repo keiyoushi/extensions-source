@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -58,7 +58,7 @@ class MangaBook : ParsedHttpSource() {
         val url = if (query.isNotBlank()) {
             "$baseUrl/dosearch?query=$query&page=$page"
         } else {
-            val url = "$baseUrl/filterList?page=$page&ftype[]=0&status[]=0".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/filterList?page=$page&ftype[]=0&status[]=0".toHttpUrl().newBuilder()
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
                     is OrderBy -> {
@@ -84,7 +84,7 @@ class MangaBook : ParsedHttpSource() {
                     else -> {}
                 }
             }
-            return GET(url.toString(), headers)
+            return GET(url.build(), headers)
         }
         return GET(url, headers)
     }

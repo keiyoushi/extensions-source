@@ -55,7 +55,7 @@ class Ngomik : MangaThemesia("Ngomik", "https://ngomik.net", "id", "/manga") {
                 else -> { /* Do Nothing */ }
             }
         }
-        return GET(url.toString())
+        return GET(url.build())
     }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
