@@ -49,7 +49,7 @@ class Supermega : ParsedHttpSource() {
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val latestComicNumber = client.newCall(GET(baseUrl)).execute().asJsoup().select("[name='bigbuttonprevious']").first()!!.parent()!!.attr("href").substringAfter("?i=").toInt() + 1
         return Observable.just(
-            latestComicNumber.let { it -> IntRange(1, it) }.map { it ->
+            IntRange(1, latestComicNumber).reversed().map { it ->
                 SChapter.create().apply {
                     name = it.toString()
                     chapter_number = it.toFloat()
