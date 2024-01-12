@@ -9,8 +9,6 @@ PACKAGE_NAME_REGEX = re.compile(r"package: name='([^']+)'")
 VERSION_CODE_REGEX = re.compile(r"versionCode='([^']+)'")
 VERSION_NAME_REGEX = re.compile(r"versionName='([^']+)'")
 IS_NSFW_REGEX = re.compile(r"'tachiyomi.extension.nsfw' value='([^']+)'")
-HAS_README_REGEX = re.compile(r"'tachiyomi.extension.hasReadme' value='([^']+)'")
-HAS_CHANGELOG_REGEX = re.compile(r"'tachiyomi.extension.hasChangelog' value='([^']+)'")
 APPLICATION_LABEL_REGEX = re.compile(r"^application-label:'([^']+)'", re.MULTILINE)
 APPLICATION_ICON_320_REGEX = re.compile(
     r"^application-icon-320:'([^']+)'", re.MULTILINE
@@ -91,8 +89,8 @@ for apk in REPO_APK_DIR.iterdir():
     index_data.append(
         {
             **common_data,
-            "hasReadme": int(HAS_README_REGEX.search(badging).group(1)),
-            "hasChangelog": int(HAS_CHANGELOG_REGEX.search(badging).group(1)),
+            "hasReadme": 0,
+            "hasChangelog": 0,
             "sources": sources,
         }
     )
@@ -104,4 +102,4 @@ with (REPO_DIR / "index.json").open("w", encoding="utf-8") as f:
     f.write(index_data_str)
 
 with (REPO_DIR / "index.min.json").open("w", encoding="utf-8") as f:
-    json.dump(index_min_data, f, ensure_ascii=False)
+    json.dump(index_min_data, f, ensure_ascii=False, separators=(",", ":"))
