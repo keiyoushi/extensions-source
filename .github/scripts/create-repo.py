@@ -95,6 +95,9 @@ for apk in REPO_APK_DIR.iterdir():
         }
     )
 
+index_data.sort(key=lambda x: x["pkg"])
+index_min_data.sort(key=lambda x: x["pkg"])
+
 with (REPO_DIR / "index.json").open("w", encoding="utf-8") as f:
     index_data_str = json.dumps(index_data, ensure_ascii=False, indent=2)
 
