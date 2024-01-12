@@ -19,6 +19,7 @@ class MMRCMSGenerator : ThemeSourceGenerator {
         SingleLang("Scan VF", "https://www.scan-vf.net", "fr", overrideVersionCode = 1),
         SingleLang("Komikid", "https://www.komikid.com", "id"),
         SingleLang("Mangadoor", "https://mangadoor.com", "es", overrideVersionCode = 1),
+        SingleLang("Mangas.in", "https://mangas.in", "es", className = "MangasIn"),
         SingleLang("Utsukushii", "https://manga.utsukushii-bg.com", "bg", overrideVersionCode = 1),
         SingleLang("Phoenix-Scans", "https://phoenix-scans.pl", "pl", className = "PhoenixScans", overrideVersionCode = 1),
         SingleLang("Lelscan-VF", "https://lelscanvf.cc", "fr", className = "LelscanVF", overrideVersionCode = 2),
