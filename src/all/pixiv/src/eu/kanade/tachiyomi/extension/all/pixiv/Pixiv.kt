@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -13,7 +14,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
@@ -191,7 +191,7 @@ class Pixiv(override val lang: String) : HttpSource() {
         for (p in countUp(start = 1)) {
             searchUsers.url.setEncodedQueryParameter("p", p.toString())
 
-            val userIds = Jsoup.parse(searchUsers.execute().body.string())
+            val userIds = searchUsers.execute().asJsoup()
                 .select(".user-recommendation-item > a").eachAttr("href")
                 .map { it.substringAfterLast('/') }
 

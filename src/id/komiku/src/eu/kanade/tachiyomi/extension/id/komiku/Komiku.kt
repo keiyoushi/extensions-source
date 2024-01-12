@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -81,7 +81,7 @@ class Komiku : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = "$baseUrlData/page/$page/?post_type=manga".toHttpUrlOrNull()?.newBuilder()!!.addQueryParameter("s", query)
+        var url = "$baseUrlData/page/$page/?post_type=manga".toHttpUrl().newBuilder().addQueryParameter("s", query)
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is CategoryNames -> {
@@ -107,13 +107,13 @@ class Komiku : ParsedHttpSource() {
                 is ProjectList -> {
                     val project = filter.values[filter.state]
                     if (project.key == "project-filter-on") {
-                        url = ("$baseUrl/pustaka" + if (page > 1) "/page/$page/" else "" + "?tipe=projek").toHttpUrlOrNull()!!.newBuilder()
+                        url = ("$baseUrl/pustaka" + if (page > 1) "/page/$page/" else "" + "?tipe=projek").toHttpUrl().newBuilder()
                     }
                 }
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)

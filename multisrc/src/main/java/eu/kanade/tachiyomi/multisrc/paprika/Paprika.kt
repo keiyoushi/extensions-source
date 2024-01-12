@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -67,7 +67,7 @@ abstract class Paprika(
         return if (query.isNotBlank()) {
             GET("$baseUrl/search?q=$query&page=$page")
         } else {
-            val url = "$baseUrl/mangas/".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/mangas/".toHttpUrl().newBuilder()
             filters.forEach { filter ->
                 when (filter) {
                     is GenreFilter -> url.addPathSegment(filter.toUriPart())
@@ -76,7 +76,7 @@ abstract class Paprika(
                 }
             }
             url.addQueryParameter("page", page.toString())
-            GET(url.toString(), headers)
+            GET(url.build(), headers)
         }
     }
 

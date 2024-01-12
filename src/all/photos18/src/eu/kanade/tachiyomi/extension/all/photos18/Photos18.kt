@@ -76,7 +76,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
             if (filter is QueryFilter) filter.addQueryTo(url)
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)

@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -91,7 +91,7 @@ class Eggporncomics : ParsedHttpSource() {
         return if (query.isNotBlank()) {
             GET("$baseUrl/search/${query.replace(queryRegex, "-")}?page=$page", headers)
         } else {
-            val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
+            val url = baseUrl.toHttpUrl().newBuilder()
             val filterList = if (filters.isEmpty()) getFilterList() else filters
             val category = filterList.find { it is CategoryFilter } as UriPartFilter
             val comics = filterList.find { it is ComicsFilter } as UriPartFilter
@@ -110,7 +110,7 @@ class Eggporncomics : ParsedHttpSource() {
 
             url.addQueryParameter("page", page.toString())
 
-            GET(url.toString(), headers)
+            GET(url.build(), headers)
         }
     }
 

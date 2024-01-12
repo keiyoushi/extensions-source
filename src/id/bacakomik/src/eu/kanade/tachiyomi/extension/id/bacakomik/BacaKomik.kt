@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -64,7 +64,7 @@ class BacaKomik : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val builtUrl = if (page == 1) "$baseUrl/daftar-komik/" else "$baseUrl/daftar-komik/page/$page/?order="
-        val url = builtUrl.toHttpUrlOrNull()!!.newBuilder()
+        val url = builtUrl.toHttpUrl().newBuilder()
         url.addQueryParameter("title", query)
         url.addQueryParameter("page", page.toString())
         filters.forEach { filter ->
@@ -97,7 +97,7 @@ class BacaKomik : ParsedHttpSource() {
                 else -> {}
             }
         }
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div.infoanime").first()!!

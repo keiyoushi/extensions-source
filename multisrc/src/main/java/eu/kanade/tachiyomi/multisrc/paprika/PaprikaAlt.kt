@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -36,7 +36,7 @@ abstract class PaprikaAlt(
         return if (query.isNotBlank()) {
             GET("$baseUrl/search?s=$query&post_type=manga&page=$page")
         } else {
-            val url = "$baseUrl/genres/".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/genres/".toHttpUrl().newBuilder()
             filters.forEach { filter ->
                 when (filter) {
                     is GenreFilter -> url.addPathSegment(filter.toUriPart())
@@ -45,7 +45,7 @@ abstract class PaprikaAlt(
                 }
             }
             url.addQueryParameter("page", page.toString())
-            GET(url.toString(), headers)
+            GET(url.build(), headers)
         }
     }
 

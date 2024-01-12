@@ -18,6 +18,7 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -178,13 +179,13 @@ open class Webtoons(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$langCode/search?keyword=$query".toHttpUrlOrNull()?.newBuilder()!!
+        val url = "$baseUrl/$langCode/search?keyword=$query".toHttpUrl().newBuilder()
         val uriPart = (filters.find { it is SearchType } as? SearchType)?.toUriPart() ?: ""
 
         url.addQueryParameter("searchType", uriPart)
         if (uriPart != "WEBTOON" && page > 1) url.addQueryParameter("page", page.toString())
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = "#content > div.card_wrap.search ul:not(#filterLayer) li a"

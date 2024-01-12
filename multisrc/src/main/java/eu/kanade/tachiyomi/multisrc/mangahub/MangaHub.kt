@@ -163,7 +163,7 @@ abstract class MangaHub(
 
     // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/page/$page".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/search/page/$page".toHttpUrl().newBuilder()
         url.addQueryParameter("q", query)
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
@@ -178,7 +178,7 @@ abstract class MangaHub(
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()

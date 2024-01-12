@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.toonily
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.text.SimpleDateFormat
@@ -51,7 +51,7 @@ class Toonily : Madara(
         val queries = request.url.queryParameterNames
             .filterNot { it == "s" }
 
-        val newUrl = "$baseUrl/${searchPage(page, query)}".toHttpUrlOrNull()!!.newBuilder().apply {
+        val newUrl = "$baseUrl/${searchPage(page, query)}".toHttpUrl().newBuilder().apply {
             queries.map { q ->
                 request.url.queryParameterValues(q).map {
                     this.addQueryParameter(q, it)

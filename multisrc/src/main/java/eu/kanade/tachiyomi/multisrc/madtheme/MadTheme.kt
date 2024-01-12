@@ -114,7 +114,7 @@ abstract class MadTheme(
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector(): String = ".book-detailed-item"

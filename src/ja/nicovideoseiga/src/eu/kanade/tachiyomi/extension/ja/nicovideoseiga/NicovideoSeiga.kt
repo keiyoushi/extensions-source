@@ -8,13 +8,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.Jsoup
 import uy.kohesive.injekt.injectLazy
 import kotlin.experimental.xor
 
@@ -31,7 +31,7 @@ class NicovideoSeiga : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val currentPage = response.request.url.queryParameter("page")!!.toInt()
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         val mangaCount = doc.select("#main_title > h2 > span").text().trim().dropLast(1).toInt()
         val mangaPerPage = 20
         val mangaList = doc.select("#comic_list > ul > li")
@@ -81,7 +81,7 @@ class NicovideoSeiga : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val currentPage = response.request.url.queryParameter("page")!!.toInt()
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         val mangaCount =
             doc.select("#mg_wrapper > div > div.header > div.header__result-summary").text().trim()
                 .split("：")[1].toInt()
@@ -118,7 +118,7 @@ class NicovideoSeiga : HttpSource() {
         GET("$baseUrl/manga/search/?q=$query&page=$page&sort=score")
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         // The description is a mix of synopsis and news announcements
         // This is just how mangakas use this site
         description =
@@ -144,7 +144,7 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         val chapters = ArrayList<SChapter>()
         val chapterList = doc.select("#episode_list > ul > li")
         val mangaId = response.request.url.toUrl().toString().substringAfterLast('/').substringBefore('?')
@@ -184,7 +184,7 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         val pages = ArrayList<Page>()
         // Nicovideo will refuse to serve any pages if the user has not logged in
         if (!doc.select("#login_manga").isEmpty()) {

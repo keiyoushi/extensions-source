@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -60,15 +59,13 @@ class YagamiProject : ParsedHttpSource() {
                 is CategoryList -> {
                     if (filter.state > 0) {
                         val catQ = getCategoryList()[filter.state].name
-                        val catUrl = "$baseUrl/tags/$catQ".toHttpUrlOrNull()!!.newBuilder()
-                        return GET(catUrl.toString(), headers)
+                        return GET("$baseUrl/tags/$catQ", headers)
                     }
                 }
                 is FormatList -> {
                     if (filter.state > 0) {
                         val formN = getFormatList()[filter.state].query
-                        val formaUrl = "$baseUrl/$formN".toHttpUrlOrNull()!!.newBuilder()
-                        return GET(formaUrl.toString(), headers)
+                        return GET("$baseUrl/$formN", headers)
                     }
                 }
                 else -> {}

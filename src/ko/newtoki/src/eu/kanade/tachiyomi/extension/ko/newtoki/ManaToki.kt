@@ -75,7 +75,7 @@ object ManaToki : NewToki("ManaToki", "comic", manaTokiPreferences) {
             url.removeAllQueryParameters("tag")
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     private class SearchCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)

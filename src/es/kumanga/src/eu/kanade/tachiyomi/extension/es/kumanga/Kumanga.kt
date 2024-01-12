@@ -19,7 +19,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -210,7 +210,7 @@ class Kumanga : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         getKumangaToken()
-        val url = "$baseUrl/backend/ajax/searchengine.php?page=$page&perPage=10&keywords=$query&retrieveCategories=true&retrieveAuthors=false&contentType=manga&token=$kumangaToken".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/backend/ajax/searchengine.php?page=$page&perPage=10&keywords=$query&retrieveCategories=true&retrieveAuthors=false&contentType=manga&token=$kumangaToken".toHttpUrl().newBuilder()
 
         filters.forEach { filter ->
             when (filter) {

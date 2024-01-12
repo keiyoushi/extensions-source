@@ -201,7 +201,7 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.lol", "id", "/d
                 else -> { /* Do Nothing */ }
             }
         }
-        return GET(url.toString())
+        return GET(url.build())
     }
 
     private class StatusFilter : SelectFilter(

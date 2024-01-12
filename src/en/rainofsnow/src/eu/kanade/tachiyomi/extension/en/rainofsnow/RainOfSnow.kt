@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -53,11 +53,11 @@ open class RainOfSnow() : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/".toHttpUrl().newBuilder()
             url.addQueryParameter("s", query)
-            return GET(url.build().toString(), headers)
+            return GET(url.build(), headers)
         }
-        val url = "$baseUrl/comics/".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/comics/".toHttpUrl().newBuilder()
         filters.forEach { filter ->
             when (filter) {
                 is AlbumTypeSelectFilter -> {
@@ -68,7 +68,7 @@ open class RainOfSnow() : ParsedHttpSource() {
                 else -> {}
             }
         }
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()

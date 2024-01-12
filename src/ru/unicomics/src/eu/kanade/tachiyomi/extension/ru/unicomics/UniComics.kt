@@ -12,7 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -59,10 +59,7 @@ class UniComics : ParsedHttpSource() {
                 is Publishers -> {
                     if (filter.state > 0) {
                         val publisherName = getPublishersList()[filter.state].url
-                        val publisherUrl =
-                            "$baseDefaultUrl$PATH_publishers/$publisherName/page/$page".toHttpUrlOrNull()!!
-                                .newBuilder()
-                        return GET(publisherUrl.toString(), headers)
+                        return GET("$baseDefaultUrl$PATH_publishers/$publisherName/page/$page", headers)
                     }
                 }
                 else -> {}

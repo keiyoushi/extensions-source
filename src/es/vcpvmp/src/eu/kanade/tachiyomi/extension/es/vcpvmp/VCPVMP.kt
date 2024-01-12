@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -91,15 +91,15 @@ open class VCPVMP(override val name: String, override val baseUrl: String) : Par
     protected open val genreSuffix = ""
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
+        var url = baseUrl.toHttpUrl().newBuilder()
 
         if (query.isNotBlank()) {
-            url = "$baseUrl/$urlSuffix".toHttpUrlOrNull()!!.newBuilder()
+            url = "$baseUrl/$urlSuffix".toHttpUrl().newBuilder()
             url.addPathSegments("page")
             url.addPathSegments(page.toString())
             url.addQueryParameter("s", query)
 
-            return GET(url.build().toString(), headers)
+            return GET(url.build(), headers)
         }
 
         filters.forEach { filter ->
@@ -117,7 +117,7 @@ open class VCPVMP(override val name: String, override val baseUrl: String) : Par
             }
         }
 
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()

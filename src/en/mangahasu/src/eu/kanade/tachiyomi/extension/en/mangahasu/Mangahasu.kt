@@ -14,7 +14,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -69,7 +69,7 @@ class Mangahasu : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/advanced-search.html".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/advanced-search.html".toHttpUrl().newBuilder()
         url.addQueryParameter("keyword", query)
         url.addQueryParameter("page", page.toString())
 
@@ -107,7 +107,7 @@ class Mangahasu : ParsedHttpSource() {
                 }
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = latestUpdatesSelector()

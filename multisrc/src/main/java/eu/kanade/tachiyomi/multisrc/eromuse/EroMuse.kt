@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -59,7 +59,7 @@ open class EroMuse(override val name: String, override val baseUrl: String) : Ht
             if (url.contains(pageQueryRegex)) {
                 url.replace(pageQueryRegex, "page=$int")
             } else {
-                val httpUrl = url.toHttpUrlOrNull()!!
+                val httpUrl = url.toHttpUrl()
                 val builder = if (httpUrl.pathSegments.last().toIntOrNull() is Int) {
                     httpUrl.newBuilder().removePathSegment(httpUrl.pathSegments.lastIndex)
                 } else {
@@ -165,7 +165,7 @@ open class EroMuse(override val name: String, override val baseUrl: String) : Ht
     protected fun stackRequest(): Request {
         stackItem = pageStack.removeLast()
         val url = if (stackItem.pageType == AUTHOR && currentSortingMode.isNotEmpty() && !stackItem.url.contains("sort")) {
-            stackItem.url.toHttpUrlOrNull()!!.newBuilder().addQueryParameter("sort", currentSortingMode).toString()
+            stackItem.url.toHttpUrl().newBuilder().addQueryParameter("sort", currentSortingMode).toString()
         } else {
             stackItem.url
         }
@@ -208,14 +208,14 @@ open class EroMuse(override val name: String, override val baseUrl: String) : Ht
             currentSortingMode = filterList.filterIsInstance<SortFilter>().first().toQueryValue()
 
             if (query.isNotBlank()) {
-                val url = "$baseUrl/search?q=$query".toHttpUrlOrNull()!!.newBuilder().apply {
+                val url = "$baseUrl/search?q=$query".toHttpUrl().newBuilder().apply {
                     if (currentSortingMode.isNotEmpty()) addQueryParameter("sort", currentSortingMode)
                     addQueryParameter("page", "1")
                 }
                 pageStack.addLast(StackItem(url.toString(), SEARCH_RESULTS_OR_BASE))
             } else {
                 val albumFilter = filterList.filterIsInstance<AlbumFilter>().first().selection()
-                val url = "$baseUrl/comics/${albumFilter.pathSegments}".toHttpUrlOrNull()!!.newBuilder().apply {
+                val url = "$baseUrl/comics/${albumFilter.pathSegments}".toHttpUrl().newBuilder().apply {
                     if (currentSortingMode.isNotEmpty()) addQueryParameter("sort", currentSortingMode)
                     if (albumFilter.pageType != AUTHOR) addQueryParameter("page", "1")
                 }

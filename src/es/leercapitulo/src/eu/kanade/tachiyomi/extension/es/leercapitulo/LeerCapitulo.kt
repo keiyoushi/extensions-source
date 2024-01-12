@@ -55,7 +55,7 @@ class LeerCapitulo : ParsedHttpSource() {
         val url = "$baseUrl/search-autocomplete".toHttpUrl().newBuilder()
             .addQueryParameter("term", query)
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {

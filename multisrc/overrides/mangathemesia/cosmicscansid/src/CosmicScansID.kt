@@ -38,7 +38,7 @@ class CosmicScansID : MangaThemesia("CosmicScans.id", "https://cosmicscans.id", 
                 else -> { /* Do Nothing */ }
             }
         }
-        return GET(url.toString())
+        return GET(url.build())
     }
 
     override fun searchMangaSelector() = ".bixbox:not(.hothome):has(.hpage) .utao .uta .imgu, .bixbox:not(.hothome) .listupd .bs .bsx"

@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -78,7 +78,7 @@ abstract class WPComics(
         return if (filterList.isEmpty()) {
             GET("$baseUrl/?s=$query&post_type=comics&page=$page")
         } else {
-            val url = "$baseUrl/$searchPath".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
 
             filterList.forEach { filter ->
                 when (filter) {

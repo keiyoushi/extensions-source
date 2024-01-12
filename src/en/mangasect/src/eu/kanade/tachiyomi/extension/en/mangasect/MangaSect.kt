@@ -111,7 +111,7 @@ class MangaSect : ParsedHttpSource() {
             addPathSegment("")
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)

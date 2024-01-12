@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -46,15 +45,13 @@ class AllHentai : GroupLe("AllHentai", "https://z.allhen.online", "ru") {
                 is OrderBy -> {
                     if (filter.state > 0) {
                         val ord = arrayOf("not", "year", "rate", "popularity", "votes", "created", "updated")[filter.state]
-                        val ordUrl = "$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}".toHttpUrlOrNull()!!.newBuilder()
-                        return GET(ordUrl.toString(), headers)
+                        return GET("$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}", headers)
                     }
                 }
                 is Tags -> {
                     if (filter.state > 0) {
                         val tagName = getTagsList()[filter.state].url
-                        val tagUrl = "$baseUrl/list/tag/$tagName?offset=${70 * (page - 1)}".toHttpUrlOrNull()!!.newBuilder()
-                        return GET(tagUrl.toString(), headers)
+                        return GET("$baseUrl/list/tag/$tagName?offset=${70 * (page - 1)}", headers)
                     }
                 }
                 else -> {}

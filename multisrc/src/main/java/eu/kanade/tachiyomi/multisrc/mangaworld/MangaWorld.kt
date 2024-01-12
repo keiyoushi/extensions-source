@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -78,7 +78,7 @@ abstract class MangaWorld(
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/archive?page=$page".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/archive?page=$page".toHttpUrl().newBuilder()
         url.addQueryParameter("keyword", query)
 
         filters.forEach { filter ->
@@ -100,7 +100,7 @@ abstract class MangaWorld(
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun mangaDetailsParse(document: Document): SManga {

@@ -16,7 +16,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Credentials
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -87,7 +87,7 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String? = null
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = (baseUrl + manga.url).toHttpUrlOrNull()!!
+        val url = (baseUrl + manga.url).toHttpUrl()
         if (url.pathSize > 5 && url.pathSegments[0] == "Manga" && url.pathSegments[1].length == 1) {
             val builder = url.newBuilder()
             for (i in 5 until url.pathSize) { builder.removePathSegment(5) }

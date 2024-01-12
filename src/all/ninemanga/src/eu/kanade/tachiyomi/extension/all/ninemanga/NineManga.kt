@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -137,7 +137,7 @@ open class NineManga(
     override fun imageUrlParse(document: Document) = document.select("div.pic_box img.manga_pic").first()!!.attr("src").orEmpty()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/search/".toHttpUrl().newBuilder()
 
         url.addQueryParameter("wd", query)
         url.addQueryParameter("page", page.toString())
@@ -166,7 +166,7 @@ open class NineManga(
 
         url.addQueryParameter("type", "high")
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()

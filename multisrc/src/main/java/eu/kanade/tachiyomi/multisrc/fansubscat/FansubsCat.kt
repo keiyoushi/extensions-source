@@ -122,7 +122,7 @@ abstract class FansubsCat(
         if (query.isNotBlank()) {
             builder.addQueryParameter("query", query)
         }
-        return GET(builder.toString(), headers)
+        return GET(builder.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = parseMangaFromJson(response)

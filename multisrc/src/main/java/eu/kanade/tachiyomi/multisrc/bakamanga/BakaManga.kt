@@ -42,7 +42,7 @@ abstract class BakaManga(
         return if (query.isNotEmpty()) {
             val url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
                 .addQueryParameter("s", query)
-            GET(url.toString(), headers)
+            GET(url.build(), headers)
         } else {
             val filterList = if (filters.isEmpty()) getFilterList() else filters
             val genreFilter = filterList.find { it is GenreFilter } as GenreFilter

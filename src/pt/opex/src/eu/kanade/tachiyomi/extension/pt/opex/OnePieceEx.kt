@@ -14,7 +14,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -78,7 +77,7 @@ class OnePieceEx : ParsedHttpSource() {
             element.select("div.volume-nome h3").text()
         thumbnail_url = THUMBNAIL_URL_MAP[title.uppercase(Locale.ROOT)] ?: DEFAULT_THUMBNAIL
 
-        val customUrl = "$baseUrl/mangas/".toHttpUrlOrNull()!!.newBuilder()
+        val customUrl = "$baseUrl/mangas/".toHttpUrl().newBuilder()
             .addQueryParameter("type", "special")
             .addQueryParameter("title", title)
             .toString()
@@ -115,7 +114,7 @@ class OnePieceEx : ParsedHttpSource() {
     }
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val mangaUrl = document.location().toHttpUrlOrNull()!!
+        val mangaUrl = document.location().toHttpUrl()
 
         when (mangaUrl.queryParameter("type")!!) {
             "main" -> {
@@ -174,7 +173,7 @@ class OnePieceEx : ParsedHttpSource() {
     override fun chapterListSelector() = "div.capitulos li.volume-capitulo"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val mangaUrl = element.ownerDocument()!!.location().toHttpUrlOrNull()!!
+        val mangaUrl = element.ownerDocument()!!.location().toHttpUrl()
 
         when (mangaUrl.queryParameter("type")!!) {
             "main" -> {

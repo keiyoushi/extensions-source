@@ -64,7 +64,7 @@ class wnacg : ParsedHttpSource(), ConfigurableSource {
             .addQueryParameter("s", "create_time_DESC")
             .addQueryParameter("q", query)
             .addQueryParameter("p", page.toString())
-        return GET(builder.toString(), headers)
+        return GET(builder.build(), headers)
     }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

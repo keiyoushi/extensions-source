@@ -27,7 +27,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -209,7 +209,7 @@ abstract class Madara(
     protected open fun searchPage(page: Int): String = "page/$page/"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/${searchPage(page)}".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
         url.addQueryParameter("s", query)
         url.addQueryParameter("post_type", "wp-manga")
         filters.forEach { filter ->
@@ -257,7 +257,7 @@ abstract class Madara(
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     protected open val authorFilterTitle: String = when (lang) {

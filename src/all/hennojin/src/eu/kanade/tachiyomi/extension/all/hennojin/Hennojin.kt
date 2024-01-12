@@ -109,7 +109,7 @@ class Hennojin(override val lang: String, suffix: String) : ParsedHttpSource() {
 
     private inline fun HttpUrl.request(
         block: HttpUrl.Builder.() -> HttpUrl.Builder,
-    ) = GET(newBuilder().block().toString(), headers)
+    ) = GET(newBuilder().block().build(), headers)
 
     private inline val Response.date: Long
         get() = headers["Last-Modified"]?.run(httpDate::parse)?.time ?: 0L

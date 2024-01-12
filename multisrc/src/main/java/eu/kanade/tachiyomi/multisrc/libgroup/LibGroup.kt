@@ -31,7 +31,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -544,7 +544,7 @@ abstract class LibGroup(
             val resBody = tokenResponse.body.string()
             csrfToken = "_token\" content=\"(.*)\"".toRegex().find(resBody)!!.groups[1]!!.value
         }
-        val url = "$baseUrl/filterlist?page=$page&chapters[min]=1".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/filterlist?page=$page&chapters[min]=1".toHttpUrl().newBuilder()
         if (query.isNotEmpty()) {
             url.addQueryParameter("name", query)
         }

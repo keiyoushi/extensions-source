@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -58,7 +58,7 @@ abstract class ZManga(
 
     // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = "$baseUrl/advanced-search/${pagePathSegment(page)}".toHttpUrlOrNull()!!.newBuilder()
+        var url = "$baseUrl/advanced-search/${pagePathSegment(page)}".toHttpUrl().newBuilder()
         url.addQueryParameter("title", query)
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
@@ -90,13 +90,13 @@ abstract class ZManga(
                 // if site has project page, default value "hasProjectPage" = false
                 is ProjectFilter -> {
                     if (filter.toUriPart() == "project-filter-on") {
-                        url = "$baseUrl$projectPageString/page/$page".toHttpUrlOrNull()!!.newBuilder()
+                        url = "$baseUrl$projectPageString/page/$page".toHttpUrl().newBuilder()
                     }
                 }
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     open val projectPageString = "/project-list"

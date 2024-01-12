@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -53,7 +53,7 @@ class Ikuhentai : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/page/$page".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
         url.addQueryParameter("post_type", "wp-manga")
         val pattern = "\\s+".toRegex()
         val q = query.replace(pattern, "+")
@@ -104,7 +104,7 @@ class Ikuhentai : ParsedHttpSource() {
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     // max 200 results
