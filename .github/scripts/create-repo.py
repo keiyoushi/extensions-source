@@ -45,12 +45,6 @@ for apk in REPO_APK_DIR.iterdir():
     package_name = PACKAGE_NAME_REGEX.search(package_info).group(1)
     version_code = int(VERSION_CODE_REGEX.search(package_info).group(1))
     version_name = VERSION_NAME_REGEX.search(package_info).group(1)
-    is_nsfw = int(IS_NSFW_REGEX.search(badging).group(1))
-    has_readme = int(HAS_README_REGEX.search(badging).group(1))
-    has_changelog = int(HAS_CHANGELOG_REGEX.search(badging).group(1))
-    application_label = APPLICATION_LABEL_REGEX.search(badging).group(1)
-    language = LANGUAGE_REGEX.search(apk.name).group(1)
-
     application_icon = APPLICATION_ICON_320_REGEX.search(badging).group(1)
 
     with ZipFile(apk) as z, z.open(application_icon) as i, (
@@ -58,6 +52,7 @@ for apk in REPO_APK_DIR.iterdir():
     ).open("wb") as f:
         f.write(i.read())
 
+    language = LANGUAGE_REGEX.search(apk.name).group(1)
     sources = inspector_data[package_name]
 
     if len(sources) == 1:
@@ -71,15 +66,14 @@ for apk in REPO_APK_DIR.iterdir():
             language = source_language
 
     common_data = {
-        "name": application_label,
+        "name": APPLICATION_LABEL_REGEX.search(badging).group(1),
         "pkg": package_name,
         "apk": apk.name,
         "lang": language,
         "code": version_code,
         "version": version_name,
-        "nsfw": is_nsfw,
+        "nsfw": int(IS_NSFW_REGEX.search(badging).group(1)),
     }
-
     min_data = {
         **common_data,
         "sources": [],
@@ -96,15 +90,14 @@ for apk in REPO_APK_DIR.iterdir():
         )
 
     index_min_data.append(min_data)
-
-    data = {
-        **common_data,
-        "hasReadme": has_readme,
-        "hasChangelog": has_changelog,
-        "sources": sources,
-    }
-
-    index_data.append(data)
+    index_data.append(
+        {
+            **common_data,
+            "hasReadme": int(HAS_README_REGEX.search(badging).group(1)),
+            "hasChangelog": int(HAS_CHANGELOG_REGEX.search(badging).group(1)),
+            "sources": sources,
+        }
+    )
 
 with (REPO_DIR / "index.json").open("w", encoding="utf-8") as f:
     index_data_str = json.dumps(index_data, ensure_ascii=False, indent=2)
