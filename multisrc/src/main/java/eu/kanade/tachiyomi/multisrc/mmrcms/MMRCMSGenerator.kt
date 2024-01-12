@@ -9,7 +9,7 @@ class MMRCMSGenerator : ThemeSourceGenerator {
 
     override val themeClass = "MMRCMS"
 
-    override val baseVersionCode = 6
+    override val baseVersionCode = 7
 
     override val sources = listOf(
         SingleLang("مانجا اون لاين", "https://onma.top", "ar", className = "onma"),
