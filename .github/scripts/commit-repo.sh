@@ -2,8 +2,8 @@
 set -e
 
 rsync -a --delete --exclude .git --exclude .gitignore --exclude README.md ../main/repo/ .
-git config --global user.email "107297513+FourTOne5@users.noreply.github.com"
-git config --global user.name "FourTOne5"
+git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
+git config --global user.name "keiyoushi-bot"
 git status
 if [ -n "$(git status --porcelain)" ]; then
     git add .
