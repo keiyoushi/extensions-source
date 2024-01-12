@@ -14,7 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -86,12 +86,12 @@ class MangaKatana : ConfigurableSource, ParsedHttpSource() {
 
         if (query.isNotEmpty()) {
             val type = filterList.find { it is TypeFilter } as TypeFilter
-            val url = "$baseUrl/page/$page".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
                 .addQueryParameter("search", query)
                 .addQueryParameter("search_by", type.toUriPart())
-            return GET(url.toString(), headers)
+            return GET(url.build(), headers)
         } else {
-            val url = "$baseUrl/manga/page/$page".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/manga/page/$page".toHttpUrl().newBuilder()
                 .addQueryParameter("filter", "1")
             for (filter in filterList) {
                 when (filter) {
@@ -125,7 +125,7 @@ class MangaKatana : ConfigurableSource, ParsedHttpSource() {
                     else -> {}
                 }
             }
-            return GET(url.toString(), headers)
+            return GET(url.build(), headers)
         }
     }
 

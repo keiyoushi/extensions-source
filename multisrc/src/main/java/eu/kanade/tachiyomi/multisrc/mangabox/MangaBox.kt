@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -80,7 +80,7 @@ abstract class MangaBox(
         return if (query.isNotBlank() && getAdvancedGenreFilters().isEmpty()) {
             GET("$baseUrl/$simpleQueryPath${normalizeSearchQuery(query)}?page=$page", headers)
         } else {
-            val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
+            val url = baseUrl.toHttpUrl().newBuilder()
             if (getAdvancedGenreFilters().isNotEmpty()) {
                 url.addPathSegment("advanced_search")
                 url.addQueryParameter("page", page.toString())
@@ -113,7 +113,7 @@ abstract class MangaBox(
                     }
                 }
             }
-            GET(url.toString(), headers)
+            GET(url.build(), headers)
         }
     }
 
@@ -210,7 +210,7 @@ abstract class MangaBox(
                 url = it.attr("abs:href").substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
                 name = it.text()
                 scanlator =
-                    it.attr("abs:href").toHttpUrlOrNull()!!.host // show where chapters are actually from
+                    it.attr("abs:href").toHttpUrl().host // show where chapters are actually from
             }
             date_upload = parseChapterDate(element.selectDateFromElement().text(), scanlator!!) ?: 0
         }

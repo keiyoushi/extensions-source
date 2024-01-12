@@ -22,7 +22,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -66,7 +66,7 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
 
     private fun OkHttpClient.Builder.rateLimitImageCDNs(hosts: Array<String>, permits: Int, period: Long): OkHttpClient.Builder {
         hosts.forEach { host ->
-            rateLimitHost(host.toHttpUrlOrNull()!!, permits, period)
+            rateLimitHost(host.toHttpUrl(), permits, period)
         }
         return this
     }
@@ -74,7 +74,7 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
     private var loadWebView = true
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(
-            baseUrl.toHttpUrlOrNull()!!,
+            baseUrl.toHttpUrl(),
             preferences.getString(WEB_RATELIMIT_PREF, WEB_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
             60,
         )
@@ -139,7 +139,7 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/library".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/library".toHttpUrl().newBuilder()
 
         url.addQueryParameter("title", query)
         url.addQueryParameter("page", page.toString())
@@ -213,7 +213,7 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
             }
         }
 
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
