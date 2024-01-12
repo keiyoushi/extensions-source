@@ -65,26 +65,21 @@ class Anchira : HttpSource(), ConfigurableSource {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val data = decodeBytes<LibraryResponse>(response.body)
 
-        return if (data.entries != null) {
-            MangasPage(
-                data.entries.map {
-                    SManga.create().apply {
-                        url = "/g/${it.id}/${it.key}"
-                        title = it.title
-                        thumbnail_url = "$cdnUrl/${it.id}/${it.key}/m/${it.cover.name}"
-                        artist = it.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
-                        author = it.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
-                        genre = prepareTags(it.tags)
-                        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                        status = SManga.COMPLETED
-                        initialized = false
-                    }
-                }.toList(),
-                data.entries.size < data.total,
-            )
-        } else {
-            MangasPage(listOf(), false)
-        }
+        return MangasPage(
+            data.entries.map {
+                SManga.create().apply {
+                    url = "/g/${it.id}/${it.key}"
+                    title = it.title
+                    thumbnail_url = "$cdnUrl/${it.id}/${it.key}/m/${it.cover.name}"
+                    artist = it.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
+                    author = it.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
+                    genre = prepareTags(it.tags)
+                    update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                    status = SManga.COMPLETED
+                }
+            }.toList(),
+            (data.page + 1) * data.limit < data.total,
+        )
     }
 
     // Popular
@@ -111,9 +106,9 @@ class Anchira : HttpSource(), ConfigurableSource {
 
                     filter.state.forEach { category ->
                         when (category.name) {
-                            "Manga" -> if (category.state) sum += 1
-                            "Doujinshi" -> if (category.state) sum += 2
-                            "Illustration" -> if (category.state) sum += 4
+                            "Manga" -> if (category.state) sum = sum or 1
+                            "Doujinshi" -> if (category.state) sum = sum or 2
+                            "Illustration" -> if (category.state) sum = sum or 4
                         }
                     }
 

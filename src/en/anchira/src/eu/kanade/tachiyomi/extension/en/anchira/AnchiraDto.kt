@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ListEntry(
-    @SerialName("id") val id: Int,
-    @SerialName("key") val key: String,
+    val id: Int,
+    val key: String,
     val title: String,
     val cover: Image,
     val tags: List<Tag> = emptyList(),
@@ -25,14 +25,16 @@ data class Tag(
 
 @Serializable
 data class LibraryResponse(
-    val entries: List<ListEntry>? = null,
+    val entries: List<ListEntry> = emptyList(),
     val total: Int,
+    val page: Int,
+    val limit: Int,
 )
 
 @Serializable
 data class Entry(
-    @SerialName("id") val id: Int,
-    @SerialName("key") val key: String,
+    val id: Int,
+    val key: String,
     @SerialName("published_at") val publishedAt: Long,
     val title: String,
     @SerialName("thumb_index") val thumbnailIndex: Int,
