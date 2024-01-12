@@ -78,7 +78,7 @@ class Multporn : ParsedHttpSource() {
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun latestUpdatesRequest(page: Int) = buildLatestMangaRequest(page - 1)
@@ -116,7 +116,7 @@ class Multporn : ParsedHttpSource() {
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     private fun buildTextSearchFilterRequests(page: Int, filters: List<TextSearchFilter>): List<Request> {

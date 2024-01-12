@@ -11,7 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -111,14 +111,14 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (filters.any { it is LanguageFilters && it.state.any { it.name == LANGUAGE_SPEECHLESS && it.state } }) { // edge case for language = speechless
-            val url = "$baseUrl/language/speechless/".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/language/speechless/".toHttpUrl().newBuilder()
 
             if ((if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<SortOrderFilter>()[0].state == 0) {
                 url.addPathSegment("popular")
             }
-            return GET(url.toString())
+            return GET(url.build())
         } else {
-            val url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("key", query)
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter(getLanguageURIByName(imhLang).uri, toBinary(true)) // main language always enabled
@@ -143,7 +143,7 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
                     else -> {}
                 }
             }
-            return GET(url.toString())
+            return GET(url.build())
         }
     }
 

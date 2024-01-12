@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -16,7 +17,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
@@ -45,7 +45,7 @@ class Twi4 : HttpSource() {
     // As the full catalog is consists of less than 50 manga, it is not worth implementing
     // We'll just list all manga in the catalog instead
     override fun popularMangaParse(response: Response): MangasPage {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         val ret = mutableListOf<SManga>()
         // Manga that are recently updated don't show up on the full catalog
         // So we'll need to parse the recent updates section as well
@@ -89,7 +89,7 @@ class Twi4 : HttpSource() {
         GET(getUrlDomain() + manga.url, getChromeHeaders())
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = Jsoup.parse(response.body.string())
+        val document = response.asJsoup()
         return SManga.create().apply {
             // We need to get the title and thumbnail again.
             // This is only needed if you search by slug, as we have no information about the them.
@@ -137,7 +137,7 @@ class Twi4 : HttpSource() {
     // They have a <noscript> layout! This is surprising
     // Though their manga pages fails to load as it relies on JS
     override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         val chapterRegex = Regex(".+『(.+)』 #(\\d+)")
         val allChapters = doc.select("#backnumbers > div > ul > li")
         val ret = mutableListOf<SChapter>()
@@ -175,7 +175,7 @@ class Twi4 : HttpSource() {
         GET(getUrlDomain() + chapter.url, getChromeHeaders())
 
     override fun pageListParse(response: Response): List<Page> {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         // The site interprets 1 page == 1 chapter
         // There should only be 1 article in the document
         val page = doc.select("article.comic:first-child")

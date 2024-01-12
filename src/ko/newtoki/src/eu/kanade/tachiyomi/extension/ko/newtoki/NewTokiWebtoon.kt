@@ -61,7 +61,7 @@ object NewTokiWebtoon : NewToki("NewToki", "webtoon", newTokiPreferences) {
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     private class SearchTargetTypeList : Filter.Select<String>("Type", arrayOf("전체", "일반웹툰", "성인웹툰", "BL/GL", "완결웹툰"))

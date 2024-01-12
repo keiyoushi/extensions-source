@@ -27,7 +27,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -146,13 +146,13 @@ open class NHentai(
             filterList.findInstance<OffsetPageFilter>()?.state?.toIntOrNull()?.plus(page) ?: page
 
         if (favoriteFilter?.state == true) {
-            val url = "$baseUrl/favorites".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/favorites".toHttpUrl().newBuilder()
                 .addQueryParameter("q", "$fixedQuery $advQuery")
                 .addQueryParameter("page", offsetPage.toString())
 
-            return GET(url.toString(), headers)
+            return GET(url.build(), headers)
         } else {
-            val url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", "$fixedQuery $nhLangSearch$advQuery")
                 .addQueryParameter("page", offsetPage.toString())
 
@@ -162,7 +162,7 @@ open class NHentai(
                 }
             }
 
-            return GET(url.toString(), headers)
+            return GET(url.build(), headers)
         }
     }
 

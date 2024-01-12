@@ -17,7 +17,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -34,8 +34,8 @@ open class WebtoonsTranslate(
     // popularMangaRequest already returns manga sorted by latest update
     override val supportsLatest = false
 
-    private val apiBaseUrl = "https://global.apis.naver.com".toHttpUrlOrNull()!!
-    private val mobileBaseUrl = "https://m.webtoons.com".toHttpUrlOrNull()!!
+    private val apiBaseUrl = "https://global.apis.naver.com".toHttpUrl()
+    private val mobileBaseUrl = "https://m.webtoons.com".toHttpUrl()
     private val thumbnailBaseUrl = "https://mwebtoon-phinf.pstatic.net"
 
     private val pageSize = 24
@@ -53,7 +53,7 @@ open class WebtoonsTranslate(
             .addQueryParameter("size", "$requeztSize")
             .addQueryParameter("languageCode", translateLangCode)
             .build()
-        return GET(url.toString(), headers)
+        return GET(url, headers)
     }
 
     // Webtoons translations doesn't really have a "popular" sort; just "UPDATE", "TITLE_ASC",
@@ -161,7 +161,7 @@ open class WebtoonsTranslate(
     override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaUrl = manga.url.toHttpUrlOrNull()!!
+        val mangaUrl = manga.url.toHttpUrl()
         val titleNo = mangaUrl.queryParameter("titleNo")
         val teamVersion = mangaUrl.queryParameter("teamVersion")
         val chapterListUrl = apiBaseUrl
@@ -210,7 +210,7 @@ open class WebtoonsTranslate(
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(apiBaseUrl.resolve(chapter.url).toString(), headers)
+        return GET(apiBaseUrl.resolve(chapter.url)!!, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {

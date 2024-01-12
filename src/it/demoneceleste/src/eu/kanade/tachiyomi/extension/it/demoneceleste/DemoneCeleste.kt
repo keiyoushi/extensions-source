@@ -12,7 +12,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -36,7 +36,7 @@ class DemoneCeleste : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga", headers)
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/", headers)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search?sez=serie".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/search?sez=serie".toHttpUrl().newBuilder()
 
         if (query.isNotEmpty()) {
             url.addQueryParameter("key", query)
