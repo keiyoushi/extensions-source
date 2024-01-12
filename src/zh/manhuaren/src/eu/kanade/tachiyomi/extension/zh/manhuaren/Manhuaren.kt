@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody
@@ -42,7 +42,7 @@ class Manhuaren : HttpSource() {
     override val baseUrl = "http://mangaapi.manhuaren.com"
 
     private val pageSize = 20
-    private val baseHttpUrl = baseUrl.toHttpUrlOrNull()!!
+    private val baseHttpUrl = baseUrl.toHttpUrl()
 
     private val gsnSalt = "4e0a48e1c0b54041bce9c8f0e036124d"
     private val encodedPublicKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmFCg289dTws27v8GtqIffkP4zgFR+MYIuUIeVO5AGiBV0rfpRh5gg7i8RrT12E9j6XwKoe3xJz1khDnPc65P5f7CJcNJ9A8bj7Al5K4jYGxz+4Q+n0YzSllXPit/Vz/iW5jFdlP6CTIgUVwvIoGEL2sS4cqqqSpCDKHSeiXh9CtMsktc6YyrSN+8mQbBvoSSew18r/vC07iQiaYkClcs7jIPq9tuilL//2uR9kWn5jsp8zHKVjmXuLtHDhM9lObZGCVJwdlN2KDKTh276u/pzQ1s5u8z/ARtK26N8e5w8mNlGcHcHfwyhjfEQurvrnkqYH37+12U3jGk5YNHGyOPcwIDAQAB"
@@ -452,7 +452,7 @@ class Manhuaren : HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return myGet((baseUrl + manga.url).toHttpUrlOrNull()!!)
+        return myGet((baseUrl + manga.url).toHttpUrl())
     }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
@@ -504,7 +504,7 @@ class Manhuaren : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = (baseUrl + chapter.url).toHttpUrlOrNull()!!.newBuilder()
+        val url = (baseUrl + chapter.url).toHttpUrl().newBuilder()
             .addQueryParameter("netType", "4")
             .addQueryParameter("loadreal", "1")
             .addQueryParameter("imageQuality", "2")

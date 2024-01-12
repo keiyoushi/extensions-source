@@ -25,7 +25,7 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -213,14 +213,14 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         val url: HttpUrl.Builder
         // If there is any search text, use text search, ignoring filters
         if (query.isNotBlank()) {
-            url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+            url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .addQueryParameter("t", "COMICS")
         } else {
             // Checking mature filter
             val matureFilter = filterList.find { it is MatureFilter } as MatureFilter
             if (matureFilter.state) {
-                url = "$baseUrl/mature".toHttpUrlOrNull()!!.newBuilder()
+                url = "$baseUrl/mature".toHttpUrl().newBuilder()
                 // Append only mature uri filters
                 filterList.forEach {
                     if (it is UriFilter && it.isMature) {
@@ -228,7 +228,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
                     }
                 }
             } else {
-                url = "$baseUrl/comics".toHttpUrlOrNull()!!.newBuilder()
+                url = "$baseUrl/comics".toHttpUrl().newBuilder()
                 // Append only non-mature uri filters
                 filterList.forEach {
                     if (it is UriFilter && !it.isMature) {
@@ -244,7 +244,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         }
         // Append page number
         url.addQueryParameter("pageNumber", page.toString())
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaNextPageSelector() =

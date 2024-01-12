@@ -197,7 +197,7 @@ class Remanga : ConfigurableSource, HttpSource() {
         if (preferences.getBoolean(isLib_PREF, false)) {
             url.addQueryParameter("exclude_bookmarks", "1")
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
@@ -207,7 +207,7 @@ class Remanga : ConfigurableSource, HttpSource() {
         if (preferences.getBoolean(isLib_PREF, false)) {
             url.addQueryParameter("exclude_bookmarks", "1")
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
@@ -307,8 +307,7 @@ class Remanga : ConfigurableSource, HttpSource() {
                             throw Exception("Пользователь не найден, необходима авторизация через WebView\uD83C\uDF0E")
                         }
                         val TypeQ = getMyList()[filter.state].id
-                        val UserProfileUrl = "$baseUrl/api/users/$USER_ID/bookmarks/?type=$TypeQ&page=$page".toHttpUrl().newBuilder()
-                        return GET(UserProfileUrl.toString(), headers)
+                        return GET("$baseUrl/api/users/$USER_ID/bookmarks/?type=$TypeQ&page=$page", headers)
                     }
                 }
                 is RequireChapters -> {
@@ -329,7 +328,7 @@ class Remanga : ConfigurableSource, HttpSource() {
             url.addQueryParameter("exclude_bookmarks", "1")
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     private fun parseStatus(status: Int): Int {

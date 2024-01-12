@@ -21,6 +21,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Call
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -92,10 +93,10 @@ abstract class GigaViewer(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
 
-            return GET(url.toString(), headers)
+            return GET(url.build(), headers)
         }
 
         val collectionSelected = (filters[0] as CollectionFilter).selected
@@ -138,7 +139,7 @@ abstract class GigaViewer(
         val document = response.asJsoup()
         val readableProductList = document.selectFirst("div.js-readable-product-list")!!
         val firstListEndpoint = readableProductList.attr("data-first-list-endpoint")
-            .toHttpUrlOrNull()!!
+            .toHttpUrl()
         val latestListEndpoint = readableProductList.attr("data-latest-list-endpoint")
             .toHttpUrlOrNull() ?: firstListEndpoint
         val numberSince = latestListEndpoint.queryParameter("number_since")!!.toFloat()
@@ -214,7 +215,7 @@ abstract class GigaViewer(
         return episode.readableProduct.pageStructure.pages
             .filter { it.type == "main" }
             .mapIndexed { i, page ->
-                val imageUrl = page.src.toHttpUrlOrNull()!!.newBuilder()
+                val imageUrl = page.src.toHttpUrl().newBuilder()
                     .addQueryParameter("width", page.width.toString())
                     .addQueryParameter("height", page.height.toString())
                     .toString()

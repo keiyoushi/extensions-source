@@ -14,7 +14,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -325,7 +324,7 @@ open class Viz(
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val authCheckUrl = "$baseUrl/$MANGA_AUTH_CHECK_URL".toHttpUrlOrNull()!!.newBuilder()
+        val authCheckUrl = "$baseUrl/$MANGA_AUTH_CHECK_URL".toHttpUrl().newBuilder()
             .addQueryParameter("device_id", "3")
             .addQueryParameter("manga_id", mangaId)
             .toString()
