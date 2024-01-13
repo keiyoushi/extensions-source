@@ -5,7 +5,7 @@ ext {
     extName = 'Nicomanga'
     pkgNameSuffix = 'ja.nicomanga'
     extClass = '.Nicomanga'
-    extVersionCode = 1
+    extVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
