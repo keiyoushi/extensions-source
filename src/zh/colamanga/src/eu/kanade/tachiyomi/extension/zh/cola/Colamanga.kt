@@ -3,11 +3,16 @@ package eu.kanade.tachiyomi.extension.zh.colamanga
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.concurrent.TimeUnit
@@ -54,8 +59,42 @@ class Colamanga : ParsedHttpSource() {
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/show?orderBy=update&page=$page", headers)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/search?type=1&page=$page&searchString=$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        // impossible to search a manga and use the filters
+        return if (query.isNotEmpty()) {
+            val url =
+                baseUrl.toHttpUrl()
+                    .newBuilder()
+                    .addEncodedPathSegment("search")
+                    .addQueryParameter("type", "1")
+                    .addQueryParameter("searchString", query)
+                    .toString()
+            GET(url, headers)
+        } else {
+            val parts =
+                filters.filterIsInstance<UriPartFilter>().joinToString("&") { it.toUriPart() }
+            GET("$baseUrl/show?page=$page&$parts", headers)
+        }
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        // Normal search
+        return if (response.request.url.encodedPath.startsWith("search?")) {
+            val mangas =
+                document.select(popularMangaSelector()).map { element ->
+                    searchMangaFromElement(element)
+                }
+            MangasPage(mangas, false)
+            // Filter search
+        } else {
+            val mangas =
+                document.select(popularMangaSelector()).map { element ->
+                    popularMangaFromElement(element)
+                }
+            MangasPage(mangas, mangas.size == 36)
+        }
+    }
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
 
@@ -90,6 +129,7 @@ class Colamanga : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         Log.i("ColaManga", "mangaDetailsParse: document")
+
         return SManga.create().apply {
             thumbnail_url =
                 document.select("dt.fed-deta-images a.fed-list-pics").attr("data-original")
@@ -164,4 +204,6 @@ class Colamanga : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document) = ""
+
+    override fun getFilterList() = getFilters()
 }
