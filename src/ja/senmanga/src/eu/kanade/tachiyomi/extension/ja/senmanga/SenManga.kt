@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -65,7 +65,7 @@ class SenManga : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("s", query)
             .addQueryParameter("page", page.toString())
 
@@ -82,7 +82,7 @@ class SenManga : ParsedHttpSource() {
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()

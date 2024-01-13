@@ -24,7 +24,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
@@ -79,7 +79,7 @@ abstract class HentaiHand(
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/api/comics".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "popularity")
             .addQueryParameter("order", "desc")
@@ -88,7 +88,7 @@ abstract class HentaiHand(
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
         // if (altLangId != null) url.addQueryParameter("languages", altLangId.toString())
-        return GET(url.toString())
+        return GET(url.build())
     }
 
     // Latest
@@ -96,7 +96,7 @@ abstract class HentaiHand(
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/api/comics".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "uploaded_at")
             .addQueryParameter("order", "desc")
@@ -104,7 +104,7 @@ abstract class HentaiHand(
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
-        return GET(url.toString())
+        return GET(url.build())
     }
 
     // Search
@@ -130,7 +130,7 @@ abstract class HentaiHand(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/comics".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("q", query)
 
@@ -162,7 +162,7 @@ abstract class HentaiHand(
             }
         }
 
-        return GET(url.toString())
+        return GET(url.build())
     }
 
     // Details

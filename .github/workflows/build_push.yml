@@ -187,11 +187,11 @@ jobs:
       - name: Create repo artifacts
         run: |
           cd main
-          ./.github/scripts/move-apks.sh
+          python ./.github/scripts/move-apks.py
           INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/tachiyomiorg/tachiyomi-extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
-          java -jar ./Inspector.jar "apk" "output.json" "tmp"
-          ./.github/scripts/create-repo.sh
+          java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
+          python ./.github/scripts/create-repo.py
 
       - name: Checkout repo branch
         uses: actions/checkout@v4

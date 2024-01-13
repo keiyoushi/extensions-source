@@ -114,7 +114,7 @@ class OlympusScanlation : HttpSource() {
         }
         url.addQueryParameter("type", "comic")
         url.addQueryParameter("page", page.toString())
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {

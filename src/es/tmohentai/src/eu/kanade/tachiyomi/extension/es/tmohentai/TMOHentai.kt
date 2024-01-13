@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -134,7 +133,7 @@ class TMOHentai : ConfigurableSource, ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = document.select("div#content-images img.content-image").attr("abs:data-original")
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/section/all?view=list".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/section/all?view=list".toHttpUrl().newBuilder()
 
         url.addQueryParameter("search[searchText]", query)
         url.addQueryParameter("page", page.toString())
@@ -165,7 +164,7 @@ class TMOHentai : ConfigurableSource, ParsedHttpSource() {
             }
         }
 
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()

@@ -13,7 +13,7 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -91,7 +91,7 @@ class Mangahere : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = "div.pager-list-left a:last-child"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
 
         filters.forEach { filter ->
             when (filter) {
@@ -137,7 +137,7 @@ class Mangahere : ParsedHttpSource() {
             addEncodedQueryParameter("name", null)
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = ".manga-list-4-list > li"

@@ -15,7 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -101,7 +101,7 @@ abstract class GroupLe(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url =
-            "$baseUrl/search/advancedResults?offset=${50 * (page - 1)}".toHttpUrlOrNull()!!
+            "$baseUrl/search/advancedResults?offset=${50 * (page - 1)}".toHttpUrl()
                 .newBuilder()
         if (query.isNotEmpty()) {
             url.addQueryParameter("q", query)
@@ -286,11 +286,7 @@ abstract class GroupLe(
 
         val html = document.html()
 
-        var readerMark = "rm_h.initReader( ["
-
-        if (!html.contains(readerMark)) {
-            readerMark = "rm_h.readerInit( 0,["
-        }
+        var readerMark = "rm_h.readerDoInit(["
 
         if (!html.contains(readerMark)) {
             if (document.select(".input-lg").isNotEmpty() || (document.select(".user-avatar").isNullOrEmpty() && document.select("img.logo").first()?.attr("title")?.contains("Allhentai") == true)) {

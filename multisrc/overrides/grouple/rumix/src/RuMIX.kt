@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -31,8 +30,7 @@ class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
                         url.addQueryParameter("sortType", arrayOf("RATING", "POPULARITY", "YEAR", "NAME", "DATE_CREATE", "DATE_UPDATE")[filter.state])
                     } else {
                         val ord = arrayOf("rate", "popularity", "year", "name", "created", "updated", "votes")[filter.state]
-                        val ordUrl = "$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}".toHttpUrlOrNull()!!.newBuilder()
-                        return GET(ordUrl.toString(), headers)
+                        return GET("$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}", headers)
                     }
                 }
                 else -> return@forEach

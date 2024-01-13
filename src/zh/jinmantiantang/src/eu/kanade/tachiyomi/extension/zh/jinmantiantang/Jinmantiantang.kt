@@ -15,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -134,18 +133,18 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
                 newQuery = "$newQuery+%2B$keyword"
                 params = params.substringAfter("&")
             }
-            "$baseUrl/search/photos?search_query=$newQuery&page=$page&$params".toHttpUrlOrNull()?.newBuilder()
+            "$baseUrl/search/photos?search_query=$newQuery&page=$page&$params"
         } else {
             params = if (params == "") "/albums?" else params
             if (query == "") {
-                "$baseUrl$params&page=$page".toHttpUrlOrNull()?.newBuilder()
+                "$baseUrl$params&page=$page"
             } else {
                 // 在搜索栏的关键词前添加-号来实现对筛选结果的过滤, 像 "-YAOI -扶他 -毛絨絨 -獵奇", 注意此时搜索功能不可用.
                 val removedGenres = query.split(" ").filter { it.startsWith("-") }.joinToString("+") { it.removePrefix("-") }
-                "$baseUrl$params&page=$page&screen=$removedGenres".toHttpUrlOrNull()?.newBuilder()
+                "$baseUrl$params&page=$page&screen=$removedGenres"
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url, headers)
     }
 
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()

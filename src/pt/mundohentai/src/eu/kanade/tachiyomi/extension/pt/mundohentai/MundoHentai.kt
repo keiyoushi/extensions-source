@@ -11,7 +11,7 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -56,7 +56,7 @@ class MundoHentai : ParsedHttpSource() {
         return GET("$baseUrl/category/doujinshi/$pageStr", newHeaders)
     }
 
-    override fun popularMangaSelector(): String = "div.lista > ul > li div.thumb-conteudo:has(a[href^=$baseUrl]:has(span.thumb-imagem)):not(:contains(Tufos))"
+    override fun popularMangaSelector(): String = "div.lista > ul > li div.thumb-conteudo:has(a[href^=$baseUrl]):not(:contains(Tufos))"
 
     override fun popularMangaFromElement(element: Element): SManga = genericMangaFromElement(element)
 
@@ -64,7 +64,7 @@ class MundoHentai : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
+            val url = baseUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("s", query)
                 .toString()
 
