@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Entities
 
 @Serializable
 data class LmMangaDto(
@@ -14,7 +15,7 @@ data class LmMangaDto(
 ) {
 
     fun toSManga(): SManga = SManga.create().apply {
-        title = this@LmMangaDto.title.rendered
+        title = Entities.unescape(this@LmMangaDto.title.rendered)
         thumbnail_url = "${LerManga.IMG_CDN_URL}/${slug.first().uppercase()}/$slug/capa.jpg"
         description = content?.rendered?.let { Jsoup.parseBodyFragment(it) }?.text()?.trim()
         genre = embedded?.wpTerm.orEmpty().flatten()
