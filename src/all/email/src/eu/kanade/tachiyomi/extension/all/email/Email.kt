@@ -7,11 +7,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.support.v7.preference.CheckBoxPreference
-import android.support.v7.preference.EditTextPreference
-import android.support.v7.preference.PreferenceScreen
 import android.text.InputType
 import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -19,11 +18,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import okhttp3.MediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.apache.commons.text.WordUtils
 import org.jsoup.Jsoup
 import rx.Observable
@@ -70,9 +69,9 @@ class Email : ConfigurableSource, HttpSource() {
         }
         if (p.isMimeType("multipart/alternative")) {
             // prefer html text over plain text
-            val mp: Multipart = p.getContent() as Multipart
+            val mp: Multipart = p.content as Multipart
             var text: String? = null
-            for (i in 0 until mp.getCount()) {
+            for (i in 0 until mp.count) {
                 val bp: Part = mp.getBodyPart(i)
                 if (bp.isMimeType("text/plain")) {
                     if (text == null) text = getText(bp)
@@ -86,8 +85,8 @@ class Email : ConfigurableSource, HttpSource() {
             }
             return text
         } else if (p.isMimeType("multipart/*")) {
-            val mp: Multipart = p.getContent() as Multipart
-            for (i in 0 until mp.getCount()) {
+            val mp: Multipart = p.content as Multipart
+            for (i in 0 until mp.count) {
                 val s = getText(mp.getBodyPart(i))
                 if (s != null) return s
             }
@@ -98,7 +97,7 @@ class Email : ConfigurableSource, HttpSource() {
     @SuppressLint("SetJavaScriptEnabled", "NewApi")
     override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor { chain ->
         val request = chain.request()
-        val url = request.url().toString()
+        val url = request.url.toString()
         val newRequest = request.newBuilder()
             .url(url.substringBeforeLast("/"))
             .build()
@@ -111,7 +110,7 @@ class Email : ConfigurableSource, HttpSource() {
         val session = Session.getDefaultInstance(
             Properties().apply {
                 put("mail.imap.ssl.enable", if (ssl) { "true" } else { "false" })
-            }
+            },
         )
         val store = session.getStore("imap")
         store.connect(host, port, mail, pass)
@@ -123,8 +122,9 @@ class Email : ConfigurableSource, HttpSource() {
         // thanks to https://github.com/tachiyomiorg/tachiyomi-extensions/pull/3506/commits/80c238123551e898d7fcf1233bd9696516eedc99
         var flavourTextParagraphs = message!!.split("\n")
 
-        if (flavourTextParagraphs.isEmpty())
+        if (flavourTextParagraphs.isEmpty()) {
             flavourTextParagraphs = listOf("No flavour text for the previous page.")
+        }
 
         val paint = Paint().apply {
             textAlign = Paint.Align.CENTER
@@ -161,7 +161,7 @@ class Email : ConfigurableSource, HttpSource() {
         val byteArrayOutputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
 
-        val rb = ResponseBody.create(MediaType.parse("image/png"), byteArrayOutputStream.toByteArray())
+        val rb = byteArrayOutputStream.toByteArray().toResponseBody("image/png".toMediaTypeOrNull())
         byteArrayOutputStream.close()
         response.newBuilder().body(rb).build()
     }.build()
@@ -186,7 +186,7 @@ class Email : ConfigurableSource, HttpSource() {
         val session = Session.getDefaultInstance(
             Properties().apply {
                 put("mail.imap.ssl.enable", if (ssl) { "true" } else { "false" })
-            }
+            },
         )
         val store = session.getStore("imap")
         store.connect(host, port, mail, pass)
@@ -207,9 +207,10 @@ class Email : ConfigurableSource, HttpSource() {
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return Observable.just(listOf(Page(0, chapter.url, chapter.url)))
     }
+
     // Prefs
-    private fun androidx.preference.PreferenceScreen.editTextPreference(title: String, default: String, value: String, isPassword: Boolean = false, isNumber: Boolean = false): androidx.preference.EditTextPreference {
-        return androidx.preference.EditTextPreference(context).apply {
+    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String, isPassword: Boolean = false, isNumber: Boolean = false): EditTextPreference {
+        return EditTextPreference(context).apply {
             key = title
             this.title = title
             summary = value
@@ -240,28 +241,8 @@ class Email : ConfigurableSource, HttpSource() {
             }
         }
     }
-    private fun PreferenceScreen.supportEditTextPreference(title: String, default: String, value: String): EditTextPreference {
-        return EditTextPreference(context).apply {
-            key = title
-            this.title = title
-            summary = value
-            this.setDefaultValue(default)
-            dialogTitle = title
 
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(title, newValue as String).commit()
-                    Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
-        }
-    }
-
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addPreference(screen.editTextPreference(SETTING_HOST, DEFAULT_HOST, host))
         screen.addPreference(screen.editTextPreference(SETTING_PORT, DEFAULT_PORT.toString(), port.toString(), isNumber = true))
         screen.addPreference(
@@ -273,30 +254,11 @@ class Email : ConfigurableSource, HttpSource() {
                 setOnPreferenceChangeListener { _, newValue ->
                     preferences.edit().putBoolean(key, newValue as Boolean).commit()
                 }
-            }
+            },
         )
 
         screen.addPreference(screen.editTextPreference(SETTING_MAIL, DEFAULT_MAIL, mail))
         screen.addPreference(screen.editTextPreference(SETTING_PASS, DEFAULT_PASS, pass, isPassword = true))
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addPreference(screen.supportEditTextPreference(SETTING_HOST, DEFAULT_HOST, host))
-        screen.addPreference(screen.supportEditTextPreference(SETTING_PORT, DEFAULT_PORT.toString(), port.toString()))
-        screen.addPreference(
-            CheckBoxPreference(screen.context).apply {
-                key = SETTING_SSL
-                title = SETTING_SSL
-                setDefaultValue(DEFAULT_SSL)
-
-                setOnPreferenceChangeListener { _, newValue ->
-                    preferences.edit().putBoolean(key, newValue as Boolean).commit()
-                }
-            }
-        )
-
-        screen.addPreference(screen.supportEditTextPreference(SETTING_MAIL, DEFAULT_MAIL, mail))
-        screen.addPreference(screen.supportEditTextPreference(SETTING_PASS, DEFAULT_PASS, pass))
     }
 
     companion object {

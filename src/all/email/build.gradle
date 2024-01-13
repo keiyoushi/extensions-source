@@ -5,8 +5,8 @@ ext {
     extName = 'Email'
     pkgNameSuffix = 'all.email'
     extClass = '.Email'
-    extVersionCode = 2
-    libVersion = '1.2'
+    extVersionCode = 1
+    isNsfw = false
 }
 
 dependencies {
