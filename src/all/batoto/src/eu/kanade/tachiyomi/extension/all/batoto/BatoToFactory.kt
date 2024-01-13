@@ -11,7 +11,7 @@ class LanguageOption(val lang: String, val siteLang: String = lang)
 private val languages = listOf(
     LanguageOption("all", ""),
     // Lang options from publish.bato.to
-    LanguageOption("en"),
+    LanguageOption("en", "en,en_us"),
     LanguageOption("ar"),
     LanguageOption("bg"),
     LanguageOption("zh"),
@@ -58,7 +58,6 @@ private val languages = listOf(
     LanguageOption("zh-Hans", "zh_hk"),
     LanguageOption("zh-Hant", "zh_tw"),
     LanguageOption("hr"),
-    LanguageOption("en-US", "en_us"),
     LanguageOption("eo"),
     LanguageOption("et"),
     LanguageOption("fo"),
