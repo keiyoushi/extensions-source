@@ -413,6 +413,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("ReadFreeComics", "https://readfreecomics.com", "en"),
         SingleLang("ReadMangaFree", "https://readmangafree.net", "en", isNsfw = true),
         SingleLang("ReadManhua", "https://readmanhua.net", "en", overrideVersionCode = 2),
+        SingleLang("Reset Scans", "https://reset-scans.us", "en"),
         SingleLang("Rh2PlusManga", "https://www.rh2plusmanga.com", "th", isNsfw = true, overrideVersionCode = 5),
         SingleLang("RichtoScan", "https://richtoscan.com", "es"),
         SingleLang("Rightdark Scan", "https://rightdark-scan.com", "es"),
