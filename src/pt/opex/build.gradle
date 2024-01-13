@@ -6,7 +6,7 @@ ext {
     extName = 'One Piece Ex'
     pkgNameSuffix = 'pt.opex'
     extClass = '.OnePieceEx'
-    extVersionCode = 6
+    extVersionCode = 7
 }
 
 apply from: "$rootDir/common.gradle"
