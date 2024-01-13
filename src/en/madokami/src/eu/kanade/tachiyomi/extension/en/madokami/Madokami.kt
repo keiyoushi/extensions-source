@@ -16,7 +16,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Credentials
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -67,7 +67,10 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         manga.url = element.attr("href")
-        manga.title = URLDecoder.decode(element.attr("href").split("/").last(), "UTF-8").trimStart('!')
+        val pathSegments = element.attr("href").split("/")
+        var i = pathSegments.size
+        manga.description = URLDecoder.decode(pathSegments[i - 1], "UTF-8")
+        do { i--; manga.title = URLDecoder.decode(pathSegments[i], "UTF-8") } while (URLDecoder.decode(pathSegments[i], "UTF-8").startsWith("!"))
         return manga
     }
 
@@ -84,7 +87,7 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String? = null
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = (baseUrl + manga.url).toHttpUrlOrNull()!!
+        val url = (baseUrl + manga.url).toHttpUrl()
         if (url.pathSize > 5 && url.pathSegments[0] == "Manga" && url.pathSegments[1].length == 1) {
             val builder = url.newBuilder()
             for (i in 5 until url.pathSize) { builder.removePathSegment(5) }
@@ -109,8 +112,7 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.author = document.select("a[itemprop=\"author\"]").joinToString(", ") { it.text() }
-        manga.description = "Tags: " + document.select("div.genres[itemprop=\"keywords\"] a.tag.tag-category").joinToString(", ") { it.text() }
-        manga.genre = document.select("div.genres a.tag[itemprop=\"genre\"]").joinToString(", ") { it.text() }
+        manga.genre = document.select("div.genres a.tag").joinToString(", ") { it.text() }
         manga.status = if (document.select("span.scanstatus").text() == "Yes") SManga.COMPLETED else SManga.UNKNOWN
         manga.thumbnail_url = document.select("div.manga-info img[itemprop=\"image\"]").attr("src")
         return manga

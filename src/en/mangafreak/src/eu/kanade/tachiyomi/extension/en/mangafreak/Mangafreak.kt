@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -72,7 +72,7 @@ class Mangafreak : ParsedHttpSource() {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
+        val url = baseUrl.toHttpUrl().newBuilder()
 
         if (query.isNotBlank()) {
             url.addPathSegments("Find/$query")
@@ -97,7 +97,7 @@ class Mangafreak : ParsedHttpSource() {
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaSelector(): String = "div.manga_search_item , div.mangaka_search_item"

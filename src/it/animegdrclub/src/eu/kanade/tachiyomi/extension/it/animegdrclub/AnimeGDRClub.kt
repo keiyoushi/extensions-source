@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -29,7 +29,7 @@ class AnimeGDRClub : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/serie.php", headers)
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/", headers)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/".toHttpUrlOrNull()!!.newBuilder()
+        val url = "$baseUrl/".toHttpUrl().newBuilder()
 
         if (query.isNotEmpty()) {
             url.addEncodedPathSegment("serie.php")
@@ -118,7 +118,7 @@ class AnimeGDRClub : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga {
         val manga = SManga.create()
 
-        manga.setUrlWithoutDomain("http://www.agcscanlation.it/progetto.php?nome=${element.attr("href").toHttpUrlOrNull()!!.queryParameter("nome")}")
+        manga.setUrlWithoutDomain("http://www.agcscanlation.it/progetto.php?nome=${element.attr("href").toHttpUrl().queryParameter("nome")}")
         manga.title = element.selectFirst(".titolo")!!.text()
         manga.thumbnail_url = "$baseUrl/${element.selectFirst("img")!!.attr("src")}"
 

@@ -3,12 +3,15 @@ package eu.kanade.tachiyomi.extension.pt.gekkouscan
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class GekkouScans : Madara(
     "Gekkou Scans",
-    "https://gekkouscans.top",
+    "https://gekkou.site",
     "pt-BR",
+    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("pt", "BR")),
 ) {
 
     // Theme changed from MMRCMS to Madara, again.
@@ -22,4 +25,10 @@ class GekkouScans : Madara(
         .build()
 
     override val useNewChapterEndpoint: Boolean = true
+
+    override val mangaDetailsSelectorTitle = "#manga-title"
+
+    override val mangaDetailsSelectorStatus = ".summary-heading:contains(Status) ~ .summary-content"
+
+    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

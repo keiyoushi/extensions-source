@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.text.SimpleDateFormat
@@ -23,7 +23,7 @@ class PojokManga : Madara("Pojok Manga", "https://pojokmanga.net", "id", SimpleD
     override val mangaSubString = "komik"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = "$baseUrl/${searchPage(page)}".toHttpUrlOrNull()!!.newBuilder()
+        var url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
         url.addQueryParameter("s", query)
         url.addQueryParameter("post_type", "wp-manga")
         filters.forEach { filter ->
@@ -70,13 +70,13 @@ class PojokManga : Madara("Pojok Manga", "https://pojokmanga.net", "id", SimpleD
                 }
                 is ProjectFilter -> {
                     if (filter.toUriPart() == "project-filter-on") {
-                        url = "$baseUrl/project/page/$page".toHttpUrlOrNull()!!.newBuilder()
+                        url = "$baseUrl/project/page/$page".toHttpUrl().newBuilder()
                     }
                 }
                 else -> {}
             }
         }
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = "div.c-tabs-item__content, div.page-item-detail"

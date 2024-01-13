@@ -45,7 +45,7 @@ class MangaRok : ParsedHttpSource() {
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
     override fun searchMangaSelector(): String =
         ".is-half > a.box"
