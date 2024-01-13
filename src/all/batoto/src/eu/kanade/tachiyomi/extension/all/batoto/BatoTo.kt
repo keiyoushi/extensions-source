@@ -109,7 +109,7 @@ open class BatoTo(
     override fun latestUpdatesSelector(): String {
         return when (siteLang) {
             "" -> "div#series-list div.col"
-            "en" -> "div#series-list div.col.no-flag"
+            "en,en_us" -> "div#series-list div.col.no-flag"
             else -> "div#series-list div.col:has([data-lang=\"$siteLang\"])"
         }
     }
