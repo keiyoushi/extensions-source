@@ -6,9 +6,7 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.decodeBytes
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.getPathFromUrl
-import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.json
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.prepareTags
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -21,6 +19,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -52,6 +52,8 @@ class Anchira : HttpSource(), ConfigurableSource {
         .addInterceptor { apiInterceptor(it) }
         .build()
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
@@ -63,7 +65,7 @@ class Anchira : HttpSource(), ConfigurableSource {
     override fun latestUpdatesRequest(page: Int) = GET("$libraryUrl?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = decodeBytes<LibraryResponse>(response.body, anchiraData.key)
+        val data = json.decodeFromString<LibraryResponse>(response.body.string())
 
         return MangasPage(
             data.entries.map {
@@ -154,7 +156,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         GET("$libraryUrl/${getPathFromUrl(manga.url)}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = decodeBytes<Entry>(response.body, anchiraData.key)
+        val data = json.decodeFromString<Entry>(response.body.string())
 
         return SManga.create().apply {
             url = "/g/${data.id}/${data.key}"
@@ -182,7 +184,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         GET("$libraryUrl/${getPathFromUrl(manga.url)}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = decodeBytes<Entry>(response.body, anchiraData.key)
+        val data = json.decodeFromString<Entry>(response.body.string())
 
         return listOf(
             SChapter.create().apply {
@@ -202,7 +204,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         GET("$libraryUrl/${getPathFromUrl(chapter.url)}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = decodeBytes<Entry>(response.body, anchiraData.key)
+        val data = json.decodeFromString<Entry>(response.body.string())
         val imageData = getImageData(data)
 
         return imageData.names.mapIndexed { i, name ->
@@ -225,7 +227,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                 client.newCall(GET("$libraryUrl/${entry.id}/${entry.key}/data", headers)).execute()
             val body = response.body
 
-            return decodeBytes(body, anchiraData.key)
+            return json.decodeFromString(response.body.string())
         } catch (_: IOException) {
             throw IOException("Complete a Captcha in the site to continue")
         }
