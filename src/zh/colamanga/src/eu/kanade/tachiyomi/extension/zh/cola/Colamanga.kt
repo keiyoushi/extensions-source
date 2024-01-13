@@ -5091,7 +5091,7 @@ class Colamanga : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = "li.fed-list-item"
 
-    override fun searchMangaSelector() = ""
+    override fun searchMangaSelector() = "div.fed-main-info dl"
 
     override fun chapterListSelector() = "div.all_data_list li.fed-padding"
 
@@ -5099,7 +5099,7 @@ class Colamanga : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = "div.fed-page-info"
 
-    override fun searchMangaNextPageSelector(): String? = null
+    override fun searchMangaNextPageSelector() = "div.fed-page-info"
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/show?page=$page", headers)
 
@@ -5107,7 +5107,7 @@ class Colamanga : ParsedHttpSource() {
         GET("$baseUrl/show?orderBy=update&page=$page", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw Exception("No search")
+        GET("$baseUrl/search?type=1&page=$page&searchString=$query", headers)
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
 
@@ -5115,7 +5115,13 @@ class Colamanga : ParsedHttpSource() {
 
     override fun latestUpdatesFromElement(element: Element) = mangaFromElement(element)
 
-    override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga {
+        return SManga.create().apply {
+            url = element.select("dt a").attr("href")
+            title = element.select("h1").text().trim()
+            thumbnail_url = element.select("a.fed-list-pics").attr("data-original")
+        }
+    }
 
     private fun mangaFromElement(element: Element): SManga {
         println("mangaFromElement: $element")
