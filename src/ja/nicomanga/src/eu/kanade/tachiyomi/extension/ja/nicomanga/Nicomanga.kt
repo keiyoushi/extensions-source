@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
@@ -32,7 +31,8 @@ class Nicomanga : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private fun mangaListParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -113,10 +113,17 @@ class Nicomanga : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = response.asJsoup()
         val chapterList = doc.select("ul > a")
+        val chapterPrefix = "$baseUrl/app/manga/controllers"
+
         val chapters = chapterList.map { chapter ->
             SChapter.create().apply {
                 name = chapter.attr("title").trim()
-                setUrlWithoutDomain(chapter.absUrl("href"))
+                val url = chapter.absUrl("href").run {
+                    takeIf { startsWith(chapterPrefix) }
+                        ?.replaceFirst(chapterPrefix, baseUrl)
+                        ?: this
+                }
+                setUrlWithoutDomain(url)
             }
         }
         return chapters
@@ -124,17 +131,11 @@ class Nicomanga : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val id = chapterIdRegex.find(response.body.string())?.groupValues?.get(1) ?: throw Exception("chapter-id not found")
-        val headers = headersBuilder().set("referer", response.request.url.toString()).build()
         val r = client.newCall(GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$id", headers)).execute()
         val doc = r.asJsoup()
         return doc.select("img.chapter-img").mapIndexed { i, page ->
-            Page(i + 1, page.attr("data-src"))
+            Page(i + 1, imageUrl = page.attr("data-src"))
         }
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val headers = headersBuilder().set("referer", baseUrl).build()
-        return GET(page.imageUrl!!, headers)
     }
 
     override fun imageUrlParse(response: Response): String =
