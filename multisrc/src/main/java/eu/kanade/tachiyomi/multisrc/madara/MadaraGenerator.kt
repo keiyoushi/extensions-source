@@ -13,7 +13,7 @@ class MadaraGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 32
 
     override val sources = listOf(
-        /*MultiLang("MangaForFree.net", "https://mangaforfree.net", listOf("en", "ko", "all"), isNsfw = true, className = "MangaForFreeFactory", pkgName = "mangaforfree", overrideVersionCode = 1),
+        MultiLang("MangaForFree.net", "https://mangaforfree.net", listOf("en", "ko", "all"), isNsfw = true, className = "MangaForFreeFactory", pkgName = "mangaforfree", overrideVersionCode = 1),
         MultiLang("Manhwa18.cc", "https://manhwa18.cc", listOf("en", "ko", "all"), isNsfw = true, className = "Manhwa18CcFactory", pkgName = "manhwa18cc", overrideVersionCode = 4),
         MultiLang("Reaper Scans", "https://reaperscans.com", listOf("fr", "tr"), className = "ReaperScansFactory", pkgName = "reaperscans", overrideVersionCode = 12),
         SingleLang("1st Kiss-Manga (unoriginal)", "https://1stkiss-manga.com", "en", isNsfw = false, className = "FirstKissDashManga"),
@@ -150,9 +150,9 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Hreads", "https://hreads.net", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("I Love Manhwa", "https://ilovemanhwa.com", "en", isNsfw = true),
         SingleLang("Illusion Scan", "https://illusionscan.com", "pt-BR", isNsfw = true),
-        SingleLang("Immortal Updates", "https://immortalupdates.com", "en", overrideVersionCode = 6),*/
-        SingleLang("Império Scans", "https://neroxus.com.br", "pt-BR", className = "ImperioScans", overrideVersionCode = 2),
-        /*SingleLang("InfraFandub", "https://infrafandub.com", "es", overrideVersionCode = 1),
+        SingleLang("Immortal Updates", "https://immortalupdates.com", "en", overrideVersionCode = 6),
+        SingleLang("Império Scans", "https://neroxus.com.br", "pt-BR", className = "ImperioScans", overrideVersionCode = 1),
+        SingleLang("InfraFandub", "https://infrafandub.com", "es", overrideVersionCode = 1),
         SingleLang("Inmortal Scan", "https://manga.mundodrama.site", "es"),
         SingleLang("InstaManhwa", "https://www.instamanhwa.com", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("IsekaiScan.com", "https://isekaiscan.com", "en", className = "IsekaiScanCom", overrideVersionCode = 4),
@@ -514,7 +514,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("مانجا ليك", "https://manga-lek.net", "ar", className = "Mangalek", overrideVersionCode = 4),
         SingleLang("مانجا ليكس", "https://mangaleks.com", "ar", className = "MangaLeks"),
         SingleLang("مانجا لينك", "https://mangalink.io", "ar", className = "MangaLinkio", overrideVersionCode = 3),
-        SingleLang("巴卡漫画", "https://bakamh.com", "zh", isNsfw = true, className = "Bakamh"),*/
+        SingleLang("巴卡漫画", "https://bakamh.com", "zh", isNsfw = true, className = "Bakamh"),
     )
 
     companion object {
