@@ -7,6 +7,13 @@ File(rootDir, "lib").eachDir {
     project(":lib-$libName").projectDir = File("lib/$libName")
 }
 
+// Load all modules under /theme
+File(rootDir, "theme").eachDir {
+    val themeName = it.name
+    include(":$themeName-theme")
+    project(":$themeName-theme").projectDir = File("theme/$themeName")
+}
+
 if (System.getenv("CI") == null || System.getenv("CI_MODULE_GEN") == "true") {
     // Local development (full project build)
 

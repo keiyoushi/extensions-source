@@ -1,0 +1,21 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+def theme = project(':heancms-theme')
+
+dependencies {
+    implementation theme
+}
+
+apply from: "${theme.projectDir.path}/version.gradle"
+
+ext {
+    extName = 'Perf Scan'
+    pkgNameSuffix = 'fr.perfscan'
+    extClass = '.PerfScan'
+    extFactory = 'heancms'
+    extVersionCode = themeVersionCode + 0
+}
+
+apply from: "$rootDir/common.gradle"
