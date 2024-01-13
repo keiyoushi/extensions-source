@@ -1,0 +1,11 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+ext {
+    extName = 'SUPER MEGA'
+    pkgNameSuffix = 'en.supermega'
+    extClass = '.Supermega'
+    extVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"
