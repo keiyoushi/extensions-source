@@ -40,8 +40,9 @@ class Colamanga : ParsedHttpSource() {
     private val pageNumberKey = "GEuOKGfufx6DUBVl"
 
     // 在 custom.js 中搜索 getDataParse 可以找到 key
-    private var imgKey = ""
-    private var imgKeyMap: Map<String, String> = mapOf()
+    private val imgKeyKey = "0zm9Egzke1Oljydl"
+
+    // 在 manga.read.js 中，运行提取脚本可以生成
     private val imgKeyMapJson =
         """{
         "518472": "9sBHp0aUiGWyymKQ",
@@ -5046,6 +5047,9 @@ class Colamanga : ParsedHttpSource() {
         "611754": "mg6TnSAXudBvCJPX"
     }"""
 
+    private var imgKey = ""
+    private var imgKeyMap: Map<String, String> = mapOf()
+
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
         if (originalResponse.request.url.toString().endsWith("enc.webp")) {
@@ -5198,7 +5202,7 @@ class Colamanga : ParsedHttpSource() {
         }
 
         if (keyType.isEmpty() || keyType == "0") {
-            this.imgKey = jsd("0zm9Egzke1Oljydl", imgKey, false)
+            this.imgKey = jsd(imgKeyKey, imgKey, false)
         } else {
             println(imgKeyMap)
             println(keyType)
