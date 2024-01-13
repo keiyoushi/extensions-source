@@ -29,7 +29,7 @@ class Colamanga : ParsedHttpSource() {
 
     override val lang = "zh"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     // 通过 https://obf-io.deobfuscate.io/
     // 反混淆 custom.js 文件之后，搜索 C_DATA 可以找到 key
@@ -5057,8 +5057,8 @@ class Colamanga : ParsedHttpSource() {
                 return@Interceptor originalResponse
             }
 
-            val orgBody = originalResponse.body.bytes()
             println("imgKey: $imgKey")
+            val orgBody = originalResponse.body.bytes()
             val aesKey = SecretKeySpec(imgKey.toByteArray(), "AES")
             val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
             cipher.init(
@@ -5067,7 +5067,6 @@ class Colamanga : ParsedHttpSource() {
                 IvParameterSpec("0000000000000000".toByteArray()),
             )
             val result = cipher.doFinal(orgBody)
-            println(result)
             val newBody = result.toResponseBody("image/webp".toMediaTypeOrNull())
             originalResponse.newBuilder().body(newBody).build()
         } else {
@@ -5090,21 +5089,22 @@ class Colamanga : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "li.fed-list-item"
 
-    override fun latestUpdatesSelector() = ""
+    override fun latestUpdatesSelector() = "li.fed-list-item"
 
     override fun searchMangaSelector() = ""
 
     override fun chapterListSelector() = "div.all_data_list li.fed-padding"
 
-    override fun popularMangaNextPageSelector(): String? = null
+    override fun popularMangaNextPageSelector() = "div.fed-page-info"
 
-    override fun latestUpdatesNextPageSelector(): String? = null
+    override fun latestUpdatesNextPageSelector() = "div.fed-page-info"
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/show", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/show?page=$page", headers)
 
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Not Used")
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$baseUrl/show?orderBy=update&page=$page", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
         throw Exception("No search")
