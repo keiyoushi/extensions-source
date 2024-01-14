@@ -61,8 +61,6 @@ class DynastyDoujins : DynastyScans() {
         val document = response.asJsoup()
         val chapters = mutableListOf<SChapter>()
         var page = 1
-        val maxRetry = 10
-        var retry = 0
 
         document.select("a.thumbnail img").let { images ->
             if (images.isNotEmpty()) {
