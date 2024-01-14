@@ -354,15 +354,6 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
             summary = MAINSITE_RATEPERMITS_PREF_SUMMARY
 
             setDefaultValue(MAINSITE_RATEPERMITS_PREF_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(MAINSITE_RATEPERMITS_PREF, newValue as String).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
         }
 
         val mainSiteRatePeriodPreference = androidx.preference.ListPreference(screen.context).apply {
@@ -373,15 +364,6 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
             summary = MAINSITE_RATEPERIOD_PREF_SUMMARY
 
             setDefaultValue(MAINSITE_RATEPERIOD_PREF_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(MAINSITE_RATEPERIOD_PREF, newValue as String).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
         }
 
         screen.addPreference(mainSiteRatePermitsPreference)
