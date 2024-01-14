@@ -68,7 +68,7 @@ class Twi4 : HttpSource() {
                         author = manga.select("div.hgroup > p").text()
                         status =
                             if (manga.select("ul:first-child > li:last-child > em.is-completed")
-                                    .isEmpty()
+                                .isEmpty()
                             ) {
                                 SManga.ONGOING
                             } else {

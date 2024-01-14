@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.all.mangadex
 import android.content.SharedPreferences
 import okhttp3.Interceptor
 import okhttp3.Response
-import java.io.IOException
 
 /**
  * Interceptor to set custom useragent for MangaDex

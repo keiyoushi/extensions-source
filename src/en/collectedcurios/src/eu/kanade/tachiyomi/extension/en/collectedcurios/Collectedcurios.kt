@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.collectedcurios
 
-import android.util.Log
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -58,7 +57,7 @@ class Collectedcurios : ParsedHttpSource() {
                         description = "Spider and Scorpion webcomic."
                         thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Spider_And_Scorpion_Button.jpg"
                     },
-                    */
+                     */
                 ),
                 false,
             ),
@@ -113,7 +112,7 @@ class Collectedcurios : ParsedHttpSource() {
     override fun imageUrlParse(response: Response): String {
         val url = response.request.url.toString()
         val document = response.asJsoup()
-        
+
         return when {
             url.contains("sequentialart") ->
                 document.selectFirst(".w3-image")!!.absUrl("src")
