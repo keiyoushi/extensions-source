@@ -78,11 +78,12 @@ class Colamanga : ParsedHttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        Log.i("ColaManga", "searchMangaParse: ${response.request.url}")
         val document = response.asJsoup()
         // Normal search
-        return if (response.request.url.encodedPath.startsWith("search?")) {
+        return if (response.request.url.encodedPath.startsWith("/search")) {
             val mangas =
-                document.select(popularMangaSelector()).map { element ->
+                document.select(searchMangaSelector()).map { element ->
                     searchMangaFromElement(element)
                 }
             MangasPage(mangas, false)
