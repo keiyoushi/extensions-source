@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.tenkaiscan
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.Madara
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 class TenkaiScan : Madara(
@@ -11,4 +11,5 @@ class TenkaiScan : Madara(
 ) {
     override val versionId = 2
     override val useNewChapterEndpoint = true
+    override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
 }
