@@ -124,9 +124,12 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
     // Filter
     private class StatusFilter : Filter.TriState("已完结")
     private class SortFilter : Filter.Select<String>("排序", arrayOf("更新日", "收录日", "日点击", "月点击"), 2)
-
+    private class CategoryFilter : Filter.Select<String>("类型", arrayOf("全部", "热血", "玄幻", "恋爱", "冒险", "古风", "都市", "穿越", "奇幻", "其他", "少男", "搞笑", "战斗", "冒险热血", "重生", "爆笑", "逆袭", "后宫", "少年", "少女", "熱血", "系统", "动作", "校园", "冒險", "修真", "修仙", "剧情", "霸总", "大女主", "生活"), 0)
+    private class CharFilter : Filter.Select<String>("字母", arrayOf("全部", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"), 0)
     override fun getFilterList() = FilterList(
         SortFilter(),
+        CategoryFilter(),
+        CharFilter(),
         StatusFilter(),
     )
 
@@ -147,6 +150,16 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
                     }
                     is SortFilter -> {
                         url.addQueryParameter("orderBy", arrayOf("update", "create", "dailyCount", "weeklyCount", "monthlyCount")[filter.state])
+                    }
+                    is CategoryFilter -> {
+                        if (filter.state != 0) {
+                            url.addQueryParameter("mainCategoryId", arrayOf("", "10023", "10024", "10126", "10210", "10143", "10124", "10129", "10242", "10560", "10641", "10122", "10309", "11224", "10461", "10201", "10943", "10138", "10321", "10301", "12044", "10722", "10125", "10131", "12123", "10133", "10453", "10480", "10127", "10706", "10142")[filter.state])
+                        }
+                    }
+                    is CharFilter -> {
+                        if (filter.state != 0) {
+                            url.addQueryParameter("charCategoryId", arrayOf("", "10182", "10081", "10134", "10001", "10238", "10161", "10225", "10137", "10284", "10141", "10283", "10132", "10136", "10130", "10282", "10262", "10164", "10240", "10121", "10123", "11184", "11483", "10135", "10061", "10082", "10128")[filter.state])
+                        }
                     }
                     else -> {}
                 }
