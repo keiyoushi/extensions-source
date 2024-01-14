@@ -126,7 +126,14 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
-    private class StatusFilter : Filter.TriState("已完结")
+    private class StatusFilter : UriPartFilter(
+        "状态",
+        arrayOf(
+            Pair("全部", ""),
+            Pair("连载中", "1"),
+            Pair("已完结", "2"),
+        ),
+    )
     private class SortFilter : UriPartFilter(
         "排序",
         arrayOf(
@@ -135,7 +142,8 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
             Pair("周点击", "weeklyCount"),
             Pair("月点击", "monthlyCount"),
         ),
-    )private class CategoryFilter : UriPartFilter(
+    )
+    private class CategoryFilter : UriPartFilter(
         "类型",
         arrayOf(
             Pair("全部", ""),
@@ -221,8 +229,8 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
             filters.forEach { filter ->
                 when (filter) {
                     is StatusFilter -> {
-                        if (!filter.isIgnored()) {
-                            url.addQueryParameter("status", arrayOf("0", "2", "1")[filter.state])
+                        if (filter.state != 0) {
+                            url.addQueryParameter("status", filter.toUriPart())
                         }
                     }
                     is SortFilter -> {
