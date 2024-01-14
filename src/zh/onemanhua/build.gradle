@@ -1,0 +1,16 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'ColaManhua (OhManhua)'
+    pkgNameSuffix = 'zh.onemanhua'
+    extClass = '.Onemanhua'
+    extVersionCode = 12
+}
+
+dependencies {
+    implementation(project(":lib-synchrony"))
+}
+
+apply from: "$rootDir/common.gradle"
