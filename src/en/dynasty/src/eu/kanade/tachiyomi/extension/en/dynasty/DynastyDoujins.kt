@@ -88,15 +88,11 @@ class DynastyDoujins : DynastyScans() {
             val newResponse = client.newCall(newRequest).execute()
 
             if (!newResponse.isSuccessful) {
-                retry += 1
-                if (retry > maxRetry) { break }
-                else {
-                    /*
-                    TODO: Toast to notify max retries exceeded
-                          and chapter parsing aborted
-                     */
-                    return chapters
-                }
+                /*
+                TODO: Toast to notify chapter parsing aborted.
+                      Add possible retry logic.
+                 */
+                return chapters
             }
 
             val newDocument = newResponse.asJsoup()
