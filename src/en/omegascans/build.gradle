@@ -12,7 +12,7 @@ ext {
     extName = 'Omega Scans'
     pkgNameSuffix = 'en.omegascans'
     extClass = '.OmegaScans'
-    extVersionCode = theme.baseVersion + 18
+    extVersionCode = theme.baseVersionCode + 18
     isNsfw = true
 }
 

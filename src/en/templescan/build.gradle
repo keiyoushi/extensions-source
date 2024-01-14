@@ -13,7 +13,7 @@ ext {
     pkgNameSuffix = 'en.templescan'
     extClass = '.TempleScan'
     extFactory = 'heancms'
-    extVersionCode = theme.baseVersion + 16
+    extVersionCode = theme.baseVersionCode + 16
     isNsfw = true
 }
 

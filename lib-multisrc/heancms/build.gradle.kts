@@ -18,7 +18,7 @@ android {
     }
 }
 
-extra["baseVersion"] = 20
+extra["baseVersionCode"] = 20
 
 repositories {
     mavenCentral()

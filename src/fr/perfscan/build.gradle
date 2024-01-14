@@ -13,7 +13,7 @@ ext {
     pkgNameSuffix = 'fr.perfscan'
     extClass = '.PerfScan'
     extFactory = 'heancms'
-    extVersionCode = theme.baseVersion + 0
+    extVersionCode = theme.baseVersionCode + 0
 }
 
 apply from: "$rootDir/common.gradle"
