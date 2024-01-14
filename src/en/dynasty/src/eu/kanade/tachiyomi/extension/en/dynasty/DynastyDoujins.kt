@@ -51,9 +51,9 @@ class DynastyDoujins : DynastyScans() {
 
     private fun doujinChapterParse(document: Document): List<SChapter> {
         return try {
-            document.select(chapterListSelector()).map { chapterFromElement(it) }.toMutableList()
+            document.select(chapterListSelector()).map { chapterFromElement(it) }
         } catch (e: IndexOutOfBoundsException) {
-            mutableListOf()
+            emptyList()
         }
     }
 
