@@ -285,7 +285,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("MangaRosie", "https://mangarosie.in", "en", isNsfw = true),
         SingleLang("MangaRuby.com", "https://mangaruby.com", "en", isNsfw = true, className = "MangaRubyCom"),
         SingleLang("Mangaryu", "https://mangaryu.com", "en", isNsfw = true),
-        SingleLang("Mangas No Sekai", "https://mangasnosekai.com", "es", overrideVersionCode = 1),
+        SingleLang("Mangas No Sekai", "https://mangasnosekai.com", "es", overrideVersionCode = 2),
         SingleLang("Mangas Origines", "https://mangas-origines.xyz", "fr", isNsfw = true, overrideVersionCode = 4),
         SingleLang("Mangas-Origines.fr", "https://mangas-origines.fr", "fr", className = "MangasOriginesFr"),
         SingleLang("MangaSco", "https://manhwasco.net", "en", overrideVersionCode = 2),

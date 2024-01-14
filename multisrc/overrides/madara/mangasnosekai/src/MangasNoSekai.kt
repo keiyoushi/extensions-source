@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -23,17 +24,47 @@ class MangasNoSekai : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${searchPage(page)}?s=&post_type=wp-manga&m_orderby=views", headers)
+    override val mangaSubString = "manganews"
 
-    override fun popularMangaSelector() = searchMangaSelector()
+    override fun popularMangaRequest(page: Int): Request {
+        return GET(
+            url = "$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views",
+            headers = headers,
+            cache = CacheControl.FORCE_NETWORK,
+        )
+    }
 
-    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
+    override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/${searchPage(page)}?s=&post_type=wp-manga&m_orderby=latest", headers)
+    override val popularMangaUrlSelector = "a[href]"
 
-    override fun latestUpdatesSelector() = searchMangaSelector()
+    override fun popularMangaFromElement(element: Element): SManga {
+        val manga = SManga.create()
 
-    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
+        with(element) {
+            select(popularMangaUrlSelector).first()?.let {
+                manga.setUrlWithoutDomain(it.attr("abs:href"))
+            }
+
+            select("figcaption").first()?.let {
+                manga.title = it.text()
+            }
+
+            select("img").first()?.let {
+                manga.thumbnail_url = imageFromElement(it)
+            }
+        }
+
+        return manga
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        return GET(
+            url = "$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest",
+            headers = headers,
+            cache = CacheControl.FORCE_NETWORK,
+        )
+    }
 
     override fun searchPage(page: Int): String {
         return if (page > 1) "page/$page/" else ""
@@ -112,4 +143,14 @@ class MangasNoSekai : Madara(
 
         return manga
     }
+
+    override val orderByFilterOptionsValues: Array<String> = arrayOf(
+        "",
+        "latest2",
+        "alphabet",
+        "rating",
+        "trending",
+        "views2",
+        "new-manga",
+    )
 }
