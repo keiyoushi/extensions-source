@@ -49,7 +49,7 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
     override val id = 8252565807829914103 // name used to be "One漫画"
     override val lang = "zh"
     override val supportsLatest = true
-    override val name = "COLA漫画 (OH漫画)"
+    override val name = "COLAMANGA"
     override val baseUrl = "https://www.colamanga.com"
 
     // Preference setting
