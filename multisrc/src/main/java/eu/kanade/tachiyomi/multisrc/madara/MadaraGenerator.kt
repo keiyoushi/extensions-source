@@ -371,6 +371,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("NekoPost.co (unoriginal)", "https://www.nekopost.co", "th", isNsfw = false, className = "NekoPostCo"),
         SingleLang("NekoScan", "https://nekoscan.com", "en", overrideVersionCode = 2),
         SingleLang("NewManhua", "https://newmanhua.com", "en", isNsfw = true),
+        SingleLang("Nexo Scans", "https://nexoscans.com", "pt-BR"),
         SingleLang("Night Comic", "https://www.nightcomic.com", "en", overrideVersionCode = 1),
         SingleLang("Niji Translations", "https://niji-translations.com", "ar", overrideVersionCode = 1),
         SingleLang("Nitro Manga", "https://nitromanga.com", "en", className = "NitroScans", overrideVersionCode = 1),
