@@ -5,7 +5,7 @@ ext {
     extName = 'Manhwas.net'
     pkgNameSuffix = 'es.manhwasnet'
     extClass = '.ManhwasNet'
-    extVersionCode = 10
+    extVersionCode = 11
     isNsfw = true
 }
 
