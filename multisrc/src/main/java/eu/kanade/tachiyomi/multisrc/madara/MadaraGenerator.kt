@@ -375,6 +375,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Night Comic", "https://www.nightcomic.com", "en", overrideVersionCode = 1),
         SingleLang("Niji Translations", "https://niji-translations.com", "ar", overrideVersionCode = 1),
         SingleLang("Nitro Manga", "https://nitromanga.com", "en", className = "NitroScans", overrideVersionCode = 1),
+        SingleLang("Norte Rose Scan", "https://norterose.com.br", "pt-BR", isNsfw = true),
         SingleLang("No Index Scan", "https://noindexscan.com", "pt-BR", isNsfw = true),
         SingleLang("Noblesse Translations", "https://www.noblessev1.com", "es", overrideVersionCode = 2),
         SingleLang("Nocturne Summer", "https://nocsummer.com.br", "pt-BR", isNsfw = true),
