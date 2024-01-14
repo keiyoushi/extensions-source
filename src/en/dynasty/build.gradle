@@ -6,7 +6,7 @@ ext {
     extName = 'Dynasty'
     pkgNameSuffix = 'en.dynasty'
     extClass = '.DynastyFactory'
-    extVersionCode = 22
+    extVersionCode = 23
 }
 
 apply from: "$rootDir/common.gradle"
