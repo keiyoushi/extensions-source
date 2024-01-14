@@ -19,6 +19,15 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun headersBuilder() = super.headersBuilder()
         .add("Accept-Language", "en-US,en;q=0.5")
 
+    override val client by lazy {
+        super.client.newBuilder()
+            .addInterceptor(DDoSGuardInterceptor(super.client))
+            .build()
+    }
+
+    override val requestPath = "manga-list-sayfala.html"
+
+    // ============================== Popular ===============================
     override fun popularMangaNextPageSelector() = "div.btn-group:not(div.btn-block) button.btn-info"
 
     // =============================== Search ===============================
