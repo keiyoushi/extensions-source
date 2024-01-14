@@ -89,7 +89,14 @@ class DynastyDoujins : DynastyScans() {
 
             if (!newResponse.isSuccessful) {
                 retry += 1
-                if (retry > maxRetry) { break } else { continue }
+                if (retry > maxRetry) { break }
+                else {
+                    /*
+                    TODO: Toast to notify max retries exceeded
+                          and chapter parsing aborted
+                     */
+                    return chapters
+                }
             }
 
             val newDocument = newResponse.asJsoup()
