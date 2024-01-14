@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.carteldemanhwas
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
