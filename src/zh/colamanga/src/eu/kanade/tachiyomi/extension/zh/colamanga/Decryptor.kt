@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.api.get
 import javax.crypto.Cipher
@@ -25,7 +26,16 @@ class Decryptor(preferences: SharedPreferences, client: OkHttpClient) {
             } else {
                 try {
                     Log.i("Decryptor", "Get Keys from: ${preferences.keysUrl}")
-                    val keysJson = client.newCall(GET(preferences.keysUrl)).execute().body.string()
+                    val keysJson =
+                        client.newCall(
+                            GET(
+                                preferences.keysUrl,
+                                cache = CacheControl.FORCE_NETWORK,
+                            ),
+                        )
+                            .execute()
+                            .body
+                            .string()
                     _keys = Json.decodeFromString<Keys>(keysJson)
                     return _keys!!
                 } catch (e: Exception) {
