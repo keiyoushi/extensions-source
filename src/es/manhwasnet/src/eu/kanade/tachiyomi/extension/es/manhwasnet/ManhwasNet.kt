@@ -46,14 +46,16 @@ class ManhwasNet : ParsedHttpSource() {
             chain.proceed(request.newBuilder().headers(clearHeaders).build())
         }
         if (response.headers["x-sucuri-cache"].isNullOrEmpty() && response.headers["x-sucuri-id"] != null && url.toString().startsWith(baseUrl)) {
-            val script = response.asJsoup().selectFirst("script")?.data()
+            val script = response.use { it.asJsoup() }.selectFirst("script")?.data()
             if (script != null) {
-                val a = script.split("(r)")[0].dropLast(1) + "r=r.replace('document.cookie','cookie');"
+                val patchedScript = script.split("(r)")[0].dropLast(1) + "r=r.replace('document.cookie','cookie');"
                 QuickJs.create().use {
-                    val b = it.evaluate(a) as String
-                    val sucuriCookie = it.evaluate(b.replace("location.", "").replace("reload();", "")) as String
-                    val cookieName = sucuriCookie.split("=")[0]
-                    val cookieValue = sucuriCookie.split("=")[1].replace(";path", "")
+                    val result = (it.evaluate(patchedScript) as String)
+                        .replace("location.", "")
+                        .replace("reload();", "")
+                    val sucuriCookie = (it.evaluate(result) as String).split("=", limit = 2)
+                    val cookieName = sucuriCookie.first()
+                    val cookieValue = sucuriCookie.last().replace(";path", "")
                     client.cookieJar.saveFromResponse(url, listOf(Cookie.parse(url, "$cookieName=$cookieValue")!!))
                 }
                 val newResponse = chain.proceed(request)
