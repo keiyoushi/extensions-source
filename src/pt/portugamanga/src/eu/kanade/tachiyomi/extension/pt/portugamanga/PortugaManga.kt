@@ -76,8 +76,7 @@ class PortugaManga : ParsedHttpSource() {
     }
 
     private fun searchMangaParse(document: Document): List<SManga> {
-        val elements = document.select(searchMangaSelector())
-        return elements.map { this.searchMangaFromElement(it) }
+        return document.select(searchMangaSelector()).map { this.searchMangaFromElement(it) }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -90,7 +89,7 @@ class PortugaManga : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("h3")?.ownText() ?: "Untitled"
-        thumbnail_url = element.selectFirst(searchMangaThumbnailSelector())?.srcAttr()
+        thumbnail_url = element.selectFirst(searchMangaThumbnailSelector())!!.absUrl("src")
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
 
@@ -109,6 +108,7 @@ class PortugaManga : ParsedHttpSource() {
         return SManga.create().apply {
             title = document.selectFirst("h1")?.text() ?: "Untitled"
             description = document.selectFirst("#manga_capitulo_descricao")?.text()
+            thumbnail_url = document.selectFirst("div.manga .row .row div.text-right img")!!.absUrl("src")
             initialized = true
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             genre = document.select("h5.cg_color > a.label.label-warning")
@@ -121,6 +121,7 @@ class PortugaManga : ParsedHttpSource() {
                 PAGE_STATUS_COMPLETED -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
+            setUrlWithoutDomain(document.location())
         }
     }
 
