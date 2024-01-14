@@ -21,6 +21,7 @@ class CarteldeManhwas : MangaThemesia(
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
     }
+
     override fun searchMangaSelector() = ".utao .uta .imgu:not(:has(span.novelabel)), " +
         ".listupd .bs .bsx:not(:has(span.novelabel)), " +
         ".listo .bs .bsx:not(:has(span.novelabel))"
