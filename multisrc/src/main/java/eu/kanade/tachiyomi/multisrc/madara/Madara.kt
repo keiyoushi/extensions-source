@@ -285,7 +285,7 @@ abstract class Madara(
         else -> arrayOf("Completed", "Ongoing", "Canceled", "On Hold")
     }
 
-    protected val statusFilterOptionsValues: Array<String> = arrayOf(
+    protected open val statusFilterOptionsValues: Array<String> = arrayOf(
         "end",
         "on-going",
         "canceled",
@@ -318,7 +318,7 @@ abstract class Madara(
         )
     }
 
-    protected val orderByFilterOptionsValues: Array<String> = arrayOf(
+    protected open val orderByFilterOptionsValues: Array<String> = arrayOf(
         "",
         "latest",
         "alphabet",
