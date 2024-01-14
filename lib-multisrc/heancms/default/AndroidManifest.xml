@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
     <application>
         <activity
             android:name="eu.kanade.tachiyomi.multisrc.heancms.HeanCmsUrlActivity"
@@ -12,9 +13,9 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:host="templescan.net"
+                    android:host="${SOURCEHOST}"
                     android:pathPattern="/.*/..*"
-                    android:scheme="https" />
+                    android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
     </application>

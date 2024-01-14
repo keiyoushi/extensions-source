@@ -7,11 +7,11 @@ File(rootDir, "lib").eachDir {
     project(":lib-$libName").projectDir = File("lib/$libName")
 }
 
-// Load all modules under /theme
-File(rootDir, "theme").eachDir {
+// Load all modules under /lib-multisrc
+File(rootDir, "lib-multisrc").eachDir {
     val themeName = it.name
     include(":$themeName-theme")
-    project(":$themeName-theme").projectDir = File("theme/$themeName")
+    project(":$themeName-theme").projectDir = File("lib-multisrc/$themeName")
 }
 
 if (System.getenv("CI") == null || System.getenv("CI_MODULE_GEN") == "true") {
