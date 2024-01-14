@@ -7,16 +7,19 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.math.max
 
 class PortugaManga : ParsedHttpSource() {
 
@@ -41,6 +44,7 @@ class PortugaManga : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("h3")?.text() ?: "Title not found"
         thumbnail_url = element.selectFirst("img")!!.srcAttr()
+        initialized = true
         setUrlWithoutDomain(element.attr("href"))
     }
 
@@ -58,38 +62,61 @@ class PortugaManga : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = "ul.pagination [aria-label=Next]"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException("Not implemented")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/mangas".toHttpUrl().newBuilder()
+            .addQueryParameter("busca", query)
+            .addQueryParameter("pagina", max(1, page).toString())
+            .build()
+        return GET(url, headers)
+    }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not implemented")
+    private fun hasNextPage(currentPage: Int, document: Document): Boolean {
+        val pageAmount = document.select("ul.pagination li:not([aria-hidden])").size
+        return pageAmount != currentPage && currentPage != -1
+    }
 
-    override fun searchMangaSelector() =
-        throw UnsupportedOperationException("Not implemented")
+    private fun searchMangaParse(document: Document): List<SManga> {
+        val elements = document.select(searchMangaSelector())
+        return elements.map { this.searchMangaFromElement(it) }
+    }
 
-    override fun searchMangaFromElement(element: Element) =
-        throw UnsupportedOperationException("Not implemented")
+    override fun searchMangaParse(response: Response): MangasPage {
+        val currentPage = response.request.url.queryParameter("pagina")?.toInt() ?: -1
+        val document = response.parseAsDocument()
+        return MangasPage(searchMangaParse(document), hasNextPage(currentPage, document))
+    }
 
-    override fun searchMangaNextPageSelector() =
-        throw UnsupportedOperationException("Not implemented")
+    override fun searchMangaSelector(): String = "div.mangas"
+
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h3")?.ownText() ?: "Untitled"
+        thumbnail_url = element.selectFirst(searchMangaThumbnailSelector())?.srcAttr()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
+
+    private fun searchMangaThumbnailSelector(): String = "div.MangaImagem img"
+
+    override fun searchMangaNextPageSelector(): String? = "ul.pagination li:last-child"
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
+    private fun getMangaStatus(document: Document): String {
+        return document.selectFirst("h5.cg_color > a.label.label-success")?.text()
+            ?: ""
+    }
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             title = document.selectFirst("h1")?.text() ?: "Untitled"
-
             description = document.selectFirst("#manga_capitulo_descricao")?.text()
-
+            initialized = true
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             genre = document.select("h5.cg_color > a.label.label-warning")
                 .map { it?.text() ?: "" }
                 .filter { it.isNotBlank() }
                 .joinToString(", ")
 
-            val pageStatus = document.selectFirst("h5.cg_color > a.label.label-success")?.text()
-                ?: ""
-
-            status = when (pageStatus) {
+            status = when (getMangaStatus(document)) {
                 PAGE_STATUS_ONGOING -> SManga.ONGOING
                 PAGE_STATUS_COMPLETED -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
@@ -128,6 +155,10 @@ class PortugaManga : ParsedHttpSource() {
             .set("Referer", page.url)
             .build()
         return GET(page.imageUrl!!, newHeaders)
+    }
+
+    private fun Response.parseAsDocument(): Document = use {
+        Jsoup.parseBodyFragment(it.body.string())
     }
 
     private fun Element.srcAttr(): String = when {

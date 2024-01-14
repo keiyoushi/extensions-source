@@ -14,7 +14,6 @@ class PortugaMangaUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
 
         if (pathSegments != null && pathSegments.size > 1) {
-            val slug = pathSegments[1]
             val intent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 putExtra("filter", packageName)
