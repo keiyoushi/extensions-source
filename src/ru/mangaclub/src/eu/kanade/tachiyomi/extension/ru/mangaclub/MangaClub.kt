@@ -97,11 +97,15 @@ class MangaClub : ParsedHttpSource() {
         title = document.select("div.info strong").text().replace("\\'", "'").substringBefore("/").trim()
         author = document.select("div.info a[href*=author]").joinToString(", ") { it.text().trim() }
         artist = author
-        status = if (document.select("div.fullstory").text().contains("Данное произведение лицензировано на территории РФ. Главы удалены.")) SManga.LICENSED else when (document.select("div.info a[href*=status_translation]").text().trim()) {
-            "Продолжается" -> SManga.ONGOING
-            "Завершен" -> SManga.COMPLETED
-            "Заморожено/Заброшено" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
+        status = if (document.select("div.fullstory").text().contains("Данное произведение лицензировано на территории РФ. Главы удалены.")) {
+            SManga.LICENSED
+        } else {
+            when (document.select("div.info a[href*=status_translation]").text().trim()) {
+                "Продолжается" -> SManga.ONGOING
+                "Завершен" -> SManga.COMPLETED
+                "Заморожено/Заброшено" -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
         }
 
         description = document.select(".description").first()!!.text()
