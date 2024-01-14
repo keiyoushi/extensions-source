@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.theme.heancms
+package eu.kanade.tachiyomi.multisrc.heancms
 
 class HeanCmsIntl(lang: String) {
 

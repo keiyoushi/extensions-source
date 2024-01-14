@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.templescan
 
+import eu.kanade.tachiyomi.multisrc.heancms.Genre
+import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.theme.heancms.Genre
-import eu.kanade.tachiyomi.theme.heancms.HeanCms
 
 class TempleScan : HeanCms("Temple Scan", "https://templescan.net", "en") {
 

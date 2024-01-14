@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.es.yugenmangas
 
 import android.app.Application
 import android.content.SharedPreferences
+import eu.kanade.tachiyomi.multisrc.heancms.Genre
+import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
-import eu.kanade.tachiyomi.theme.heancms.Genre
-import eu.kanade.tachiyomi.theme.heancms.HeanCms
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.ProtocolException

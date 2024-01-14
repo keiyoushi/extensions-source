@@ -11,7 +11,7 @@ android {
         minSdk = AndroidConfig.minSdk
     }
 
-    namespace = "eu.kanade.tachiyomi.theme.heancms"
+    namespace = "eu.kanade.tachiyomi.multisrc.heancms"
 
     kotlinOptions {
         freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"

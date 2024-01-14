@@ -1,6 +1,6 @@
-package eu.kanade.tachiyomi.theme.heancms
+package eu.kanade.tachiyomi.multisrc.heancms
 
-import eu.kanade.tachiyomi.theme.heancms.HeanCms.SlugStrategy
+import eu.kanade.tachiyomi.multisrc.heancms.HeanCms.SlugStrategy
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
