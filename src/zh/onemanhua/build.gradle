@@ -3,10 +3,10 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
 
 ext {
-    extName = 'ColaManhua (OhManhua)'
+    extName = 'COLAMANGA'
     pkgNameSuffix = 'zh.onemanhua'
     extClass = '.Onemanhua'
-    extVersionCode = 12
+    extVersionCode = 13
 }
 
 dependencies {
