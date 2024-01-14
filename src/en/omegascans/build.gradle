@@ -8,13 +8,11 @@ dependencies {
     implementation theme
 }
 
-apply from: "${theme.projectDir.path}/version.gradle"
-
 ext {
     extName = 'Omega Scans'
     pkgNameSuffix = 'en.omegascans'
     extClass = '.OmegaScans'
-    extVersionCode = themeVersionCode + 18
+    extVersionCode = theme.baseVersion + 18
     isNsfw = true
 }
 

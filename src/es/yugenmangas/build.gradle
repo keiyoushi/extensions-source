@@ -8,14 +8,12 @@ dependencies {
     implementation theme
 }
 
-apply from: "${theme.projectDir.path}/version.gradle"
-
 ext {
     extName = 'YugenMangas'
     pkgNameSuffix = 'es.yugenmangas'
     extClass = '.YugenMangas'
     extFactory = 'heancms'
-    extVersionCode = themeVersionCode + 9
+    extVersionCode = theme.baseVersion + 9
     isNsfw = true
 
 }

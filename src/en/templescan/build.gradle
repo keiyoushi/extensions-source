@@ -8,14 +8,12 @@ dependencies {
     implementation theme
 }
 
-apply from: "${theme.projectDir.path}/version.gradle"
-
 ext {
     extName = 'Temple Scan'
     pkgNameSuffix = 'en.templescan'
     extClass = '.TempleScan'
     extFactory = 'heancms'
-    extVersionCode = themeVersionCode + 16
+    extVersionCode = theme.baseVersion + 16
     isNsfw = true
 }
 
