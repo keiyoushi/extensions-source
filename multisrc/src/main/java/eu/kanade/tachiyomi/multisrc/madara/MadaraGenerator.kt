@@ -192,7 +192,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Lolicon", "https://lolicon.mobi", "en", isNsfw = true, overrideVersionCode = 2),
         SingleLang("Lord Manga", "https://lordmanga.com", "en"),
         SingleLang("Luffy Manga", "https://luffymanga.com", "en", isNsfw = false),
-        SingleLang("LuxManga", "https://luxmanga.com", "en"),
+        SingleLang("LuxManga", "https://luxmanga.net", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("MadaraDex", "https://madaradex.org", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Maid Scan", "https://maidscan.com.br", "pt-BR"),
         SingleLang("Manga 18h", "https://manga18h.com", "en", isNsfw = true),
