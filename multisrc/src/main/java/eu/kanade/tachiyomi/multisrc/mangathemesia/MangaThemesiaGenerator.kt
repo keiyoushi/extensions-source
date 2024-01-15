@@ -137,6 +137,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Senpai Ediciones", "http://senpaiediciones.com", "es", overrideVersionCode = 1),
         SingleLang("Shadow Mangas", "https://shadowmangas.com", "es", overrideVersionCode = 1),
         SingleLang("Shea Manga", "https://sheakomik.com", "id", overrideVersionCode = 4),
+        SingleLang("Shirakami", "https://shirakami.xyz", "id"),
         SingleLang("Silence Scan", "https://silencescan.com.br", "pt-BR", isNsfw = true, overrideVersionCode = 5),
         SingleLang("Siren Komik", "https://sirenkomik.my.id", "id", className = "MangKomik", overrideVersionCode = 2),
         SingleLang("SkyMangas", "https://skymangas.com", "es", overrideVersionCode = 1),
