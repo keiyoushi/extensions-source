@@ -7,20 +7,6 @@ File(rootDir, "lib").eachDir {
     project(":lib-$libName").projectDir = File("lib/$libName")
 }
 
-// Fix deprecation warnings with Gradle 8.5+.
-// See https://docs.gradle.org/8.5/userguide/upgrading_version_8.html#deprecated_missing_project_directory
-listOf(
-    ":extensions" to "$rootDir/gradle", // Temporary workaround.
-    ":extensions:individual" to "$rootDir/src",
-    ":extensions:multisrc" to "$rootDir/generated-src",
-).forEach { (name, path) ->
-    val projectDir = file(path)
-    if (projectDir.exists()) {
-        include(name)
-        project(name).projectDir = projectDir
-    }
-}
-
 if (System.getenv("CI") == null || System.getenv("CI_MODULE_GEN") == "true") {
     // Local development (full project build)
 
