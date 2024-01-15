@@ -232,9 +232,6 @@ intent filters inside this file (see [URL intent filter](#url-intent-filter) for
 Make sure that your new extension's `build.gradle` file follows the following structure:
 
 ```gradle
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = '<My source name>'
     pkgNameSuffix = '<lang>.<mysourcename>'
