@@ -1,6 +1,3 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'ReadComicOnline'
     pkgNameSuffix = 'en.readcomiconline'
@@ -8,8 +5,8 @@ ext {
     extVersionCode = 18
 }
 
+apply from: "$rootDir/common.gradle"
+
 dependencies {
     implementation(project(":lib-synchrony"))
 }
-
-apply from: "$rootDir/common.gradle"

@@ -1,7 +1,3 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlinx-serialization'
-
 ext {
     extName = 'Mango'
     pkgNameSuffix = 'all.mango'
@@ -9,8 +5,8 @@ ext {
     extVersionCode = 9
 }
 
+apply from: "$rootDir/common.gradle"
+
 dependencies {
     implementation 'info.debatty:java-string-similarity:2.0.0'
 }
-
-apply from: "$rootDir/common.gradle"
