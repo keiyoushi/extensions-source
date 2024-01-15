@@ -247,7 +247,7 @@ class Rawdevart : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private class AuthorFilter : Filter.Text("Author")
 

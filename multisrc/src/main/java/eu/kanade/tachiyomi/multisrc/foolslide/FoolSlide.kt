@@ -271,7 +271,7 @@ abstract class FoolSlide(
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     protected val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!

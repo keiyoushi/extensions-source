@@ -280,7 +280,7 @@ class OppaiStream : ParsedHttpSource() {
 
     // Unused
     override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
     }
 
     // helpers

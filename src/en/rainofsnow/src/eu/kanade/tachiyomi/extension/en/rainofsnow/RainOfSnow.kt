@@ -159,9 +159,9 @@ open class RainOfSnow() : ParsedHttpSource() {
         fun toUriPart() = vals[state].second
     }
 
-    override fun latestUpdatesFromElement(element: Element) = throw Exception("Not used")
-    override fun latestUpdatesNextPageSelector() = throw Exception("Not used")
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Not used")
-    override fun latestUpdatesSelector() = throw Exception("Not used")
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

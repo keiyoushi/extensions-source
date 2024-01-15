@@ -153,7 +153,7 @@ class ManhwasNet : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         Filter.Header("Los filtros no se pueden combinar:"),

@@ -255,7 +255,7 @@ abstract class GroupLe(
     }
 
     override fun chapterFromElement(element: Element): SChapter {
-        throw Exception("Not used")
+        throw UnsupportedOperationException()
     }
 
     override fun prepareNewChapter(chapter: SChapter, manga: SManga) {

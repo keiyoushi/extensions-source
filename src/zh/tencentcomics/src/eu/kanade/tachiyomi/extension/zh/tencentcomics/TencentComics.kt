@@ -159,7 +159,7 @@ class TencentComics : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun searchMangaSelector() = "ul > li.comic-item > a"
 

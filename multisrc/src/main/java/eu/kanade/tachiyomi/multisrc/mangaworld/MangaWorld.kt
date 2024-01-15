@@ -201,7 +201,7 @@ abstract class MangaWorld(
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeader = Headers.Builder().apply {

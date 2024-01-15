@@ -38,9 +38,9 @@ abstract class NaverComicBase(protected val mType: String) : ParsedHttpSource() 
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/api/search/$mType?keyword=$query&page=$page")
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<ApiMangaSearchResponse>(response.body.string())
@@ -56,7 +56,7 @@ abstract class NaverComicBase(protected val mType: String) : ParsedHttpSource() 
         return MangasPage(mangas, result.pageInfo.nextPage != 0)
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterListRequest(manga: SManga) = chapterListRequest(manga.url, 1)
     private fun chapterListRequest(mangaUrl: String, page: Int): Request {
         val titleId = Uri.parse("$baseUrl$mangaUrl").getQueryParameter("titleId")
@@ -85,7 +85,7 @@ abstract class NaverComicBase(protected val mType: String) : ParsedHttpSource() 
         }
     }
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     @SuppressLint("SimpleDateFormat")
     private fun parseChapterDate(date: String): Long {
@@ -141,15 +141,15 @@ abstract class NaverComicBase(protected val mType: String) : ParsedHttpSource() 
     }
 
     // We are able to get the image URL directly from the page list
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }
 
 abstract class NaverComicChallengeBase(mType: String) : NaverComicBase(mType) {
-    override fun popularMangaSelector() = throw UnsupportedOperationException("Not used")
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun popularMangaSelector() = throw UnsupportedOperationException()
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
     override fun popularMangaParse(response: Response): MangasPage {
         val apiMangaResponse = json.decodeFromString<ApiMangaChallengeResponse>(response.body.string())
         val mangas = apiMangaResponse.list.map {

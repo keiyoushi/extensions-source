@@ -148,7 +148,7 @@ class IkigaiMangas : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun parseStatus(statusId: Long?) = when (statusId) {
         906397890812182531, 911437469204086787 -> SManga.ONGOING

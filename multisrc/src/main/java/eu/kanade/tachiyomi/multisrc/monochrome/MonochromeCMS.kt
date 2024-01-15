@@ -107,32 +107,32 @@ open class MonochromeCMS(
         json.decodeFromString<T>(body.string())
 
     override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsRequest(manga: SManga) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 }

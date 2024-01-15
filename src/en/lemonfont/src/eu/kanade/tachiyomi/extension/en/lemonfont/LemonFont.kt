@@ -84,27 +84,27 @@ class LemonFont : ParsedHttpSource() {
         return Observable.just(MangasPage(emptyList(), false))
     }
 
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException("Not Used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not Used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not Used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 }

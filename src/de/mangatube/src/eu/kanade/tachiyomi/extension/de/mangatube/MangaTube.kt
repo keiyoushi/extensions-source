@@ -82,11 +82,11 @@ class MangaTube : ParsedHttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun popularMangaSelector() = throw UnsupportedOperationException("Not used")
+    override fun popularMangaSelector() = throw UnsupportedOperationException()
 
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
     // Latest
 
@@ -119,11 +119,11 @@ class MangaTube : ParsedHttpSource() {
         return parseMangaFromJson(response, false)
     }
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     // Details
 
@@ -181,5 +181,5 @@ class MangaTube : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

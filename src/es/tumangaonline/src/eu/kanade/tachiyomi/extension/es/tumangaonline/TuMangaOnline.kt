@@ -244,8 +244,8 @@ class TuMangaOnline : ConfigurableSource, ParsedHttpSource() {
         }
         return chapters
     }
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
     private fun oneShotChapterListSelector() = "div.chapter-list-element > ul.list-group li.list-group-item"
     private fun oneShotChapterFromElement(element: Element) = SChapter.create().apply {
         url = element.select("div.row > .text-right > a").attr("href")
@@ -384,7 +384,7 @@ class TuMangaOnline : ConfigurableSource, ParsedHttpSource() {
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/$PREFIX_LIBRARY/$id", headers)
 

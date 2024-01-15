@@ -533,7 +533,7 @@ class Remanga : ConfigurableSource, HttpSource() {
             this
         }
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("chapterListParse(response: Response, manga: SManga)")
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     private fun chapterListParse(response: Response, manga: SManga, exChapters: List<ExBookDto>): List<SChapter> {
         val chapters = json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(response.body.string()).content
@@ -634,7 +634,7 @@ class Remanga : ConfigurableSource, HttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("pageListParse(response: Response, urlRequest: String)")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter): Request {
         return if (chapter.scanlator.equals("exmanga")) {

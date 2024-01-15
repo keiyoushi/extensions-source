@@ -142,5 +142,5 @@ class Nicomanga : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 }

@@ -334,9 +334,9 @@ class ReaperScans : ParsedHttpSource() {
     }
 
     // Unused
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()

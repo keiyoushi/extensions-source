@@ -166,7 +166,7 @@ class Rmanga : ConfigurableSource, ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

@@ -219,7 +219,7 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
         json.decodeFromString<T>(body.string())
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     companion object {
         private val dateFormat =

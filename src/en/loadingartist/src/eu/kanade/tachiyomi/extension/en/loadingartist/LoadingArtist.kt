@@ -60,15 +60,15 @@ class LoadingArtist : HttpSource() {
         )
     }
 
-    override fun popularMangaRequest(page: Int): Request = throw Exception("Not used")
-    override fun popularMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
         throw Exception("Search not available for this source")
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("Not used")
-    override fun searchMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
@@ -76,7 +76,7 @@ class LoadingArtist : HttpSource() {
         return Observable.just(manga)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw Exception("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // Chapters
 
@@ -114,8 +114,8 @@ class LoadingArtist : HttpSource() {
         return listOf(Page(0, response.request.url.toString(), imageUrl))
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
-    override fun latestUpdatesParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }

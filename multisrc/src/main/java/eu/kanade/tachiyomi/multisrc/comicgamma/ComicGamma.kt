@@ -40,19 +40,19 @@ open class ComicGamma(
         thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.absUrl("src")
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used.")
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used.")
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used.")
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not used.")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
         fetchPopularManga(page).map { p -> MangasPage(p.mangas.filter { it.title.contains(query) }, false) }
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used.")
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used.")
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document) =
         document.select("#content > div[data-ptimg]").mapIndexed { i, e ->
@@ -91,7 +91,7 @@ open class ComicGamma(
     override fun pageListRequest(chapter: SChapter) =
         GET(baseUrl + chapter.url.toNewChapterUrl(), headers)
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     companion object {
         internal fun SimpleDateFormat.parseJST(date: String) = parse(date)?.apply {

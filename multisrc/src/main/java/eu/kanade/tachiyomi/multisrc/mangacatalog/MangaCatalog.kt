@@ -36,16 +36,16 @@ abstract class MangaCatalog(
         title = name
         url = sourceurl
     }
-    override fun popularMangaRequest(page: Int): Request = throw Exception("Not used")
-    override fun popularMangaNextPageSelector(): String? = throw Exception("Not used")
-    override fun popularMangaSelector(): String = throw Exception("Not used")
-    override fun popularMangaFromElement(element: Element) = throw Exception("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
+    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
+    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
-    override fun latestUpdatesNextPageSelector(): String? = throw Exception("Not used")
-    override fun latestUpdatesSelector(): String = throw Exception("Not used")
-    override fun latestUpdatesFromElement(element: Element): SManga = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     // Search
 
@@ -59,10 +59,10 @@ abstract class MangaCatalog(
         return Observable.just(MangasPage(mangas, false))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw Exception("Not used")
-    override fun searchMangaNextPageSelector() = throw Exception("Not used")
-    override fun searchMangaSelector() = throw Exception("Not used")
-    override fun searchMangaFromElement(element: Element) = throw Exception("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Get Override
 
@@ -106,5 +106,5 @@ abstract class MangaCatalog(
             Page(index, "", img.attr("src"))
         }
 
-    override fun imageUrlParse(document: Document): String = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

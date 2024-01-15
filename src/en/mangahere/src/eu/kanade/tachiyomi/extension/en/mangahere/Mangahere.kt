@@ -322,7 +322,7 @@ class Mangahere : ParsedHttpSource() {
         return quickJs.evaluate(secretKeyResultScript).toString()
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private class Genre(title: String, val id: Int) : Filter.TriState(title)
 

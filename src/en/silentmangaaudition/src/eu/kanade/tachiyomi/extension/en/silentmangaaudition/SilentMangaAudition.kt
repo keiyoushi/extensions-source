@@ -102,19 +102,19 @@ class SilentMangaAudition : HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     companion object {
         private const val SMACMAG_URL = "https://smacmag.net"

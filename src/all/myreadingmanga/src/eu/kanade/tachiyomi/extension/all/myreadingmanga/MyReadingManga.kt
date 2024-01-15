@@ -44,9 +44,9 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         cacheAssistant()
         return searchMangaParse(response)
     }
-    override fun popularMangaNextPageSelector() = throw Exception("Not used")
-    override fun popularMangaSelector() = throw Exception("Not used")
-    override fun popularMangaFromElement(element: Element) = throw Exception("Not used")
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun popularMangaSelector() = throw UnsupportedOperationException()
+    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Latest
     @SuppressLint("DefaultLocale")
@@ -83,7 +83,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         return GET(uri.toString(), headers)
     }
 
-    override fun searchMangaNextPageSelector(): String? = throw Exception("Not used")
+    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
     override fun searchMangaSelector() = "div.results-by-facets div[id*=res]"
     private var mangaParsedSoFar = 0
     override fun searchMangaParse(response: Response): MangasPage {
@@ -171,7 +171,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         }
     }
 
-    override fun mangaDetailsParse(document: Document) = throw Exception("Not used")
+    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 
     // Start Chapter Get
     override fun chapterListSelector() = ".entry-pagination a"
@@ -214,7 +214,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         return chapter
     }
 
-    override fun chapterFromElement(element: Element) = throw Exception("Not used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Pages
 
@@ -225,7 +225,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
             .mapIndexed { i, url -> Page(i, "", url) }
     }
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filter Parsing, grabs pages as document and filters out Genres, Popular Tags, and Categories, Parings, and Scan Groups
     private var filtersCached = false

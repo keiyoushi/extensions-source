@@ -94,8 +94,8 @@ class Comicabc : ParsedHttpSource() {
         quickJs.close()
     }
 
-    override fun pageListParse(document: Document): List<Page> = throw Exception("Not Used")
-    override fun imageUrlParse(document: Document): String = throw Exception("Not Used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     companion object {
         // Functions required by script in pageListParse()

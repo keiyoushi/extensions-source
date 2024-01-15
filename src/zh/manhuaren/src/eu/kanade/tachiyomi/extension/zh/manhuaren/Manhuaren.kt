@@ -512,7 +512,7 @@ class Manhuaren : HttpSource() {
         return myGet(url)
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("This method should not be called!")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()

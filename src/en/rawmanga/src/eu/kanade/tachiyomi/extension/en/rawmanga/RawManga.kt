@@ -140,11 +140,11 @@ class RawManga : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = throw java.lang.UnsupportedOperationException("Not used.")
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used.")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     companion object {
         val DATE_FORMATTER by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.US) }

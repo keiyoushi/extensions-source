@@ -193,7 +193,7 @@ class Readmangatoday : ParsedHttpSource() {
         return scriptPages.distinctBy { it.imageUrl }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private class Status : Filter.TriState("Completed")
     private class Genre(name: String, val id: Int) : Filter.TriState(name)

@@ -166,7 +166,7 @@ class CloudRecess : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
     }
 
     companion object {

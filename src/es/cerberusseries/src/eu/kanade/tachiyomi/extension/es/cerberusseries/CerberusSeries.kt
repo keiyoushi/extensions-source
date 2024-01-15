@@ -55,11 +55,11 @@ class CerberusSeries : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw IOException("Esta funcionalidad aún no esta implementada.")
 
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException("Not used!")
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException("Not used!")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used!")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         thumbnail_url = document.selectFirst("div.thumb-wrapper img")!!.attr("abs:src")
@@ -83,7 +83,7 @@ class CerberusSeries : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used!")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private fun parseRelativeDate(date: String): Long {
         val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0

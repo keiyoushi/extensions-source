@@ -370,32 +370,32 @@ class Pixiv(override val lang: String) : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 }
