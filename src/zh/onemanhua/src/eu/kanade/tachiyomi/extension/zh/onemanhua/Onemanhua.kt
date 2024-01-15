@@ -437,7 +437,11 @@ class Onemanhua : ConfigurableSource, ParsedHttpSource() {
             if (imageUrl.startsWith("//")) {
                 imageUrl = "https:$imageUrl"
             }
-            Page(i, imageUrl = imageUrl + "#key=$key")
+            // Empty key means image is not encrypted
+            if (key != "") {
+                imageUrl = "$imageUrl#key=$key"
+            }
+            Page(i, imageUrl = imageUrl)
         }
     }
 
