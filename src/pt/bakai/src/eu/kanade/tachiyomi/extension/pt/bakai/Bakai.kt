@@ -124,6 +124,16 @@ class Bakai : ParsedHttpSource() {
     }
 
     // ============================== Chapters ==============================
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val chapter = SChapter.create().apply {
+            name = "Hentai"
+            chapter_number = 1F
+            url = manga.url
+        }
+
+        return Observable.just(listOf(chapter))
+    }
+
     override fun chapterListSelector(): String {
         throw UnsupportedOperationException("Not used.")
     }
