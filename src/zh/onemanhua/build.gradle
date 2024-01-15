@@ -1,7 +1,3 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlinx-serialization'
-
 ext {
     extName = 'COLAMANGA'
     pkgNameSuffix = 'zh.onemanhua'
@@ -9,8 +5,8 @@ ext {
     extVersionCode = 14
 }
 
+apply from: "$rootDir/common.gradle"
+
 dependencies {
     implementation(project(":lib-synchrony"))
 }
-
-apply from: "$rootDir/common.gradle"

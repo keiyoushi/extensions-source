@@ -1,6 +1,3 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'E-Hentai'
     pkgNameSuffix = 'all.ehentai'
