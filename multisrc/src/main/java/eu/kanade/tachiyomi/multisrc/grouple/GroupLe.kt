@@ -288,6 +288,11 @@ abstract class GroupLe(
 
         var readerMark = "rm_h.readerDoInit(["
 
+        // allhentai necessary
+        if (!html.contains(readerMark)) {
+            readerMark = "rm_h.readerInit( 0,["
+        }
+
         if (!html.contains(readerMark)) {
             if (document.select(".input-lg").isNotEmpty() || (document.select(".user-avatar").isNullOrEmpty() && document.select("img.logo").first()?.attr("title")?.contains("Allhentai") == true)) {
                 throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
