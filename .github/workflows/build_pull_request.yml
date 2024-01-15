@@ -35,7 +35,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: adopt
+          distribution: temurin
 
       - id: get-changed-files
         name: Get changed files
@@ -111,7 +111,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: adopt
+          distribution: temurin
 
       - name: Generate sources from the multi-source library
         uses: gradle/gradle-build-action@v2
@@ -145,7 +145,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: adopt
+          distribution: temurin
 
       - name: Build extensions (chunk ${{ matrix.chunk }})
         uses: gradle/gradle-build-action@v2
