@@ -144,7 +144,10 @@ class Bakai : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        throw UnsupportedOperationException("Not used.")
+        return document.select("div.ipsGrid div.ipsType_center > img")
+            .mapIndexed { index, item ->
+                Page(index, "", item.absUrl("data-src"))
+            }
     }
 
     override fun imageUrlParse(document: Document): String {
