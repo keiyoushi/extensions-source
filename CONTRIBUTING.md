@@ -209,9 +209,8 @@ src/<lang>/<mysourcename>/
 │   │   └── ic_launcher.png
 │   ├── mipmap-xxhdpi
 │   │   └── ic_launcher.png
-│   ├── mipmap-xxxhdpi
-│   │   └── ic_launcher.png
-│   └── web_hi_res_512.png
+│   └── mipmap-xxxhdpi
+│       └── ic_launcher.png
 └── src
     └── eu
         └── kanade
@@ -573,9 +572,8 @@ multisrc
 │       │       │   └── ic_launcher.png
 │       │       ├── mipmap-xxhdpi
 │       │       │   └── ic_launcher.png
-│       │       ├── mipmap-xxxhdpi
-│       │       │   └── ic_launcher.png
-│       │       └── web_hi_res_512.png
+│       │       └── mipmap-xxxhdpi
+│       │           └── ic_launcher.png
 │       └── <sourcepkg>
 │           ├── additional.gradle
 │           ├── AndroidManifest.xml
@@ -588,9 +586,8 @@ multisrc
 │           │   │   └── ic_launcher.png
 │           │   ├── mipmap-xxhdpi
 │           │   │   └── ic_launcher.png
-│           │   ├── mipmap-xxxhdpi
-│           │   │   └── ic_launcher.png
-│           │   └── web_hi_res_512.png
+│           │   └── mipmap-xxxhdpi
+│           │       └── ic_launcher.png
 │           └── src
 │               └── <SourceName>.kt
 └── src
@@ -857,7 +854,7 @@ Git Repository in Android Studio" section of the guide.
 > [!IMPORTANT]
 > Make sure you have generated the extension icon using the linked Icon Generator tool in the [Tools](#tools) 
 > section. The icon **must follow the pattern** adopted by all other extensions: a square with rounded 
-> corners.
+> corners. Make sure to remove the generated `web_hi_res_512.png`.
 
 Please **do test your changes by compiling it through Android Studio** before submitting it. Obvious
 untested PRs will not be merged, such as ones created with the GitHub web interface. Also make sure
