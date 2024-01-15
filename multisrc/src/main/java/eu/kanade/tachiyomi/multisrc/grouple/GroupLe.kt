@@ -288,7 +288,7 @@ abstract class GroupLe(
 
         var readerMark = "rm_h.readerDoInit(["
 
-        //allhentai necessary
+        // allhentai necessary
         if (!html.contains(readerMark)) {
             readerMark = "rm_h.readerInit( 0,["
         }
