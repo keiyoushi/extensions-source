@@ -1,7 +1,7 @@
-apply plugin: 'org.jmailen.kotlinter'
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
+apply plugin: 'org.jmailen.kotlinter'
 
 android {
     compileSdkVersion AndroidConfig.compileSdk
