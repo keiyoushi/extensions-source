@@ -69,10 +69,6 @@ interface ThemeSourceGenerator {
             gradle.writeText(
                 """
                 |// THIS FILE IS AUTO-GENERATED; DO NOT EDIT
-                |apply plugin: 'com.android.application'
-                |apply plugin: 'kotlin-android'
-                |apply plugin: 'kotlinx-serialization'
-                |
                 |ext {
                 |    extName = '${source.name}'
                 |    pkgNameSuffix = '${pkgNameSuffix(source, ".")}'
@@ -92,6 +88,7 @@ interface ThemeSourceGenerator {
                 |        ]
                 |    }
                 |}
+                |
                 """.trimMargin(),
             )
         }
@@ -109,6 +106,7 @@ interface ThemeSourceGenerator {
                     |<?xml version="1.0" encoding="utf-8"?>
                     |<!-- THIS FILE IS AUTO-GENERATED; DO NOT EDIT -->
                     |<manifest />
+                    |
                     """.trimMargin(),
                 )
             }
