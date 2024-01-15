@@ -16,6 +16,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.util.concurrent.TimeUnit
 
 class Bakai : ParsedHttpSource() {
 
@@ -29,7 +30,7 @@ class Bakai : ParsedHttpSource() {
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
             .build()
     }
 
