@@ -46,7 +46,7 @@ class Bakai : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaNextPageSelector() = "li.ipsPagination_next > a[rel=next]"
+    override fun popularMangaNextPageSelector() = "li.ipsPagination_next:not(.ipsPagination_inactive) > a[rel=next]"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
@@ -83,20 +83,29 @@ class Bakai : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException("Not used.")
+        val url = "$baseUrl/search1/".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("type", "cms_records1")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("sortby", "relevancy")
+            .addQueryParameter("search_and_or", "or")
+            .build()
+
+        return GET(url, headers)
     }
 
-    override fun searchMangaSelector(): String {
-        throw UnsupportedOperationException("Not used.")
+    override fun searchMangaSelector() = "ol > li > div"
+
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.selectFirst(".ipsThumb img")?.absUrl("src")
+
+        with(element.selectFirst("h2.ipsStreamItem_title a")!!) {
+            title = text()
+            setUrlWithoutDomain(attr("href"))
+        }
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException("Not used.")
-    }
-
-    override fun searchMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException("Not used.")
-    }
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document): SManga {
