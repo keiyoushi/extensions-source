@@ -1,6 +1,3 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
 ext {
     extName = 'Hentai2Read'
     pkgNameSuffix = 'en.hentai2read'
