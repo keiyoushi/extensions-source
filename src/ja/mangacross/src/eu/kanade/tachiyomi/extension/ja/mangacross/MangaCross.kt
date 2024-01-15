@@ -71,7 +71,7 @@ class MangaCross : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private lateinit var tags: List<Pair<String, MCComicTag?>>
     private var isFetchingTags = false

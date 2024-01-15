@@ -198,5 +198,5 @@ class manga1s : ParsedHttpSource() {
         }
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 }

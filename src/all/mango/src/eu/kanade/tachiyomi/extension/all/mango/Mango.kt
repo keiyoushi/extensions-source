@@ -66,10 +66,10 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     // Default is to just return the whole library for searching
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(1)
@@ -114,7 +114,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
 
     // Stub
     override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsRequest(manga: SManga): Request =
         GET(baseUrl + "/api" + manga.url, headers)
@@ -173,7 +173,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
 
     // Stub
     override fun pageListRequest(chapter: SChapter): Request =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     // Overridden fetch so that we use our overloaded method instead
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -194,7 +194,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
 
     // Stub
     override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = ""
     override fun getFilterList(): FilterList = FilterList()

@@ -110,9 +110,9 @@ class Kumanga : HttpSource() {
         return MangasPage(mangaList, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Not Used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) = throw Exception("Not Used")
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val body = response.asJsoup()
@@ -206,7 +206,7 @@ class Kumanga : HttpSource() {
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    override fun imageUrlParse(response: Response) = throw Exception("Not Used")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         getKumangaToken()

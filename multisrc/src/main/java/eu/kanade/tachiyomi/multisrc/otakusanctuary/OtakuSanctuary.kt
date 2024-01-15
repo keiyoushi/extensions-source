@@ -95,9 +95,9 @@ open class OtakuSanctuary(
         return MangasPage(parseMangaCollection(collection), hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET(
@@ -176,7 +176,7 @@ open class OtakuSanctuary(
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()

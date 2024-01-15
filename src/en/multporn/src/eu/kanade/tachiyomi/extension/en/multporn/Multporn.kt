@@ -240,11 +240,11 @@ class Multporn : ParsedHttpSource() {
 
     // Chapters
 
-    override fun chapterListSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
         listOf(
@@ -264,7 +264,7 @@ class Multporn : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filters
 

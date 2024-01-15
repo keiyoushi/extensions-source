@@ -174,15 +174,15 @@ abstract class ReadAllComics(
     }
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not Implemented")
+        throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException("Not Implemented")
+        throw UnsupportedOperationException()
     override fun latestUpdatesFromElement(element: Element) =
-        throw UnsupportedOperationException("Not Implemented")
+        throw UnsupportedOperationException()
     override fun latestUpdatesSelector() =
-        throw UnsupportedOperationException("Not Implemented")
+        throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector() =
-        throw UnsupportedOperationException("Not Implemented")
+        throw UnsupportedOperationException()
     override fun popularMangaFromElement(element: Element) =
-        throw UnsupportedOperationException("Not Implemented")
+        throw UnsupportedOperationException()
 }

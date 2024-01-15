@@ -83,7 +83,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapter = SChapter.create().apply {
@@ -94,7 +94,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
         return Observable.just(listOf(chapter))
     }
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -104,7 +104,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         SortFilter(),

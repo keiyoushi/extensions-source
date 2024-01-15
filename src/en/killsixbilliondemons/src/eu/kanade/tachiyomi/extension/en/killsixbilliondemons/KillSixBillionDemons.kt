@@ -113,15 +113,15 @@ class KillSixBillionDemons : HttpSource() {
     }
 
     // latest Updates not used
-    override fun latestUpdatesParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return Observable.just(fetchBooksAsMangas().find { manga.title == it.title })
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw Exception("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return Observable.just(
@@ -188,9 +188,9 @@ class KillSixBillionDemons : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = throw Exception("Not used")
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw Exception("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val chapterDoc = client.newCall(GET(baseUrl + chapter.url, headers)).execute().asJsoup()
@@ -203,9 +203,9 @@ class KillSixBillionDemons : HttpSource() {
         return Observable.just(pages)
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response): List<Page> = throw Exception("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(
         page: Int,
@@ -213,8 +213,8 @@ class KillSixBillionDemons : HttpSource() {
         filters: FilterList,
     ): Observable<MangasPage> = throw Exception("Search functionality is not available.")
 
-    override fun searchMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw Exception("Not used")
+        throw UnsupportedOperationException()
 }

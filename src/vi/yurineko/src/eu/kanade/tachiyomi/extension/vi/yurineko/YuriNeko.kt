@@ -91,9 +91,9 @@ class YuriNeko : HttpSource() {
         return mangaListDto.toMangasPage(currentPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return when {
@@ -193,7 +193,7 @@ class YuriNeko : HttpSource() {
     override fun pageListParse(response: Response): List<Page> =
         response.parseAs<ReadResponseDto>().toPageList()
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {

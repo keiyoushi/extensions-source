@@ -262,7 +262,7 @@ abstract class MyMangaCMS(
 
     override fun chapterListSelector(): String = "ul.list-chapters > a"
 
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     private fun chapterFromElement(element: Element, scanlator: String?): SChapter =
         SChapter.create().apply {
@@ -307,7 +307,7 @@ abstract class MyMangaCMS(
             .filterNot { it.attr("abs:data-src").isNullOrEmpty() }
             .mapIndexed { index, elem -> Page(index, "", elem.attr("abs:data-src")) }
 
-    override fun imageUrlParse(document: Document): String = throw Exception("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
     //endregion
 
     //region Filters

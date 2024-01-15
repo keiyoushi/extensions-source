@@ -78,5 +78,5 @@ abstract class MangaRawTheme(
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

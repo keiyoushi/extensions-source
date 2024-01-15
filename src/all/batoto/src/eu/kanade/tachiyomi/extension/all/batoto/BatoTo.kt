@@ -298,10 +298,10 @@ open class BatoTo(
         add("prevPos", "null")
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.startsWith("http")) {
@@ -473,7 +473,7 @@ open class BatoTo(
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private fun String.removeEntities(): String = Parser.unescapeEntities(this, true)
 

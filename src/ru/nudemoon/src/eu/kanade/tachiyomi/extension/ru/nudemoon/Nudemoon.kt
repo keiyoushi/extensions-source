@@ -235,9 +235,9 @@ class Nudemoon : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> = throw Exception("Not Used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
     private class Genre(name: String, val id: String = name.replace(' ', '_')) : Filter.CheckBox(name.replaceFirstChar { it.uppercaseChar() })
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", genres)

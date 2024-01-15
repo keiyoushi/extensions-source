@@ -105,9 +105,9 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         return MangasPage(mangas, totalPage > currentPage + 15)
     }
 
-    override fun latestUpdatesNextPageSelector() = throw Exception("Not used")
-    override fun latestUpdatesSelector() = throw Exception("Not used")
-    override fun latestUpdatesFromElement(element: Element) = throw Exception("Not used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Search
 
@@ -178,7 +178,7 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {

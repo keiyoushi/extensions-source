@@ -123,7 +123,7 @@ abstract class LibGroup(
         .build()
 
     // Latest
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used") // popularMangaRequest()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException() // popularMangaRequest()
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
         if (csrfToken.isEmpty()) {
             return client.newCall(popularMangaRequest(page))

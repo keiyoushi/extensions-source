@@ -122,16 +122,16 @@ class MantaComics : HttpSource() {
     override fun getFilterList() = FilterList(Category())
 
     override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     private fun <R> Request.fetch(parse: (Response) -> R) =
         client.newCall(this).asObservable().map { res ->

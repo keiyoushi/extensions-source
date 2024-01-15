@@ -180,7 +180,7 @@ class LxHentai : ParsedHttpSource() {
         .select("div.text-center img.lazy")
         .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:src")) }
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 

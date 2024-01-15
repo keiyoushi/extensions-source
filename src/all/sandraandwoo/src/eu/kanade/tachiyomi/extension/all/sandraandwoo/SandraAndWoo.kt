@@ -106,33 +106,33 @@ abstract class SandraAndWoo(
     override fun mangaDetailsParse(document: Document) = manga
 
     // <editor-fold desc="not used">
-    override fun chapterFromElement(element: Element) = throw Exception("Not used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element) = throw Exception("Not used")
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() = throw Exception("Not used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw Exception("Not used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun popularMangaFromElement(element: Element) = throw Exception("Not used")
+    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector() = throw Exception("Not used")
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) = throw Exception("Not used")
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun popularMangaSelector() = throw Exception("Not used")
+    override fun popularMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element) = throw Exception("Not used")
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw Exception("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw Exception("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector() = throw Exception("Not used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
     // </editor-fold>
 
     private fun String.timestamp() = DATE_FORMAT.parse(this)?.time ?: 0L

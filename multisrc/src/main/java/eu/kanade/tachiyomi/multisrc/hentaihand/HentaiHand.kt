@@ -274,7 +274,7 @@ abstract class HentaiHand(
             Page(index, "", imgUrl)
         }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Authorization
 

@@ -97,38 +97,38 @@ class Megatokyo : ParsedHttpSource() {
             .hostnameVerifier { _, _ -> true }.build()
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Not used")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
 
     override fun imageUrlRequest(page: Page) = GET(page.url)
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun popularMangaSelector(): String = throw Exception("Not used")
+    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = throw Exception("Not used")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String = throw Exception("Not used")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector(): String = throw Exception("Not used")
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int): Request = throw Exception("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw Exception("Not used")
+        throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector(): String = throw Exception("Not used")
+    override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
-    override fun popularMangaFromElement(element: Element): SManga = throw Exception("Not used")
+    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(document: Document): SManga = throw Exception("Not used")
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String = throw Exception("Not used")
+    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw Exception("Not used")
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String = throw Exception("Not used")
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
     private fun String.toDate(): Long {
         return runCatching { dateParser.parse(this.replace("(\\d+)(st|nd|rd|th)".toRegex(), "$1"))?.time }

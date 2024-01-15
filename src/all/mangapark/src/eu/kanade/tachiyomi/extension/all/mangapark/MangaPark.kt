@@ -222,7 +222,7 @@ class MangaPark(
         json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
 
     override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
     }
 
     companion object {

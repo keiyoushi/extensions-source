@@ -130,7 +130,7 @@ abstract class Paprika(
 
     // never called
     override fun chapterFromElement(element: Element): SChapter {
-        throw Exception("unreachable code was reached!")
+        throw UnsupportedOperationException()
     }
 
     open fun chapterFromElement(element: Element, mangaTitle: String): SChapter {
@@ -179,7 +179,7 @@ abstract class Paprika(
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 

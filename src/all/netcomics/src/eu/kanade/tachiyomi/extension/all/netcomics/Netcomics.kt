@@ -208,34 +208,34 @@ class Netcomics(
     }
 
     override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsRequest(manga: SManga) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     private inline val SManga.slug: String
         get() = url.substringBefore('|')

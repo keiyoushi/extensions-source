@@ -335,7 +335,7 @@ class Newbie : ConfigurableSource, HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("chapterListParse(response: Response, manga: SManga)")
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     private fun chapterListParse(response: Response, manga: SManga, branch: Long): List<SChapter> {
         var chapters = json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(response.body.string()).items
@@ -352,7 +352,7 @@ class Newbie : ConfigurableSource, HttpSource() {
             }
         }
     }
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException("chapterListRequest(branch: Long)")
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
     private fun chapterListRequest(branch: Long): Request {
         return GET(
             "$API_URL/branches/$branch/chapters?reverse=true&size=1000000",
@@ -380,7 +380,7 @@ class Newbie : ConfigurableSource, HttpSource() {
         return result
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw Exception("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return client.newCall(pageListRequest(chapter))
             .asObservableSuccess()

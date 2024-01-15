@@ -96,7 +96,7 @@ class FMTEAM : HttpSource() {
             .mapIndexed { i, page -> Page(i, "${results.chapter.url}#${i + 1}", page) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Utils
     private fun fmTeamComicToSManga(comic: FmteamComic): SManga = SManga.create().apply {

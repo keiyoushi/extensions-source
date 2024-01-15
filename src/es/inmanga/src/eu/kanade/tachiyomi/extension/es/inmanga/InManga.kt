@@ -155,7 +155,7 @@ class InManga : ParsedHttpSource() {
         date_upload = parseChapterDate(chapter.registrationDate)
     }
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     private fun parseChapterDate(string: String): Long {
         return DATE_FORMATTER.parse(string)?.time ?: 0L
@@ -170,7 +170,7 @@ class InManga : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 

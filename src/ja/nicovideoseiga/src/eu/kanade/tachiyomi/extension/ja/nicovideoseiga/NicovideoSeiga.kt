@@ -220,7 +220,7 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     private fun imageIntercept(chain: Interceptor.Chain): Response {
         // Intercept requests for paid manga images only

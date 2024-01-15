@@ -146,9 +146,9 @@ class AComics : ParsedHttpSource() {
         return res
     }
 
-    override fun chapterListSelector(): Nothing = throw Exception("Not used")
+    override fun chapterListSelector(): Nothing = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
         val imageElement = document.select("img#mainImage").first()!!

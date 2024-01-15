@@ -66,7 +66,7 @@ class Webcomics : ParsedHttpSource() {
         return manga
     }
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun searchMangaFromElement(element: Element): SManga {
         val infoElement = element.select(".col-md-5")

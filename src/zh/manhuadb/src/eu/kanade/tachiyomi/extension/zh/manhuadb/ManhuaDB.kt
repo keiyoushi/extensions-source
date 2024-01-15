@@ -25,10 +25,10 @@ class ManhuaDB : MDB("漫画DB", "https://www.manhuadb.com"), ConfigurableSource
 
     override fun popularMangaNextPageSelector() = "nav > div.form-inline > :nth-last-child(2):not(.disabled)"
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used.")
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used.")
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used.")
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not used.")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     override val authorSelector = "a.comic-creator"
     override fun transformDescription(description: String) = description.substringBeforeLast("欢迎在漫画DB观看")

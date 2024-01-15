@@ -48,21 +48,21 @@ class Mangalay : ParsedHttpSource() {
             }
     }
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 }

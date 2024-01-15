@@ -269,7 +269,7 @@ abstract class MangaBox(
         return GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Based on change_alias JS function from Mangakakalot's website
     @SuppressLint("DefaultLocale")
