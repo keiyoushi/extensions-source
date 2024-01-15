@@ -4,20 +4,19 @@ apply plugin: 'kotlinx-serialization'
 
 def theme = project(':heancms-multisrc')
 
-dependencies {
-   implementation theme
-}
-
 ext {
     extName = 'Temple Scan'
     pkgNameSuffix = 'en.templescan'
     extClass = '.TempleScan'
-    extFactory = 'heancms'
     extVersionCode = theme.baseVersionCode + 16
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation theme
+}
 
 android {
     defaultConfig {
