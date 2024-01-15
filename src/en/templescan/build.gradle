@@ -1,0 +1,29 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+def theme = project(':heancms-multisrc')
+
+dependencies {
+   implementation theme
+}
+
+ext {
+    extName = 'Temple Scan'
+    pkgNameSuffix = 'en.templescan'
+    extClass = '.TempleScan'
+    extFactory = 'heancms'
+    extVersionCode = theme.baseVersionCode + 16
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+android {
+    defaultConfig {
+        manifestPlaceholders += [
+            SOURCEHOST: "templescan.net",
+            SOURCESCHEME: "https"
+        ]
+    }
+}

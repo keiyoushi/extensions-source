@@ -1,0 +1,29 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+def theme = project(':heancms-multisrc')
+
+dependencies {
+   implementation theme
+}
+
+ext {
+    extName = 'Perf Scan'
+    pkgNameSuffix = 'fr.perfscan'
+    extClass = '.PerfScan'
+    extFactory = 'heancms'
+    extVersionCode = theme.baseVersionCode + 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+
+android {
+    defaultConfig {
+        manifestPlaceholders += [
+            SOURCEHOST: "perf-scan.fr",
+            SOURCESCHEME: "https"
+        ]
+    }
+}
