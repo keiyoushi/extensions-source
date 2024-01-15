@@ -1,6 +1,5 @@
 ext {
     extName = 'Rudra Scans'
-    pkgNameSuffix = 'en.rudrascans'
     extClass = '.RudraScans'
     extVersionCode = 1
 }

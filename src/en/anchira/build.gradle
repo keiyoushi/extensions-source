@@ -1,6 +1,5 @@
 ext {
     extName = 'Anchira'
-    pkgNameSuffix = 'en.anchira'
     extClass = '.Anchira'
     extVersionCode = 4
     isNsfw = true

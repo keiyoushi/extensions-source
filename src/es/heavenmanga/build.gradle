@@ -1,6 +1,5 @@
 ext {
     extName = 'HeavenManga'
-    pkgNameSuffix = 'es.heavenmanga'
     extClass = '.HeavenManga'
     extVersionCode = 6
     isNsfw = true

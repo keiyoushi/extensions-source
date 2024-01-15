@@ -1,6 +1,5 @@
 ext {
     extName = 'MANGA Plus Creators by SHUEISHA'
-    pkgNameSuffix = 'all.mangapluscreators'
     extClass = '.MangaPlusCreatorsFactory'
     extVersionCode = 1
 }

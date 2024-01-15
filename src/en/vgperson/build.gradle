@@ -1,6 +1,5 @@
 ext {
     extName = 'vgperson'
-    pkgNameSuffix = 'en.vgperson'
     extClass = '.Vgperson'
     extVersionCode = 4
 }

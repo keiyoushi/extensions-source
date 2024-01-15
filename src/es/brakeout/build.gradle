@@ -1,6 +1,5 @@
 ext {
     extName = 'Brakeout'
-    pkgNameSuffix = 'es.brakeout'
     extClass = '.Brakeout'
     extVersionCode = 1
     isNsfw = false

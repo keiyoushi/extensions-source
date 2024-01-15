@@ -1,6 +1,5 @@
 ext {
     extName = 'Rain Of Snow'
-    pkgNameSuffix = 'en.rainofsnow'
     extClass = '.RainOfSnow'
     extVersionCode = 8
 }

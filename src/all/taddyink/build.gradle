@@ -1,6 +1,5 @@
 ext {
     extName = 'Taddy INK (Webtoons)'
-    pkgNameSuffix = 'all.taddyink'
     extClass = '.TaddyInkFactory'
     extVersionCode = 1
 }

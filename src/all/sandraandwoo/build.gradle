@@ -1,6 +1,5 @@
 ext {
     extName = 'Sandra and Woo'
-    pkgNameSuffix = 'all.sandraandwoo'
     extClass = '.SandraAndWooFactory'
     extVersionCode = 1
 }

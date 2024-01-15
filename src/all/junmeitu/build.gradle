@@ -1,6 +1,5 @@
 ext {
     extName = 'Junmeitu'
-    pkgNameSuffix = 'all.junmeitu'
     extClass = '.Junmeitu'
     extVersionCode = 5
     isNsfw = true

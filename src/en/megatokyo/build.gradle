@@ -1,6 +1,5 @@
 ext {
     extName = 'Megatokyo'
-    pkgNameSuffix = 'en.megatokyo'
     extClass = '.Megatokyo'
     extVersionCode = 3
 }

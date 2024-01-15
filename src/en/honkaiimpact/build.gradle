@@ -1,6 +1,5 @@
 ext {
     extName = 'HonkaiImpact3'
-    pkgNameSuffix = 'en.honkaiimpact'
     extClass = '.Honkaiimpact'
     extVersionCode = 2
 }

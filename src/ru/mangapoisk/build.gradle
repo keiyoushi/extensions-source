@@ -1,6 +1,5 @@
 ext {
     extName = 'MangaPoisk'
-    pkgNameSuffix = 'ru.mangapoisk'
     extClass = '.MangaPoisk'
     extVersionCode = 10
     isNsfw = true
