@@ -452,7 +452,7 @@ abstract class ComickFun(
     }
 
     override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
     }
 
     override fun getFilterList() = getFilters()

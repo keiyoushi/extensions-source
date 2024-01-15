@@ -102,7 +102,7 @@ class BuonDua() : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList = FilterList(

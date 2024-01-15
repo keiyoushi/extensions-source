@@ -80,23 +80,23 @@ class ThePropertyOfHate : HttpSource() {
         response.asJsoup().selectFirst(".comic_comic > img")!!.absUrl("src")
 
     override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException("Search functionality is not available.")
+        throw Exception("Search functionality is not available.")
 }

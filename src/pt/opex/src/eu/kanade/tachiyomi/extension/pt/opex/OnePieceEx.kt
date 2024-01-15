@@ -226,13 +226,13 @@ class OnePieceEx : ParsedHttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     companion object {
         private const val ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9," +

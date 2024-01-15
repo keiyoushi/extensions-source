@@ -132,7 +132,7 @@ class Pururin : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun fetchImageUrl(page: Page) =
         Request.Builder().url(page.url).head().build()

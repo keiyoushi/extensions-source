@@ -287,10 +287,10 @@ class MangaDoom : HttpSource() {
             .map { Page(pageIndex++, it.attr("src"), it.attr("src")) }
     }
 
-    override fun fetchImageUrl(page: Page) = throw UnsupportedOperationException("Not used.")
+    override fun fetchImageUrl(page: Page) = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     // search
     /**

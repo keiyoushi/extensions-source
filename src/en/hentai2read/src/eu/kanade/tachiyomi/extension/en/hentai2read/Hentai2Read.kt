@@ -143,7 +143,7 @@ class Hentai2Read : ParsedHttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -260,9 +260,9 @@ class Hentai2Read : ParsedHttpSource() {
         return pages
     }
 
-    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private class MangaNameSelect : Filter.Select<String>("Manga Name", arrayOf("Contains", "Starts With", "Ends With"))
     private class ArtistName : Filter.Text("Artist")

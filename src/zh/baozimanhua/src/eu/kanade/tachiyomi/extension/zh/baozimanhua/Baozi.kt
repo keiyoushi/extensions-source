@@ -65,7 +65,7 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "https://$domain/")
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used.")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -171,15 +171,15 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
         return GET(url, headers)
     }
 
-    override fun pageListParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(ID_SEARCH_PREFIX)) {

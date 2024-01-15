@@ -89,9 +89,9 @@ class ScanManga : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
 
     // Search
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage = parseMangaFromJson(response)
 
@@ -166,7 +166,7 @@ class ScanManga : ParsedHttpSource() {
         return MangasPage(mangaList, hasNextPage = false)
     }
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -177,9 +177,9 @@ class ScanManga : ParsedHttpSource() {
     }
 
     // Chapters
-    override fun chapterListSelector() = throw Exception("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -207,7 +207,7 @@ class ScanManga : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder()

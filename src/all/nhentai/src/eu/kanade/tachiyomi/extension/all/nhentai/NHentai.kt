@@ -247,9 +247,9 @@ open class NHentai(
         )
     }
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
         val script = document.select("script:containsData(media_server)").first()!!.data()
@@ -294,7 +294,7 @@ open class NHentai(
 
     class OffsetPageFilter : Filter.Text("Offset results by # pages")
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only", false)
 

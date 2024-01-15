@@ -426,7 +426,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // More parser stuff
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
         val id = document.select("#reader").attr("data-id")

@@ -130,7 +130,7 @@ class Junmeitu : ParsedHttpSource() {
         return img.attr("src")
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList = FilterList(

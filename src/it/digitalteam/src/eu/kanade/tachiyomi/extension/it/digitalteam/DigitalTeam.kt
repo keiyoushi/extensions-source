@@ -60,9 +60,9 @@ class DigitalTeam : ParsedHttpSource() {
         setUrlWithoutDomain(element.select(".manga_title a").first()!!.attr("href"))
     }
 
-    override fun searchMangaFromElement(element: Element): SManga = throw Exception("Not Used")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw Exception("Not Used")
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     //  NEXT SELECTOR
     //  Not needed

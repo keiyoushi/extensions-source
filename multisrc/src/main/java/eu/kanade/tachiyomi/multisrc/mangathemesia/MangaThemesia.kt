@@ -503,15 +503,15 @@ abstract class MangaThemesia(
     protected open fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 
     // Unused
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException("Not used")
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
-    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException("Not used")
+    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
+    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException("Not used")
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
-    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)

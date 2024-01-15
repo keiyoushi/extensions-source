@@ -45,23 +45,23 @@ class PatchFriday : HttpSource() {
         return Observable.just(MangasPage(listOf(createManga()), false))
     }
 
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
@@ -69,7 +69,7 @@ class PatchFriday : HttpSource() {
         return Observable.just(createManga())
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // Chapters
 
@@ -108,7 +108,7 @@ class PatchFriday : HttpSource() {
         return chapters
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // Pages
 
@@ -116,7 +116,7 @@ class PatchFriday : HttpSource() {
         return Observable.just(listOf(Page(0, baseUrl + chapter.url)))
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String {
         return response.asJsoup().select("div#strip_image img").attr("abs:src")

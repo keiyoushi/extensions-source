@@ -182,7 +182,7 @@ class MangaBook : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw Exception("imageUrlParse Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filters
     private class CheckFilter(name: String, val id: String) : Filter.CheckBox(name)

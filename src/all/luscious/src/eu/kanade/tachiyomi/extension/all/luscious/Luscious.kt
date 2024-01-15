@@ -314,7 +314,7 @@ abstract class Luscious(
         return chapters.reversed()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // Pages
 
@@ -394,9 +394,9 @@ abstract class Luscious(
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun fetchImageUrl(page: Page): Observable<String> {
         if (page.imageUrl != null) {
@@ -461,7 +461,7 @@ abstract class Luscious(
             return manga
         }
     }
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // Popular
 

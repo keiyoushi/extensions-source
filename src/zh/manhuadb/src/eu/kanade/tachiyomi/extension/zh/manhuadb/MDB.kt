@@ -64,7 +64,7 @@ abstract class MDB(
     override fun searchMangaSelector() = "div.comic-main-section > div.row > div"
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     final override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     protected open fun transformTitle(title: String) = title
     protected abstract val authorSelector: String
@@ -114,7 +114,7 @@ abstract class MDB(
 
     protected abstract fun parseImages(imgData: String, readerConfig: Element): List<String>
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     protected class Category(val name: String, private val values: Array<String>, private val params: List<String>) {
         fun toFilter() = CategoryFilter(name, values, params)

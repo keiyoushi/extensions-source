@@ -255,11 +255,11 @@ class RizzComic : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
     }
 
     override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
     }
 
     private inline fun <reified T> Response.parseAs(): T =

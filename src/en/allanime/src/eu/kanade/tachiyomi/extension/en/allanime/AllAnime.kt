@@ -272,7 +272,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

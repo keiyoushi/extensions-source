@@ -57,7 +57,7 @@ class BH3 : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/book", headers)
 
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Not Used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw Exception("No search")
 
@@ -77,7 +77,7 @@ class BH3 : ParsedHttpSource() {
         return manga
     }
 
-    override fun chapterFromElement(element: Element) = throw Exception("Not Used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val jsonResult = json.parseToJsonElement(response.body.string()).jsonArray

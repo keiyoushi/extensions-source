@@ -190,7 +190,7 @@ abstract class FansubsCat(
     override fun pageListParse(response: Response): List<Page> = parsePageListFromJson(response)
 
     override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     // Filter
     override fun getFilterList() = FilterList(

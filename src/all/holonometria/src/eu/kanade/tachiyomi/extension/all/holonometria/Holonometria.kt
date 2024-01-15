@@ -142,9 +142,9 @@ class Holonometria(
         }
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not used")
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used")
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used")
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

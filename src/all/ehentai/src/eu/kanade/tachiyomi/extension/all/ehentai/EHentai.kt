@@ -327,9 +327,9 @@ abstract class EHentai(
         }
     }
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("Unused method was called somehow!")
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException("Unused method was called somehow!")
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = response.asJsoup().select("#img").attr("abs:src")
 

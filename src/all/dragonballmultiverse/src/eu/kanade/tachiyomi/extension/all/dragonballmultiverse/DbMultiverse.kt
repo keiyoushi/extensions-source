@@ -70,7 +70,7 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
         }.let { Observable.just(it) }
     }
 
-    override fun mangaDetailsParse(document: Document): SManga = throw Exception("Not Used")
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

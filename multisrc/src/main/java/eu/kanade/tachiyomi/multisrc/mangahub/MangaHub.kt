@@ -279,7 +279,7 @@ abstract class MangaHub(
     }
 
     override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
     }
 
     private fun parseChapterDate(date: String): Long {
@@ -361,7 +361,7 @@ abstract class MangaHub(
             .doOnError { refreshApiKey(chapter) }
             .retry(1)
 
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException("Not used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> {
         val chapterObject = json.decodeFromString<ApiChapterPagesResponse>(response.body.string())
 
@@ -393,7 +393,7 @@ abstract class MangaHub(
         return GET(page.url, newHeaders)
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // filters
     private class Genre(title: String, val key: String) : Filter.TriState(title) {

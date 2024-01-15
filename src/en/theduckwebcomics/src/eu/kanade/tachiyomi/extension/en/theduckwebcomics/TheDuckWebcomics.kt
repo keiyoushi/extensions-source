@@ -88,13 +88,13 @@ class TheDuckWebcomics : ParsedHttpSource() {
         listOf(Page(0, "", document.selectFirst(".page-image")!!.absUrl("src")))
 
     override fun mangaDetailsParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun chapterFromElement(element: Element) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         TypeFilter(),

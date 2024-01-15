@@ -258,7 +258,7 @@ abstract class NewToki(
     override fun latestUpdatesNextPageSelector() = ".pg_end"
 
     // We are able to get the image URL directly from the page list
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("This method should not be called!")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         getPreferencesInternal(screen.context).map(screen::addPreference)

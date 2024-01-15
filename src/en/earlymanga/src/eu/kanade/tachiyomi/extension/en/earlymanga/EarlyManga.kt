@@ -196,5 +196,5 @@ class EarlyManga : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

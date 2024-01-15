@@ -52,17 +52,17 @@ class Explosm : HttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
@@ -104,7 +104,7 @@ class Explosm : HttpSource() {
         return Observable.just(listOf(Page(0, baseUrl + chapter.url)))
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String {
         return response.asJsoup().select("div#comic-wrap img").attr("abs:src")

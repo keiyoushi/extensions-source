@@ -200,7 +200,7 @@ class BacaKomik : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()

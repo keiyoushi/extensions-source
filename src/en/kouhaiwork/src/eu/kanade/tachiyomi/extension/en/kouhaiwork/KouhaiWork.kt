@@ -131,7 +131,7 @@ class KouhaiWork : HttpSource() {
     )
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     private fun FilterList.json() = json.encodeToJsonElement(
         KouhaiTagList(

@@ -159,7 +159,7 @@ class ComicExtra : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Unused method was called somehow!")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filters
 

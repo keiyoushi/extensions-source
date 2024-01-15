@@ -199,10 +199,10 @@ class Tappytoon(override val lang: String) : HttpSource() {
         get() = url.substringAfter('|')
 
     override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     companion object {
         private const val IMG_CONTENT_TYPE = "image/jpeg"

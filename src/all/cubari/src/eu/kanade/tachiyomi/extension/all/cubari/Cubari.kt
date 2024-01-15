@@ -106,7 +106,7 @@ open class Cubari(override val lang: String) : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        throw Exception("Unused")
+        throw UnsupportedOperationException()
     }
 
     private fun mangaDetailsParse(response: Response, manga: SManga): SManga {
@@ -275,7 +275,7 @@ open class Cubari(override val lang: String) : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        throw Exception("Unused")
+        throw UnsupportedOperationException()
     }
 
     private fun searchMangaParse(response: Response, query: String): MangasPage {
@@ -409,7 +409,7 @@ open class Cubari(override val lang: String) : HttpSource() {
     // ----------------- Things we aren't supporting -----------------
 
     override fun imageUrlParse(response: Response): String {
-        throw Exception("imageUrlParse not supported.")
+        throw UnsupportedOperationException()
     }
 
     companion object {

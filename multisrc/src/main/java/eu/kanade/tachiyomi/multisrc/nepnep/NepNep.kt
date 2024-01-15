@@ -227,7 +227,7 @@ abstract class NepNep(
         return parseDirectory(1)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
@@ -357,7 +357,7 @@ abstract class NepNep(
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
 

@@ -35,7 +35,7 @@ class NaverWebtoon : NaverComicBase("webtoon") {
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun mangaDetailsParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 }
 
 class NaverBestChallenge : NaverComicChallengeBase("bestChallenge") {
@@ -45,7 +45,7 @@ class NaverBestChallenge : NaverComicChallengeBase("bestChallenge") {
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/$mType/list?order=UPDATE&page=$page")
 
     override fun mangaDetailsParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 }
 
 class NaverChallenge : NaverComicChallengeBase("challenge") {
@@ -69,5 +69,5 @@ class NaverChallenge : NaverComicChallengeBase("challenge") {
     }
 
     override fun mangaDetailsParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 }

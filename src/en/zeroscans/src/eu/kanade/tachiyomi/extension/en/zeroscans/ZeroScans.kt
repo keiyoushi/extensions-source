@@ -333,20 +333,20 @@ class ZeroScans : HttpSource() {
     // Unused Stuff
     override fun imageUrlParse(response: Response): String = ""
 
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException("Not Used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not Used")
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException("Not Used")
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not Used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("Not Used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     companion object {
         const val API_PATH = "swordflake"

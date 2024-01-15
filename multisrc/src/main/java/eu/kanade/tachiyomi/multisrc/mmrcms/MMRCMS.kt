@@ -420,7 +420,7 @@ abstract class MMRCMS(
             Page(i, response.request.url.toString(), url)
         }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Unused method called!")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private fun getInitialFilterList() = listOf<Filter<*>>(
         Filter.Header("NOTE: Ignored if using text search!"),

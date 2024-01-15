@@ -256,7 +256,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         return internalParse(document, mutableListOf())
     }
 
-    override fun imageUrlParse(document: Document): String = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
     // 按照类别信息进行检索

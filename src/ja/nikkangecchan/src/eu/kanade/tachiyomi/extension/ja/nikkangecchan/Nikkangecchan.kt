@@ -114,15 +114,15 @@ class Nikkangecchan : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = ""
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("This method should not be called!")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw Exception("This method should not be called!")
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun pageListRequest(chapter: SChapter): Request = throw Exception("This method should not be called!")
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> = throw Exception("This method should not be called!")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
     companion object {
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.92 Safari/537.36"

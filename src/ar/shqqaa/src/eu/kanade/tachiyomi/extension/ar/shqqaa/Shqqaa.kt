@@ -67,13 +67,13 @@ class Shqqaa : ParsedHttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1)
         .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector(): String = throw Exception("Not Used")
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = throw Exception("Not Used")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw Exception("Not Used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     // Manga summary page
     override fun mangaDetailsParse(document: Document): SManga {
@@ -118,7 +118,7 @@ class Shqqaa : ParsedHttpSource() {
         }
         return pages
     }
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }
