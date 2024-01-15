@@ -6,7 +6,7 @@ ext {
     extName = 'COLAMANGA'
     pkgNameSuffix = 'zh.onemanhua'
     extClass = '.Onemanhua'
-    extVersionCode = 13
+    extVersionCode = 14
 }
 
 dependencies {
