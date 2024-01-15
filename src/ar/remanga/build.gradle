@@ -1,5 +1,3 @@
-
-
 ext {
     extName = 'RE Manga'
     pkgNameSuffix = 'ar.remanga'

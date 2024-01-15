@@ -1,5 +1,3 @@
-
-
 ext {
     extName = 'Latis Books'
     pkgNameSuffix = 'en.latisbooks'

@@ -1,5 +1,3 @@
-
-
 ext {
     extName = 'Multporn'
     pkgNameSuffix = 'en.multporn'

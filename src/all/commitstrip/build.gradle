@@ -1,5 +1,3 @@
-
-
 ext {
     extName = 'Commit Strip'
     pkgNameSuffix = 'all.commitstrip'

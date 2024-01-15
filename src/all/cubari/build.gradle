@@ -1,5 +1,3 @@
-
-
 ext {
     extName = 'Cubari'
     pkgNameSuffix = "all.cubari"

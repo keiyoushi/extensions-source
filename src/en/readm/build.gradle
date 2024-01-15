@@ -1,5 +1,3 @@
-
-
 ext {
     extName = 'ReadM'
     pkgNameSuffix = 'en.readm'
