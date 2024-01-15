@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -109,8 +110,17 @@ class Bakai : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document): SManga {
-        throw UnsupportedOperationException("Not used.")
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1.ipsType_pageTitle")?.text() ?: "Hentai"
+        thumbnail_url = document.selectFirst("div.cCmsRecord_image img")?.absUrl("src")
+        artist = document.selectFirst("span.mangaInfo:contains(Artist:) + a")?.text()
+        genre = document.selectFirst("span.mangaInfo:contains(Tags:) + span")?.text()
+        description = document.selectFirst("h2.ipsFieldRow_desc")?.let {
+            // Alternative titles
+            "Títulos alternativos: ${it.text()}"
+        }
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     // ============================== Chapters ==============================
