@@ -7,3 +7,4 @@ Checklist:
 - [ ] Have not changed source names
 - [ ] Have explicitly kept the `id` if a source's name or language were changed
 - [ ] Have tested the modifications by compiling and running the extension through Android Studio
+- [ ] Have removed `web_hi_res_512.png` when adding a new extension
