@@ -34,21 +34,19 @@ class Bakai : ParsedHttpSource() {
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException("Not used.")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/home1/page/$page/")
+
+    override fun popularMangaSelector() = "#elCmsPageWrap ul > li > article"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        with(element.selectFirst("h2.ipsType_pageTitle a")!!) {
+            title = text()
+            setUrlWithoutDomain(attr("href"))
+        }
     }
 
-    override fun popularMangaSelector(): String {
-        throw UnsupportedOperationException("Not used.")
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException("Not used.")
-    }
-
-    override fun popularMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException("Not used.")
-    }
+    override fun popularMangaNextPageSelector() = "li.ipsPagination_next > a[rel=next]"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
