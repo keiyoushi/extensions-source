@@ -261,7 +261,7 @@ abstract class Senkuro(
                 chapterListParse(response, manga)
             }
     }
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("chapterListParse(response: Response, manga: SManga)")
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
     private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
         val chaptersList = json.decodeFromString<PageWrapperDto<MangaTachiyomiChaptersDto>>(response.body.string())
         val teamsList = chaptersList.data.mangaTachiyomiChapters.teams

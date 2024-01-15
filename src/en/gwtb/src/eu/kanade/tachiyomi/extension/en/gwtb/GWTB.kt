@@ -48,26 +48,26 @@ class GWTB : HttpSource() {
         Observable.just(manga.apply { initialized = true })
 
     override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 }

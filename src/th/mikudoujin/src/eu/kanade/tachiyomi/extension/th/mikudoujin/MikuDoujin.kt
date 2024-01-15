@@ -75,13 +75,13 @@ class MikuDoujin : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw Exception("Unused")
+        throw UnsupportedOperationException()
 
-    override fun searchMangaSelector(): String = throw Exception("Unused")
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = throw Exception("Unused")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String = throw Exception("Unused")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(
         page: Int,
@@ -143,7 +143,7 @@ class MikuDoujin : ParsedHttpSource() {
 
     override fun chapterListSelector() = "table.table-episode tr"
 
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Unused")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     private fun chapterFromElementWithIndex(element: Element, idx: Int, manga: SManga): SChapter {
         val chapter = SChapter.create()
@@ -206,7 +206,7 @@ class MikuDoujin : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }

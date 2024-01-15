@@ -115,13 +115,13 @@ abstract class NoiseManga(override val lang: String) : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = ""
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     companion object {
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36"

@@ -455,7 +455,7 @@ abstract class Guya(
     // ----------------- Things we aren't supporting -----------------
 
     override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException("Unused")
+        throw UnsupportedOperationException()
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -467,11 +467,11 @@ abstract class Guya(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException("Unused.")
+        throw UnsupportedOperationException()
     }
 
     override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Unused.")
+        throw UnsupportedOperationException()
     }
 
     companion object {

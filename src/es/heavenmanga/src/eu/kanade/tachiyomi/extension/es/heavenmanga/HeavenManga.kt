@@ -144,7 +144,7 @@ class HeavenManga : ParsedHttpSource() {
         description = document.select("div.description-summary p").text()
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter): Request {
         return getUrlContents(baseUrl + chapter.url).select("a[id=leer]").attr("abs:href")

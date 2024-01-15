@@ -218,7 +218,7 @@ class MangaMiso : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     //region Filter Classes
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :

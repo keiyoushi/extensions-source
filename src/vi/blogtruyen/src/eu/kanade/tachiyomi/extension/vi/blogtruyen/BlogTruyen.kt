@@ -74,7 +74,7 @@ class BlogTruyen : ParsedHttpSource() {
     override fun popularMangaSelector() = ".list .tiptip"
 
     override fun popularMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     private fun popularMangaFromElement(element: Element, tiptip: Element) = SManga.create().apply {
         val anchor = element.selectFirst("a")!!
@@ -206,7 +206,7 @@ class BlogTruyen : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     private fun searchMangaFromElement(element: Element, tiptip: Element) =
         popularMangaFromElement(element, tiptip)
@@ -299,7 +299,7 @@ class BlogTruyen : ParsedHttpSource() {
 
     override fun chapterListSelector() = "div.list-wrap > p"
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     private fun chapterFromElement(element: Element, title: String): SChapter = SChapter.create().apply {
         val anchor = element.select("span > a").first()!!
@@ -352,7 +352,7 @@ class BlogTruyen : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private class Status : Filter.Select<String>(
         "Status",

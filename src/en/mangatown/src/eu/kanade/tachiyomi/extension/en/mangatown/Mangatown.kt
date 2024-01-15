@@ -136,7 +136,7 @@ class Mangatown : ParsedHttpSource() {
         return response.asJsoup().select("div#viewer img").attr("abs:src")
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }

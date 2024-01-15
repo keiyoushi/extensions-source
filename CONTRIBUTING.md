@@ -468,7 +468,7 @@ empty, so the app will skip the `fetchImageUrl` source and call directly `fetchI
 ### Misc notes
 
 - Sometimes you may find no use for some inherited methods. If so just override them and throw 
-exceptions: `throw UnsupportedOperationException("Not used.")`
+exceptions: `throw UnsupportedOperationException()`
 - You probably will find `getUrlWithoutDomain` useful when parsing the target source URLs. Keep in 
 mind there's a current issue with spaces in the URL though, so if you use it, replace all spaces with
 URL encoded characters (like `%20`).

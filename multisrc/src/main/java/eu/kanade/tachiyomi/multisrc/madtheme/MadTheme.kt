@@ -277,7 +277,7 @@ abstract class MadTheme(
     }
 
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     // Date logic lifted from Madara
     private fun parseChapterDate(date: String?): Long {

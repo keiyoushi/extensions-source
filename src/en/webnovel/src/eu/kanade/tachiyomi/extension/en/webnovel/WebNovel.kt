@@ -248,7 +248,7 @@ class WebNovel : HttpSource() {
             .mapIndexed { i, chapterPage -> Page(i, imageUrl = chapterPage.url) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),

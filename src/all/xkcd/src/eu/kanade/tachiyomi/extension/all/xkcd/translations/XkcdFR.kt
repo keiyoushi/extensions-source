@@ -42,5 +42,5 @@ class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {
         }
 
     override val interactiveText: String
-        get() = throw UnsupportedOperationException("Not used")
+        get() = throw UnsupportedOperationException()
 }

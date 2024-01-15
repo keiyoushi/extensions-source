@@ -273,5 +273,5 @@ class MangaDemon : ParsedHttpSource() {
             .map { it.attr("abs:src") }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

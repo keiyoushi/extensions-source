@@ -36,8 +36,8 @@ class TerraHistoricus : HttpSource() {
             MangasPage(mangas, false)
         }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException("Not used.")
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
     // navigate webview to webpage
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url.removePrefix("/api"), headers)
@@ -57,7 +57,7 @@ class TerraHistoricus : HttpSource() {
             }
         }
 
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) = response.parseAs<THPage>().url
 

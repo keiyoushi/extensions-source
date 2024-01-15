@@ -207,7 +207,7 @@ class Tsumino : HttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     data class AdvSearchEntry(val type: Int, val text: String, val exclude: Boolean)
 

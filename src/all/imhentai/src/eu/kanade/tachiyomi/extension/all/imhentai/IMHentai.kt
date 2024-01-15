@@ -211,9 +211,9 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
         )
     }
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    override fun chapterListSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
     // Pages
 
@@ -254,7 +254,7 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 

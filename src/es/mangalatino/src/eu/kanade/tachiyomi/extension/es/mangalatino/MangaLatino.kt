@@ -109,7 +109,7 @@ class MangaLatino : ParsedHttpSource() {
         return GET(page.imageUrl!!, noRefererHeader)
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used!")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("NOTA: La búsqueda por texto ignorará los demás filtros."),

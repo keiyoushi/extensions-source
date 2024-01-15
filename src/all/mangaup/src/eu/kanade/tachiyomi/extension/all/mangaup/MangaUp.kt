@@ -56,9 +56,9 @@ class MangaUp(override val lang: String) : HttpSource() {
         return MangasPage(titles, hasNextPage = false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.startsWith(PREFIX_ID_SEARCH) && query.matches(ID_SEARCH_PATTERN)) {

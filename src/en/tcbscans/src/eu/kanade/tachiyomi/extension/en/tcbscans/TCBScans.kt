@@ -86,7 +86,7 @@ class TCBScans : ParsedHttpSource() {
     }
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun searchMangaNextPageSelector(): String = throw Exception("Not used")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     override fun searchMangaSelector(): String = popularMangaSelector()
 

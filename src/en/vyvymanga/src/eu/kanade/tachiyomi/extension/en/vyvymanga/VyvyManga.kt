@@ -107,7 +107,7 @@ class VyvyManga : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
     }
 
     // Other

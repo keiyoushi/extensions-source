@@ -278,7 +278,7 @@ class Desu : ConfigurableSource, HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("This method should not be called!")
+        throw UnsupportedOperationException()
 
     private fun searchMangaByIdRequest(id: String): Request {
         return GET("$baseUrl$API_URL/$id", headers)

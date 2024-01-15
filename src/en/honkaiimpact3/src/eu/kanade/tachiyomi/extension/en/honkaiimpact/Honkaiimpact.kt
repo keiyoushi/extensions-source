@@ -53,16 +53,16 @@ class Honkaiimpact : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
 
     // Latest
-    override fun latestUpdatesSelector() = throw Exception("Not Used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Not Used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
     override fun latestUpdatesFromElement(element: Element) = mangaFromElement(element)
 
     // Search
-    override fun searchMangaSelector() = throw Exception("Not Used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
     override fun searchMangaNextPageSelector(): String? = null
 
@@ -88,9 +88,9 @@ class Honkaiimpact : ParsedHttpSource() {
     }
 
     // Chapters
-    override fun chapterListSelector() = throw Exception("Not Used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element) = throw Exception("Not Used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url + "/get_chapter", headers)
 

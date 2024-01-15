@@ -27,10 +27,10 @@ class Xinmeitulu : ParsedHttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not Used.")
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not Used.")
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not Used.")
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not Used.")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Popular
 
@@ -86,7 +86,7 @@ class Xinmeitulu : ParsedHttpSource() {
             Page(index, imageUrl = element.attr("abs:data-original"))
         }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     companion object {
         private fun contentTypeIntercept(chain: Interceptor.Chain): Response {

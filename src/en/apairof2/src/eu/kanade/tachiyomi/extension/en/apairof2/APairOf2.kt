@@ -154,7 +154,7 @@ class APairOf2 : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("not used")
+        throw UnsupportedOperationException()
     }
 
     companion object {

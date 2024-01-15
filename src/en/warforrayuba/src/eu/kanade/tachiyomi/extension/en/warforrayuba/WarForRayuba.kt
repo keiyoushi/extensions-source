@@ -146,13 +146,13 @@ class WarForRayuba : HttpSource() {
         return Observable.just(MangasPage(emptyList(), false))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not Used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not Used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }

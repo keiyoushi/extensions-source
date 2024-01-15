@@ -118,13 +118,13 @@ class Hennojin(override val lang: String, suffix: String) : ParsedHttpSource() {
         get() = "/home/manga-reader/?manga=$title&view=multi"
 
     override fun chapterListSelector() =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun chapterFromElement(element: Element) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     companion object {
         // Let's hope this doesn't change

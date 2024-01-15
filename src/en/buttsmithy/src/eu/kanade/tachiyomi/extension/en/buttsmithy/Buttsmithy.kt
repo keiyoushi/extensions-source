@@ -263,16 +263,16 @@ class Buttsmithy : HttpSource() {
         return MangasPage(fetchAllComics(), false)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw Exception("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String {
         val pageDoc = response.asJsoup()
         return pageDoc.select("#comic").select("img[src]").attr("href")
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return Observable.just(
@@ -298,7 +298,7 @@ class Buttsmithy : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = throw Exception("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val comicPageDoc = client.newCall(GET(chapter.url, headers)).execute().asJsoup()
@@ -308,18 +308,18 @@ class Buttsmithy : HttpSource() {
         return Observable.just(listOf(comicPage))
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw Exception("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return Observable.just(generateMangasPage())
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int): Request = throw Exception("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw Exception("Not used")
+        throw UnsupportedOperationException()
 }

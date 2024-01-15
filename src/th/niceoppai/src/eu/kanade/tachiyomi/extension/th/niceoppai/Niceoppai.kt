@@ -188,7 +188,7 @@ class Niceoppai : ParsedHttpSource() {
         }
     }
     override fun chapterListSelector() = "ul.lst li.lng_"
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Unused")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
     private fun chapterFromElementWithIndex(element: Element, idx: Int, manga: SManga): SChapter {
         val chapter = SChapter.create()
 
@@ -261,7 +261,7 @@ class Niceoppai : ParsedHttpSource() {
         }
     }
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     // Filter
     private val orderByFilterTitle: String = "Order By เรียกตาม"

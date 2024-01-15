@@ -165,7 +165,7 @@ class Hiveworks : ParsedHttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers) // Used to open proper page in webview
-    override fun mangaDetailsParse(document: Document): SManga = throw Exception("Not Used")
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
     private fun mangaDetailsParse(response: Response, url: String): SManga {
         val document = response.asJsoup()
         return document.select(popularMangaSelector())
@@ -230,7 +230,7 @@ class Hiveworks : ParsedHttpSource() {
         date_upload = parseDate(element.text().substringBefore("-").trim(), DATE_FORMATTER)
     }
 
-    override fun chapterFromElement(element: Element) = throw Exception("Not Used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Pages
 
@@ -261,9 +261,9 @@ class Hiveworks : ParsedHttpSource() {
         return pages
     }
 
-    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used, see pageListParse(response)")
-    override fun imageUrlRequest(page: Page) = throw Exception("Not used")
-    override fun imageUrlParse(document: Document) = throw Exception("Not used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
+    override fun imageUrlRequest(page: Page) = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filters
 

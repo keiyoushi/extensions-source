@@ -215,7 +215,7 @@ abstract class SinMH(
             emptyList() // []
         }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used.")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     protected class UriPartFilter(displayName: String, values: Array<String>, private val uriParts: Array<String>) :
         Filter.Select<String>(displayName, values) {

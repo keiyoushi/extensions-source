@@ -58,9 +58,9 @@ class ComicNewtype : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used.")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val path = when {
@@ -126,7 +126,7 @@ class ComicNewtype : HttpSource() {
             Page(index, imageUrl = baseUrl + newPath)
         }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getFilterList() = filterList
 

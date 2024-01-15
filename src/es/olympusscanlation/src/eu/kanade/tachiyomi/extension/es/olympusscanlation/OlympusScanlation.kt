@@ -224,7 +224,7 @@ class OlympusScanlation : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun parseStatus(statusId: Int?) = when (statusId) {
         1 -> SManga.ONGOING

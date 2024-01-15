@@ -141,7 +141,7 @@ class TruyenQQ : ParsedHttpSource() {
             }
 
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Không dùng chung với tìm kiếm bằng tên"),

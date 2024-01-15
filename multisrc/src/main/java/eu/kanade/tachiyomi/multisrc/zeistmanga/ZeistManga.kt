@@ -272,7 +272,7 @@ abstract class ZeistManga(
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     protected open val mangaCategory: String = "Series"
 

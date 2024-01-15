@@ -95,8 +95,8 @@ class Iqiyi : ParsedHttpSource() {
         }.reversed()
     }
 
-    override fun chapterListSelector(): String = throw Exception("Not Used")
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Not Used")
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // Pages
 
@@ -113,5 +113,5 @@ class Iqiyi : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

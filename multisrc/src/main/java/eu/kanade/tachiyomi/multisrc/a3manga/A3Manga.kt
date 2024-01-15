@@ -56,13 +56,13 @@ open class A3Manga(
 
     override fun popularMangaNextPageSelector() = "li.next:not(.disabled)"
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return when {
@@ -92,11 +92,11 @@ open class A3Manga(
                 .build(),
         )
 
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<SearchResponseDto>()
@@ -213,7 +213,7 @@ open class A3Manga(
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString(body.string())

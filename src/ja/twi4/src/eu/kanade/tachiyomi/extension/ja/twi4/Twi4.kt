@@ -263,17 +263,17 @@ class Twi4 : HttpSource() {
 
     // All these functions are unused
     override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 }

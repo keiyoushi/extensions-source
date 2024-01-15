@@ -173,10 +173,10 @@ class Bruttal : HttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromString(body.string())

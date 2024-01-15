@@ -110,11 +110,11 @@ class LerManga : ParsedHttpSource() {
         return MangasPage(mangaList, hasNextPage)
     }
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
@@ -135,7 +135,7 @@ class LerManga : ParsedHttpSource() {
         return response.parseAs<List<LmMangaDto>>().first().toSManga()
     }
 
-    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 
     override fun chapterListSelector() = "div.manga-chapters div.single-chapter"
 

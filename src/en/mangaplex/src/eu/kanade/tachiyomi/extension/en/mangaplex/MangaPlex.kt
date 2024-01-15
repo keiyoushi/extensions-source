@@ -120,5 +120,5 @@ class MangaPlex : ParsedHttpSource() {
             .mapIndexed { i, el -> Page(i, "", el.attr("src")) }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

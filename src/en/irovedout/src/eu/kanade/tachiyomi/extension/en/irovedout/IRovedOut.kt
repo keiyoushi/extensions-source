@@ -33,9 +33,9 @@ class IRovedOut : HttpSource() {
     private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
     private val titleRegex = Regex("Book (?<bookNumber>\\d+): (?<chapterTitle>.+)")
 
-    override fun chapterListRequest(manga: SManga): Request = throw Exception("Not used")
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw Exception("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val mainPage = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
@@ -66,17 +66,17 @@ class IRovedOut : HttpSource() {
         return Observable.just(imageUrl)
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return Observable.just(manga)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw Exception("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val match = titleRegex.matchEntire(chapter.name) ?: return Observable.just(listOf())
@@ -91,9 +91,9 @@ class IRovedOut : HttpSource() {
         return Observable.just(pages)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = throw Exception("Not used")
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response): List<Page> = throw Exception("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val manga = SManga.create().apply {
@@ -110,13 +110,13 @@ class IRovedOut : HttpSource() {
         return Observable.just(MangasPage(listOf(manga), false))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int): Request = throw Exception("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Not used")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 }

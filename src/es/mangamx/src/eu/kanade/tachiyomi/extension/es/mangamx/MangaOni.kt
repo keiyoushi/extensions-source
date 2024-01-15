@@ -198,7 +198,7 @@ open class MangaOni : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList {
         val filterList = mutableListOf(

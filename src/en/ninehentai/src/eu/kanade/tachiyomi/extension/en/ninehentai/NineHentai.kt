@@ -359,7 +359,7 @@ class NineHentai : HttpSource() {
         CategoryFilter(),
     )
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not Used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private val Request.bodyString: String
         get() {

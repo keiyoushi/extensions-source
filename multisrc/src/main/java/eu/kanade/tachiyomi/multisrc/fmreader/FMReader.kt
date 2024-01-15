@@ -333,7 +333,7 @@ abstract class FMReader(
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private class TextField(name: String, val key: String) : Filter.Text(name)
     private class Status : Filter.Select<String>("Status", arrayOf("Any", "Completed", "Ongoing"))

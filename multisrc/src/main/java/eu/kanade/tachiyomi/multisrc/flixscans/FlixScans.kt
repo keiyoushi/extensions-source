@@ -263,7 +263,7 @@ abstract class FlixScans(
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     protected inline fun <reified T> Response.parseAs(): T =
         use { body.string() }.let(json::decodeFromString)

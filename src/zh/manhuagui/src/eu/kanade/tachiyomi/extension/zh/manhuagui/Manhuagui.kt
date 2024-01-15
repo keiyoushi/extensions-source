@@ -284,7 +284,7 @@ class Manhuagui(
         return manga
     }
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used.")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val chapters = mutableListOf<SChapter>()
@@ -411,7 +411,7 @@ class Manhuagui(
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val mainSiteRateLimitPreference = androidx.preference.ListPreference(screen.context).apply {

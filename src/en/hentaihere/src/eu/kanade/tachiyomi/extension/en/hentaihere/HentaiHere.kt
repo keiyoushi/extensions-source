@@ -206,10 +206,10 @@ class HentaiHere : ParsedHttpSource() {
         }
 
     override fun pageListParse(document: Document): List<Page> =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList {

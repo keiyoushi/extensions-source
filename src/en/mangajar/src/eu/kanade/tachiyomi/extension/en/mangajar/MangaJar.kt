@@ -142,7 +142,7 @@ class MangaJar : ParsedHttpSource() {
 
     override fun chapterListSelector() = "li.list-group-item.chapter-item"
 
-    override fun chapterFromElement(element: Element) = throw Exception("Not Used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     private fun parseChapterDate(string: String): Long {
         return if ("ago" in string) {
@@ -176,7 +176,7 @@ class MangaJar : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 

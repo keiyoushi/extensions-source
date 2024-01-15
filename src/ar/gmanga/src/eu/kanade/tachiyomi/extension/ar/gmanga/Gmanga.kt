@@ -108,7 +108,7 @@ class Gmanga : ConfigurableSource, HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val isLatest = when (preferences.getString(PREF_LASTETS_LISTING)) {

@@ -375,8 +375,8 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response) =
-        throw UnsupportedOperationException("Not implemented")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not implemented")
+        throw UnsupportedOperationException()
 }

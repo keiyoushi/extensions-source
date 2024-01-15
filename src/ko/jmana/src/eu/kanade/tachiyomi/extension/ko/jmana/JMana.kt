@@ -54,7 +54,7 @@ class JMana : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException("This method should not be called!")
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
     // Do not add page parameter if page is 1 to prevent tracking.
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic_list?page=${page - 1}", headers)
@@ -73,7 +73,7 @@ class JMana : ConfigurableSource, ParsedHttpSource() {
 
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("This method should not be called!")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comic_list?page=${page - 1}&keyword=$query", headers)
 
@@ -190,10 +190,10 @@ class JMana : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("This method should not be called!")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     // We are able to get the image URL directly from the page list
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("This method should not be called!")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     companion object {
         const val DETAIL_GENRE = "장르 : "

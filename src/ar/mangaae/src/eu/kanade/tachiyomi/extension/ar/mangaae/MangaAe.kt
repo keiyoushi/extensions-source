@@ -136,7 +136,7 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw Exception("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // ============================== Filters ===============================
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :

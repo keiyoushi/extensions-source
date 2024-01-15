@@ -101,9 +101,9 @@ class AnimeSama : ParsedHttpSource() {
     }
 
     // Chapters
-    override fun chapterListSelector() = throw Exception("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -159,7 +159,7 @@ class AnimeSama : ParsedHttpSource() {
         return client.newCall(request).execute()
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder()

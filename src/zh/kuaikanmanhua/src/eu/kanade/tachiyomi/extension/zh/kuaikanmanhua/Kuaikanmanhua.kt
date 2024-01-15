@@ -235,7 +235,7 @@ class Kuaikanmanhua : HttpSource() {
     )
 
     override fun imageUrlParse(response: Response): String {
-        throw Exception("Not used")
+        throw UnsupportedOperationException()
     }
 
     private class GenreFilter : UriPartFilter(

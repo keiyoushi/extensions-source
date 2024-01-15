@@ -188,7 +188,7 @@ class SixMH : HttpSource(), ConfigurableSource {
         return result.mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream(body.byteStream())

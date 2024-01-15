@@ -120,7 +120,7 @@ class MangaRok : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList = FilterList()

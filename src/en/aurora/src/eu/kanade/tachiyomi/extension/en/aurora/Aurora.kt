@@ -25,9 +25,9 @@ class Aurora : HttpSource() {
     private val auroraGenre = "fantasy"
     private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 
-    override fun chapterListRequest(manga: SManga): Request = throw Exception("Not used")
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw Exception("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return Observable.just(fetchChapterListTR(baseUrl + manga.url, mutableListOf()).reversed())
@@ -71,11 +71,11 @@ class Aurora : HttpSource() {
         return Observable.just(page.imageUrl)
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         val chapterNr = manga.title.substringAfter(' ').toFloatOrNull() ?: 0f
@@ -113,7 +113,7 @@ class Aurora : HttpSource() {
     Find Red’s general ramblings on Twitter, alongside her cohost Blue, at OSPYouTube.
     """.trimIndent()
 
-    override fun mangaDetailsParse(response: Response): SManga = throw Exception("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val singlePageChapterDoc = client.newCall(
@@ -127,9 +127,9 @@ class Aurora : HttpSource() {
         return Observable.just(listOf(singlePageChapter))
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = throw Exception("Not used")
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response): List<Page> = throw Exception("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     /**
      * Because the comic is updated 1 page at a time the chapters are turned into different mangas
@@ -185,13 +185,13 @@ class Aurora : HttpSource() {
         return Observable.just(generateAuroraMangasPage())
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int): Request = throw Exception("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Not used")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 }

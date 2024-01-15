@@ -200,19 +200,19 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
         }.jsonObject
 
     override fun mangaDetailsRequest(manga: SManga) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     companion object {
         private const val ORIGIN = "https://www.izneo.com"

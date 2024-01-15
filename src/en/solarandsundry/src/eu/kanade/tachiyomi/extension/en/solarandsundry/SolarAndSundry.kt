@@ -76,23 +76,23 @@ class SolarAndSundry : HttpSource() {
         return Observable.just(MangasPage(listOf(createManga()), false))
     }
 
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
@@ -100,7 +100,7 @@ class SolarAndSundry : HttpSource() {
         return Observable.just(createManga().apply { initialized = true })
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun getMangaUrl(manga: SManga): String {
         return ARCHIVE_URL
@@ -134,5 +134,5 @@ class SolarAndSundry : HttpSource() {
 
     override fun imageRequest(page: Page) = GET(page.imageUrl!!, imgHeaders)
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

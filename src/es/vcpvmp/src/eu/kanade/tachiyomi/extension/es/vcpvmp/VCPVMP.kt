@@ -26,13 +26,13 @@ open class VCPVMP(override val name: String, override val baseUrl: String) : Par
             .add("Referer", "$baseUrl/")
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/$urlSuffix/page/$page", headers)
 
@@ -78,14 +78,14 @@ open class VCPVMP(override val name: String, override val baseUrl: String) : Par
         )
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     protected open val pageListSelector = "div.wp-content p > img:not(noscript img)"
     override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector)
         .mapIndexed { i, img -> Page(i, "", img.attr("abs:data-src")) }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     protected open val urlSuffix = ""
     protected open val genreSuffix = ""

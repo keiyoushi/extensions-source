@@ -253,7 +253,7 @@ class UniComics : ParsedHttpSource() {
         return chapter
     }
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter): Request {
         return GET(baseDefaultUrl + chapter.url, headers)

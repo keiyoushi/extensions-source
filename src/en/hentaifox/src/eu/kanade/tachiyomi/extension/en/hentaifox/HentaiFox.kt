@@ -54,15 +54,15 @@ class HentaiFox : ParsedHttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     // Search
 
@@ -123,9 +123,9 @@ class HentaiFox : ParsedHttpSource() {
         )
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // Pages
 
@@ -140,7 +140,7 @@ class HentaiFox : ParsedHttpSource() {
         return document.select("img#gimg").attr("abs:data-src")
     }
 
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException("Not used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
     // Filters
 

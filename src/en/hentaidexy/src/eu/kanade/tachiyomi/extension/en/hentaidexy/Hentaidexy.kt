@@ -158,7 +158,7 @@ class Hentaidexy : HttpSource() {
 
     // unused
     override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
     }
 
     // Helpers

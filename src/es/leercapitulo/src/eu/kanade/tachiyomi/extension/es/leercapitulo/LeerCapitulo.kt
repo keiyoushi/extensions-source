@@ -70,9 +70,9 @@ class LeerCapitulo : ParsedHttpSource() {
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used.")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     override fun searchMangaNextPageSelector(): String? = null
 
@@ -156,7 +156,7 @@ class LeerCapitulo : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     private fun String.toStatus() = when (this) {
         "Ongoing" -> SManga.ONGOING

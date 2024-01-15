@@ -283,7 +283,7 @@ class LikeManga : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     companion object {
         val dateFormat by lazy {

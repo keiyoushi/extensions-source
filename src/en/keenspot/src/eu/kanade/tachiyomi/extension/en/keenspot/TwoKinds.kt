@@ -53,15 +53,15 @@ class TwoKinds : HttpSource() {
         return Observable.just(MangasPage(listOf(mangaSinglePages(), manga20Pages()), false))
     }
 
-    override fun popularMangaRequest(page: Int): Request = throw Exception("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // latest Updates not used
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     // the manga is one and only, but still write the data again to avoid bugs in backup restore
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
@@ -72,7 +72,7 @@ class TwoKinds : HttpSource() {
         }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw Exception("Not used")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // chapter list
 
@@ -88,7 +88,7 @@ class TwoKinds : HttpSource() {
         return GET("$baseUrl/archive/", headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw Exception("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     data class TwoKindsPage(val url: String, val name: String)
 
@@ -162,7 +162,7 @@ class TwoKinds : HttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw Exception("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String {
         val document = response.asJsoup()
@@ -172,7 +172,7 @@ class TwoKinds : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Search functionality is not available.")
 
-    override fun searchMangaParse(response: Response): MangasPage = throw Exception("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 }

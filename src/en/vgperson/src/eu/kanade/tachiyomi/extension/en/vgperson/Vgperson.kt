@@ -119,24 +119,24 @@ class Vgperson : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
 
     override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException("This method should not be called!")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesFromElement(element: Element) =
-        throw UnsupportedOperationException("This method should not be called!")
+        throw UnsupportedOperationException()
 
     override fun searchMangaSelector() = ""
 
     override fun searchMangaNextPageSelector(): String? = null
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException("This method should not be called!")
+        throw UnsupportedOperationException()
 
     override fun searchMangaFromElement(element: Element) =
-        throw UnsupportedOperationException("This method should not be called!")
+        throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException("This method should not be called!")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("This method should not be called!")
+        throw UnsupportedOperationException()
 }

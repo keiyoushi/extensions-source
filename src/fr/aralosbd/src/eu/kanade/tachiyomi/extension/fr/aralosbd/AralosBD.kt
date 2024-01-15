@@ -157,7 +157,7 @@ class AralosBD : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private fun authorToString(author: AralosBDAuthor) = author.name
     private fun tagToString(tag: AralosBDTag) = tag.tag

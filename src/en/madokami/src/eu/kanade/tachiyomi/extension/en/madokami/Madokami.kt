@@ -58,9 +58,9 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     }.build()
 
     override fun latestUpdatesSelector() = ""
-    override fun latestUpdatesFromElement(element: Element): SManga = throw Exception("Unsupported!")
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector(): String? = null
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Unsupported!")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
     override fun popularMangaSelector(): String = "table.mobile-files-table tbody tr td:nth-child(1) a:nth-child(1)"
 

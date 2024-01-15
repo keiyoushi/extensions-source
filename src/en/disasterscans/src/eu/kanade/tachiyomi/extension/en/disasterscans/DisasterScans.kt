@@ -196,14 +196,14 @@ class DisasterScans : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not Used")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException("Not Implemented")
+        throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException("Not Implemented")
+        throw UnsupportedOperationException()
 }

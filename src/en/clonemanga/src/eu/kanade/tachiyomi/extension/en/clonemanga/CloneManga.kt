@@ -99,29 +99,29 @@ class CloneManga : ParsedHttpSource() {
         return listOf(Page(1, "", imgAbsoluteUrl))
     }
 
-    override fun imageUrlParse(document: Document): String { throw Exception("Not used") }
+    override fun imageUrlParse(document: Document): String { throw UnsupportedOperationException() }
 
     override fun pageListParse(document: Document): List<Page> { throw Exception("Not used") }
 
     override fun chapterListSelector(): String { throw Exception("Not used") }
 
-    override fun chapterFromElement(element: Element): SChapter { throw Exception("Not used") }
+    override fun chapterFromElement(element: Element): SChapter { throw UnsupportedOperationException() }
 
-    override fun latestUpdatesFromElement(element: Element): SManga { throw Exception("Not used") }
+    override fun latestUpdatesFromElement(element: Element): SManga { throw UnsupportedOperationException() }
 
     override fun latestUpdatesNextPageSelector(): String? { throw Exception("Not used") }
 
-    override fun latestUpdatesRequest(page: Int): Request { throw Exception("Not used") }
+    override fun latestUpdatesRequest(page: Int): Request { throw UnsupportedOperationException() }
 
     override fun latestUpdatesSelector(): String { throw Exception("Not used") }
 
     override fun popularMangaNextPageSelector(): String? { throw Exception("Not used") }
 
-    override fun searchMangaFromElement(element: Element): SManga { throw Exception("Not used") }
+    override fun searchMangaFromElement(element: Element): SManga { throw UnsupportedOperationException() }
 
     override fun searchMangaNextPageSelector(): String? { throw Exception("Not used") }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request { throw Exception("Not used") }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request { throw UnsupportedOperationException() }
 
     override fun searchMangaSelector(): String { throw Exception("Not used") }
 }

@@ -52,7 +52,7 @@ class Bakai : ParsedHttpSource() {
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
     }
 
     override fun latestUpdatesSelector(): String {
@@ -60,7 +60,7 @@ class Bakai : ParsedHttpSource() {
     }
 
     override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
     }
 
     override fun latestUpdatesNextPageSelector(): String? {
@@ -139,7 +139,7 @@ class Bakai : ParsedHttpSource() {
     }
 
     override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
     }
 
     // =============================== Pages ================================
@@ -151,7 +151,7 @@ class Bakai : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
     }
 
     companion object {

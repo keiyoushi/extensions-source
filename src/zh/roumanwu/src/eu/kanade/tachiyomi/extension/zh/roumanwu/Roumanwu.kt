@@ -67,7 +67,7 @@ class Roumanwu : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         Filter.Header("提示：搜索时筛选无效"),

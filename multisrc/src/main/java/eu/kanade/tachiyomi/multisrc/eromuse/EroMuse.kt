@@ -188,15 +188,15 @@ open class EroMuse(override val name: String, override val baseUrl: String) : Ht
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchManga("$baseUrl/comics/album/Various-Authors", page, "")
 
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Latest
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchManga("$baseUrl/comics/album/Various-Authors?sort=date", page, "date")
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
@@ -228,8 +228,8 @@ open class EroMuse(override val name: String, override val baseUrl: String) : Ht
             .map { response -> parseManga(response.asJsoup()) }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
@@ -332,7 +332,7 @@ open class EroMuse(override val name: String, override val baseUrl: String) : Ht
         return parsePages(response.asJsoup())
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
 

@@ -157,7 +157,7 @@ class SenManga : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("This method should not be called!")
+        throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         GenreFilter(getGenreList()),

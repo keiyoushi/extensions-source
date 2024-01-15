@@ -90,7 +90,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
             response.parseAs<ListPageDto<MangaDto>>().list.find { it.id == id }!!.toSManga()
         }
 
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga): Request =
         GET("$baseUrl/home/api/chapter_list/tp/${manga.url}-0-0-10", headers)
@@ -124,8 +124,8 @@ class BoyLove : HttpSource(), ConfigurableSource {
             urlList.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
         }
 
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException("Not used.")
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream<ResultDto<T>>(body.byteStream()).result

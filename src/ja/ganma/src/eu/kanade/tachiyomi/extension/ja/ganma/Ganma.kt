@@ -59,10 +59,10 @@ open class Ganma : HttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     // navigate Webview to web page
     override fun mangaDetailsRequest(manga: SManga) =
@@ -99,10 +99,10 @@ open class Ganma : HttpSource(), ConfigurableSource {
     }
 
     final override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not used.")
+        throw UnsupportedOperationException()
 
     protected open class TypeFilter : Filter.Select<String>("Type", arrayOf("Popular", "Completed"))
 

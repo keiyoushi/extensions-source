@@ -260,9 +260,9 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     private fun oneShotChapterListSelector() = "div.chapter-list-element > ul.list-group li.list-group-item"
 
@@ -408,7 +408,7 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
             .build(),
     )
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/$MANGA_URL_CHUNK/$id", headers)
 

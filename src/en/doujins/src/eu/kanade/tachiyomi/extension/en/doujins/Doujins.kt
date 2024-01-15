@@ -60,7 +60,7 @@ class Doujins : HttpSource() {
         )
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         return MangasPage(

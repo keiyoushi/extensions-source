@@ -67,9 +67,9 @@ class OnePieceBerwarna : ParsedHttpSource() {
         return MangasPage(list, false)
     }
 
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
 
@@ -106,22 +106,22 @@ class OnePieceBerwarna : ParsedHttpSource() {
             }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
     // website doesn't have search
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 }

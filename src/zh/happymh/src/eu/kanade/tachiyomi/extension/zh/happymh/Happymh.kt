@@ -143,7 +143,7 @@ class Happymh : HttpSource(), ConfigurableSource {
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not Used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context

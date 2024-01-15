@@ -158,29 +158,29 @@ class Schlockmercenary : ParsedHttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException("Not used")
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException("Not used")
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
     companion object {
         const val defaultThumbnailUrl = "/static/img/logo.b6dacbb8.jpg"

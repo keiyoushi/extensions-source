@@ -75,8 +75,8 @@ class ZeurelScan : HttpSource() {
         MangasPage(mangaList.filter { it.title.contains(query, true) }, false),
     )
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     // Details
 
@@ -126,5 +126,5 @@ class ZeurelScan : HttpSource() {
             Page(i, "", element.attr("abs:src"))
         }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

@@ -283,7 +283,7 @@ class MangaPoisk : ParsedHttpSource() {
         CheckFilter("бара", "8119"),
     )
 
-    override fun imageUrlParse(document: Document) = throw Exception("Not Used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter = throw Exception("Not Used")
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 }

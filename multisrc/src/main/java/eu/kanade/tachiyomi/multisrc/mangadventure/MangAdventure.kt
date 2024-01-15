@@ -116,7 +116,7 @@ abstract class MangAdventure(
         }
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/reader/${manga.url}"
 

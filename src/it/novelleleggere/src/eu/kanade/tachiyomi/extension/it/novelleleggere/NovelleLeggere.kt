@@ -31,12 +31,12 @@ class NovelleLeggere : ParsedHttpSource() {
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = throw Exception("Latest Not Supported")
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String = throw Exception("Latest Not Supported")
-    override fun latestUpdatesSelector(): String = throw Exception("Latest Not Supported")
+    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
     override fun latestUpdatesFromElement(element: Element): SManga =
-        throw Exception("Latest Not Supported")
+        throw UnsupportedOperationException()
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
@@ -77,5 +77,5 @@ class NovelleLeggere : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String =
-        throw Exception("ImgURL Parse Not Used")
+        throw UnsupportedOperationException()
 }

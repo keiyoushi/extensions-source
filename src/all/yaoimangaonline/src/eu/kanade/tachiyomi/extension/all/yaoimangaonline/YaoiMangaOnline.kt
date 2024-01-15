@@ -103,7 +103,7 @@ class YaoiMangaOnline : ParsedHttpSource() {
         }
 
     override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun getFilterList() =
         FilterList(CategoryFilter(), TagFilter())

@@ -276,7 +276,7 @@ class InfinityScans : HttpSource() {
 
     // Image
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val pageHeaders = headersBuilder().apply {

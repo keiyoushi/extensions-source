@@ -96,7 +96,7 @@ open class MCCMS(
             }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("Not used.")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val id = getMangaId(manga.url)
@@ -112,7 +112,7 @@ open class MCCMS(
 
     protected open fun getMangaId(url: String) = url.substringAfterLast('/')
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used.")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter): Request =
         GET(baseUrl + chapter.url, pcHeaders)
@@ -126,7 +126,7 @@ open class MCCMS(
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page) = GET(page.imageUrl!!, pcHeaders)
 

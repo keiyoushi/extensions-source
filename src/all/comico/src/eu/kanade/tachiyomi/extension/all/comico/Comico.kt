@@ -188,10 +188,10 @@ open class Comico(
     ) = json.decodeFromJsonElement<List<T>>(this[key]).map(transform)
 
     override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used")
+        throw UnsupportedOperationException()
 
     companion object {
         private const val ANON_IP = "0.0.0.0"

@@ -280,8 +280,8 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
             }
             .sortedByDescending { it.date_upload }
     }
-    override fun chapterListSelector() = throw UnsupportedOperationException("Not Used")
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not Used")*/
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()*/
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)

@@ -174,7 +174,7 @@ abstract class ZManga(
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     open val hasProjectPage = false
 

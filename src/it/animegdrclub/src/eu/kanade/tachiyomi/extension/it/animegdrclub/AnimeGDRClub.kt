@@ -173,7 +173,7 @@ class AnimeGDRClub : ParsedHttpSource() {
     }
 
     override fun chapterListSelector() = ".capitoli_cont > a"
-    override fun chapterFromElement(element: Element) = throw Exception("Not Used")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
     //endregion
 
     //region PAGE loading

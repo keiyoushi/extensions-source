@@ -165,11 +165,11 @@ abstract class ReaderFront(
     private inline val JsonElement.content get() = jsonPrimitive.content
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException("Not used!")
+        throw UnsupportedOperationException()
 }

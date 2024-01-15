@@ -312,8 +312,8 @@ open class NineNineNineHentai(
 
     private val SharedPreferences.shortTitle get() = getBoolean(PREF_SHORT_TITLE, false)
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException("Not Used")
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not Used")
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private const val size = 20

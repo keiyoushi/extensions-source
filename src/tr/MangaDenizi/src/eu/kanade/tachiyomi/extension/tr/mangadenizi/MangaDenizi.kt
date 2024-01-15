@@ -69,7 +69,7 @@ class MangaDenizi : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/search?query=$query", headers)
 
     override fun searchMangaNextPageSelector() = "Unused"
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Unused")
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage {
         val mangaListJson = Json.decodeFromString<SearchMangaJson>(response.body.string())
@@ -120,7 +120,7 @@ class MangaDenizi : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not Used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 
