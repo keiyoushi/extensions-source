@@ -35,7 +35,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: adopt
+          distribution: temurin
 
       - name: Generate multisrc sources
         uses: gradle/gradle-build-action@v2
@@ -82,7 +82,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: adopt
+          distribution: temurin
 
       - name: Prepare signing key
         run: |
@@ -131,7 +131,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: adopt
+          distribution: temurin
 
       - name: Prepare signing key
         run: |
@@ -176,7 +176,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: adopt
+          distribution: temurin
 
       - name: Checkout main branch
         uses: actions/checkout@v4
