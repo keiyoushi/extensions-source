@@ -77,9 +77,11 @@ interface ThemeSourceGenerator {
                 |    extVersionCode = ${baseVersionCode + source.overrideVersionCode + multisrcLibraryVersion}
                 |    ${if (source.isNsfw) "isNsfw = true\n" else ""}
                 |}
+                |
+                |apply from: "${'$'}rootDir/common.gradle"
+                |
                 |$defaultAdditionalGradleText
                 |$additionalGradleOverrideText
-                |apply from: "${'$'}rootDir/common.gradle"
                 |
                 |android {
                 |    defaultConfig {
