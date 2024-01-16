@@ -1,17 +1,12 @@
-def theme = project(':lib-multisrc:heancms')
-
 ext {
     extName = 'Perf Scan'
     extClass = '.PerfScan'
-    extVersionCode = theme.baseVersionCode + 0
+    theme = 'heancms'
+    extVersionCode = 0
     isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation theme
-}
 
 android {
     defaultConfig {

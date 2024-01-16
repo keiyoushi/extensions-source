@@ -1,17 +1,12 @@
-def theme = project(':lib-multisrc:heancms')
-
 ext {
     extName = 'Temple Scan'
     extClass = '.TempleScan'
-    extVersionCode = theme.baseVersionCode + 16
+    theme = 'heancms'
+    extVersionCode = 16
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation theme
-}
 
 android {
     defaultConfig {

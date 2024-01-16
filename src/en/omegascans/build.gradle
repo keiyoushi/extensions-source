@@ -1,17 +1,12 @@
-def theme = project(':lib-multisrc:heancms')
-
 ext {
     extName = 'Omega Scans'
     extClass = '.OmegaScans'
-    extVersionCode = theme.baseVersionCode + 18
+    theme = "heancms"
+    extVersionCode = 18
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation theme
-}
 
 android {
     defaultConfig {

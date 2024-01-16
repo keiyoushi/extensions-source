@@ -3,6 +3,11 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
 apply plugin: 'org.jmailen.kotlinter'
 
+Project theme = null
+if (project.properties.getOrDefault("theme", "") != "") {
+    theme = project(":lib-multisrc:${project.theme}")
+}
+
 android {
     compileSdk AndroidConfig.compileSdk
 
@@ -20,8 +25,12 @@ android {
         minSdk AndroidConfig.minSdk
         targetSdk AndroidConfig.targetSdk
         applicationIdSuffix project.parent.name + "." + project.name
-        versionCode extVersionCode
-        versionName project.ext.properties.getOrDefault("libVersion", "1.4") + ".$extVersionCode"
+        def version = extVersionCode
+        if (theme != null) {
+            version += theme.baseVersionCode
+        }
+        versionCode version
+        versionName project.ext.properties.getOrDefault("libVersion", "1.4") + ".$version"
         base {
             archivesName = "tachiyomi-$applicationIdSuffix-v$versionName"
         }
@@ -84,6 +93,11 @@ repositories {
 dependencies {
     implementation(project(":core"))
     compileOnly(libs.bundles.common)
+
+    if (theme != null) {
+        implementation(theme)
+    }
+
 }
 
 tasks.register("writeManifestFile") {

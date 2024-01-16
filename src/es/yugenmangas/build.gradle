@@ -1,17 +1,12 @@
-def theme = project(':lib-multisrc:heancms')
-
 ext {
     extName = 'YugenMangas'
     extClass = '.YugenMangas'
-    extVersionCode = theme.baseVersionCode + 9
+    theme = 'heancms'
+    extVersionCode = 9
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation theme
-}
 
 android {
     defaultConfig {
