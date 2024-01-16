@@ -35,7 +35,7 @@ dependencies {
     // Note that this does not mean that generated sources are going to
     // implement them too; this is just to be able to compile and generate sources.
     rootProject.subprojects
-        .filter { it.path.startsWith(":lib") }
+        .filter { it.path.startsWith(":lib:") }
         .forEach(::implementation)
 }
 

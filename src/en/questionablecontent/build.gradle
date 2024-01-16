@@ -7,5 +7,5 @@ ext {
 apply from: "$rootDir/common.gradle"
 
 dependencies {
-    implementation(project(':lib-textinterceptor'))
+    implementation(project(':lib:textinterceptor'))
 }
