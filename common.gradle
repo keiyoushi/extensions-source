@@ -94,6 +94,11 @@ dependencies {
     if (theme != null) implementation(theme)
     implementation(project(":core"))
     compileOnly(libs.bundles.common)
+
+    if (theme != null) {
+        implementation(theme)
+    }
+
 }
 
 tasks.register("writeManifestFile") {
