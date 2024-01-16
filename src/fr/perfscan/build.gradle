@@ -1,8 +1,7 @@
-def theme = project(':heancms-multisrc')
+def theme = project(':lib-multisrc:heancms')
 
 ext {
     extName = 'Perf Scan'
-    pkgNameSuffix = 'fr.perfscan'
     extClass = '.PerfScan'
     extVersionCode = theme.baseVersionCode + 0
     isNsfw = false

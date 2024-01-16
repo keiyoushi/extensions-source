@@ -1,8 +1,7 @@
-def theme = project(':heancms-multisrc')
+def theme = project(':lib-multisrc:heancms')
 
 ext {
     extName = 'YugenMangas'
-    pkgNameSuffix = 'es.yugenmangas'
     extClass = '.YugenMangas'
     extVersionCode = theme.baseVersionCode + 9
     isNsfw = true

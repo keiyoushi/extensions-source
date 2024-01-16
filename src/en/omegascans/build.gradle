@@ -1,8 +1,7 @@
-def theme = project(':heancms-multisrc')
+def theme = project(':lib-multisrc:heancms')
 
 ext {
     extName = 'Omega Scans'
-    pkgNameSuffix = 'en.omegascans'
     extClass = '.OmegaScans'
     extVersionCode = theme.baseVersionCode + 18
     isNsfw = true

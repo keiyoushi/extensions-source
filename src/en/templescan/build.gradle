@@ -1,8 +1,7 @@
-def theme = project(':heancms-multisrc')
+def theme = project(':lib-multisrc:heancms')
 
 ext {
     extName = 'Temple Scan'
-    pkgNameSuffix = 'en.templescan'
     extClass = '.TempleScan'
     extVersionCode = theme.baseVersionCode + 16
     isNsfw = true
