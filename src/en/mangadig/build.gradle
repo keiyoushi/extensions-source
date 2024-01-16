@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaDig'
+    extClass = '.MangaDig'
+    theme = "jiayapopola"
+    extVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
