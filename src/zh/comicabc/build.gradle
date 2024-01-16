@@ -1,6 +1,5 @@
 ext {
     extName = 'Comicabc'
-    pkgNameSuffix = 'zh.comicabc'
     extClass = '.Comicabc'
     extVersionCode = 1
 }

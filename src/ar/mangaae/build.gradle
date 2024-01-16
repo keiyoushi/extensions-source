@@ -1,6 +1,5 @@
 ext {
     extName = 'Manga.ae'
-    pkgNameSuffix = 'ar.mangaae'
     extClass = '.MangaAe'
     extVersionCode = 11
 }

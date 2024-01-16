@@ -1,6 +1,5 @@
 ext {
     extName = 'Nux Scans'
-    pkgNameSuffix = 'en.nuxscans'
     extClass = '.NuxScans'
     extVersionCode = 1
 }

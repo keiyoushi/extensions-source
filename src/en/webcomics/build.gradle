@@ -1,6 +1,5 @@
 ext {
     extName = 'Webcomics'
-    pkgNameSuffix = 'en.webcomics'
     extClass = '.Webcomics'
     extVersionCode = 3
 }

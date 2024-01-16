@@ -1,6 +1,5 @@
 ext {
     extName = 'Toomics'
-    pkgNameSuffix = 'all.toomics'
     extClass = '.ToomicsFactory'
     extVersionCode = 7
 }

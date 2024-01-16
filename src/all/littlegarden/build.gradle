@@ -1,6 +1,5 @@
 ext {
     extName = 'Little Garden'
-    pkgNameSuffix = 'all.littlegarden'
     extClass = '.LittleGarden'
     extVersionCode = 2
 }

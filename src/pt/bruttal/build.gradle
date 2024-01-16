@@ -1,6 +1,5 @@
 ext {
     extName = 'Bruttal'
-    pkgNameSuffix = 'pt.bruttal'
     extClass = '.Bruttal'
     extVersionCode = 6
 }

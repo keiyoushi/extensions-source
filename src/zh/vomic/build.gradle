@@ -1,6 +1,5 @@
 ext {
     extName = 'vomic'
-    pkgNameSuffix = 'zh.vomic'
     extClass = '.Vomic'
     extVersionCode = 4
 }

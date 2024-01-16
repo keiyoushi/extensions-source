@@ -1,6 +1,5 @@
 ext {
     extName = 'CloudRecess'
-    pkgNameSuffix = 'en.cloudrecess'
     extClass = '.CloudRecess'
     extVersionCode = 2
     isNsfw = true

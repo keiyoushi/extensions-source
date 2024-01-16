@@ -1,6 +1,5 @@
 ext {
     extName = 'Rmanga.app'
-    pkgNameSuffix = 'en.rmanga'
     extClass = '.Rmanga'
     extVersionCode = 2
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Baimangu (Darpou)'
-    pkgNameSuffix = 'zh.baimangu'
     extClass = '.Baimangu'
     extVersionCode = 3
 }

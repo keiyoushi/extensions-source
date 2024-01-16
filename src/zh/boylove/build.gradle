@@ -1,6 +1,5 @@
 ext {
     extName = 'BoyLove'
-    pkgNameSuffix = 'zh.boylove'
     extClass = '.BoyLove'
     extVersionCode = 9
     isNsfw = true

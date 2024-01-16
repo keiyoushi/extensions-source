@@ -1,6 +1,5 @@
 ext {
     extName = 'FMTEAM'
-    pkgNameSuffix = 'fr.fmteam'
     extClass = '.FMTEAM'
     extVersionCode = 2
 }

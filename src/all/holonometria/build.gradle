@@ -1,6 +1,5 @@
 ext {
     extName = 'HOLONOMETRIA'
-    pkgNameSuffix = 'all.holonometria'
     extClass = '.HolonometriaFactory'
     extVersionCode = 1
 }

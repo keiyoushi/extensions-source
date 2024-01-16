@@ -1,6 +1,5 @@
 ext {
     extName = 'Saikai Scan'
-    pkgNameSuffix = 'pt.saikaiscan'
     extClass = '.SaikaiScan'
     extVersionCode = 11
 }

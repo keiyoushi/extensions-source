@@ -1,6 +1,5 @@
 ext {
     extName = 'HQ Now!'
-    pkgNameSuffix = 'pt.hqnow'
     extClass = '.HQNow'
     extVersionCode = 7
 }

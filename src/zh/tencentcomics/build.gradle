@@ -1,6 +1,5 @@
 ext {
     extName = 'Tencent Comics (ac.qq.com)'
-    pkgNameSuffix = 'zh.tencentcomics'
     extClass = '.TencentComics'
     extVersionCode = 6
 }

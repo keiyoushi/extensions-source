@@ -1,6 +1,5 @@
 ext {
     extName = 'TuMangaOnline'
-    pkgNameSuffix = 'es.tumangaonline'
     extClass = '.TuMangaOnline'
     extVersionCode = 48
     isNsfw = true

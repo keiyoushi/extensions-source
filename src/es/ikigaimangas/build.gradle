@@ -1,6 +1,5 @@
 ext {
     extName = 'Ikigai Mangas'
-    pkgNameSuffix = 'es.ikigaimangas'
     extClass = '.IkigaiMangas'
     extVersionCode = 1
     isNsfw = true

@@ -1,6 +1,5 @@
 ext {
     extName = 'Loading Artist'
-    pkgNameSuffix = 'en.loadingartist'
     extClass = '.LoadingArtist'
     extVersionCode = 2
 }

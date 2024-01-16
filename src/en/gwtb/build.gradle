@@ -1,6 +1,5 @@
 ext {
     extName = 'Gone with the Blastwave'
-    pkgNameSuffix = 'en.gwtb'
     extClass = '.GWTB'
     extVersionCode = 2
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Yomu Mangás'
-    pkgNameSuffix = 'pt.yomumangas'
     extClass = '.YomuMangas'
     extVersionCode = 3
     isNsfw = true
