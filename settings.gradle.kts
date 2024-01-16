@@ -3,8 +3,7 @@ include(":core")
 // Load all modules under /lib
 File(rootDir, "lib").eachDir {
     val libName = it.name
-    include(":lib-$libName")
-    project(":lib-$libName").projectDir = File("lib/$libName")
+    include("lib:$libName")
 }
 
 if (System.getenv("CI") == null || System.getenv("CI_MODULE_GEN") == "true") {
