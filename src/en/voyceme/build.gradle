@@ -1,6 +1,5 @@
 ext {
     extName = 'Voyce.Me'
-    pkgNameSuffix = 'en.voyceme'
     extClass = '.VoyceMe'
     extVersionCode = 3
 }

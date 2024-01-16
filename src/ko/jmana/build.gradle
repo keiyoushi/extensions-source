@@ -1,6 +1,5 @@
 ext {
     extName = 'JMana'
-    pkgNameSuffix = 'ko.jmana'
     extClass = '.JMana'
     extVersionCode = 15
 }

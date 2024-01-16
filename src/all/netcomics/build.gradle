@@ -1,6 +1,5 @@
 ext {
     extName = 'NETCOMICS'
-    pkgNameSuffix = 'all.netcomics'
     extClass = '.NetcomicsFactory'
     extVersionCode = 3
     isNsfw = true

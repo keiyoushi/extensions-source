@@ -1,6 +1,5 @@
 ext {
     extName = 'Traducciones Amistosas'
-    pkgNameSuffix = 'es.nartag'
     extClass = '.Nartag'
     extVersionCode = 2
     isNsfw = true

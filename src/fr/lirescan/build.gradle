@@ -1,6 +1,5 @@
 ext {
     extName = 'LireScan'
-    pkgNameSuffix = 'fr.lirescan'
     extClass = '.LireScan'
     extVersionCode = 1
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Hentaidexy'
-    pkgNameSuffix = 'en.hentaidexy'
     extClass = '.Hentaidexy'
     extVersionCode = 32
     isNsfw = true

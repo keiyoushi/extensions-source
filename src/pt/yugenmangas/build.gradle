@@ -1,6 +1,5 @@
 ext {
     extName = 'Yugen Mangás'
-    pkgNameSuffix = 'pt.yugenmangas'
     extClass = '.YugenMangas'
     extVersionCode = 38
 }

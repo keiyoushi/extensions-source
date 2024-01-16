@@ -1,6 +1,5 @@
 ext {
     extName = 'RE Manga'
-    pkgNameSuffix = 'ar.remanga'
     extClass = '.REManga'
     extVersionCode = 2
 }

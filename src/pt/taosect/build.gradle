@@ -1,6 +1,5 @@
 ext {
     extName = 'Tao Sect'
-    pkgNameSuffix = 'pt.taosect'
     extClass = '.TaoSect'
     extVersionCode = 19
     isNsfw = true

@@ -1,6 +1,5 @@
 ext {
     extName = 'TruyenQQ'
-    pkgNameSuffix = 'vi.truyenqq'
     extClass = '.TruyenQQ'
     extVersionCode = 12
 }

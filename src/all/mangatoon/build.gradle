@@ -1,6 +1,5 @@
 ext {
     extName = 'MangaToon (Limited)'
-    pkgNameSuffix = 'all.mangatoon'
     extClass = '.MangaToonFactory'
     extVersionCode = 5
 }

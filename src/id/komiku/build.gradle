@@ -1,6 +1,5 @@
 ext {
     extName = 'Komiku'
-    pkgNameSuffix = 'id.komiku'
     extClass = '.Komiku'
     extVersionCode = 17
 }

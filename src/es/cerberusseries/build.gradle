@@ -1,6 +1,5 @@
 ext {
     extName = 'Cerberus Series'
-    pkgNameSuffix = 'es.cerberusseries'
     extClass = '.CerberusSeries'
     extVersionCode = 1
     isNsfw = false

@@ -1,6 +1,5 @@
 ext {
     extName = 'Schlock Mercenary'
-    pkgNameSuffix = 'en.schlockmercenary'
     extClass = '.Schlockmercenary'
     extVersionCode = 1
 }

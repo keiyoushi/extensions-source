@@ -1,6 +1,5 @@
 ext {
     extName = 'Yaoi Manga Online'
-    pkgNameSuffix = 'all.yaoimangaonline'
     extClass = '.YaoiMangaOnline'
     extVersionCode = 3
     isNsfw = true

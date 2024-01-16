@@ -1,6 +1,5 @@
 ext {
     extName = 'Tappytoon'
-    pkgNameSuffix = 'all.tappytoon'
     extClass = '.TappytoonFactory'
     extVersionCode = 7
     isNsfw = true

@@ -1,6 +1,5 @@
 ext {
     extName = 'Hennojin'
-    pkgNameSuffix = 'all.hennojin'
     extClass = '.HennojinFactory'
     extVersionCode = 1
     isNsfw = true

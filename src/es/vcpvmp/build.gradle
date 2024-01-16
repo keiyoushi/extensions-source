@@ -1,6 +1,5 @@
 ext {
     extName = 'VCPVMP'
-    pkgNameSuffix = "es.vcpvmp"
     extClass = '.VCPVMPFactory'
     extVersionCode = 9
     isNsfw = true

@@ -1,6 +1,5 @@
 ext {
     extName = 'aurora'
-    pkgNameSuffix = 'en.aurora'
     extClass = '.Aurora'
     extVersionCode = 4
 }

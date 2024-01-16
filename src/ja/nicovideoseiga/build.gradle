@@ -1,6 +1,5 @@
 ext {
     extName = 'Nicovideo Seiga'
-    pkgNameSuffix = 'ja.nicovideoseiga'
     extClass = '.NicovideoSeiga'
     extVersionCode = 2
 }

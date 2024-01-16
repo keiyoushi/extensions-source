@@ -1,6 +1,5 @@
 ext {
     extName = 'Oglaf'
-    pkgNameSuffix = 'en.oglaf'
     extClass = '.Oglaf'
     extVersionCode = 3
     isNsfw = true

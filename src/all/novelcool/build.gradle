@@ -1,6 +1,5 @@
 ext {
     extName = 'NovelCool'
-    pkgNameSuffix = 'all.novelcool'
     extClass = '.NovelCoolFactory'
     extVersionCode = 3
     isNsfw = true
