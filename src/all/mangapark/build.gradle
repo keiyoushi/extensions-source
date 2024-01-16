@@ -1,6 +1,5 @@
 ext {
     extName = 'MangaPark'
-    pkgNameSuffix = 'all.mangapark'
     extClass = '.MangaParkFactory'
     extVersionCode = 19
     isNsfw = true

@@ -1,6 +1,5 @@
 ext {
     extName = '6Manhua / Qixi Manhua'
-    pkgNameSuffix = 'zh.sixmh'
     extClass = '.SixMH'
     extVersionCode = 9
 }

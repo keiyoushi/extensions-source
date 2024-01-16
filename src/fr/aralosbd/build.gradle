@@ -1,6 +1,5 @@
 ext {
     extName = 'AralosBD'
-    pkgNameSuffix = 'fr.aralosbd'
     extClass = '.AralosBD'
     extVersionCode = 6
 }

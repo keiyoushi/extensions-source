@@ -1,6 +1,5 @@
 ext {
     extName = 'Doujins'
-    pkgNameSuffix = 'en.doujins'
     extClass = '.Doujins'
     extVersionCode = 5
     isNsfw = true

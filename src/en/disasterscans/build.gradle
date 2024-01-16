@@ -1,6 +1,5 @@
 ext {
     extName = 'Disaster Scans'
-    pkgNameSuffix = 'en.disasterscans'
     extClass = '.DisasterScans'
     extVersionCode = 32
 }

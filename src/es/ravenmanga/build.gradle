@@ -1,6 +1,5 @@
 ext {
     extName = 'RavenManga'
-    pkgNameSuffix = 'es.ravenmanga'
     extClass = '.RavenManga'
     extVersionCode = 1
     isNsfw = false

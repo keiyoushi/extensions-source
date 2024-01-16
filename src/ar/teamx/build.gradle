@@ -1,6 +1,5 @@
 ext {
     extName = 'Team X'
-    pkgNameSuffix = 'ar.teamx'
     extClass = '.TeamX'
     extVersionCode = 16
     isNsfw = false

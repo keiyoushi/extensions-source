@@ -1,6 +1,5 @@
 ext {
     extName = 'Questionable Content'
-    pkgNameSuffix = 'en.questionablecontent'
     extClass = '.QuestionableContent'
     extVersionCode = 7
 }

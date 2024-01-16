@@ -1,6 +1,5 @@
 ext {
     extName = 'Scantrad Union'
-    pkgNameSuffix = 'fr.scantradunion'
     extClass = '.ScantradUnion'
     extVersionCode = 2
 }

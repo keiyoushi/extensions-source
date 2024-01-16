@@ -1,6 +1,5 @@
 ext {
     extName = 'Naver Comic'
-    pkgNameSuffix = 'ko.navercomic'
     extClass = '.NaverComicFactory'
     extVersionCode = 4
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Happymh'
-    pkgNameSuffix = 'zh.happymh'
     extClass = '.Happymh'
     extVersionCode = 6
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Cyanide & Happiness'
-    pkgNameSuffix = 'en.explosm'
     extClass = '.Explosm'
     extVersionCode = 3
 }

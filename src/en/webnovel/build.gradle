@@ -1,6 +1,5 @@
 ext {
     extName = 'WebNovel'
-    pkgNameSuffix = 'en.webnovel'
     extClass = '.WebNovel'
     extVersionCode = 9
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Toonkor'
-    pkgNameSuffix = 'ko.toonkor'
     extClass = '.Toonkor'
     extVersionCode = 4
 }

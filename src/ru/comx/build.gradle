@@ -1,6 +1,5 @@
 ext {
     extName = 'Com-X'
-    pkgNameSuffix = 'ru.comx'
     extClass = '.ComX'
     extVersionCode = 27
 }

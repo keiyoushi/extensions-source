@@ -1,6 +1,5 @@
 ext {
     extName = 'Iqiyi'
-    pkgNameSuffix = 'zh.iqiyi'
     extClass = '.Iqiyi'
     extVersionCode = 1
 }

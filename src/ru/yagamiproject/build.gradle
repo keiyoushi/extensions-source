@@ -1,6 +1,5 @@
 ext {
     extName = 'YagamiProject'
-    pkgNameSuffix = 'ru.yagamiproject'
     extClass = '.YagamiProject'
     extVersionCode = 5
 }

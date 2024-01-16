@@ -1,6 +1,5 @@
 ext {
     extName = 'Zero Scans'
-    pkgNameSuffix = 'en.zeroscans'
     extClass = '.ZeroScans'
     extVersionCode = 7
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Akuma'
-    pkgNameSuffix = 'all.akuma'
     extClass = '.Akuma'
     extVersionCode = 1
     isNsfw = true

@@ -1,6 +1,5 @@
 ext {
     extName = 'BlogTruyen'
-    pkgNameSuffix = 'vi.blogtruyen'
     extClass = '.BlogTruyen'
     extVersionCode = 17
     isNsfw = true

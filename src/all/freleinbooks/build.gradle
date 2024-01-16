@@ -1,6 +1,5 @@
 ext {
     extName = 'Frelein Books'
-    pkgNameSuffix = 'all.freleinbooks'
     extClass = '.FreleinBooks'
     extVersionCode = 1
     isNsfw = false

@@ -1,6 +1,5 @@
 ext {
     extName = 'Temple Scan'
-    pkgNameSuffix = 'es.templescanesp'
     extClass = '.TempleScanEsp'
     extVersionCode = 33
     isNsfw = true

@@ -1,6 +1,5 @@
 ext {
     extName = 'Bakai'
-    pkgNameSuffix = 'pt.bakai'
     extClass = '.Bakai'
     extVersionCode = 1
     isNsfw = true

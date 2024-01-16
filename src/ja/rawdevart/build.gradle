@@ -1,6 +1,5 @@
 ext {
     extName = 'Rawdevart'
-    pkgNameSuffix = 'ja.rawdevart'
     extClass = '.Rawdevart'
     extVersionCode = 4
 }

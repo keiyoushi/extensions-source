@@ -1,6 +1,5 @@
 ext {
     extName = 'Kiutaku'
-    pkgNameSuffix = 'en.kiutaku'
     extClass = '.Kiutaku'
     extVersionCode = 1
     isNsfw = true

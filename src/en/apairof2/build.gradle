@@ -1,6 +1,5 @@
 ext {
     extName = 'A Pair of 2+'
-    pkgNameSuffix = 'en.apairof2'
     extClass = '.APairOf2'
     extVersionCode = 31
 }

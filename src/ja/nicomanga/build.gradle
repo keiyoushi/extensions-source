@@ -1,6 +1,5 @@
 ext {
     extName = 'Nicomanga'
-    pkgNameSuffix = 'ja.nicomanga'
     extClass = '.Nicomanga'
     extVersionCode = 2
 }

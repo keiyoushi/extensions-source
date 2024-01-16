@@ -1,6 +1,5 @@
 ext {
     extName = 'I Roved Out'
-    pkgNameSuffix = 'en.irovedout'
     extClass = '.IRovedOut'
     extVersionCode = 3
     isNsfw = true

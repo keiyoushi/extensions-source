@@ -1,6 +1,5 @@
 ext {
     extName = 'Purple Cress'
-    pkgNameSuffix = 'en.purplecress'
     extClass = '.PurpleCress'
     extVersionCode = 3
 }

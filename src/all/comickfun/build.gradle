@@ -1,6 +1,5 @@
 ext {
     extName = 'Comick'
-    pkgNameSuffix = 'all.comickfun'
     extClass = '.ComickFunFactory'
     extVersionCode = 41
     isNsfw = true

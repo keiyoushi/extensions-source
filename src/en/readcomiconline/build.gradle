@@ -1,6 +1,5 @@
 ext {
     extName = 'ReadComicOnline'
-    pkgNameSuffix = 'en.readcomiconline'
     extClass = '.Readcomiconline'
     extVersionCode = 18
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Manhuaren'
-    pkgNameSuffix = 'zh.manhuaren'
     extClass = '.Manhuaren'
     extVersionCode = 14
 }

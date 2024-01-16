@@ -1,6 +1,5 @@
 ext {
     extName = 'Simply Hentai'
-    pkgNameSuffix = 'all.simplyhentai'
     extClass = '.SimplyHentaiFactory'
     extVersionCode = 6
     isNsfw = true

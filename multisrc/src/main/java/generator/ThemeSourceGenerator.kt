@@ -71,7 +71,6 @@ interface ThemeSourceGenerator {
                 |// THIS FILE IS AUTO-GENERATED; DO NOT EDIT
                 |ext {
                 |    extName = '${source.name}'
-                |    pkgNameSuffix = '${pkgNameSuffix(source, ".")}'
                 |    extClass = '.${source.className}'
                 |    extFactory = '$themePkg'
                 |    extVersionCode = ${baseVersionCode + source.overrideVersionCode + multisrcLibraryVersion}

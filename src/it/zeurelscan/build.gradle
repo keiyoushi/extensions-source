@@ -1,6 +1,5 @@
 ext {
     extName = 'ZeurelScan'
-    pkgNameSuffix = 'it.zeurelscan'
     extClass = '.ZeurelScan'
     extVersionCode = 1
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Commit Strip'
-    pkgNameSuffix = 'all.commitstrip'
     extClass = '.CommitStripFactory'
     extVersionCode = 3
 }

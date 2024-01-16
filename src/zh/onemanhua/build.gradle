@@ -1,6 +1,5 @@
 ext {
     extName = 'COLAMANGA'
-    pkgNameSuffix = 'zh.onemanhua'
     extClass = '.Onemanhua'
     extVersionCode = 14
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'HentaiHere'
-    pkgNameSuffix = 'en.hentaihere'
     extClass = '.HentaiHere'
     extVersionCode = 4
     isNsfw = true

@@ -1,6 +1,5 @@
 ext {
     extName = 'Oppai Stream'
-    pkgNameSuffix = 'en.oppaistream'
     extClass = '.OppaiStream'
     extVersionCode = 1
     isNsfw = true

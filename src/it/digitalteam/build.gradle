@@ -1,6 +1,5 @@
 ext {
     extName = 'DigitalTeam'
-    pkgNameSuffix = 'it.digitalteam'
     extClass = '.DigitalTeam'
     extVersionCode = 3
 }

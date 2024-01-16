@@ -1,6 +1,5 @@
 ext {
     extName = 'InfinityScans'
-    pkgNameSuffix = 'en.infinityscans'
     extClass = '.InfinityScans'
     extVersionCode = 1
     isNsfw = true

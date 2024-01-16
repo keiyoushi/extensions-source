@@ -1,6 +1,5 @@
 ext {
     extName = 'Niceoppai'
-    pkgNameSuffix = 'th.niceoppai'
     extClass = '.Niceoppai'
     extVersionCode = 28
     isNsfw = true

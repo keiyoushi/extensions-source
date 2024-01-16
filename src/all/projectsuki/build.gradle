@@ -1,6 +1,5 @@
 ext {
     extName = 'Project Suki'
-    pkgNameSuffix = 'all.projectsuki'
     extClass = '.ProjectSuki'
     extVersionCode = 3
 }

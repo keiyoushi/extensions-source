@@ -1,6 +1,5 @@
 ext {
     extName = 'Luscious'
-    pkgNameSuffix = 'all.luscious'
     extClass = '.LusciousFactory'
     extVersionCode = 19
     isNsfw = true

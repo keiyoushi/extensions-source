@@ -1,6 +1,5 @@
 ext {
     extName = 'Madokami'
-    pkgNameSuffix = 'en.madokami'
     extClass = '.Madokami'
     extVersionCode = 8
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'IMHentai'
-    pkgNameSuffix = 'all.imhentai'
     extClass = '.IMHentaiFactory'
     extVersionCode = 14
     isNsfw = true

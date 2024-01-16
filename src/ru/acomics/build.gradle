@@ -1,6 +1,5 @@
 ext {
     extName = 'AComics'
-    pkgNameSuffix = 'ru.acomics'
     extClass = '.AComics'
     extVersionCode = 3
 }

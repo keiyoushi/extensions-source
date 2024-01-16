@@ -1,6 +1,5 @@
 ext {
     extName = 'Comic Newtype'
-    pkgNameSuffix = 'ja.comicnewtype'
     extClass = '.ComicNewtype'
     extVersionCode = 2
 }

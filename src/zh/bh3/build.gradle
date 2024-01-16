@@ -1,6 +1,5 @@
 ext {
     extName = 'BH3'
-    pkgNameSuffix = 'zh.bh3'
     extClass = '.BH3'
     extVersionCode = 3
 }

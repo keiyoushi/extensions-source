@@ -1,6 +1,5 @@
 ext {
     extName = 'Vinne Veritas - CCC'
-    pkgNameSuffix = 'all.vinnieVeritas'
     extClass = '.vinnieVeritasFactory'
     extVersionCode = 2
 }

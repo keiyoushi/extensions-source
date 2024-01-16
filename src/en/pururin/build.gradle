@@ -1,6 +1,5 @@
 ext {
     extName = 'Pururin'
-    pkgNameSuffix = 'en.pururin'
     extClass = '.Pururin'
     extVersionCode = 6
     isNsfw = true

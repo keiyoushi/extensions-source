@@ -1,6 +1,5 @@
 ext {
     extName = 'Dynasty'
-    pkgNameSuffix = 'en.dynasty'
     extClass = '.DynastyFactory'
     extVersionCode = 23
 }

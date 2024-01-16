@@ -1,6 +1,5 @@
 ext {
     extName = 'Baozimh.org'
-    pkgNameSuffix = 'zh.baozimhorg'
     extClass = '.BaozimhOrg'
     extVersionCode = 28
 }

@@ -1,6 +1,5 @@
 ext {
     extName = 'Zerobyw'
-    pkgNameSuffix = 'zh.zerobyw'
     extClass = '.Zerobyw'
     extVersionCode = 17
 }

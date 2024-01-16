@@ -1,6 +1,5 @@
 ext {
     extName = 'The Library of Ohara'
-    pkgNameSuffix = 'all.thelibraryofohara'
     extClass = '.TheLibraryOfOharaFactory'
     extVersionCode = 1
 }

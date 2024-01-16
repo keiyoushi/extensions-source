@@ -1,6 +1,5 @@
 ext {
     extName = 'Simply Cosplay'
-    pkgNameSuffix = 'all.simplycosplay'
     extClass = '.SimplyCosplay'
     extVersionCode = 1
     isNsfw = true

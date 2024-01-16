@@ -1,6 +1,5 @@
 ext {
     extName = 'WNACG'
-    pkgNameSuffix = 'zh.wnacg'
     extClass = '.wnacg'
     extVersionCode = 14
     isNsfw = true

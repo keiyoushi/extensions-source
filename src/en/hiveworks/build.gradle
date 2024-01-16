@@ -1,6 +1,5 @@
 ext {
     extName = 'Hiveworks Comics'
-    pkgNameSuffix = 'en.hiveworks'
     extClass = '.Hiveworks'
     extVersionCode = 8
 }

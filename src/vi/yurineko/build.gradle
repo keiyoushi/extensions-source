@@ -1,6 +1,5 @@
 ext {
     extName = 'YuriNeko'
-    pkgNameSuffix = 'vi.yurineko'
     extClass = '.YuriNeko'
     extVersionCode = 3
     isNsfw = true

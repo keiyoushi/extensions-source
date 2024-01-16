@@ -1,6 +1,5 @@
 ext {
     extName = 'Grrl Power Comic'
-    pkgNameSuffix = 'en.grrlpower'
     extClass = '.GrrlPower'
     extVersionCode = 2
 }
