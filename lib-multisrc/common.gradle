@@ -9,6 +9,8 @@ android {
         targetSdkVersion AndroidConfig.targetSdk
     }
 
+    namespace "eu.kanade.tachiyomi.multisrc.${project.name}"
+
     buildTypes {
         release {
             minifyEnabled false
