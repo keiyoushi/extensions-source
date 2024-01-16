@@ -1,0 +1,29 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+android {
+    defaultConfig {
+        compileSdk AndroidConfig.compileSdk
+        minSdkVersion AndroidConfig.minSdk
+        targetSdkVersion AndroidConfig.targetSdk
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    kotlinOptions {
+        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly libs.bundles.common
+}

@@ -1,0 +1,9 @@
+apply from: "$rootDir/lib-multisrc/common.gradle"
+
+android {
+    namespace "eu.kanade.tachiyomi.multisrc.heancms"
+}
+
+ext {
+    baseVersionCode = 20
+}
