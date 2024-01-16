@@ -1,7 +1,11 @@
 ext {
     extName = 'Rizz Comic'
     extClass = '.RizzComic'
-    extVersionCode = 1
+    extVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:randomua"))
+}
