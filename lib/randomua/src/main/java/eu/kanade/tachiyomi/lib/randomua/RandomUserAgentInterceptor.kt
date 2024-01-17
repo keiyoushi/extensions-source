@@ -85,7 +85,7 @@ private class RandomUserAgentInterceptor(
     }
 
     companion object {
-        private const val UA_DB_URL = "https://tachiyomiorg.github.io/user-agents/user-agents.json"
+        private const val UA_DB_URL = "https://keiyoushi.github.io/user-agents/user-agents.json"
     }
 }
 
