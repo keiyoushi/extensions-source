@@ -133,7 +133,7 @@ class SlimeRead : HttpSource() {
                 scanlator = it.scan?.scan_name
                 url = "/book_cap_units?manga_id=$mangaId&cap=${it.number}"
             }
-        }
+        }.reversed()
     }
 
     private fun parseChapterNumber(number: Float): String {
