@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.slimeread
 
+import eu.kanade.tachiyomi.extension.pt.slimeread.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.LatestResponseDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.MangaInfoDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.PopularMangaDto
@@ -118,8 +119,37 @@ class SlimeRead : HttpSource() {
     }
 
     // ============================== Chapters ==============================
+    override fun chapterListRequest(manga: SManga) =
+        GET("$API_URL/book_cap_units_all?manga_id=${manga.url.substringAfterLast("/")}", headers)
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException()
+        val items = response.parseAs<List<ChapterDto>>()
+        val mangaId = response.request.url.queryParameter("manga_id")!!
+        return items.map {
+            SChapter.create().apply {
+                name = "Cap " + parseChapterNumber(it.number)
+                chapter_number = it.number
+                scanlator = it.scan?.scan_name
+                url = "/book_cap_units?manga_id=$mangaId&cap=${it.number}"
+            }
+        }
+    }
+
+    private fun parseChapterNumber(number: Float): String {
+        val cap = number + 1F
+        val num = "%.2f".format(cap)
+            .let { if (cap < 10F) "0$it" else it }
+            .replace(",00", "")
+            .replace(",", ".")
+        return num
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val id = url.queryParameter("manga_id")!!
+        val cap = url.queryParameter("cap")!!.toFloat()
+        val num = parseChapterNumber(cap)
+        return "$baseUrl/ler/$id/cap-$num"
     }
 
     // =============================== Pages ================================

@@ -42,3 +42,12 @@ data class MangaInfoDto(
 
     val categories = _categories.map { it.categories.name }
 }
+
+@Serializable
+data class ChapterDto(
+    @SerialName("btc_cap") val number: Float,
+    val scan: ScanDto?,
+) {
+    @Serializable
+    data class ScanDto(val scan_name: String?)
+}
