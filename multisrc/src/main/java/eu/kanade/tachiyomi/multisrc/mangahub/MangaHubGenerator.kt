@@ -9,13 +9,13 @@ class MangaHubGenerator : ThemeSourceGenerator {
 
     override val themeClass = "MangaHub"
 
-    override val baseVersionCode: Int = 22
+    override val baseVersionCode: Int = 23
 
     override val sources = listOf(
 //        SingleLang("1Manga.co", "https://1manga.co", "en", isNsfw = true, className = "OneMangaCo"),
 //        SingleLang("MangaFox.fun", "https://mangafox.fun", "en", isNsfw = true, className = "MangaFoxFun"),
 //        SingleLang("MangaHere.onl", "https://mangahere.onl", "en", isNsfw = true, className = "MangaHereOnl"),
-        SingleLang("MangaHub", "https://mangahub.io", "en", isNsfw = true, overrideVersionCode = 11, className = "MangaHubIo"),
+        SingleLang("MangaHub", "https://mangahub.io", "en", isNsfw = true, overrideVersionCode = 10, className = "MangaHubIo"),
 //        SingleLang("Mangakakalot.fun", "https://mangakakalot.fun", "en", isNsfw = true, className = "MangakakalotFun"),
 //        SingleLang("MangaNel", "https://manganel.me", "en", isNsfw = true),
 //        SingleLang("MangaOnline.fun", "https://mangaonline.fun", "en", isNsfw = true, className = "MangaOnlineFun"),
