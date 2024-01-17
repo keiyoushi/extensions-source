@@ -87,9 +87,48 @@ class BlackoutComics : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = null
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document): SManga {
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val row = document.selectFirst("section > div.container > div.row")!!
+        thumbnail_url = row.selectFirst("img")?.absUrl("src")
+        title = row.selectFirst("div.trailer-content > h2")?.text() ?: "Manga"
+
+        with(row.selectFirst("div.trailer-content:has(h3:containsOwn(Detalhes))")!!) {
+            println(outerHtml())
+            artist = getInfo("Artista")
+            author = getInfo("Autor")
+            genre = getInfo("Genêros")
+            status = when (getInfo("Status")) {
+                "Completo" -> SManga.COMPLETED
+                "Em Lançamento" -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
+
+            description = buildString {
+                // Synopsis
+                row.selectFirst("h3:containsOwn(Descrição) + p")?.ownText()?.also {
+                    append("$it\n\n")
+                }
+
+                row.selectFirst("h2:contains($title) + p")?.ownText()?.also {
+                    // Alternative title
+                    append("Título alternativo: $it\n")
+                }
+
+                // Additional info
+                listOf("Editora", "Lançamento", "Scans", "Tradução", "Cleaner", "Vizualizações")
+                    .forEach { item ->
+                        selectFirst("p:contains($item)")
+                            ?.text()
+                            ?.also { append("$it\n") }
+                    }
+            }
+        }
     }
+
+    private fun Element.getInfo(text: String) =
+        selectFirst("p:contains($text)")?.run {
+            selectFirst("b")?.text() ?: ownText()
+        }
 
     // ============================== Chapters ==============================
     override fun chapterListSelector(): String {
