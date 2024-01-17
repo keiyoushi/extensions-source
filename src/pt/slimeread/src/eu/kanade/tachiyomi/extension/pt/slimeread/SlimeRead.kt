@@ -41,10 +41,12 @@ class SlimeRead : HttpSource() {
             .build()
     }
 
+    override fun headersBuilder() = super.headersBuilder().add("Origin", baseUrl)
+
     private val json: Json by injectLazy()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = GET("$API_URL/ranking/semana?nsfw=false")
+    override fun popularMangaRequest(page: Int) = GET("$API_URL/ranking/semana?nsfw=false", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val items = response.parseAs<List<PopularMangaDto>>()
@@ -53,7 +55,7 @@ class SlimeRead : HttpSource() {
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = GET("$API_URL/books?page=$page")
+    override fun latestUpdatesRequest(page: Int) = GET("$API_URL/books?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<LatestResponseDto>()
@@ -66,7 +68,7 @@ class SlimeRead : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
             val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$API_URL/book/$id"))
+            client.newCall(GET("$API_URL/book/$id", headers))
                 .asObservableSuccess()
                 .map(::searchMangaByIdParse)
         } else {
