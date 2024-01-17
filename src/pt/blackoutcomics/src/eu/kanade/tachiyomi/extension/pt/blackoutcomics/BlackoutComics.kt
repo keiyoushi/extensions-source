@@ -35,6 +35,12 @@ class BlackoutComics : ParsedHttpSource() {
             .build()
     }
 
+    override fun headersBuilder() =
+        super.headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+            .add("Accept-Language", "en-US,en;q=0.5")
+
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/ranking")
 
@@ -147,7 +153,9 @@ class BlackoutComics : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        throw UnsupportedOperationException()
+        return document.select("div.chapter-image canvas").mapIndexed { index, item ->
+            Page(index, "", item.absUrl("data-src"))
+        }
     }
 
     override fun imageUrlParse(document: Document): String {
