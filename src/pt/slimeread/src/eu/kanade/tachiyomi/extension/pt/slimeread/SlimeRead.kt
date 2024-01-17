@@ -37,6 +37,7 @@ class SlimeRead : HttpSource() {
     override val client by lazy {
         network.client.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .rateLimitHost(API_URL.toHttpUrl(), 1)
             .build()
     }
 
