@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -36,13 +38,27 @@ class SlimeRead : HttpSource() {
     private val json: Json by injectLazy()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaRequest(page: Int) = GET("$API_URL/ranking/semana?nsfw=false")
 
     override fun popularMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
+        val items = response.parseAs<List<PopularMangaDto>>()
+        val manga = items.map { item ->
+            SManga.create().apply {
+                thumbnail_url = item.thumbnail_url
+                title = item.name
+                url = "/manga/${item.id}"
+            }
+        }
+
+        return MangasPage(manga, false)
     }
+
+    @Serializable
+    data class PopularMangaDto(
+        @SerialName("book_image") val thumbnail_url: String,
+        @SerialName("book_id") val id: Int,
+        @SerialName("book_name_original") val name: String,
+    )
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
@@ -104,5 +120,7 @@ class SlimeRead : HttpSource() {
 
     companion object {
         const val PREFIX_SEARCH = "id:"
+
+        private const val API_URL = "https://ai3.slimeread.com:8443"
     }
 }
