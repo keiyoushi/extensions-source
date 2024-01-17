@@ -17,7 +17,7 @@ import java.util.Locale
 class SeriManga : ParsedHttpSource() {
     override val name = "SeriManga"
 
-    override val baseUrl = "https://serimanga.com"
+    override val baseUrl = "https://serimangas.com"
 
     override val lang = "tr"
 
