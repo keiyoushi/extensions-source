@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.slimeread
 
+import eu.kanade.tachiyomi.extension.pt.slimeread.dto.LatestResponseDto
+import eu.kanade.tachiyomi.extension.pt.slimeread.dto.PopularMangaDto
+import eu.kanade.tachiyomi.extension.pt.slimeread.dto.toSMangaList
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -9,8 +12,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -27,7 +28,7 @@ class SlimeRead : HttpSource() {
 
     override val lang = "pt-BR"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val client by lazy {
         network.client.newBuilder()
@@ -42,31 +43,18 @@ class SlimeRead : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val items = response.parseAs<List<PopularMangaDto>>()
-        val manga = items.map { item ->
-            SManga.create().apply {
-                thumbnail_url = item.thumbnail_url
-                title = item.name
-                url = "/manga/${item.id}"
-            }
-        }
-
-        return MangasPage(manga, false)
+        val mangaList = items.toSMangaList()
+        return MangasPage(mangaList, false)
     }
-
-    @Serializable
-    data class PopularMangaDto(
-        @SerialName("book_image") val thumbnail_url: String,
-        @SerialName("book_id") val id: Int,
-        @SerialName("book_name_original") val name: String,
-    )
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int) = GET("$API_URL/books?page=$page")
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
+        val dto = response.parseAs<LatestResponseDto>()
+        val mangaList = dto.data.toSMangaList()
+        val hasNextPage = dto.page < dto.pages
+        return MangasPage(mangaList, hasNextPage)
     }
 
     // =============================== Search ===============================
