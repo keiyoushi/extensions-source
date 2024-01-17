@@ -9,7 +9,7 @@ class MangaHubGenerator : ThemeSourceGenerator {
 
     override val themeClass = "MangaHub"
 
-    override val baseVersionCode: Int = 22
+    override val baseVersionCode: Int = 23
 
     override val sources = listOf(
 //        SingleLang("1Manga.co", "https://1manga.co", "en", isNsfw = true, className = "OneMangaCo"),
