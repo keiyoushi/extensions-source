@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.slimeread
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.LatestResponseDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.MangaInfoDto
+import eu.kanade.tachiyomi.extension.pt.slimeread.dto.PageListDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.PopularMangaDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.toSMangaList
 import eu.kanade.tachiyomi.network.GET
@@ -153,8 +154,14 @@ class SlimeRead : HttpSource() {
     }
 
     // =============================== Pages ================================
+    override fun pageListRequest(chapter: SChapter) = GET(API_URL + chapter.url, headers)
+
     override fun pageListParse(response: Response): List<Page> {
-        throw UnsupportedOperationException()
+        val pages = response.parseAs<List<PageListDto>>().flatMap { it.pages }
+
+        return pages.mapIndexed { index, item ->
+            Page(index, "", item.url)
+        }
     }
 
     override fun imageUrlParse(response: Response): String {
