@@ -17,7 +17,6 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         MultiLang("Asura Scans", "https://asuratoon.com", listOf("en", "tr"), className = "AsuraScansFactory", pkgName = "asurascans", overrideVersionCode = 31),
         MultiLang("Miau Scan", "https://miaucomics.org", listOf("es", "pt-BR"), overrideVersionCode = 2),
         SingleLang("Ainz Scans ID", "https://ainzscans.site", "id"),
-        SingleLang("AiYuManga", "https://aiyumanhua.com", "es", overrideVersionCode = 8),
         SingleLang("Alceascan", "https://alceascan.my.id", "id"),
         SingleLang("Animated Glitched Comics", "https://agscomics.com", "en"),
         SingleLang("Animated Glitched Scans", "https://anigliscans.xyz", "en", overrideVersionCode = 1),
