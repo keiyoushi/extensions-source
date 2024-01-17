@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.slimeread
 
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.LatestResponseDto
+import eu.kanade.tachiyomi.extension.pt.slimeread.dto.MangaInfoDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.PopularMangaDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.toSMangaList
 import eu.kanade.tachiyomi.network.GET
@@ -62,7 +63,7 @@ class SlimeRead : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
             val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/manga/$id"))
+            client.newCall(GET("$API_URL/book/$id"))
                 .asObservableSuccess()
                 .map(::searchMangaByIdParse)
         } else {
@@ -97,8 +98,23 @@ class SlimeRead : HttpSource() {
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException()
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.replace("/book/", "/manga/")
+
+    override fun mangaDetailsRequest(manga: SManga) = GET(API_URL + manga.url, headers)
+
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val info = response.parseAs<MangaInfoDto>()
+        thumbnail_url = info.thumbnail_url
+        title = info.name
+        description = info.description
+        genre = info.categories.joinToString()
+        status = when (info.status) {
+            1 -> SManga.ONGOING
+            2 -> SManga.COMPLETED
+            3, 4 -> SManga.CANCELLED
+            5 -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
     }
 
     // ============================== Chapters ==============================

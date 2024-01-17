@@ -22,6 +22,23 @@ fun List<PopularMangaDto>.toSMangaList(): List<SManga> = map { item ->
     SManga.create().apply {
         thumbnail_url = item.thumbnail_url
         title = item.name
-        url = "/manga/${item.id}"
+        url = "/book/${item.id}"
     }
+}
+
+@Serializable
+data class MangaInfoDto(
+    @SerialName("book_image") val thumbnail_url: String?,
+    @SerialName("book_name_original") val name: String,
+    @SerialName("book_status") val status: Int,
+    @SerialName("book_synopsis") val description: String?,
+    @SerialName("book_categories") private val _categories: List<CategoryDto>,
+) {
+    @Serializable
+    data class CategoryDto(val categories: CatDto)
+
+    @Serializable
+    data class CatDto(@SerialName("cat_name_ptBR") val name: String)
+
+    val categories = _categories.map { it.categories.name }
 }
