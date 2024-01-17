@@ -34,21 +34,17 @@ class BlackoutComics : ParsedHttpSource() {
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/ranking")
+
+    override fun popularMangaSelector() = "section > div.container div > a"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        title = element.selectFirst("p")?.text() ?: "Manga"
     }
 
-    override fun popularMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaNextPageSelector() = null
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
