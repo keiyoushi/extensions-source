@@ -16,6 +16,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class BlackoutComics : ParsedHttpSource() {
 
@@ -131,12 +133,16 @@ class BlackoutComics : ParsedHttpSource() {
         }
 
     // ============================== Chapters ==============================
-    override fun chapterListSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListSelector() = "section.relese > div.container > div.row h5:has(a)"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst("form + a")!!.run {
+            setUrlWithoutDomain(attr("href"))
+            name = text()
+            chapter_number = name.substringAfter(" ").toFloatOrNull() ?: 1F
+        }
+
+        date_upload = element.selectFirst("form + a + span")?.text().orEmpty().toDate()
     }
 
     // =============================== Pages ================================
@@ -148,7 +154,17 @@ class BlackoutComics : ParsedHttpSource() {
         throw UnsupportedOperationException()
     }
 
+    // ============================= Utilities ==============================
+    private fun String.toDate(): Long {
+        return runCatching { DATE_FORMATTER.parse(trim())?.time }
+            .getOrNull() ?: 0L
+    }
+
     companion object {
         const val PREFIX_SEARCH = "id:"
+
+        private val DATE_FORMATTER by lazy {
+            SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH)
+        }
     }
 }
