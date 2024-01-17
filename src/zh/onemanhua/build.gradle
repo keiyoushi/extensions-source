@@ -1,7 +1,7 @@
 ext {
     extName = 'COLAMANGA'
     extClass = '.Onemanhua'
-    theme = "jiayapopola"
+    theme = "colamanga"
     extVersionCode = 14
 }
 

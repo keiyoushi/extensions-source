@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.jiayapopola
+package eu.kanade.tachiyomi.multisrc.colamanga
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -48,7 +48,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-abstract class Jiayapopola(
+abstract class ColaManga(
     override val name: String,
     final override val baseUrl: String,
     override val lang: String,

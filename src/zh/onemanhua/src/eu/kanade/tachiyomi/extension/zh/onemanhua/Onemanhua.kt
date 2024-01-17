@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.zh.onemanhua
 
-import eu.kanade.tachiyomi.multisrc.jiayapopola.Jiayapopola
+import eu.kanade.tachiyomi.multisrc.colamanga.ColaManga
 import eu.kanade.tachiyomi.source.model.FilterList
 
 // Originally, the site was called One漫画. The name has been changing every once in awhile
-class Onemanhua : Jiayapopola(
+class Onemanhua : ColaManga(
     "COLAMANGA",
     "https://www.colamanga.com",
     "zh",

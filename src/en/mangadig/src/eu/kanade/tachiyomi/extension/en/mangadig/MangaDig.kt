@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.mangadig
 
-import eu.kanade.tachiyomi.multisrc.jiayapopola.Jiayapopola
+import eu.kanade.tachiyomi.multisrc.colamanga.ColaManga
 import eu.kanade.tachiyomi.source.model.FilterList
 
-class MangaDig : Jiayapopola(
+class MangaDig : ColaManga(
     "MangaDig",
     "https://mangadig.com",
     "en",

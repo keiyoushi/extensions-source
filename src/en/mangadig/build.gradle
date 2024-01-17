@@ -1,7 +1,7 @@
 ext {
     extName = 'MangaDig'
     extClass = '.MangaDig'
-    theme = "jiayapopola"
+    theme = "colamanga"
     extVersionCode = 0
     isNsfw = true
 }
