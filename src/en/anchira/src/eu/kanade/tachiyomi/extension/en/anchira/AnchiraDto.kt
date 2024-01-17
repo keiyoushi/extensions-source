@@ -48,14 +48,8 @@ data class ImageData(
 @Serializable
 data class EntryKey(
     val id: Int,
-    val key: String,
-    val hash: String,
-    val url: String?,
+    val key: String? = null,
+    val hash: String? = null,
+    val url: String? = null,
     val names: List<String> = emptyList(),
-)
-
-@Serializable
-data class AnchiraData(
-    val key: String,
-    val galleries: List<EntryKey>,
 )

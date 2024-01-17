@@ -65,6 +65,9 @@ class Anchira : HttpSource(), ConfigurableSource {
     override fun latestUpdatesRequest(page: Int) = GET("$libraryUrl?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
+        // Ugly but it works
+        anchiraData.isNotEmpty()
+
         val data = json.decodeFromString<LibraryResponse>(response.body.string())
 
         return MangasPage(
@@ -75,7 +78,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                     thumbnail_url = "$cdnUrl/${it.id}/${it.key}/m/${it.thumbnailIndex + 1}"
                     artist = it.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
                     author = it.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
-                    genre = prepareTags(it.tags)
+                    genre = prepareTags(it.tags, preferences.useTagGrouping)
                     update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
                     status = SManga.COMPLETED
                 }
@@ -165,7 +168,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                 "$cdnUrl/${data.id}/${data.key}/b/${data.thumbnailIndex + 1}"
             artist = data.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
             author = data.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
-            genre = prepareTags(data.tags)
+            genre = prepareTags(data.tags, preferences.useTagGrouping)
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             status = SManga.COMPLETED
         }
@@ -173,7 +176,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     override fun getMangaUrl(manga: SManga) = if (preferences.openSource) {
         val id = manga.url.split("/").reversed()[1].toInt()
-        anchiraData.galleries.find { it.id == id }?.url ?: "$baseUrl${manga.url}"
+        anchiraData.find { it.id == id }?.url ?: "$baseUrl${manga.url}"
     } else {
         "$baseUrl${manga.url}"
     }
@@ -216,16 +219,15 @@ class Anchira : HttpSource(), ConfigurableSource {
     }
 
     private fun getImageData(entry: Entry): ImageData {
-        val keys = anchiraData.galleries.find { it.id == entry.id }
+        val keys = anchiraData.find { it.id == entry.id }
 
-        if (keys != null) {
+        if (keys?.key != null && keys.hash != null) {
             return ImageData(keys.id, keys.key, keys.hash, keys.names)
         }
 
         try {
             val response =
                 client.newCall(GET("$libraryUrl/${entry.id}/${entry.key}/data", headers)).execute()
-            val body = response.body
 
             return json.decodeFromString(response.body.string())
         } catch (_: IOException) {
@@ -255,14 +257,21 @@ class Anchira : HttpSource(), ConfigurableSource {
 
         val openSourcePref = SwitchPreferenceCompat(screen.context).apply {
             key = OPEN_SOURCE_PREF
-            title = "Open in FAKKU in WebView"
-            summary =
-                "Enable to open the search the book in FAKKU when opening the manga or chapter in WebView. If only one result exists, it will open that one."
+            title = "Open source website in WebView"
+            summary = "Enable to open the original source website of the gallery (if available) instead of Anchira."
+            setDefaultValue(false)
+        }
+
+        val useTagGrouping = SwitchPreferenceCompat(screen.context).apply {
+            key = USE_TAG_GROUPING
+            title = "Group tags"
+            summary = "Enable to group tags together by artist, circle, parody, magazine and general tags"
             setDefaultValue(false)
         }
 
         screen.addPreference(imageQualityPref)
         screen.addPreference(openSourcePref)
+        screen.addPreference(useTagGrouping)
     }
 
     override fun getFilterList() = FilterList(
@@ -293,6 +302,9 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     private val SharedPreferences.openSource
         get() = getBoolean(OPEN_SOURCE_PREF, false)
+
+    private val SharedPreferences.useTagGrouping
+        get() = getBoolean(USE_TAG_GROUPING, false)
 
     private fun apiInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -327,13 +339,14 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     private val anchiraData by lazy {
         client.newCall(GET(DATA_JSON, headers)).execute()
-            .use { json.decodeFromStream<AnchiraData>(it.body.byteStream()) }
+            .use { json.decodeFromStream<List<EntryKey>>(it.body.byteStream()) }
     }
 
     companion object {
         private const val IMAGE_QUALITY_PREF = "image_quality"
         private const val OPEN_SOURCE_PREF = "use_manga_source"
+        private const val USE_TAG_GROUPING = "use_tag_grouping"
         private const val DATA_JSON =
-            "https://gist.githubusercontent.com/LetrixZ/2b559cc5829d1c221c701e02ecd81411/raw/site_data.json"
+            "https://gist.githubusercontent.com/LetrixZ/2b559cc5829d1c221c701e02ecd81411/raw/data-v5.json"
     }
 }
