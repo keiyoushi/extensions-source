@@ -46,8 +46,8 @@ abstract class MangaHub(
 
     override val supportsLatest = true
 
-    private var baseApiUrl = "https://api.mghubcdn.com"
-    private var baseCdnUrl = "https://imgx.mghubcdn.com"
+    private var baseApiUrl = "https://api.mghcdn.com"
+    private var baseCdnUrl = "https://imgx.mghcdn.com"
 
     override val client: OkHttpClient = super.client.newBuilder()
         .setRandomUserAgent(
