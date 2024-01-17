@@ -73,20 +73,18 @@ class BlackoutComics : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException()
+        // Using URLBuilder just to prevent issues with strange queries
+        val url = "$baseUrl/comics".toHttpUrl().newBuilder()
+            .addQueryParameter("search", query)
+            .build()
+        return GET(url, headers)
     }
 
-    override fun searchMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaNextPageSelector() = null
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document): SManga {
