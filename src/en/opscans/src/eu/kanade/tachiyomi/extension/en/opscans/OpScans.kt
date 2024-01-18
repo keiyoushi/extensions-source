@@ -81,6 +81,8 @@ class OpScans : HttpSource() {
         return GET("$apiUrl/api/mangaData#${manga.url}", headers)
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/${manga.url}"
+
     override fun mangaDetailsParse(response: Response): SManga {
         val mangaData = response.parseAs<List<MangaData>>()
         val mangaId = response.request.url.fragment!!
@@ -90,6 +92,8 @@ class OpScans : HttpSource() {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaData = response.parseAs<List<MangaData>>()
         val mangaId = response.request.url.fragment!!
@@ -97,17 +101,19 @@ class OpScans : HttpSource() {
         return mangaData.firstOrNull { it.id == mangaId }
             ?.chapters.orEmpty().map {
                 SChapter.create().apply {
-                    url = it.id
+                    url = "/$mangaId/${it.id}"
                     name = it.number + if (it.title.isNullOrEmpty()) "" else ": ${it.title}"
                     date_upload = runCatching {
                         dateFormat.parse(it.date!!)!!.time
                     }.getOrDefault(0L)
                 }
-            }
+            }.reversed()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiUrl/api/mangaData#${chapter.url}", headers)
+        val chapterId = chapter.url.substringAfterLast("/")
+
+        return GET("$apiUrl/api/mangaData#$chapterId", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
