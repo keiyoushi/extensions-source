@@ -1,15 +1,12 @@
 package eu.kanade.tachiyomi.extension.es.lectormanga
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.view.View
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -31,9 +28,13 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 class LectorManga : ConfigurableSource, ParsedHttpSource() {
 
@@ -71,8 +72,42 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
         return this
     }
 
-    private var loadWebView = true
+    private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
+        val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
+        object : X509TrustManager {
+            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+            override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+            override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+        }
+
+        val insecureSocketFactory = SSLContext.getInstance("TLSv1.2").apply {
+            val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
+            init(null, trustAllCerts, SecureRandom())
+        }.socketFactory
+
+        sslSocketFactory(insecureSocketFactory, naiveTrustManager)
+        hostnameVerifier { _, _ -> true }
+        return this
+    }
+
+    private val ignoreSslClient = network.client.newBuilder()
+        .ignoreAllSSLErrors()
+        .followRedirects(false)
+        .rateLimit(
+            preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
+            60,
+        )
+        .build()
+
     override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+            if (url.host.contains("japanreader.com")) {
+                return@addInterceptor ignoreSslClient.newCall(request).execute()
+            }
+            chain.proceed(request)
+        }
         .rateLimitHost(
             baseUrl.toHttpUrl(),
             preferences.getString(WEB_RATELIMIT_PREF, WEB_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
@@ -83,39 +118,6 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
             preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
             60,
         )
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-            if (url.host.contains("japanreader.com") && loadWebView) {
-                val handler = Handler(Looper.getMainLooper())
-                val latch = CountDownLatch(1)
-                var webView: WebView? = null
-                handler.post {
-                    val webview = WebView(Injekt.get<Application>())
-                    webView = webview
-                    webview.settings.domStorageEnabled = true
-                    webview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                    webview.settings.useWideViewPort = false
-                    webview.settings.loadWithOverviewMode = false
-
-                    webview.webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            latch.countDown()
-                        }
-                    }
-
-                    val headers = mutableMapOf<String, String>()
-                    headers["Referer"] = baseUrl
-
-                    webview.loadUrl(url.toString(), headers)
-                }
-
-                latch.await()
-                loadWebView = false
-                handler.post { webView?.destroy() }
-            }
-            chain.proceed(request)
-        }
         .build()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/library?order_item=likes_count&order_dir=desc&type=&filter_by=title&page=$page", headers)
@@ -629,8 +631,8 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
         // Ratelimit permits per second for main website
         private const val WEB_RATELIMIT_PREF_TITLE = "Ratelimit por minuto para el sitio web"
 
-        // This value affects network request amount to TMO url. Lower this value may reduce the chance to get HTTP 429 error, but loading speed will be slower too. Tachiyomi restart required. \nCurrent value: %s
-        private const val WEB_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red a la URL de TMO. Reducir este valor puede disminuir la posibilidad de obtener un error HTTP 429, pero la velocidad de descarga será más lenta. Se requiere reiniciar Tachiyomi. \nValor actual: %s"
+        // This value affects network request amount to TMO url. Lower this value may reduce the chance to get HTTP 429 error, but loading speed will be slower too. App restart required. \nCurrent value: %s
+        private const val WEB_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red a la URL de TMO. Reducir este valor puede disminuir la posibilidad de obtener un error HTTP 429, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. \nValor actual: %s"
         private const val WEB_RATELIMIT_PREF_DEFAULT_VALUE = "8"
 
         private const val IMAGE_CDN_RATELIMIT_PREF = "imgCDNRatelimitPreference"
@@ -638,8 +640,8 @@ class LectorManga : ConfigurableSource, ParsedHttpSource() {
         // Ratelimit permits per second for image CDN
         private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "Ratelimit por minuto para descarga de imágenes"
 
-        // This value affects network request amount for loading image. Lower this value may reduce the chance to get error when loading image, but loading speed will be slower too. Tachiyomi restart required. \nCurrent value: %s
-        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red para descargar imágenes. Reducir este valor puede disminuir errores al cargar imagenes, pero la velocidad de descarga será más lenta. Se requiere reiniciar Tachiyomi. \nValor actual: %s"
+        // This value affects network request amount for loading image. Lower this value may reduce the chance to get error when loading image, but loading speed will be slower too. App restart required. \nCurrent value: %s
+        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red para descargar imágenes. Reducir este valor puede disminuir errores al cargar imagenes, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. \nValor actual: %s"
         private const val IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE = "50"
 
         private val ENTRIES_ARRAY = arrayOf("1", "2", "3", "5", "6", "7", "8", "9", "10", "15", "20", "30", "40", "50", "100")

@@ -1,7 +1,7 @@
 ext {
     extName = 'TuMangaOnline'
     extClass = '.TuMangaOnline'
-    extVersionCode = 48
+    extVersionCode = 49
     isNsfw = true
 }
 
