@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.pt.huntersscans
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.network.POST
-import okhttp3.OkHttpClient
 import okhttp3.FormBody
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
