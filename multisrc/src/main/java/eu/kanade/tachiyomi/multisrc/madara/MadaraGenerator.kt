@@ -460,7 +460,6 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("The Blank Scanlation", "https://theblank.net", "en", className = "TheBlank", isNsfw = true),
         SingleLang("The Guild", "https://theguildscans.com", "en"),
         SingleLang("Time Naight", "https://timenaight.com", "tr"),
-        SingleLang("TMO Manga", "https://tmomanga.com", "es", isNsfw = true),
         SingleLang("Todaymic", "https://todaymic.com", "en", overrideVersionCode = 1),
         SingleLang("TonizuToon", "https://tonizu.com", "tr", isNsfw = true, overrideVersionCode = 1),
         SingleLang("ToonChill", "https://toonchill.com", "en", overrideVersionCode = 1),
