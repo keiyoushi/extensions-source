@@ -30,7 +30,6 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         add("X-Requested-With", "") // added for webview, and removed in interceptor for normal use
     }
 
-    // disable random ua in ext setting from multisrc (.setRandomUserAgent)
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
