@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.es.atlantisscan
+package eu.kanade.tachiyomi.extension.es.tmomanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
