@@ -14,7 +14,7 @@ class MHScans : Madara(
     "MHScans",
     "https://mhscans.com",
     "es",
-    dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale('es')),
+    dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
 ) {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 3, TimeUnit.SECONDS)
