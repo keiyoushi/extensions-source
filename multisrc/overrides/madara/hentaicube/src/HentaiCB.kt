@@ -6,8 +6,14 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HentaiCB : Madara("Hentai CB", "https://hentaicube.net", "vi", SimpleDateFormat("dd/MM/yyyy", Locale("vi"))) {
+class HentaiCB : Madara("CBHentai", "https://cbhentai.net", "vi", SimpleDateFormat("dd/MM/yyyy", Locale("vi"))) {
+
     override val id: Long = 823638192569572166
+
+    override val mangaSubString = "read"
+
+    override val filterNonMangaItems = false
+
     override fun pageListParse(document: Document): List<Page> {
         return super.pageListParse(document).distinctBy { it.imageUrl }
     }
