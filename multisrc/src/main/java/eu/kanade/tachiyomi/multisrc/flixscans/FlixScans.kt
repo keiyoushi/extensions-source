@@ -79,11 +79,9 @@ abstract class FlixScans(
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<ApiResponse<BrowseSeries>>()
-        val currentPage = response.request.url.queryParameter("page")
-            ?.toIntOrNull() ?: 1
 
         val entries = result.data.map { it.toSManga(cdnUrl) }
-        val hasNextPage = result.meta.lastPage > currentPage
+        val hasNextPage = result.meta.lastPage > result.meta.currentPage
 
         return MangasPage(entries, hasNextPage)
     }
@@ -174,6 +172,7 @@ abstract class FlixScans(
         if (query.isNotEmpty()) {
             val searchBody = SearchInput(query.trim())
                 .let(json::encodeToString)
+                .replace("\"", "\\\"")
 
             val requestBody = """{
                 |"path":"search/serie?page=$page",
@@ -182,7 +181,7 @@ abstract class FlixScans(
                 |}
             """.trimMargin().toRequestBody(JSON_MEDIA_TYPE)
 
-            return POST("$apiUrl/search/serie?page=$page", headers, requestBody)
+            return POST(apiUrl, headers, requestBody)
         }
 
         val advSearchBody = buildString {

@@ -17,6 +17,7 @@ data class ApiResponse<T>(
 @Serializable
 data class PageInfo(
     @SerialName("last_page") val lastPage: Int,
+    @SerialName("current_page") val currentPage: Int,
 )
 
 @Serializable
