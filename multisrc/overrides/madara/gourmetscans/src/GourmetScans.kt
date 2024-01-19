@@ -81,7 +81,7 @@ class GourmetScans : Madara(
         UriPartFilter("Genre", vals.toTypedArray())
 
     override fun getFilterList(): FilterList {
-        val filters = buildList(5) {
+        val filters = buildList(4) {
             add(YearFilter(yearFilterTitle))
             add(
                 OrderByFilter(
