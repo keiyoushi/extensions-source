@@ -111,16 +111,17 @@ class OpScans : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast("/")
-
-        return GET("$apiUrl/api/mangaData#$chapterId", headers)
+        return GET("$apiUrl/api/mangaData#${chapter.url}", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val mangaData = response.parseAs<List<MangaData>>()
-        val chapterId = response.request.url.fragment!!
+        val ids = response.request.url.fragment!!.split("/")
+        val mangaId = ids[1]
+        val chapterId = ids[2]
 
-        return mangaData.flatMap { it.chapters }.firstOrNull { it.id == chapterId }
+        return mangaData.firstOrNull { it.id == mangaId }
+            ?.chapters?.firstOrNull { it.id == chapterId }
             ?.images.orEmpty().mapIndexed { idx, img ->
                 Page(idx, "", "https://127.0.0.1/image#${img.source}")
             }
