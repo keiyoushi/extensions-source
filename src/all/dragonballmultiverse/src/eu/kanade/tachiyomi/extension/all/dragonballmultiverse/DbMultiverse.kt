@@ -39,9 +39,19 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#h_read img").mapIndexed { index, element ->
-            Page(index, "", element.attr("abs:src"))
-        }
+        return document.select("#balloonsimg")
+            .let { e ->
+                listOf(
+                    if (e.hasAttr("src")) {
+                        Page(1, "", e.attr("abs:src"))
+                    } else {
+                        e.attr("style")
+                            .substringAfter("(")
+                            .substringBefore(")")
+                            .let { Page(1, "", baseUrl + it) }
+                    },
+                )
+            }
     }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
