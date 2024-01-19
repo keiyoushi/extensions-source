@@ -3,7 +3,9 @@ package eu.kanade.tachiyomi.extension.fr.mangascan
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
+import okhttp3.Response
 
 class MangaScan : MMRCMS("Manga-Scan", "https://mangascan-fr.com", "fr") {
 
