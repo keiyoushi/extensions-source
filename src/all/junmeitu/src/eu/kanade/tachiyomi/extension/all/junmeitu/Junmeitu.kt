@@ -78,7 +78,8 @@ class Junmeitu : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.title = document.selectFirst(".news-title,.title")!!.text()
-        manga.description = document.select(".news-info,.picture-details").text() + "\n" + document.select(".introduce").text()
+        manga.description = "${document.select(".news-info, .picture-details")
+            .joinToString { it.text() }}\n" + document.select(".introduce").text()
         manga.genre = document.select(".relation_tags > a").joinToString { it.text() }
         manga.status = SManga.COMPLETED
         return manga
@@ -86,20 +87,18 @@ class Junmeitu : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(element.select(".position a:last-child").first()!!.attr("abs:href"))
-        chapter.chapter_number = -2f
+        chapter.setUrlWithoutDomain(element.select(".position a:last-child").attr("abs:href"))
         chapter.name = "Gallery"
         return chapter
     }
 
-    override fun chapterListSelector() = "html"
+    override fun chapterListSelector() = "div.position"
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val numPages = document.select(".pages > a:nth-last-of-type(2)").text().toIntOrNull()
         val newsBody = document.selectFirst(Evaluator.Class("news-body"))
         if (newsBody == null) {
-            val baseUrl = this.baseUrl
             val prefix = document.location().run {
                 val index = lastIndexOf('.') // .html
                 baseUrl + "/ajax_" + substring(baseUrl.length + 1, index) + '-'
