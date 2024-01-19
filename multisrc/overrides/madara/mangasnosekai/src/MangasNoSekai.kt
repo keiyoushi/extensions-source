@@ -2,11 +2,16 @@ package eu.kanade.tachiyomi.extension.es.mangasnosekai
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.CacheControl
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -72,13 +77,14 @@ class MangasNoSekai : Madara(
 
     override fun searchMangaNextPageSelector() = "nav.navigation a.next"
 
-    override val mangaDetailsSelectorTitle = "div.summary-content h1.titleManga"
-    override val mangaDetailsSelectorThumbnail = "div.tab-summary img.img-responsive"
-    override val mangaDetailsSelectorDescription = "div.summary-content div.artist-content"
-    override val mangaDetailsSelectorStatus = "div.summary-content ul.general-List li:has(span:contains(Estado))"
-    override val mangaDetailsSelectorAuthor = "div.summary-content ul.general-List li:has(span:contains(Autor))"
-    override val mangaDetailsSelectorArtist = "div.summary-content ul.general-List li:has(span:contains(Dibujante))"
-    override val seriesTypeSelector = "div.summary-content ul.general-List li:has(span:contains(Tipo))"
+    override val mangaDetailsSelectorTitle = "div.thumble-container p.titleMangaSingle"
+    override val mangaDetailsSelectorThumbnail = "div.thumble-container img.img-responsive"
+    override val mangaDetailsSelectorDescription = "section#section-sinopsis > p"
+    override val mangaDetailsSelectorStatus = "section#section-sinopsis div.d-flex:has(div:contains(Estado)) p"
+    override val mangaDetailsSelectorAuthor = "section#section-sinopsis div.d-flex:has(div:contains(Autor)) p"
+    override val mangaDetailsSelectorGenre = "section#section-sinopsis div.d-flex:has(div:contains(Generos)) p a"
+    override val altNameSelector = "section#section-sinopsis div.d-flex:has(div:contains(Otros nombres)) p"
+    override val altName = "Otros nombres: "
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
@@ -88,9 +94,6 @@ class MangasNoSekai : Madara(
             }
             selectFirst(mangaDetailsSelectorAuthor)?.ownText()?.let {
                 manga.author = it
-            }
-            selectFirst(mangaDetailsSelectorArtist)?.ownText()?.let {
-                manga.artist = it
             }
             select(mangaDetailsSelectorDescription).let {
                 manga.description = it.text()
@@ -111,13 +114,6 @@ class MangasNoSekai : Madara(
                 .map { element -> element.text().lowercase(Locale.ROOT) }
                 .toMutableSet()
 
-            // add manga/manhwa/manhua thinggy to genre
-            document.select(seriesTypeSelector).firstOrNull()?.ownText()?.let {
-                if (it.isEmpty().not() && it.notUpdating() && it != "-" && genres.contains(it).not()) {
-                    genres.add(it.lowercase(Locale.ROOT))
-                }
-            }
-
             manga.genre = genres.toList().joinToString(", ") { genre ->
                 genre.replaceFirstChar {
                     if (it.isLowerCase()) {
@@ -130,7 +126,6 @@ class MangasNoSekai : Madara(
                 }
             }
 
-            // add alternative name to manga description
             document.select(altNameSelector).firstOrNull()?.ownText()?.let {
                 if (it.isBlank().not() && it.notUpdating()) {
                     manga.description = when {
@@ -153,4 +148,64 @@ class MangasNoSekai : Madara(
         "views2",
         "new-manga",
     )
+
+    private fun altChapterRequest(mangaId: String, page: Int): Request {
+        val form = FormBody.Builder()
+            .add("action", "load_chapters")
+            .add("mangaid", mangaId)
+            .add("page", page.toString())
+            .build()
+
+        val xhrHeaders = headersBuilder()
+            .add("Content-Length", form.contentLength().toString())
+            .add("Content-Type", form.contentType().toString())
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
+    }
+
+    private val altChapterListSelector = "div.wp-manga-chapter"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+
+        val mangaUrl = document.location().removeSuffix("/")
+
+        var xhrRequest = xhrChaptersRequest(mangaUrl)
+        var xhrResponse = client.newCall(xhrRequest).execute()
+
+        val chapterElements = xhrResponse.asJsoup().select(chapterListSelector())
+        if (chapterElements.isEmpty()) {
+            val mangaId = document.selectFirst("div.tab-summary > script:containsData(manga_id)")?.data()
+                ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
+                ?: throw Exception("No se pudo obtener el id del manga")
+
+            var page = 1
+            do {
+                xhrRequest = altChapterRequest(mangaId, page)
+                xhrResponse = client.newCall(xhrRequest).execute()
+                val xhrDocument = xhrResponse.asJsoup()
+                chapterElements.addAll(xhrDocument.select(altChapterListSelector))
+                page++
+            } while (xhrDocument.select(altChapterListSelector).isNotEmpty())
+
+            countViews(document)
+            return chapterElements.map(::altChapterFromElement)
+        }
+
+        countViews(document)
+        return chapterElements.map(::chapterFromElement)
+    }
+
+    private fun altChapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        name = element.select("div.text-sm").text()
+        date_upload = element.select("time").firstOrNull()?.text()?.let {
+            parseChapterDate(it)
+        } ?: 0
+    }
+
+    companion object {
+        val MANGA_ID_REGEX = """manga_id\s*=\s*(.*)\s*;""".toRegex()
+    }
 }
