@@ -26,7 +26,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.json.JSONObject
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
@@ -100,12 +99,19 @@ class Picacomic : HttpSource(), ConfigurableSource {
             )
         }
 
-        val payload = parts[1]?.let { JSONObject(Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8)) }
+        val payload = parts[1]?.let {
+            json.decodeFromString<PicaJWTPayload>(
+                Base64.decode(
+                    it,
+                    Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+                ).toString(Charsets.UTF_8),
+            )
+        }
 
-        val exp = payload?.getLong("exp")?.let {
+        val exp = payload?.exp?.let {
             Date(it * 1000)
         }
-        val iat = payload?.getLong("iat")?.let {
+        val iat = payload?.iat?.let {
             Date(it * 1000)
         }
 
