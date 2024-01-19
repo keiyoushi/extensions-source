@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.flixscans
 
 import android.util.Log
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -16,7 +15,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -28,8 +26,8 @@ abstract class FlixScans(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    protected val apiUrl: String = baseUrl.replace("://", "://api.").plus("/api/v1"),
-    protected val cdnUrl: String = baseUrl.replace("://", "://api.").plus("/storage/"),
+    protected val apiUrl: String = "$baseUrl/api/__api_party/noxApi",
+    protected val cdnUrl: String = baseUrl.replace("://", "://media.").plus("/"),
 ) : HttpSource() {
 
     override val supportsLatest = true
@@ -43,6 +41,12 @@ abstract class FlixScans(
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
+    protected open fun postPath(path: String): Request {
+        val payload = """{"path":"$path","headers":{}}""".toRequestBody(JSON_MEDIA_TYPE)
+
+        return POST(apiUrl, headers, payload)
+    }
+
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         runCatching { fetchGenre() }
 
@@ -50,7 +54,7 @@ abstract class FlixScans(
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/webtoon/homepage/home", headers)
+        return postPath("webtoon/pages/home/romance")
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -70,7 +74,7 @@ abstract class FlixScans(
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/search/advance?page=$page&serie_type=webtoon", headers)
+        return postPath("search/advance?page=$page&serie_type=webtoon")
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -131,7 +135,7 @@ abstract class FlixScans(
     }
 
     private fun fetchGenreRequest(): Request {
-        return GET("$apiUrl/search/genres", headers)
+        return postPath("search/genres")
     }
 
     private fun fetchGenreParse(response: Response): List<GenreHolder> {
@@ -168,53 +172,54 @@ abstract class FlixScans(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val requestBody = SearchInput(query.trim())
+            val searchBody = SearchInput(query.trim())
                 .let(json::encodeToString)
-                .toRequestBody(JSON_MEDIA_TYPE)
 
-            val newHeaders = headersBuilder()
-                .add("Content-Length", requestBody.contentLength().toString())
-                .add("Content-Type", requestBody.contentType().toString())
-                .build()
+            val requestBody = """{
+                |"path":"search/serie?page=$page",
+                |"headers":{"Content-type":"application/json"},
+                |"method":"POST","body":"$searchBody"
+                |}
+            """.trimMargin().toRequestBody(JSON_MEDIA_TYPE)
 
-            return POST("$apiUrl/search/serie?page=$page", newHeaders, requestBody)
+            return POST("$apiUrl/search/serie?page=$page", headers, requestBody)
         }
 
-        val advSearchUrl = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("search/advance")
-            addQueryParameter("page", page.toString())
-            addQueryParameter("serie_type", "webtoon")
+        val advSearchBody = buildString {
+            append("search/advance")
+            append("?page=", page)
+            append("&serie_type=webtoon")
 
             filters.forEach { filter ->
                 when (filter) {
                     is GenreFilter -> {
                         filter.checked.let {
                             if (it.isNotEmpty()) {
-                                addQueryParameter("genres", it.joinToString(","))
+                                append("&genres=", it.joinToString(","))
                             }
                         }
                     }
                     is MainGenreFilter -> {
                         if (filter.state > 0) {
-                            addQueryParameter("main_genres", filter.selected)
+                            append("&main_genres=", filter.selected)
                         }
                     }
                     is TypeFilter -> {
                         if (filter.state > 0) {
-                            addQueryParameter("type", filter.selected)
+                            append("&type=", filter.selected)
                         }
                     }
                     is StatusFilter -> {
                         if (filter.state > 0) {
-                            addQueryParameter("status", filter.selected)
+                            append("&status=", filter.selected)
                         }
                     }
                     else -> {}
                 }
             }
-        }.build()
+        }
 
-        return GET(advSearchUrl, headers)
+        return postPath(advSearchBody)
     }
 
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
@@ -222,7 +227,7 @@ abstract class FlixScans(
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.split("-")[1]
 
-        return GET("$apiUrl/webtoon/series/$id", headers)
+        return postPath("webtoon/series/$id")
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
@@ -236,7 +241,7 @@ abstract class FlixScans(
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.split("-")[1]
 
-        return GET("$apiUrl/webtoon/chapters/$id-desc", headers)
+        return postPath("webtoon/chapters/$id-desc")
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -250,7 +255,7 @@ abstract class FlixScans(
             .substringAfterLast("/")
             .substringBefore("-")
 
-        return GET("$apiUrl/webtoon/chapters/chapter/$id", headers)
+        return postPath("webtoon/chapters/chapter/$id")
     }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
@@ -269,6 +274,6 @@ abstract class FlixScans(
         use { body.string() }.let(json::decodeFromString)
 
     companion object {
-        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
+        private val JSON_MEDIA_TYPE = "application/json".toMediaTypeOrNull()
     }
 }
