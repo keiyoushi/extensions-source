@@ -97,6 +97,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Empire Webtoon", "https://webtoonsempireron.com", "ar", isNsfw = true, overrideVersionCode = 3),
         SingleLang("Eromiau", "https://www.eromiau.com", "es", isNsfw = true),
         SingleLang("Esomanga", "https://esomanga.com", "tr", overrideVersionCode = 1),
+        SingleLang("EZmanga", "https://ezmanga.net", "en"),
         SingleLang("FactManga", "https://factmanga.com", "en", isNsfw = false),
         SingleLang("Fay Scans", "https://fayscans.net", "pt-BR", overrideVersionCode = 2),
         SingleLang("Final Scans", "https://finalscans.com", "pt-BR", isNsfw = true, overrideVersionCode = 1),
