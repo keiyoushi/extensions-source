@@ -206,7 +206,7 @@ class Mangaku : ParsedHttpSource() {
 
 
         if (latch.count == 1L) {
-            throw Exception("Timeout while decrypting image links")
+            throw Exception("Kehabisan waktu saat men-decrypt tautan gambar") //Timeout while decrypting image links
         }
 
         return jsInterface.images.mapIndexed { i, url ->
