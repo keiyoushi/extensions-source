@@ -118,6 +118,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Glory Manga", "https://glorymanga.com", "tr"),
         SingleLang("Good Girls Scan", "https://goodgirls.moe", "en", isNsfw = true),
         SingleLang("Goof Fansub", "https://gooffansub.com", "pt-BR", isNsfw = true),
+        SingleLang("Gourmet Scans", "https://gourmetsupremacy.com", "en", isNsfw = true),
         SingleLang("Grabber Zone", "https://grabber.zone", "all"),
         SingleLang("Gri Melek", "https://grimelek.net", "tr", isNsfw = true, className = "Siyahmelek", overrideVersionCode = 4),
         SingleLang("GuncelManga", "https://guncelmanga.com", "tr", overrideVersionCode = 1),
