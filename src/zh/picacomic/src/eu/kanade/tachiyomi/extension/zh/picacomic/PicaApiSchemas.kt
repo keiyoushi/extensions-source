@@ -22,6 +22,12 @@ data class PicaResponse(
 )
 
 @Serializable
+data class PicaJWTPayload(
+    val exp: Long? = null,
+    val iat: Long? = null,
+)
+
+@Serializable
 data class PicaData(
     // /comics/advanced-search: PicaSearchComics
     // /comics/random: List<PicaSearchComic>
