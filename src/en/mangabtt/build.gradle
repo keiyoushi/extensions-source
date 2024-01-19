@@ -2,7 +2,7 @@ ext {
     extName = 'MangaBTT'
     extClass = '.MangaBTT'
     extVersionCode = 1
-	isNsfw = true
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
