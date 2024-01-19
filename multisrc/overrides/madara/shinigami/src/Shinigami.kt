@@ -83,7 +83,6 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         )
         val postId = POST_ID_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("Unable to get post_id")
         val otherId = OTHER_ID_REGEX.findAll(script).firstOrNull { it.groupValues[1] != "post" }?.groupValues?.get(2) ?: throw Exception("Unable to get other id")
-        
         val key = otherId + keyMatch[1] + postId + keyMatch[2] + postId
         val salt = chapterData.s.decodeHex()
 
