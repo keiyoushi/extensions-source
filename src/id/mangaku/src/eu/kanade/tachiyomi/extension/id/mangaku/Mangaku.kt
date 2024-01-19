@@ -204,7 +204,6 @@ class Mangaku : ParsedHttpSource() {
         latch.await(5, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
-
         if (latch.count == 1L) {
             throw Exception("Kehabisan waktu saat men-decrypt tautan gambar") //Timeout while decrypting image links
         }
@@ -238,10 +237,15 @@ class Mangaku : ParsedHttpSource() {
         }
     }
 
-    private val jQueryScript = javaClass
-        .getResource("/assets/zepto.min.js")!!
-        .readText() // Zepto v1.2.0 (jQuery compatible)
-    private val cryptoJSScript = javaClass
-        .getResource("/assets/crypto-js.min.js")!!
-        .readText() // CryptoJS v4.0.0 (on site: cpr2.js)
+    private val jQueryScript by lazy {
+        javaClass
+            .getResource("/assets/zepto.min.js")!!
+            .readText() // Zepto v1.2.0 (jQuery compatible)
+    }
+
+    private val cryptoJSScript by lazy {
+        javaClass
+            .getResource("/assets/crypto-js.min.js")!!
+            .readText() // CryptoJS v4.0.0 (on site: cpr2.js)
+    }
 }
