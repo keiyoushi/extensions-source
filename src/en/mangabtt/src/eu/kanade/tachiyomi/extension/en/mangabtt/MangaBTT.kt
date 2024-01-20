@@ -106,8 +106,8 @@ class MangaBTT : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.selectFirst(".image img")?.imgAttr()
         element.selectFirst("figcaption h3 a")!!.run {
-            title = text().trim()
-            setUrlWithoutDomain(attr("href"))
+            title = text()
+            setUrlWithoutDomain(attr("abs:href"))
         }
     }
 
@@ -133,21 +133,23 @@ class MangaBTT : ParsedHttpSource() {
 
         document.selectFirst(".detail-info")?.run {
             thumbnail_url = selectFirst("img")?.imgAttr()
-            status = parseStatus(selectFirst(".status p:not(.name)")?.text())
-            genre = select(".kind a").joinToString(", ") { it.text().trim() }
-            author = selectFirst(".author p:not(.name)")?.text()?.trim()?.takeUnless {
+            status = selectFirst(".status p:not(.name)").parseStatus()
+            genre = select(".kind a").joinToString(", ") { it.text() }
+            author = selectFirst(".author p:not(.name)")?.text()?.takeUnless {
                 it.equals("updating", true)
             }
         }
     }
 
-    private fun parseStatus(status: String?): Int = when {
-        status.equals("ongoing", true) -> SManga.ONGOING
-        status.equals("Đang cập nhật", true) -> SManga.ONGOING
-        status.equals("completed", true) -> SManga.COMPLETED
-        status.equals("on-hold", true) -> SManga.ON_HIATUS
-        status.equals("canceled", true) -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
+    private fun Element?.parseStatus(): Int = with(this?.text()) {
+        return when {
+            equals("ongoing", true) -> SManga.ONGOING
+            equals("Đang cập nhật", true) -> SManga.ONGOING
+            equals("completed", true) -> SManga.COMPLETED
+            equals("on-hold", true) -> SManga.ON_HIATUS
+            equals("canceled", true) -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
     }
 
     // ============================== Chapters ==============================
@@ -172,11 +174,11 @@ class MangaBTT : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         element.selectFirst(".col-xs-4")?.also {
-            date_upload = it.text().trim().parseRelativeDate()
+            date_upload = it.text().parseRelativeDate()
         }
         element.selectFirst("a")!!.run {
-            name = text().trim()
-            setUrlWithoutDomain(attr("href"))
+            name = text()
+            setUrlWithoutDomain(attr("abs:href"))
         }
     }
 
@@ -236,7 +238,7 @@ class MangaBTT : ParsedHttpSource() {
             val img = page.selectFirst("img[data-index]")!!
             val index = img.attr("data-index").toInt()
             val url = img.imgAttr()
-            Page(index, document.location(), url)
+            Page(index, imageUrl = url)
         }.sortedBy { it.index }
     }
 
