@@ -2,16 +2,16 @@ name: Issue moderator
 
 on:
   issues:
-    types: [opened, edited, reopened]
+    types: [ opened, edited, reopened ]
   issue_comment:
-    types: [created]
+    types: [ created ]
 
 jobs:
   autoclose:
     runs-on: ubuntu-latest
     steps:
       - name: Moderate issues
-        uses: tachiyomiorg/issue-moderator-action@v2
+        uses: tachiyomiorg/issue-moderator-action@39b363606e00c4ae39a15b3705a63535cd428c15 # v2
         with:
           repo-token: ${{ secrets.ISSUE_MODERATOR_PAT }}
           duplicate-label: Duplicate
