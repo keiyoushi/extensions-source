@@ -118,10 +118,8 @@ data class ExLibraryDto(
 
 @Serializable
 data class PagesDto(
-    val id: Int,
-    val height: Int,
     val link: String,
-    val page: Int,
+    val height: Int,
 )
 
 @Serializable
