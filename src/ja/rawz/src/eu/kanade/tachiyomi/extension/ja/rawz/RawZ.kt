@@ -112,6 +112,8 @@ class RawZ : HttpSource() {
         return FilterList(filters)
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         return GET("$apiUrl/manga/${manga.url.substringAfter(".")}")
     }
@@ -144,6 +146,8 @@ class RawZ : HttpSource() {
             }
         }
     }
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url
