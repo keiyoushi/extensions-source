@@ -618,8 +618,8 @@ class Remanga : ConfigurableSource, HttpSource() {
             }
             return try {
                 val page = json.decodeFromString<SeriesWrapperDto<PageDto>>(body)
-                page.content.pages.filter { it.height > heightEmptyChunks }.map {
-                    Page(it.page, "", fixLink(it.link))
+                page.content.pages.filter { it.height > heightEmptyChunks }.mapIndexed { index, it ->
+                    Page(index, "", fixLink(it.link))
                 }
             } catch (e: SerializationException) {
                 val page = json.decodeFromString<SeriesWrapperDto<ChunksPageDto>>(body)
