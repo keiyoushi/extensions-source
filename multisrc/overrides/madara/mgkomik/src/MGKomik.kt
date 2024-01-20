@@ -140,9 +140,9 @@ class MGKomik : Madara("MG Komik", "https://mgkomik.id", "id", SimpleDateFormat(
     companion object {
         const val TITLE_CUSTOM_UA = "Custom User-Agent"
         const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua"
-        const val SUMMARY_STRING_CUSTOM_UA = "\n\nBiarkan kosong untuk menggunakan User-Agent secara random" //leave empty to use random UA
-        const val SUMMARY_STRING2_CUSTOM_UA = "\n\nKosongkan untuk menggunakan User-Agent secara random" //make it blank/empty to use random UA
+        const val SUMMARY_STRING_CUSTOM_UA = "\n\nBiarkan kosong untuk menggunakan User-Agent secara random" // leave empty to use random UA
+        const val SUMMARY_STRING2_CUSTOM_UA = "\n\nKosongkan untuk menggunakan User-Agent secara random" // make it blank/empty to use random UA
 
-        const val RESTART_APP_STRING = "Restart Aplikasi untuk menggunakan pengaturan baru." //restart app to use new settings
+        const val RESTART_APP_STRING = "Restart Aplikasi untuk menggunakan pengaturan baru." // restart app to use new settings
     }
 }
