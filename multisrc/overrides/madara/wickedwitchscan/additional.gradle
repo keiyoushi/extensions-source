@@ -1,0 +1,5 @@
+dependencies {
+    implementation(project(":lib:cryptoaes"))
+    implementation(project(":lib:randomua"))
+    compileOnly("com.github.tachiyomiorg:image-decoder:fbd6601290")
+}
