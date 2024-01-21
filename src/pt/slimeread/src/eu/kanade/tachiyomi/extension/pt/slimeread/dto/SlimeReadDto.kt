@@ -58,7 +58,7 @@ data class PageListDto(@SerialName("book_temp_cap_unit") val pages: List<PageDto
 @Serializable
 data class PageDto(
     @SerialName("btcu_image") private val path: String,
-    @SerialName("btcu_provider_host") private val hostId: Int,
+    @SerialName("btcu_provider_host") private val hostId: Int?,
 ) {
     val url by lazy {
         val baseUrl = when (hostId) {
