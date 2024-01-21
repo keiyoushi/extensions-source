@@ -7,7 +7,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -202,12 +201,8 @@ class WickedWitchScan : ParsedHttpSource() {
                 val entryType = splitEntryName.last()
 
                 val imageData = if (entryType == "avif") {
-                    Log.d("wickedwitch", "Extracting AVIF image $entryName")
-
                     zis.readBytes()
                 } else {
-                    Log.d("wickedwitch", "Extracting SVG image $entryName")
-
                     val svgBytes = zis.readBytes()
                     val svgContent = svgBytes.toString(Charsets.UTF_8)
                     val b64 = dataUriRegex.find(svgContent)?.groupValues?.get(1)
@@ -227,8 +222,6 @@ class WickedWitchScan : ParsedHttpSource() {
                 decoder.recycle()
 
                 if (bitmap == null) {
-                    Log.e("wickedwitch", "Could not decode content into bitmap")
-
                     throw IOException("Não foi possível decodificar a imagem $filename#$entryName")
                 }
 
@@ -242,8 +235,6 @@ class WickedWitchScan : ParsedHttpSource() {
 
         val totalWidth = images.maxOf { it.second.width }
         val totalHeight = images.sumOf { it.second.height }
-
-        Log.d("wickedwitch", "Total size: ${totalWidth}x$totalHeight")
 
         val result = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
