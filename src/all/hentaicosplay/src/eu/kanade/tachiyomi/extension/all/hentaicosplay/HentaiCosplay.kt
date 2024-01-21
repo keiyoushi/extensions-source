@@ -159,10 +159,10 @@ class HentaiCosplay : HttpSource() {
                         add(Pair("", ""))
                         select("#tags a").map {
                             Pair(
-                                it.text(),
-                                it.attr("href")
+                                it.text()
                                     .replace(tagNumRegex, "")
                                     .trim(),
+                                it.attr("href"),
                             ).let(::add)
                         }
                     }
