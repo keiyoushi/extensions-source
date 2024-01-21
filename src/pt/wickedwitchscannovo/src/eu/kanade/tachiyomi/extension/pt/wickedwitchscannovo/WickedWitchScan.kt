@@ -108,7 +108,7 @@ class WickedWitchScan : ParsedHttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val manga = json.parseToJsonElement(response.body.string()).jsonArray.map {
-            val element = Jsoup.parse(it.jsonObject["html"]!!.jsonPrimitive.content)
+            val element = Jsoup.parseBodyFragment(it.jsonObject["html"]!!.jsonPrimitive.content)
 
             searchMangaFromElement(element)
         }
