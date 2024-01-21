@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.asurascans
+package eu.kanade.tachiyomi.extension.en.asurascans
 
 import android.app.Application
 import android.content.SharedPreferences
@@ -27,7 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class AsuraScansEn : MangaThemesia(
+class AsuraScans : MangaThemesia(
     "Asura Scans",
     "https://asuratoon.com",
     "en",
