@@ -58,7 +58,7 @@ jobs:
               },
               {
                 "type": "both",
-                "regex": ".*(?:fail(?:ed|ure|s|ing)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?.*install(?: updated)?(?: extensions?)?",
+                "regex": ".*(?:fail(?:ed|ure|s|ing)?|can\\s*(?:no|')?t|(?:not|un)(?:.*able)?|(?<!n[o']?t )blocked by|error) (?:to )?.*(?:install|update(?:d|ing)?)?(?: extensions?)?",
                 "ignoreCase": true,
                 "message": "Uninstall the extension before updating. If that does not work, uninstall it from your device's settings by navigating to your device's Settings -> Apps and uninstall it from there by looking for `Tachiyomi: <extension name>`.\n\nThis is usually caused your previous extension having a different signature from the updated extension, making Android refuse to update it."
               }
