@@ -49,7 +49,7 @@ class ManhuaRock : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaRequest(page: Int) = GET("https://manhuarockz.com/tat-ca-truyen/$page/?sort=most-viewd")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/tat-ca-truyen/$page/?sort=most-viewd")
 
     override fun popularMangaSelector() = "div.listupd div.page-item"
 
@@ -63,7 +63,7 @@ class ManhuaRock : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = "li.next:not(.disabled)"
 
-    override fun latestUpdatesRequest(page: Int) = GET("https://manhuarockz.com/tat-ca-truyen/$page/?sort=latest-updated")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/tat-ca-truyen/$page/?sort=latest-updated")
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
