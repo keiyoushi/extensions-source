@@ -63,7 +63,7 @@ class WickedWitchScanNew : ParsedHttpSource() {
     private val json: Json by injectLazy()
 
     private val simpleDateFormat by lazy {
-        SimpleDateFormat("d 'de' MMMM 'de' yyyy 'às' HH:mm", Locale("pt")).apply {
+        SimpleDateFormat("d 'de' MMMM 'de' yyyy 'às' HH:mm", Locale("pt", "BR")).apply {
             timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
         }
     }
