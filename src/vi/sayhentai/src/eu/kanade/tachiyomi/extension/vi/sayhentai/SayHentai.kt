@@ -58,10 +58,7 @@ class SayHentai : ParsedHttpSource() {
             } else {
                 (if (filters.isEmpty()) getFilterList() else filters).forEach {
                     when (it) {
-                        is GenreList -> {
-                            val genre = it.values[it.state]
-                            addPathSegment(genre.path)
-                        }
+                        is GenreList -> addPathSegments(it.values[it.state].path)
                         else -> {}
                     }
                 }
