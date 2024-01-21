@@ -171,7 +171,7 @@ class WickedWitchScan : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val scriptElement = document.selectFirst("script:containsData(const urls =[)")
-            ?: throw Exception("Could not find script with image data.")
+            ?: throw Exception("Não foi possível encontrar o script com dados de imagem.")
 
         val urls = scriptElement.html().substringAfter("const urls =[").substringBefore("];")
 
@@ -212,7 +212,7 @@ class WickedWitchScan : ParsedHttpSource() {
                     val svgBytes = zis.readBytes()
                     val svgContent = svgBytes.toString(Charsets.UTF_8)
                     val b64 = dataUriRegex.find(svgContent)?.groupValues?.get(1)
-                        ?: throw IOException("Could not match image in SVG content")
+                        ?: throw IOException("Não foi possível corresponder a imagem no conteúdo SVG")
 
                     Base64.decode(b64, Base64.DEFAULT)
                 }
@@ -220,7 +220,7 @@ class WickedWitchScan : ParsedHttpSource() {
                 val decoder = ImageDecoder.newInstance(ByteArrayInputStream(imageData))
 
                 if (decoder == null || decoder.width <= 0 || decoder.height <= 0) {
-                    throw IOException("Failed to initialize image decoder")
+                    throw IOException("Falha ao inicializar o decodificador de imagem")
                 }
 
                 val bitmap = decoder.decode(rgb565 = isLowRamDevice)
@@ -230,7 +230,7 @@ class WickedWitchScan : ParsedHttpSource() {
                 if (bitmap == null) {
                     Log.e("wickedwitch", "Could not decode content into bitmap")
 
-                    throw IOException("Could not decode image $filename#$entryName")
+                    throw IOException("Não foi possível decodificar a imagem $filename#$entryName")
                 }
 
                 entryIndex to bitmap
