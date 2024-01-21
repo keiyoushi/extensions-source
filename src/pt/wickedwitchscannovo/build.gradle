@@ -1,0 +1,11 @@
+ext {
+    extName = 'Wicked Witch Scan (Novo)'
+    extClass = '.WickedWitchScan'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    compileOnly("com.github.tachiyomiorg:image-decoder:fbd6601290")
+}

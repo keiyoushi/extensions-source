@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.wickedwitchscan
+package eu.kanade.tachiyomi.extension.pt.wickedwitchscannovo
 
 import android.annotation.SuppressLint
 import android.app.ActivityManager
@@ -45,9 +45,9 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
 @SuppressLint("WrongConstant")
-class WickedWitchScanNew : ParsedHttpSource() {
+class WickedWitchScan : ParsedHttpSource() {
 
-    override val name = "Wicked Witch Scan (Novo)"
+    override val name = "Wicked Witch Scan"
 
     override val lang = "pt-BR"
 
@@ -55,14 +55,6 @@ class WickedWitchScanNew : ParsedHttpSource() {
 
     // Source changed from Madara to homegrown website
     override val versionId = 2
-
-    // Keep the source name unchanged in ID calculation, since the "(Novo)" would be temporary
-    override val id by lazy {
-        val key = "wicked witch scan/$lang/$versionId"
-        val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
-
-        (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
-    }
 
     override val supportsLatest = true
 
