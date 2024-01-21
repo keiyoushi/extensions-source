@@ -144,7 +144,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("HentaiZM", "https://manga.hentaizm.fun", "tr", isNsfw = true),
         SingleLang("HentaiZone", "https://hentaizone.xyz", "fr", isNsfw = true, overrideVersionCode = 1),
         SingleLang("HerenScan", "https://herenscan.com", "es"),
-        SingleLang("HipercooL", "https://hiper.cool", "pt-BR", isNsfw = true, className = "Hipercool"),
+        SingleLang("HipercooL", "https://hiper.cool", "pt-BR", isNsfw = true, className = "Hipercool", overrideVersionCode = 1),
         SingleLang("Hiperdex", "https://hiperdex.com", "en", isNsfw = true, overrideVersionCode = 11),
         SingleLang("HistoireDHentai", "https://hhentai.fr", "fr", isNsfw = true),
         SingleLang("Hizomanga", "https://hizomanga.com", "ar", overrideVersionCode = 1),
