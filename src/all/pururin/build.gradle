@@ -1,7 +1,7 @@
 ext {
     extName = 'Pururin'
-    extClass = '.Pururin'
-    extVersionCode = 6
+    extClass = '.PururinFactory'
+    extVersionCode = 7
     isNsfw = true
 }
 
