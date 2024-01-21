@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.komiktap
 
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Cookie
