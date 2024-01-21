@@ -51,6 +51,8 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
     // Tags are useless as they are just SEO keywords.
     override val mangaDetailsSelectorTag = ""
 
+    override val chapterUrlSelector = "a:not([href*=troll-page])"
+
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val urlElement = element.selectFirst(chapterUrlSelector)!!
 
