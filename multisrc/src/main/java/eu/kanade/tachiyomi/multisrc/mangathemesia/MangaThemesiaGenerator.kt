@@ -152,6 +152,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Sushiscan.fr", "https://anime-sama.me", "fr", className = "SushiScanFR", overrideVersionCode = 1),
         SingleLang("Tarot Scans", "https://www.tarotscans.com", "tr"),
         SingleLang("Tecno Scan", "https://tecnoscann.com", "es", isNsfw = true, overrideVersionCode = 6),
+        SingleLang("Tempest Fansub", "https://tempestfansub.com", "tr", isNsfw = true),
         SingleLang("Tenshi.id", "https://tenshi.id", "id", className = "TenshiId", pkgName = "masterkomik", overrideVersionCode = 4),
         SingleLang("The Apollo Team", "https://theapollo.team", "en"),
         SingleLang("Tres Daos Scan", "https://tresdaos.com", "es"),
