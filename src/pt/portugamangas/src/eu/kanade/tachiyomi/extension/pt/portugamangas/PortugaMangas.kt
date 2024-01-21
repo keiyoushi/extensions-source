@@ -35,9 +35,7 @@ class PortugaMangas : ParsedHttpSource() {
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaSelector(): String = "div#maisLidos > div.itemmanga"
 
@@ -50,7 +48,7 @@ class PortugaMangas : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun latestUpdatesSelector() = "div.atualizacao"
 
@@ -75,9 +73,8 @@ class PortugaMangas : ParsedHttpSource() {
         return pageAmount != currentPage && currentPage != -1
     }
 
-    private fun searchMangaParse(document: Document): List<SManga> {
-        return document.select(searchMangaSelector()).map { this.searchMangaFromElement(it) }
-    }
+    private fun searchMangaParse(document: Document): List<SManga> =
+        document.select(searchMangaSelector()).map { this.searchMangaFromElement(it) }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val currentPage = response.request.url.queryParameter("pagina")?.toInt() ?: -1
@@ -99,10 +96,8 @@ class PortugaMangas : ParsedHttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    private fun getMangaStatus(document: Document): String {
-        return document.selectFirst("h5.cg_color > a.label.label-success")?.text()
-            ?: ""
-    }
+    private fun getMangaStatus(document: Document): String =
+        document.selectFirst("h5.cg_color > a.label.label-success")?.text() ?: ""
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
@@ -132,9 +127,8 @@ class PortugaMangas : ParsedHttpSource() {
         return if (date.isNotBlank()) { date.toDate() } else { 0L }
     }
 
-    private fun chapterNameParse(content: String): String {
-        return content.replace(DATE_PATTERN, "")
-    }
+    private fun chapterNameParse(content: String): String =
+        content.replace(DATE_PATTERN, "")
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         name = chapterNameParse(element.selectFirst("a > div")?.ownText() ?: "Unnamed")
