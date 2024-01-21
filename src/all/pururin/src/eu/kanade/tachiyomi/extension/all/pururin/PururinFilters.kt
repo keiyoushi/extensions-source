@@ -1,16 +1,10 @@
-package eu.kanade.tachiyomi.extension.en.pururin
+package eu.kanade.tachiyomi.extension.all.pururin
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class SortFilter(
-    values: Array<Search.Sort> = Search.Sort.values(),
-) : Filter.Select<Search.Sort>("Sort by", values) {
-    inline val sort get() = values[state]
-}
-
 sealed class TagFilter(
     name: String,
-    val id: Int,
+    val id: String,
 ) : Filter.TriState(name)
 
 sealed class TagGroup<T : TagFilter>(
@@ -18,29 +12,21 @@ sealed class TagGroup<T : TagFilter>(
     values: List<T>,
 ) : Filter.Group<T>(name, values)
 
-// TODO: Artist, Circle, Contents, Parody, Character, Convention
-
-class Category(name: String, id: Int) : TagFilter(name, id)
+class Category(name: String, id: String) : TagFilter(name, id)
 
 class CategoryGroup(
     values: List<Category> = categories,
 ) : TagGroup<Category>("Categories", values) {
     companion object {
         private val categories get() = listOf(
-            Category("Doujinshi", 13003),
-            Category("Manga", 13004),
-            Category("Artist CG", 13006),
-            Category("Game CG", 13008),
-            Category("Artbook", 17783),
-            Category("Webtoon", 27939),
+            Category("Doujinshi", "{\"id\":13003,\"name\":\"Doujinshi [Category]\"}"),
+            Category("Manga", "{\"id\":13004,\"name\":\"Manga [Category]\"}"),
+            Category("Artist CG", "{\"id\":13006,\"name\":\"Artist CG [Category]\"}"),
+            Category("Game CG", "{\"id\":13008,\"name\":\"Game CG [Category]\"}"),
+            Category("Artbook", "{\"id\":17783,\"name\":\"Artbook [Category]\"}"),
+            Category("Webtoon", "{\"id\":27939,\"name\":\"Webtoon [Category]\"}"),
         )
     }
-}
-
-class TagModeFilter(
-    values: Array<Search.TagMode> = Search.TagMode.values(),
-) : Filter.Select<Search.TagMode>("Tag mode", values) {
-    inline val mode get() = values[state]
 }
 
 class PagesFilter(
@@ -49,7 +35,7 @@ class PagesFilter(
     values: Array<Int> = range,
 ) : Filter.Select<Int>(name, values, default) {
     companion object {
-        private val range get() = Array(1001) { it }
+        private val range get() = Array(301) { it }
     }
 }
 
@@ -63,7 +49,7 @@ class PagesGroup(
     companion object {
         private val minmax get() = listOf(
             PagesFilter("Minimum", 0),
-            PagesFilter("Maximum", 100),
+            PagesFilter("Maximum", 300),
         )
     }
 }
