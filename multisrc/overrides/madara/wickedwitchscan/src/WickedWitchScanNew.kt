@@ -37,6 +37,7 @@ import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -51,6 +52,17 @@ class WickedWitchScanNew : ParsedHttpSource() {
     override val lang = "pt-BR"
 
     override val baseUrl = "https://wicked-witch-scan.com"
+
+    // Source changed from Madara to homegrown website
+    override val versionId = 2
+
+    // Keep the source name unchanged in ID calculation, since the "(Novo)" would be temporary
+    override val id by lazy {
+        val key = "wicked witch scan/$lang/$versionId"
+        val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
+
+        (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
+    }
 
     override val supportsLatest = true
 
