@@ -18,7 +18,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -113,13 +112,6 @@ class AsuraScans : MangaThemesia(
         return document.select(pageSelector)
             .filterNot { it.attr("src").isNullOrEmpty() }
             .mapIndexed { i, img -> Page(i, document.location(), img.attr("abs:src")) }
-    }
-
-    override fun Element.imgAttr(): String = when {
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("data-src") -> attr("abs:data-src")
-        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-        else -> attr("abs:src")
     }
 
     private fun Observable<MangasPage>.tempUrlToPermIfNeeded(): Observable<MangasPage> {

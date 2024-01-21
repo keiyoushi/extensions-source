@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.carteldemanhwas
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -14,13 +13,6 @@ class CarteldeManhwas : MangaThemesia(
 ) {
     override val hasProjectPage = true
     override val projectPageString = "/proyectos"
-
-    override fun Element.imgAttr(): String = when {
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-        hasAttr("data-src") -> attr("abs:data-src")
-        else -> attr("abs:src")
-    }
 
     override fun searchMangaSelector() = ".utao .uta .imgu:not(:has(span.novelabel)), " +
         ".listupd .bs .bsx:not(:has(span.novelabel)), " +
