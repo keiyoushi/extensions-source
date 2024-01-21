@@ -115,13 +115,6 @@ class AsuraScans : MangaThemesia(
             .mapIndexed { i, img -> Page(i, document.location(), img.attr("abs:src")) }
     }
 
-    override fun Element.imgAttr(): String = when {
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("data-src") -> attr("abs:data-src")
-        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-        else -> attr("abs:src")
-    }
-
     private fun Observable<MangasPage>.tempUrlToPermIfNeeded(): Observable<MangasPage> {
         return this.map { mangasPage ->
             MangasPage(
