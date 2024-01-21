@@ -13,7 +13,7 @@ class MadaraGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 32
 
     override val sources = listOf(
-        /*MultiLang("MangaForFree.net", "https://mangaforfree.net", listOf("en", "ko", "all"), isNsfw = true, className = "MangaForFreeFactory", pkgName = "mangaforfree", overrideVersionCode = 1),
+        MultiLang("MangaForFree.net", "https://mangaforfree.net", listOf("en", "ko", "all"), isNsfw = true, className = "MangaForFreeFactory", pkgName = "mangaforfree", overrideVersionCode = 1),
         MultiLang("Manhwa18.cc", "https://manhwa18.cc", listOf("en", "ko", "all"), isNsfw = true, className = "Manhwa18CcFactory", pkgName = "manhwa18cc", overrideVersionCode = 4),
         MultiLang("Reaper Scans", "https://reaperscans.com", listOf("fr", "tr"), className = "ReaperScansFactory", pkgName = "reaperscans", overrideVersionCode = 12),
         SingleLang("1st Kiss-Manga (unoriginal)", "https://1stkiss-manga.com", "en", isNsfw = false, className = "FirstKissDashManga"),
@@ -34,9 +34,9 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Anisa Manga", "https://anisamanga.com", "tr"),
         SingleLang("Ansh Scans", "https://anshscans.org", "en", overrideVersionCode = 1),
         SingleLang("ApollComics", "https://apollcomics.xyz", "es", isNsfw = true, overrideVersionCode = 2),
-        SingleLang("Apolltoons", "https://apolltoons.xyz", "es", isNsfw = true),*/
+        SingleLang("Apolltoons", "https://apolltoons.xyz", "es", isNsfw = true),
         SingleLang("Armoni Scans", "https://armoniscans.net", "tr"),
-        /*SingleLang("Aqua Manga", "https://aquamanga.org", "en", isNsfw = false, overrideVersionCode = 8),
+        SingleLang("Aqua Manga", "https://aquamanga.org", "en", isNsfw = false, overrideVersionCode = 8),
         SingleLang("AQUA Scans", "https://aquascans.com", "en", className = "ManhwaWorld", overrideVersionCode = 1),
         SingleLang("ArazNovel", "https://www.araznovel.com", "tr", overrideVersionCode = 3),
         SingleLang("Arcanescans", "https://arcanescans.com", "en"),
@@ -524,7 +524,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("مانجا ليك", "https://manga-lek.net", "ar", className = "Mangalek", overrideVersionCode = 4),
         SingleLang("مانجا ليكس", "https://mangaleks.com", "ar", className = "MangaLeks"),
         SingleLang("مانجا لينك", "https://mangalink.io", "ar", className = "MangaLinkio", overrideVersionCode = 3),
-        SingleLang("巴卡漫画", "https://bakamh.com", "zh", isNsfw = true, className = "Bakamh"),*/
+        SingleLang("巴卡漫画", "https://bakamh.com", "zh", isNsfw = true, className = "Bakamh"),
     )
 
     companion object {
