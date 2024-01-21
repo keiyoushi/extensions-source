@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangareadorg
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 

@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -62,5 +61,4 @@ class LectorMangaLat : Madara(
     }
 
     override val pageListParseSelector = "div.reading-content div.page-break > img"
-
 }
