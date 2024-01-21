@@ -19,7 +19,6 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Alceascan", "https://alceascan.my.id", "id"),
         SingleLang("Animated Glitched Comics", "https://agscomics.com", "en"),
         SingleLang("Animated Glitched Scans", "https://anigliscans.xyz", "en", overrideVersionCode = 1),
-        SingleLang("Arkham Scan", "https://arkhamscan.com", "pt-BR"),
         SingleLang("Arven Scans", "https://arvenscans.com", "en"),
         SingleLang("AscalonScans", "https://ascalonscans.com", "en"),
         SingleLang("Asura Scans", "https://asuratoon.com", "en"),
