@@ -116,9 +116,9 @@ class HentaiCosplay : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotEmpty()) {
+        if (query.isNotEmpty()) {
             val keyword = query.trim().replace(" ", "+")
-            GET("$baseUrl/search/keyword/$keyword/page/$page/", headers)
+            return GET("$baseUrl/search/keyword/$keyword/page/$page/", headers)
         } else {
             filters.forEach { filter ->
                 when (filter) {
