@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -62,14 +61,4 @@ class LectorMangaLat : Madara(
     }
 
     override val pageListParseSelector = "div.reading-content div.page-break > img"
-
-    override fun imageFromElement(element: Element): String? {
-        return when {
-            element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ")
-            else -> element.attr("abs:src")
-        }
-    }
 }
