@@ -56,7 +56,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Infernal Void Scans", "https://void-scans.com", "en", overrideVersionCode = 5),
         SingleLang("Kai Scans", "https://kaiscans.com", "en", isNsfw = false),
         SingleLang("Kanzenin", "https://kanzenin.info", "id", isNsfw = true, overrideVersionCode = 1),
-        SingleLang("KataKomik", "http://katakomik.my.id", "id", overrideVersionCode = 1),
+        SingleLang("KataKomik", "https://katakomik.my.id", "id", overrideVersionCode = 1),
         SingleLang("King of Shojo", "https://kingofshojo.com", "ar", overrideVersionCode = 1),
         SingleLang("Kiryuu", "https://kiryuu.id", "id", overrideVersionCode = 6),
         SingleLang("Komik AV", "https://komikav.com", "id", overrideVersionCode = 1),
