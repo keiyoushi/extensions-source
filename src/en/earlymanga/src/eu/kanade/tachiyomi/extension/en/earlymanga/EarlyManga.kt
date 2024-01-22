@@ -60,8 +60,10 @@ class EarlyManga : HttpSource() {
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     /* latest */
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", OrderByFilter.LATEST)
+    override fun latestUpdatesRequest(page: Int): Request {
+        return GET("$apiUrl/home/show-more?page=$page")
+    }
+
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     /* search */
