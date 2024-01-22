@@ -6,7 +6,7 @@
 
 # Usage
 
-https://github.com/keiyoushi/extensions/blob/main/README.md
+[Getting started](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo)
 
 # Contributing
 
