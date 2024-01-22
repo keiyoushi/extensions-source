@@ -150,7 +150,7 @@ abstract class Pururin(
     override fun pageListParse(document: Document): List<Page> {
         return document.select(".gallery-preview a img")
             .mapIndexed { i, img ->
-                Page(i, "", img.attr("abs:src").replace("t.", "."))
+                Page(i, "", (if (img.hasAttr("abs:src")) img.attr("abs:src") else img.attr("abs:data-src")).replace("t.", "."))
             }
     }
 
