@@ -9,9 +9,7 @@ import okhttp3.Response
 import java.io.IOException
 
 class Komiktap : MangaThemesia("Komiktap", "https://komiktap.me", "id") {
-    override val client by lazy {
-        super.client.newBuilder().addInterceptor(::sucuriInterceptor).build()
-    }
+    override val client = super.client.newBuilder().addInterceptor(::sucuriInterceptor).build()
 
     // Taken from es/ManhwasNet
     private fun sucuriInterceptor(chain: Interceptor.Chain): Response {
