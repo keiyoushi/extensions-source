@@ -60,8 +60,10 @@ class EarlyManga : HttpSource() {
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     /* latest */
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", OrderByFilter.LATEST)
+    override fun latestUpdatesRequest(page: Int): Request {
+        return GET("$apiUrl/home/show-more?page=$page")
+    }
+
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     /* search */
@@ -93,7 +95,9 @@ class EarlyManga : HttpSource() {
                 SManga.create().apply {
                     url = "/manga/${it.id}/${it.slug}"
                     title = it.title
-                    thumbnail_url = "$baseUrl/storage/uploads/covers_optimized_mangalist/manga_${it.id}/${it.cover}"
+                    thumbnail_url = it.cover?.let { cover ->
+                        "$baseUrl/storage/uploads/covers_optimized_mangalist/manga_${it.id}/$cover"
+                    }
                 }
             },
             hasNextPage = result.meta.last_page > result.meta.current_page,
@@ -166,10 +170,17 @@ class EarlyManga : HttpSource() {
             title = result.title
             author = result.authors?.joinToString { it.trim() }
             artist = result.artists?.joinToString { it.trim() }
-            description = "${result.desc.trim()}\n\nAlternative Names: ${result.alt_titles?.joinToString { it.name.trim() }}"
+            description = buildString {
+                result.desc?.trim()?.also { append(it, "\n\n") }
+                result.alt_titles?.joinToString("\n") { "• ${it.name.trim()}" }
+                    ?.takeUnless { it.isEmpty() }
+                    ?.also { append("Alternative Names:\n", it) }
+            }
             genre = result.all_genres?.joinToString { it.name.trim() }
             status = result.pubstatus[0].name.parseStatus()
-            thumbnail_url = "$baseUrl/storage/uploads/covers/manga_${result.id}/${result.cover}"
+            thumbnail_url = result.cover?.let { cover ->
+                "$baseUrl/storage/uploads/covers/manga_${result.id}/$cover"
+            }
         }
     }
 
@@ -211,9 +222,11 @@ class EarlyManga : HttpSource() {
         val chapterUrl = response.request.url.toString()
             .replace("/api", "")
 
-        return result.images.mapIndexed { index, img ->
-            Page(index = index, url = chapterUrl, imageUrl = "$cdnUrl/manga/manga_${result.manga_id}/chapter_${result.slug}/$img")
-        }
+        return result.images
+            .filterNot { it.endsWith(".ico") }
+            .mapIndexed { index, img ->
+                Page(index = index, url = chapterUrl, imageUrl = "$cdnUrl/manga/manga_${result.manga_id}/chapter_${result.slug}/$img")
+            }
     }
 
     override fun imageRequest(page: Page): Request {
