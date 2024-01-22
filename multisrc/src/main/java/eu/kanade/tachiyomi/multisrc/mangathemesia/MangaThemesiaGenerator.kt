@@ -68,7 +68,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("KomikMama", "https://komikmama.co", "id", overrideVersionCode = 1),
         SingleLang("KomikManhwa", "https://komikmanhwa.me", "id", isNsfw = true),
         SingleLang("Komiksan", "https://komiksan.link", "id", overrideVersionCode = 2),
-        SingleLang("Komiktap", "https://komiktap.me", "id", isNsfw = true),
+        SingleLang("Komiktap", "https://komiktap.me", "id", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Komiku.com", "https://komiku.com", "id", className = "KomikuCom"),
         SingleLang("Kuma Scans (Kuma Translation)", "https://kumascans.com", "en", className = "KumaScans", overrideVersionCode = 1),
         SingleLang("KumaPoi", "https://kumapoi.info", "id", isNsfw = true, overrideVersionCode = 3),
