@@ -50,6 +50,11 @@ jobs:
                 "message": "You did not fill out the description in the title."
               },
               {
+                "type": "body",
+                "regex": "- \\[[xX]\\] I have admitted that I am a clown by having checked this box, as I have not read these acknowledgements\\.",
+                "message": "You have not carefully read the acknowledgements."
+              },
+              {
                 "type": "both",
                 "regex": ".*(?:fail(?:ed|ure|s)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?(?:get past|by ?pass|penetrate)?.*cl[oa]ud ?fl?[ai]re.*",
                 "ignoreCase": true,
@@ -60,7 +65,7 @@ jobs:
                 "type": "both",
                 "regex": ".*(?:fail(?:ed|ure|s|ing)?|can\\s*(?:no|')?t|(?:not|un)(?:.*able)?|(?<!n[o']?t )blocked by|error) (?:to )?.*(?:install|update(?:d|ing)?)?(?: extensions?)?",
                 "ignoreCase": true,
-                "message": "Uninstall the extension before updating. If that does not work, uninstall it from your device's settings by navigating to your device's Settings -> Apps and uninstall it from there by looking for `Tachiyomi: <extension name>`.\n\nThis is usually caused your previous extension having a different signature from the updated extension, making Android refuse to update it."
+                "message": "Uninstall the extension before updating. If that does not work, uninstall it from your device's settings by navigating to your device's Settings -> Apps and uninstall it from there by looking for **Tachiyomi: <extension name>**.\n\nThis is usually caused your previous extension having a different signature from the updated extension, making Android refuse to update it."
               }
             ]
           auto-close-ignore-label: do-not-autoclose

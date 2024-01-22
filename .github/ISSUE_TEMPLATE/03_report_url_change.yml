@@ -47,11 +47,12 @@ body:
       options:
         - label: I have updated all installed extensions.
           required: true
-        - label: I have opened WebView and checked that the source URL is not updated yet.
+        - label: I have opened WebView and checked that the source URL has not changed yet.
           required: true
         - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
           required: true
         - label: I have written a short but informative title.
           required: true
+        - label: I have admitted that I am a clown by having checked this box, as I have not read these acknowledgements.
         - label: I will fill out all of the requested information in this form.
           required: true
