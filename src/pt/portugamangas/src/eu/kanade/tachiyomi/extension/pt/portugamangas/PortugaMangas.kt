@@ -41,7 +41,6 @@ class PortugaMangas : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("h3")?.text() ?: "Title not found"
         thumbnail_url = element.selectFirst("img")!!.srcAttr()
-        initialized = true
         setUrlWithoutDomain(element.attr("href"))
     }
 
@@ -103,7 +102,6 @@ class PortugaMangas : ParsedHttpSource() {
             title = document.selectFirst("h1")?.text() ?: "Untitled"
             description = document.selectFirst("#manga_capitulo_descricao")?.text()
             thumbnail_url = document.selectFirst("div.manga .row .row div.text-right img")!!.absUrl("src")
-            initialized = true
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             genre = document.select("h5.cg_color > a.label.label-warning")
                 .map { it?.text() ?: "" }
