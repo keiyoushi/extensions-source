@@ -19,7 +19,6 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import kotlin.math.max
 
 class PortugaMangas : ParsedHttpSource() {
 
@@ -63,7 +62,7 @@ class PortugaMangas : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("busca", query)
-            .addQueryParameter("pagina", max(1, page).toString())
+            .addQueryParameter("pagina", "$page")
             .build()
         return GET(url, headers)
     }
