@@ -53,8 +53,6 @@ class OrderByFilter(
         private val options = listOf(
             "Views",
             "Bookmarks",
-            "Added date",
-            "Updated date",
             "Number of chapters",
             "Rating",
         )
