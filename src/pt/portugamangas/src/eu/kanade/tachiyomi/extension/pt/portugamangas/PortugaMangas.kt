@@ -46,7 +46,12 @@ class PortugaMangas : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$baseUrl".toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", "$page")
+            .build()
+        return GET(url, headers)
+    }
 
     override fun latestUpdatesSelector() = "div.atualizacao"
 
