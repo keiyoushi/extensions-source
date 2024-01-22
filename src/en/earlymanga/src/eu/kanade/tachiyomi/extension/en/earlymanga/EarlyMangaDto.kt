@@ -13,7 +13,7 @@ data class SearchData(
     val id: Int,
     val title: String,
     val slug: String,
-    val cover: String,
+    val cover: String? = null,
 )
 
 @Serializable
@@ -31,8 +31,8 @@ data class MangaData(
     val artists: List<String>?,
     val all_genres: List<NameVal>?,
     val pubstatus: List<NameVal>,
-    val desc: String = "Unknown",
-    val cover: String,
+    val desc: String? = "Unknown",
+    val cover: String? = null,
 )
 
 @Serializable
