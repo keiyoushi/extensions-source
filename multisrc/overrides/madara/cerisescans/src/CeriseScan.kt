@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 class CeriseScan : Madara(
     "Cerise Scan",
-    "https://cerisescan.com",
+    "https://cerisescan.net",
     "pt-BR",
     SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
