@@ -97,11 +97,11 @@ class Mangaku : ParsedHttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun latestUpdatesSelector() = "div.kiri_anime div.utao, div.proyek div.utao"
+    override fun latestUpdatesSelector() = "div.kiri_anime div.utao"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.select("div.uta div.luf a.series").attr("href"))
-        title = element.select("div.uta div.luf a.series").attr("title")
+        title = element.select("div.uta div.luf a.series").text()
         thumbnail_url = element.select("div.uta div.imgu img").attr("abs:data-src")
     }
 
@@ -129,12 +129,16 @@ class Mangaku : ParsedHttpSource() {
             .select("#sidebar-a a[imageanchor] > img, #abc a[imageanchor] > img")
             .attr("abs:src")
 
+        genre = document.select(".inf:contains(Genre) p a, .inf:contains(Type) p").joinToString { it.text() }
         document.select("#wrapper-a #content-a .inf, #abc .inf").forEach { row ->
             when (row.select(".infx").text()) {
-                "Genre" -> genre = row.select("p a[rel=tag]").joinToString { it.text() }
                 "Author" -> author = row.select("p").text()
                 "Sinopsis" -> description = row.select("p").text()
             }
+        }
+        val altName = document.selectFirst(".inf:contains(Alternative) p")?.ownText().takeIf { it.isNullOrBlank().not() }
+        altName?.let {
+            description = "$description\n\nAlternative Name: $altName".trim()
         }
     }
 
@@ -205,7 +209,7 @@ class Mangaku : ParsedHttpSource() {
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
-            throw Exception("Kehabisan waktu saat men-decrypt tautan gambar") //Timeout while decrypting image links
+            throw Exception("Kehabisan waktu saat men-decrypt tautan gambar") // Timeout while decrypting image links
         }
 
         return jsInterface.images.mapIndexed { i, url ->
