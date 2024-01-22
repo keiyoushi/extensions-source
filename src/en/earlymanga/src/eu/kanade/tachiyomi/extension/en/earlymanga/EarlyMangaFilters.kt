@@ -58,7 +58,6 @@ class OrderByFilter(
         )
 
         val POPULAR = FilterList(OrderByFilter("Views"))
-        val LATEST = FilterList(OrderByFilter("Updated date"))
     }
 }
 
