@@ -95,7 +95,9 @@ class EarlyManga : HttpSource() {
                 SManga.create().apply {
                     url = "/manga/${it.id}/${it.slug}"
                     title = it.title
-                    thumbnail_url = "$baseUrl/storage/uploads/covers_optimized_mangalist/manga_${it.id}/${it.cover}"
+                    thumbnail_url = it.cover?.let { cover ->
+                        "$baseUrl/storage/uploads/covers_optimized_mangalist/manga_${it.id}/$cover"
+                    }
                 }
             },
             hasNextPage = result.meta.last_page > result.meta.current_page,
@@ -168,10 +170,17 @@ class EarlyManga : HttpSource() {
             title = result.title
             author = result.authors?.joinToString { it.trim() }
             artist = result.artists?.joinToString { it.trim() }
-            description = "${result.desc.trim()}\n\nAlternative Names: ${result.alt_titles?.joinToString { it.name.trim() }}"
+            description = buildString {
+                result.desc?.trim()?.also { append(it, "\n\n") }
+                result.alt_titles?.joinToString("\n") { "• ${it.name.trim()}" }
+                    ?.takeUnless { it.isEmpty() }
+                    ?.also { append("Alternative Names:\n", it) }
+            }
             genre = result.all_genres?.joinToString { it.name.trim() }
             status = result.pubstatus[0].name.parseStatus()
-            thumbnail_url = "$baseUrl/storage/uploads/covers/manga_${result.id}/${result.cover}"
+            thumbnail_url = result.cover?.let { cover ->
+                "$baseUrl/storage/uploads/covers/manga_${result.id}/$cover"
+            }
         }
     }
 
