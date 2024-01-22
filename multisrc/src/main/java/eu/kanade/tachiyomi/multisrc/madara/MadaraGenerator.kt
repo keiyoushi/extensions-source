@@ -15,6 +15,7 @@ class MadaraGenerator : ThemeSourceGenerator {
     override val sources = listOf(
         MultiLang("MangaForFree.net", "https://mangaforfree.net", listOf("en", "ko", "all"), isNsfw = true, className = "MangaForFreeFactory", pkgName = "mangaforfree", overrideVersionCode = 1),
         MultiLang("Manhwa18.cc", "https://manhwa18.cc", listOf("en", "ko", "all"), isNsfw = true, className = "Manhwa18CcFactory", pkgName = "manhwa18cc", overrideVersionCode = 4),
+        MultiLang("Reaper Scans", "https://reaperscans.com", listOf("fr", "tr"), className = "ReaperScansFactory", pkgName = "reaperscans", overrideVersionCode = 12),
         SingleLang("1st Kiss-Manga (unoriginal)", "https://1stkiss-manga.com", "en", isNsfw = false, className = "FirstKissDashManga"),
         SingleLang("1st Manhwa", "https://1stmanhwa.com", "en", isNsfw = true, className = "FirstManhwa"),
         SingleLang("1stKissManga.blog", "https://1stkissmanga.blog", "en", isNsfw = true, className = "FirstKissMangaBlog"),
