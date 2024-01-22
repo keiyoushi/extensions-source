@@ -222,9 +222,11 @@ class EarlyManga : HttpSource() {
         val chapterUrl = response.request.url.toString()
             .replace("/api", "")
 
-        return result.images.mapIndexed { index, img ->
-            Page(index = index, url = chapterUrl, imageUrl = "$cdnUrl/manga/manga_${result.manga_id}/chapter_${result.slug}/$img")
-        }
+        return result.images
+            .filterNot { it.endsWith(".ico") }
+            .mapIndexed { index, img ->
+                Page(index = index, url = chapterUrl, imageUrl = "$cdnUrl/manga/manga_${result.manga_id}/chapter_${result.slug}/$img")
+            }
     }
 
     override fun imageRequest(page: Page): Request {
