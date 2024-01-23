@@ -27,7 +27,6 @@ class MMRCMSGenerator : ThemeSourceGenerator {
         SingleLang("Jpmangas", "https://jpmangas.xyz", "fr", overrideVersionCode = 2),
         SingleLang("Manga-FR", "https://manga-fr.cc", "fr", className = "MangaFR", overrideVersionCode = 2),
         SingleLang("Manga-Scan", "https://mangascan-fr.com", "fr", className = "MangaScan", overrideVersionCode = 4),
-        SingleLang("Ama Scans", "https://amascan.com", "pt-BR", isNsfw = true, overrideVersionCode = 2),
         SingleLang("Bentoscan", "https://bentoscan.com", "fr"),
         // NOTE: THIS SOURCE CONTAINS A CUSTOM LANGUAGE SYSTEM (which will be ignored)!
         SingleLang("HentaiShark", "https://www.hentaishark.com", "all", isNsfw = true),
