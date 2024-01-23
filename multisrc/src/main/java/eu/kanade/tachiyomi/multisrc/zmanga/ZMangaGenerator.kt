@@ -13,7 +13,7 @@ class ZMangaGenerator : ThemeSourceGenerator {
 
     override val sources = listOf(
         SingleLang("KomikGan", "https://komikgan.com", "id"),
-        SingleLang("Hensekai", "https://hensekai.com", "id", isNsfw = true, className = "Hensekai"),
+        SingleLang("Hensekai", "https://hensekai.com", "id", isNsfw = true),
         SingleLang("KomikIndo.info", "http://komikindo.info", "id", isNsfw = true, className = "KomikIndoInfo"),
         SingleLang("Komikita", "https://komikita.org", "id"),
         SingleLang("KomikPlay", "https://komikplay.com", "id", overrideVersionCode = 1),

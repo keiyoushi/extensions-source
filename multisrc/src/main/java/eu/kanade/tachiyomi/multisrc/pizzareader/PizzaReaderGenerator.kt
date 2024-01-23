@@ -13,7 +13,7 @@ class PizzaReaderGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 2
 
     override val sources = listOf(
-        SingleLang("Phoenix Scans", "https://www.phoenixscans.com", "it", className = "PhoenixScans", overrideVersionCode = 4),
+        SingleLang("Phoenix Scans", "https://www.phoenixscans.com", "it", overrideVersionCode = 4),
         SingleLang("GTO The Great Site", "https://reader.gtothegreatsite.net", "it", className = "GTO", overrideVersionCode = 3),
         SingleLang("LupiTeam", "https://lupiteam.net", "it", overrideVersionCode = 3),
         SingleLang("TuttoAnimeManga", "https://tuttoanimemanga.net", "it", overrideVersionCode = 4),
