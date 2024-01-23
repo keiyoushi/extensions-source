@@ -1,6 +1,5 @@
 ext {
     extName = 'Portuga Mangas'
-    pkgNameSuffix = 'pt.portugamangas'
     extClass = '.PortugaMangas'
     extVersionCode = 1
     isNsfw = true
