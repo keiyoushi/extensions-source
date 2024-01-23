@@ -104,7 +104,7 @@ class PortugaMangas : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            title = document.selectFirst("h1")?.text() ?: "Untitled"
+            title = document.selectFirst("h1")!!.text()
             description = document.selectFirst("#manga_capitulo_descricao")?.text()
             thumbnail_url = document.selectFirst("div.manga .row .row div.text-right img")!!.absUrl("src")
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
