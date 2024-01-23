@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class luratoon : Madara(
     "Random Scan",
-    "https://luratoon.com/",
+    "https://luratoon.com",
     "pt-BR",
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 ) {
