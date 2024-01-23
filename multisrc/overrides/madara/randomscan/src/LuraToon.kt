@@ -7,7 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class LunaToon : Madara(
+class LuraToon : Madara(
     "Random Scan",
     "https://luratoon.com",
     "pt-BR",
