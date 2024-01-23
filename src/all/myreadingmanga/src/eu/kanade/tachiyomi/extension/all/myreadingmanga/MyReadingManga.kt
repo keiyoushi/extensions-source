@@ -13,11 +13,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -219,7 +219,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     // Pages
 
     override fun pageListParse(document: Document): List<Page> {
-        return (document.select("div img") + document.select("div.separator img[data-src]"))
+        return (document.select("div.entry-content img") + document.select("div.separator img[data-src]"))
             .mapNotNull { getImage(it) }
             .distinct()
             .mapIndexed { i, url -> Page(i, "", url) }
@@ -229,11 +229,12 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
 
     // Filter Parsing, grabs pages as document and filters out Genres, Popular Tags, and Categories, Parings, and Scan Groups
     private var filtersCached = false
+    private val filterMap = mutableMapOf<String, String>()
 
     // Grabs page containing filters and puts it into cache
-    private fun filterAssist(url: String): String {
+    private fun filterAssist(url: String) {
         val response = client.newCall(GET(url, headers)).execute()
-        return response.body.string()
+        filterMap[url] = response.body.string()
     }
 
     private fun cacheAssistant() {
@@ -243,22 +244,17 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         }
     }
 
-    // Returns page from cache to reduce calls to website
-    private fun getCache(url: String): Document? {
-        val response = client.newCall(GET(url, headers, CacheControl.FORCE_CACHE)).execute()
-        return if (response.isSuccessful) {
-            filtersCached = true
-            response.asJsoup()
-        } else {
+    // Parses cached page for filters
+    private fun returnFilter(url: String, css: String): Array<String> {
+        val document = if (filterMap.isNullOrEmpty()) {
             filtersCached = false
             null
+        } else {
+            filtersCached = true
+            Jsoup.parse(filterMap[url]!!)
         }
-    }
-
-    // Parses page for filter
-    private fun returnFilter(document: Document?, css: String): Array<String> {
         return document?.select(css)?.map { it.text() }?.toTypedArray()
-            ?: arrayOf("Press 'Reset' to try again")
+            ?: arrayOf("Press 'Reset' to load filters")
     }
 
     // URLs for the pages we need to cache
@@ -275,11 +271,11 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         return FilterList(
             EnforceLanguageFilter(siteLang),
             SearchSortTypeList(),
-            GenreFilter(returnFilter(getCache(cachedPagesUrls["genres"]!!), ".tagcloud a[href*=/genre/]")),
-            TagFilter(returnFilter(getCache(cachedPagesUrls["tags"]!!), ".tagcloud a[href*=/tag/]")),
-            CatFilter(returnFilter(getCache(cachedPagesUrls["categories"]!!), ".links a")),
-            PairingFilter(returnFilter(getCache(cachedPagesUrls["pairings"]!!), ".links a")),
-            ScanGroupFilter(returnFilter(getCache(cachedPagesUrls["groups"]!!), ".links a")),
+            GenreFilter(returnFilter(cachedPagesUrls["genres"]!!, ".tagcloud a[href*=/genre/]")),
+            TagFilter(returnFilter(cachedPagesUrls["tags"]!!, ".tagcloud a[href*=/tag/]")),
+            CatFilter(returnFilter(cachedPagesUrls["categories"]!!, ".links a")),
+            PairingFilter(returnFilter(cachedPagesUrls["pairings"]!!, ".links a")),
+            ScanGroupFilter(returnFilter(cachedPagesUrls["groups"]!!, ".links a")),
         )
     }
 
@@ -325,6 +321,6 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     }
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.5563.115 Mobile Safari/537.36"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Mobile Safari/537.36"
     }
 }
