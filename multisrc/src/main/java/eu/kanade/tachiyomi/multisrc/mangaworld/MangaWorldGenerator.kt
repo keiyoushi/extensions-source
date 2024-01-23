@@ -10,7 +10,7 @@ class MangaWorldGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 2
 
     override val sources = listOf(
-        SingleLang("Mangaworld", "https://www.mangaworld.so", "it", pkgName = "mangaworld", overrideVersionCode = 5),
+        SingleLang("Mangaworld", "https://www.mangaworld.so", "it", overrideVersionCode = 5),
         SingleLang("MangaworldAdult", "https://www.mangaworldadult.com", "it", isNsfw = true),
     )
 
