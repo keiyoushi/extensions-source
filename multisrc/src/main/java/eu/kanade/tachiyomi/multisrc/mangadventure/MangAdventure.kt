@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -13,7 +14,6 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
-import eu.kanade.tachiyomi.source.model.Page as SPage
 
 /** MangAdventure base source. */
 abstract class MangAdventure(
@@ -25,7 +25,7 @@ abstract class MangAdventure(
     protected open val categories = DEFAULT_CATEGORIES
 
     /** The site's manga status names. */
-    protected open val statuses = arrayOf("Any", "Completed", "Ongoing")
+    protected open val statuses = arrayOf("Any", "Completed", "Ongoing", "Hiatus", "Cancelled")
 
     /** The site's sort order labels that correspond to [SortOrder.values]. */
     protected open val orders = arrayOf(
@@ -36,9 +36,8 @@ abstract class MangAdventure(
     )
 
     /** A user agent representing Tachiyomi. */
-    private val userAgent = "Mozilla/5.0 " +
-        "(Android ${VERSION.RELEASE}; Mobile) " +
-        "Tachiyomi/${AppInfo.getVersionName()}"
+    private val userAgent =
+        "Mozilla/5.0 (Android ${VERSION.RELEASE}; Mobile) Tachiyomi/${AppInfo.getVersionName()}"
 
     /** The URL of the site's API. */
     private val apiUrl by lazy { "$baseUrl/api/v2" }
@@ -62,7 +61,7 @@ abstract class MangAdventure(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
         apiUrl.toHttpUrl().newBuilder().addEncodedPathSegment("series").run {
             if (query.startsWith(SLUG_QUERY)) {
-                addQueryParameter("slug", query.substring(SLUG_QUERY.length))
+                addQueryParameter("slug", query.substringAfter(SLUG_QUERY))
             } else {
                 addQueryParameter("page", page.toString())
                 addQueryParameter("title", query)
@@ -70,6 +69,7 @@ abstract class MangAdventure(
                     addQueryParameter(it.param, it.toString())
                 }
             }
+
             GET(build(), headers)
         }
 
@@ -98,7 +98,7 @@ abstract class MangAdventure(
             SChapter.create().apply {
                 url = chapter.id.toString()
                 name = buildString {
-                    append(chapter.full_title)
+                    append(chapter.fullTitle)
                     if (chapter.final) append(" [END]")
                 }
                 chapter_number = chapter.number
@@ -111,8 +111,8 @@ abstract class MangAdventure(
         response.decode<Series>().let(::mangaFromJSON)
 
     override fun pageListParse(response: Response) =
-        response.decode<Results<Page>>().map { page ->
-            SPage(page.number, page.url, page.image)
+        response.decode<Results<MAPage>>().map { page ->
+            Page(page.number, imageUrl = page.image)
         }
 
     override fun imageUrlParse(response: Response) =
@@ -126,8 +126,8 @@ abstract class MangAdventure(
         FilterList(
             Author(),
             Artist(),
-            SortOrder(orders),
             Status(statuses),
+            SortOrder(orders),
             CategoryList(categories),
         )
 
