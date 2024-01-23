@@ -124,6 +124,16 @@ class HentaiCafe : ParsedHttpSource() {
             ?.joinToString()
 
     // ============================== Chapters ==============================
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val chapter = SChapter.create().apply {
+            url = manga.url
+            name = "Chapter"
+            chapter_number = 1F
+        }
+
+        return Observable.just(listOf(chapter))
+    }
+
     override fun chapterListSelector(): String {
         throw UnsupportedOperationException()
     }
