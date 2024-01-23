@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -90,9 +91,37 @@ class HentaiCafe : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document): SManga {
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        thumbnail_url = document.selectFirst("#cover > a > img")?.run {
+            absUrl("data-src").ifEmpty { absUrl("src") }
+        }
+
+        with(document.selectFirst("div#bigcontainer > div > div#info")!!) {
+            title = selectFirst("h1.title")!!.text()
+            artist = getInfo("Artists")
+            genre = getInfo("Tags")
+
+            description = buildString {
+                select(".title > span").eachText().joinToString("\n").also {
+                    append("Full titles:\n$it\n")
+                }
+
+                getInfo("Groups")?.also { append("\nGroups: $it") }
+                getInfo("Languages")?.also { append("\nLanguages: $it") }
+                getInfo("Parodies")?.also { append("\nParodies: $it") }
+                getInfo("Pages")?.also { append("\nPages: $it") }
+            }
+        }
+
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
+
+    private fun Element.getInfo(item: String) =
+        select("div.field-name:containsOwn($item) a.tag > span.name")
+            .eachText()
+            .takeUnless { it.isEmpty() }
+            ?.joinToString()
 
     // ============================== Chapters ==============================
     override fun chapterListSelector(): String {
