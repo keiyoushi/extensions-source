@@ -219,7 +219,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     // Pages
 
     override fun pageListParse(document: Document): List<Page> {
-        return (document.select("div img") + document.select("div.separator img[data-src]"))
+        return (document.select("div.entry-content img") + document.select("div.separator img[data-src]"))
             .mapNotNull { getImage(it) }
             .distinct()
             .mapIndexed { i, url -> Page(i, "", url) }
