@@ -56,8 +56,8 @@ class PortugaMangas : ParsedHttpSource() {
     override fun latestUpdatesSelector() = "div.atualizacao"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("a > h3")?.text() ?: "Title not found"
-        thumbnail_url = element.selectFirst("div > img")!!.absUrl("src")
+        title = element.selectFirst("a > h3")!!.text()
+        thumbnail_url = element.selectFirst("div > img")?.absUrl("src")
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
 
