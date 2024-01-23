@@ -472,7 +472,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Toonily", "https://toonily.com", "en", isNsfw = true, overrideVersionCode = 11),
         SingleLang("Toonizy", "https://toonizy.com", "en", isNsfw = true),
         SingleLang("ToonMany", "https://toonmany.com", "en", isNsfw = true),
-        SingleLang("Top Manhua", "https://topmanhua.com", "en", overrideVersionCode = 2),
+        SingleLang("Top Manhua", "https://topmanhua.com", "en", overrideVersionCode = 3),
         SingleLang("TopReadManhwa", "https://topreadmanhwa.com", "en", isNsfw = true),
         SingleLang("Tortuga Ceviri", "https://tortuga-ceviri.com", "tr"),
         SingleLang("Traducciones Moonlight", "https://traduccionesmoonlight.com", "es"),
