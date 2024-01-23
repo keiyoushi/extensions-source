@@ -33,8 +33,9 @@ body:
           required: true
         - label: If this is an issue with the app itself, I should be opening an issue in the [app repository](https://github.com/tachiyomiorg/tachiyomi/issues/new/choose).
           required: true
-        - label: I have updated the app to version **[0.15.1](https://github.com/tachiyomiorg/tachiyomi/releases/latest)**.
+        - label: I have updated the app to version **[0.15.3](https://github.com/tachiyomiorg/tachiyomi/releases/latest)**.
           required: true
+        - label: I have admitted that I am a clown by having checked this box, as I have not read these acknowledgements.
         - label: I have updated all installed extensions.
           required: true
         - label: I will fill out all of the requested information in this form.

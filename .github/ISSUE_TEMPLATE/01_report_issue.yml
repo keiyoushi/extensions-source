@@ -101,6 +101,7 @@ body:
           required: true
         - label: I have tried the [troubleshooting guide](https://tachiyomi.org/help/guides/troubleshooting/).
           required: true
+        - label: I have admitted that I am a clown by having checked this box, as I have not read these acknowledgements.
         - label: If this is an issue with the app itself, I should be opening an issue in the [app repository](https://github.com/tachiyomiorg/tachiyomi/issues/new/choose).
           required: true
         - label: I will fill out all of the requested information in this form.
