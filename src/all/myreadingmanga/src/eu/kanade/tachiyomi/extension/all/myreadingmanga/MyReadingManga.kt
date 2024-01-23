@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -29,7 +28,6 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     // Basic Info
     override val name = "MyReadingManga"
     final override val baseUrl = "https://myreadingmanga.info"
-    override val client: OkHttpClient = network.cloudflareClient
     override fun headersBuilder(): Headers.Builder =
         super.headersBuilder()
             .set("User-Agent", USER_AGENT)
