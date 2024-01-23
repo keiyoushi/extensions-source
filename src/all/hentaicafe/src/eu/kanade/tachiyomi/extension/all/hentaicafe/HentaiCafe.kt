@@ -41,9 +41,7 @@ class HentaiCafe : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        thumbnail_url = element.selectFirst("img")?.run {
-            absUrl("data-src").ifEmpty { absUrl("src") }
-        }
+        thumbnail_url = element.selectFirst("img")?.getImageUrl()
         title = element.selectFirst("div.caption")!!.text()
     }
 
@@ -92,9 +90,7 @@ class HentaiCafe : ParsedHttpSource() {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        thumbnail_url = document.selectFirst("#cover > a > img")?.run {
-            absUrl("data-src").ifEmpty { absUrl("src") }
-        }
+        thumbnail_url = document.selectFirst("#cover > a > img")?.getImageUrl()
 
         with(document.selectFirst("div#bigcontainer > div > div#info")!!) {
             title = selectFirst("h1.title")!!.text()
@@ -144,12 +140,20 @@ class HentaiCafe : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        throw UnsupportedOperationException()
+        return document.select("div.thumbs a.gallerythumb > img").mapIndexed { index, item ->
+            val url = item.getImageUrl()
+            // Show original images instead of previews
+            val imageUrl = url.substringBeforeLast('/') + "/" + url.substringAfterLast('/').replace("t.", ".")
+            Page(index, "", imageUrl)
+        }
     }
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException()
     }
+
+    // ============================= Utilities ==============================
+    private fun Element.getImageUrl() = absUrl("data-src").ifEmpty { absUrl("src") }
 
     companion object {
         const val PREFIX_SEARCH = "id:"
