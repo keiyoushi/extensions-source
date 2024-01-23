@@ -59,7 +59,7 @@ class Vgperson : ParsedHttpSource() {
         }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        status = when (document.select(".chaptername").first()!!.text()) {
+        status = when (document.select("div.content .complete").text()) {
             "(Complete)" -> SManga.COMPLETED
             "(Series in Progress)" -> SManga.ONGOING
             else -> SManga.UNKNOWN
@@ -84,7 +84,7 @@ class Vgperson : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         element.select("td > a").first()!!.let {
             name = it.text()
-            url = it.attr("href")
+            setUrlWithoutDomain(it.attr("abs:href"))
         }
         // append the name if it exists & remove the occasional hyphen
         element.select(".chaptername").first()?.let {
