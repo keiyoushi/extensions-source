@@ -185,7 +185,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaSelector(): String = "div.card div.p-2"
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if ("live-search" in response.request.url.toString()) {
+        if (response.request.url.pathSegments.first() == "live-search") {
             val jsonResult = json.parseToJsonElement(response.body.string()).jsonArray
 
             val mangaList = jsonResult.map { jsonEl -> searchMangaFromJson(jsonEl.jsonObject) }
@@ -216,8 +216,9 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     }
 
     private fun searchMangaFromJson(jsonObj: JsonObject): SManga = SManga.create().apply {
-        title = jsonObj["name"]!!.jsonPrimitive.content
         url = jsonObj["url"]!!.jsonPrimitive.content
+        title = jsonObj["name"]!!.jsonPrimitive.content
+        thumbnail_url = baseUrl + jsonObj["image"]!!.jsonPrimitive.content
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
