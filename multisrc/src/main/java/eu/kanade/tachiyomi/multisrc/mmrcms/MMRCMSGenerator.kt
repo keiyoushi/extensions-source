@@ -14,7 +14,6 @@ class MMRCMSGenerator : ThemeSourceGenerator {
     override val sources = listOf(
         SingleLang("مانجا اون لاين", "https://onma.top", "ar", className = "onma"),
         SingleLang("Read Comics Online", "https://readcomicsonline.ru", "en"),
-        SingleLang("Fallen Angels", "https://manga.fascans.com", "en", overrideVersionCode = 2),
         SingleLang("Scan FR", "https://www.scan-fr.org", "fr", overrideVersionCode = 2),
         SingleLang("Scan VF", "https://www.scan-vf.net", "fr", overrideVersionCode = 1),
         SingleLang("Komikid", "https://www.komikid.com", "id"),
