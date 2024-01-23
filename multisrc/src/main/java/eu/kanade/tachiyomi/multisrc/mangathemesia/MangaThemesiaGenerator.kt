@@ -33,7 +33,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Cosmic Scans", "https://cosmic-scans.com", "en", overrideVersionCode = 2),
         SingleLang("CosmicScans.id", "https://cosmicscans.id", "id", overrideVersionCode = 3, className = "CosmicScansID"),
         SingleLang("Cypher Scans", "https://cypherscans.xyz", "en"),
-        SingleLang("Diskus Scan", "https://diskusscan.com", "pt-BR", overrideVersionCode = 8),
+        SingleLang("Diskus Scan", "https://diskusscan.com", "pt-BR", overrideVersionCode = 9),
         SingleLang("Dojing.net", "https://dojing.net", "id", isNsfw = true, className = "DojingNet"),
         SingleLang("DuniaKomik.id", "https://duniakomik.org", "id", className = "DuniaKomikId", overrideVersionCode = 2),
         SingleLang("Elarc Toon", "https://elarctoon.com", "en", className = "ElarcPage", overrideVersionCode = 2),
