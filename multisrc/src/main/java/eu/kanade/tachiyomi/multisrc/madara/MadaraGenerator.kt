@@ -64,7 +64,6 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Café com Yaoi", "http://cafecomyaoi.com.br", "pt-BR", className = "CafeComYaoi", isNsfw = true, overrideVersionCode = 1),
         SingleLang("CAT-translator", "https://cats-translator.com/manga", "th", className = "CatTranslator", overrideVersionCode = 2),
         SingleLang("Cat300", "https://cat300.com", "th", isNsfw = true, overrideVersionCode = 1),
-        SingleLang("CatOnHeadTranslations", "https://catonhead.com", "en", overrideVersionCode = 2),
         SingleLang("CBHentai", "https://cbhentai.net", "vi", isNsfw = true, overrideVersionCode = 7, pkgName = "hentaicube", className = "HentaiCB"),
         SingleLang("Cerise Scan", "https://cerisescan.net", "pt-BR", pkgName = "cerisescans", isNsfw = true, overrideVersionCode = 8),
         SingleLang("Clover Manga", "https://clover-manga.com", "tr", overrideVersionCode = 2),
