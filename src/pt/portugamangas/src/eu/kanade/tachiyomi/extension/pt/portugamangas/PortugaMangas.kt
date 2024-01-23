@@ -39,8 +39,8 @@ class PortugaMangas : ParsedHttpSource() {
     override fun popularMangaSelector(): String = "div#maisLidos > div.itemmanga"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("h3")?.text() ?: "Title not found"
-        thumbnail_url = element.selectFirst("img")!!.srcAttr()
+        title = element.selectFirst("h3")!!.text()
+        thumbnail_url = element.selectFirst("img")?.srcAttr()
         setUrlWithoutDomain(element.attr("href"))
     }
 
