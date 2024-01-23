@@ -31,8 +31,14 @@ class HentaiCafe : ParsedHttpSource() {
     override val client by lazy {
         network.client.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            // Image CDN
+            .rateLimitHost("https://cdn.hentaibomb.com".toHttpUrl(), 2)
             .build()
     }
+
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Accept-Language", "en-US,en;q=0.5")
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
