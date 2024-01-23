@@ -77,7 +77,7 @@ class PortugaMangas : ParsedHttpSource() {
     }
 
     private fun searchMangaParse(document: Document): List<SManga> =
-        document.select(searchMangaSelector()).map { this.searchMangaFromElement(it) }
+        document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val currentPage = response.request.url.queryParameter("pagina")?.toInt() ?: -1
