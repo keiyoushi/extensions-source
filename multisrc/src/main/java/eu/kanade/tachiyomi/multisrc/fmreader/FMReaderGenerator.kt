@@ -12,7 +12,6 @@ class FMReaderGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 8
 
     override val sources = listOf(
-        SingleLang("Epik Manga", "https://www.epikmanga.com", "tr"),
         SingleLang("KissLove", "https://klz9.com", "ja", isNsfw = true, overrideVersionCode = 4),
         SingleLang("Manga-TR", "https://manga-tr.com", "tr", className = "MangaTR", overrideVersionCode = 3),
         SingleLang("Say Truyen", "https://saytruyenvip.com", "vi", overrideVersionCode = 3),
