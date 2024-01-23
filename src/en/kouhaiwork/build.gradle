@@ -1,7 +1,0 @@
-ext {
-    extName = 'Kouhai Work'
-    extClass = '.KouhaiWork'
-    extVersionCode = 8
-}
-
-apply from: "$rootDir/common.gradle"
