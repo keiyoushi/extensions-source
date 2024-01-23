@@ -25,7 +25,7 @@ class HentaiCafe : ParsedHttpSource() {
 
     override val lang = "all"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val client by lazy {
         network.client.newBuilder()
@@ -49,21 +49,13 @@ class HentaiCafe : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = null
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
 
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesSelector() = "div.index-container:contains(new uploads) > div.gallery > a"
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesNextPageSelector() = "section.pagination > a.last:not(.disabled)"
 
     // =============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
