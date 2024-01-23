@@ -24,7 +24,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import kotlin.collections.ArrayList
 
 class TencentComics : ParsedHttpSource() {
 
@@ -45,18 +44,25 @@ class TencentComics : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun chapterListSelector(): String = "ul.chapter-wrap-list.reverse > li > a"
+    override fun chapterListRequest(manga: SManga): Request {
+        return GET("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/"), headers)
+    }
+
+    override fun chapterListSelector(): String = ".works-chapter-item"
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            url = element.attr("href").trim()
+            setUrlWithoutDomain(element.select("a").attr("abs:href"))
             name = (if (element.isLockedChapter()) "\uD83D\uDD12 " else "") + element.text().trim()
-            chapter_number = element.attr("data-seq").toFloat()
         }
     }
 
     private fun Element.isLockedChapter(): Boolean {
-        return this.selectFirst("div.lock") != null
+        return this.selectFirst(".ui-icon-pay") != null
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return super.chapterListParse(response).reversed()
     }
 
     override fun popularMangaSelector(): String = "ul.ret-search-list.clearfix > li"
@@ -73,7 +79,7 @@ class TencentComics : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = throw java.lang.UnsupportedOperationException("Not used.")
 
-    override fun popularMangaRequest(page: Int): Request = GET("$desktopUrl/Comic/all/search/hot/page/$page)", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$desktopUrl/Comic/all/search/hot/page/$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -93,7 +99,7 @@ class TencentComics : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = throw java.lang.UnsupportedOperationException("Not used.")
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$desktopUrl/Comic/all/search/time/page/$page)", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$desktopUrl/Comic/all/search/time/page/$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         return popularMangaParse(response)
@@ -119,7 +125,7 @@ class TencentComics : ParsedHttpSource() {
     }
 
     // convert url to desktop since some chapters are blocked on mobile
-    override fun pageListRequest(chapter: SChapter): Request = GET("$desktopUrl/ComicView/" + chapter.url.substringAfter("/chapter/"), headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(desktopUrl + chapter.url, headers)
 
     private val jsDecodeFunction = """
         raw = raw.split('');
