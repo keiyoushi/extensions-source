@@ -24,7 +24,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("247Manga", "https://247manga.com", "en", className = "Manga247", overrideVersionCode = 1),
         SingleLang("365Manga", "https://365manga.com", "en", className = "ThreeSixtyFiveManga", overrideVersionCode = 1),
         SingleLang("Adonis Fansub", "https://manga.adonisfansub.com", "tr", overrideVersionCode = 1),
-        SingleLang("Adult Webtoon", "https://adultwebtoon.com", "en", isNsfw = true, overrideVersionCode = 1),
+        SingleLang("Adult Webtoon", "https://adultwebtoon.com", "en", isNsfw = true, overrideVersionCode = 2),
         SingleLang("Akimangá", "https://akimanga.com", "pt-BR", isNsfw = true, className = "Akimanga"),
         SingleLang("AkuManga", "https://akumanga.com", "en", isNsfw = true, overrideVersionCode = 2),
         SingleLang("Akuzenai Arts", "https://akuzenaiarts.org", "en"),
