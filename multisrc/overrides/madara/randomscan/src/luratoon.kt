@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.luratoon
+package eu.kanade.tachiyomi.extension.pt.randomscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -7,8 +7,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class LuraToon : Madara(
-    "LuraToon",
+class luratoon : Madara(
+    "Random Scan",
     "https://luratoon.com/",
     "pt-BR",
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
