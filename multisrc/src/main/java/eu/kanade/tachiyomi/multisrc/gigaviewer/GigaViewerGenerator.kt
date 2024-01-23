@@ -19,7 +19,7 @@ class GigaViewerGenerator : ThemeSourceGenerator {
         SingleLang("Kurage Bunch", "https://kuragebunch.com", "ja"),
         SingleLang("MAGCOMI", "https://magcomi.com", "ja", className = "MagComi"),
         SingleLang("Magazine Pocket", "https://pocket.shonenmagazine.com", "ja"),
-        SingleLang("Shonen Jump+", "https://shonenjumpplus.com", "ja", pkgName = "shonenjumpplus", className = "ShonenJumpPlus", overrideVersionCode = 2),
+        SingleLang("Shonen Jump+", "https://shonenjumpplus.com", "ja", className = "ShonenJumpPlus", overrideVersionCode = 2),
         SingleLang("Sunday Web Every", "https://www.sunday-webry.com", "ja"),
         SingleLang("Tonari no Young Jump", "https://tonarinoyj.jp", "ja", className = "TonariNoYoungJump"),
     )
