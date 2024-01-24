@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.tsukimangas
 
+import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.CompleteMangaDto
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.MangaListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -46,7 +47,7 @@ class TsukiMangas : HttpSource() {
         val item = response.parseAs<MangaListDto>()
         val mangas = item.data.map {
             SManga.create().apply {
-                url = it.entryPath
+                url = "/obra" + it.entryPath
                 thumbnail_url = baseUrl + it.imagePath
                 title = it.title
             }
@@ -102,8 +103,31 @@ class TsukiMangas : HttpSource() {
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val id = manga.url.getMangaId()
+        return GET("$baseUrl/api/v2/mangas/$id", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val mangaDto = response.parseAs<CompleteMangaDto>()
+        thumbnail_url = baseUrl + mangaDto.imagePath
+        title = mangaDto.title
+        artist = mangaDto.staff
+        genre = mangaDto.genres.joinToString { it.genre }
+        status = parseStatus(mangaDto.status.orEmpty())
+        description = buildString {
+            mangaDto.synopsis?.also { append("$it\n\n") }
+            if (mangaDto.titles.isNotEmpty()) {
+                append("Títulos alternativos: ${mangaDto.titles.joinToString { it.title }}")
+            }
+        }
+    }
+
+    private fun parseStatus(status: String) = when (status) {
+        "Ativo" -> SManga.ONGOING
+        "Completo" -> SManga.COMPLETED
+        "Hiato" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
     }
 
     // ============================== Chapters ==============================
@@ -129,6 +153,8 @@ class TsukiMangas : HttpSource() {
         if (value.isNotBlank()) addQueryParameter(query, value)
         return this
     }
+
+    private fun String.getMangaId() = substringAfter("/obra/").substringBefore("/")
 
     companion object {
         const val PREFIX_SEARCH = "path:"
