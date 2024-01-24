@@ -27,9 +27,10 @@ class AscalonScans : MangaThemesia("AscalonScans", "https://ascalonscans.com", "
 
         val body = FormBody.Builder().add("challenge", token).build()
         val challengeReq = POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers, body = body)
-        chain.proceed(challengeReq).use {
-            if (it.code != 200) throw IOException("Failed to bypass js challenge!")
-        }
+
+        val challengeResponse = chain.proceed(challengeReq)
+        if (challengeResponse.code != 200) throw IOException("Failed to bypass js challenge!")
+        challengeResponse.close()
 
         return chain.proceed(request)
     }
