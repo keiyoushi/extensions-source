@@ -7,13 +7,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -81,7 +80,7 @@ class PortugaMangas : ParsedHttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val currentPage = response.request.url.queryParameter("pagina")?.toInt() ?: -1
-        val document = response.parseAsDocument()
+        val document = response.asJsoup()
         return MangasPage(searchMangaParse(document), hasNextPage(currentPage, document))
     }
 
@@ -154,10 +153,6 @@ class PortugaMangas : ParsedHttpSource() {
             .set("Referer", page.url)
             .build()
         return GET(page.imageUrl!!, newHeaders)
-    }
-
-    private fun Response.parseAsDocument(): Document = use {
-        Jsoup.parseBodyFragment(it.body.string())
     }
 
     private fun Element.srcAttr(): String = when {
