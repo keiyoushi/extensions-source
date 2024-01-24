@@ -30,6 +30,8 @@ class TsukiMangas : HttpSource() {
 
     override val baseUrl = "https://tsuki-mangas.com"
 
+    private val API_URL = baseUrl + API_PATH
+
     override val lang = "pt-BR"
 
     override val supportsLatest = true
@@ -47,7 +49,7 @@ class TsukiMangas : HttpSource() {
     private val json: Json by injectLazy()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/v2/mangas?page=$page&filter=0", headers)
+    override fun popularMangaRequest(page: Int) = GET("$API_URL/mangas?page=$page&filter=0", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val item = response.parseAs<MangaListDto>()
@@ -66,7 +68,7 @@ class TsukiMangas : HttpSource() {
     // Yes, "lastests". High IQ move.
     // Also yeah, there's a "?format=0" glued to the page number. Without this,
     // the request will blow up with a HTTP 500.
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/v2/home/lastests?page=$page%3Fformat%3D0", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$API_URL/home/lastests?page=$page%3Fformat%3D0", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -74,7 +76,7 @@ class TsukiMangas : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
             val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/api/v2/mangas/$id", headers))
+            client.newCall(GET("$API_URL/mangas/$id", headers))
                 .asObservableSuccess()
                 .map(::searchMangaByIdParse)
         } else {
@@ -91,7 +93,7 @@ class TsukiMangas : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val params = TsukiMangasFilters.getSearchParameters(filters)
-        val url = "$baseUrl/api/v2/mangas".toHttpUrl().newBuilder()
+        val url = "$API_URL/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("title", query.trim())
             .addIfNotBlank("filter", params.filter)
@@ -111,7 +113,7 @@ class TsukiMangas : HttpSource() {
     // =========================== Manga Details ============================
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.getMangaId()
-        return GET("$baseUrl/api/v2/mangas/$id", headers)
+        return GET("$API_URL/mangas/$id", headers)
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
@@ -142,7 +144,7 @@ class TsukiMangas : HttpSource() {
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.getMangaId()
-        return GET("$baseUrl/api/v2/chapters/$id/all", headers)
+        return GET("$API_URL/chapters/$id/all", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -155,7 +157,7 @@ class TsukiMangas : HttpSource() {
                 // which could ruin the automatic chapter number recognition system.
                 chapter_number = it.number.trim { char -> !char.isDigit() }.toFloatOrNull() ?: 1F
 
-                url = "/api/v2/chapter/versions/${it.versionId}"
+                url = "$API_PATH/chapter/versions/${it.versionId}"
 
                 date_upload = it.created_at.orEmpty().toDate()
             }
@@ -205,5 +207,6 @@ class TsukiMangas : HttpSource() {
 
         private const val MAIN_CDN = "https://cdn.tsuki-mangas.com"
         private const val SECONDARY_CDN = "https://cdn2.tsuki-mangas.com"
+        private const val API_PATH = "/api/v2"
     }
 }
