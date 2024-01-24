@@ -62,3 +62,9 @@ data class ChapterDto(
 
     val id = versions.first().id
 }
+
+@Serializable
+data class PageListDto(val pages: List<PageDto>)
+
+@Serializable
+data class PageDto(val server: Int, val url: String)

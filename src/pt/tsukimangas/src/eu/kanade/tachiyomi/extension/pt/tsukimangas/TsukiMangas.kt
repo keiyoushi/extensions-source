@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.tsukimangas
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.CompleteMangaDto
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.MangaListDto
+import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.PageListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -161,7 +162,15 @@ class TsukiMangas : HttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(response: Response): List<Page> {
-        throw UnsupportedOperationException()
+        val data = response.parseAs<PageListDto>()
+        return data.pages.sortedBy { it.url.substringAfterLast("/") }.mapIndexed { index, item ->
+            val host = when (item.server) {
+                1 -> "$MAIN_CDN/tsuki"
+                else -> SECONDARY_CDN
+            }
+
+            Page(index, imageUrl = host + item.url)
+        }
     }
 
     override fun imageUrlParse(response: Response): String {
@@ -187,8 +196,12 @@ class TsukiMangas : HttpSource() {
 
     companion object {
         const val PREFIX_SEARCH = "id:"
+
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
         }
+
+        private const val MAIN_CDN = "https://cdn.tsuki-mangas.com"
+        private const val SECONDARY_CDN = "https://cdn2.tsuki-mangas.com"
     }
 }
