@@ -23,6 +23,8 @@ class AscalonScans : MangaThemesia("AscalonScans", "https://ascalonscans.com", "
         if (origRes.code != 403) return origRes
         origRes.close()
 
+        // Same delay as the source
+        Thread.sleep(3000L)
         val token = fetchToken(chain).sha256()
 
         val body = FormBody.Builder().add("challenge", token).build()
