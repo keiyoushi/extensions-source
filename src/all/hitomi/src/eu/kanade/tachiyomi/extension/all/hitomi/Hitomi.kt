@@ -31,7 +31,10 @@ import java.util.Locale
 import kotlin.math.min
 
 @OptIn(ExperimentalUnsignedTypes::class)
-class Hitomi : HttpSource() {
+class Hitomi(
+    override val lang: String,
+    private val nozomiLang: String,
+) : HttpSource() {
 
     override val name = "Hitomi"
 
@@ -40,8 +43,6 @@ class Hitomi : HttpSource() {
     override val baseUrl = "https://$domain"
 
     private val ltnUrl = "https://ltn.$domain"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -58,7 +59,7 @@ class Hitomi : HttpSource() {
     }
 
     private suspend fun getPopularManga(page: Int): MangasPage {
-        val entries = getGalleryIDsFromNozomi("popular", "today", "english", page.nextPageRange())
+        val entries = getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
             .toMangaList()
 
         return MangasPage(entries, entries.size >= 24)
@@ -69,7 +70,7 @@ class Hitomi : HttpSource() {
     }
 
     private suspend fun getLatestUpdates(page: Int): MangasPage {
-        val entries = getGalleryIDsFromNozomi(null, "index", "english", page.nextPageRange())
+        val entries = getGalleryIDsFromNozomi(null, "index", nozomiLang, page.nextPageRange())
             .toMangaList()
 
         return MangasPage(entries, entries.size >= 24)
@@ -83,7 +84,7 @@ class Hitomi : HttpSource() {
 
     private suspend fun getSearchManga(page: Int, query: String): MangasPage {
         if (page == 1) {
-            searchResponse = hitomiSearch(query.trim(), false, "english")
+            searchResponse = hitomiSearch(query.trim(), false, nozomiLang)
                 .toList()
         }
 
