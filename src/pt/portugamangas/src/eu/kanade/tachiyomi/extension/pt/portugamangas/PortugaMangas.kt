@@ -110,7 +110,6 @@ class PortugaMangas : ParsedHttpSource() {
             title = document.selectFirst("h1")!!.text()
             description = document.selectFirst("#manga_capitulo_descricao")?.text()
             thumbnail_url = document.selectFirst("div.manga .row .row div.text-right img")?.absUrl("src")
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             genre = document.select("h5.cg_color > a.label.label-warning")
                 .map { it?.text() ?: "" }
                 .filter { it.isNotBlank() }
