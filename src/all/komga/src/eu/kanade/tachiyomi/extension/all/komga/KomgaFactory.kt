@@ -9,6 +9,6 @@ class KomgaFactory : SourceFactory {
         val komgaCount = firstKomga.preferences.getString(Komga.PREF_EXTRA_SOURCES_COUNT, Komga.PREF_EXTRA_SOURCES_DEFAULT)!!.toInt()
 
         // Komga(""), Komga("2"), Komga("3"), ...
-        return listOf(firstKomga) + (0..komgaCount).map { Komga("${it + 2}") }
+        return listOf(firstKomga) + (0 until komgaCount).map { Komga("${it + 2}") }
     }
 }
