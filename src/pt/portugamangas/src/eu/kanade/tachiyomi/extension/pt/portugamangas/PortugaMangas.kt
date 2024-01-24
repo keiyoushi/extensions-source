@@ -136,7 +136,7 @@ class PortugaMangas : ParsedHttpSource() {
         content.replace(DATE_PATTERN, "")
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        name = chapterNameParse(element.selectFirst("a > div")?.ownText() ?: "Unnamed")
+        name = chapterNameParse(element.selectFirst("a > div")!!.ownText())
         date_upload = dateUploadParse(element.selectFirst("a > div span")?.ownText() ?: "")
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
