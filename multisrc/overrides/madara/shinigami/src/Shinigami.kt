@@ -27,7 +27,7 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         add("Sec-Fetch-Mode", "navigate")
         add("Sec-Fetch-Site", "same-origin")
         add("Upgrade-Insecure-Requests", "1")
-        add("X-Requested-With", randomString((1..20).random()))
+        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
     }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -107,7 +107,7 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
             .toByteArray()
     }
 
-    private fun randomString(length: Int = 10): String {
+    private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')
         return List(length) { charPool.random() }.joinToString("")
     }
