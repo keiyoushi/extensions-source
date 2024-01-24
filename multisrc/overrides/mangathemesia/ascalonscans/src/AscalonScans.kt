@@ -35,7 +35,7 @@ class AscalonScans : MangaThemesia("AscalonScans", "https://ascalonscans.com", "
         return chain.proceed(request)
     }
 
-    private fun fetchToken(chain: Interceptor.Chain, attempt: Int = 0): String {
+    private tailrec fun fetchToken(chain: Interceptor.Chain, attempt: Int = 0): String {
         if (attempt > 5) throw IOException("Failed to fetch challenge token!")
         val request = GET("$baseUrl/hcdn-cgi/jschallenge", headers)
         val res = chain.proceed(request).body.string()
