@@ -89,9 +89,12 @@ class PortugaMangas : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("h3")?.ownText() ?: "Untitled"
-        thumbnail_url = element.selectFirst(searchMangaThumbnailSelector())?.attr("src")?.toAbsURL()
+        thumbnail_url = getMangaThumbnailUrlInSearch(element)
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
+
+    private fun getMangaThumbnailUrlInSearch(element: Element): String? =
+        element.selectFirst(searchMangaThumbnailSelector())?.attr("src")?.toAbsURL()
 
     private fun searchMangaThumbnailSelector(): String = "img"
 
