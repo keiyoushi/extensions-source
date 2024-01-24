@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.tsukimangas
 
+import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.MangaListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -33,15 +34,25 @@ class TsukiMangas : HttpSource() {
             .build()
     }
 
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+
     private val json: Json by injectLazy()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/v2/mangas?page=$page&filter=0", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
+        val item = response.parseAs<MangaListDto>()
+        val mangas = item.data.map {
+            SManga.create().apply {
+                url = it.entryPath
+                thumbnail_url = baseUrl + it.imagePath
+                title = it.title
+            }
+        }
+
+        val hasNextPage = item.page < item.lastPage
+        return MangasPage(mangas, hasNextPage)
     }
 
     // =============================== Latest ===============================
