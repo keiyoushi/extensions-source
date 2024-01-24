@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.boylove
 
 import android.app.Application
-import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -19,8 +18,10 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -37,8 +38,8 @@ class BoyLove : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    override val baseUrl = run {
-        val preferences: SharedPreferences =
+    override val baseUrl by lazy {
+        val preferences =
             Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
         val mirrors = MIRRORS
@@ -48,6 +49,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .addInterceptor(UnscramblerInterceptor())
         .build()
 
     override fun popularMangaRequest(page: Int): Request =
@@ -111,7 +113,8 @@ class BoyLove : HttpSource(), ConfigurableSource {
 
     private fun fetchPageList(chapterUrl: String): Observable<List<Page>> =
         client.newCall(GET(baseUrl + chapterUrl, headers)).asObservableSuccess().map { response ->
-            val root = response.asJsoup().selectFirst(Evaluator.Tag("section"))!!
+            val doc = response.asJsoup()
+            val root = doc.selectFirst(Evaluator.Tag("section"))!!
             val images = root.select(Evaluator.Class("reader-cartoon-image"))
             val urlList = if (images.isEmpty()) {
                 root.select(Evaluator.Tag("img")).map { it.attr("src").trim().toImageUrl() }
@@ -121,8 +124,30 @@ class BoyLove : HttpSource(), ConfigurableSource {
                     .filter { it.attr("src").endsWith("load.png") }
                     .map { it.attr("data-original").trim().toImageUrl() }
             }
-            urlList.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+            val parts = doc.getPartsCount()
+            urlList.mapIndexed { index, imageUrl ->
+                val url = if (parts == null) {
+                    imageUrl
+                } else {
+                    imageUrl.toHttpUrl().newBuilder()
+                        .addQueryParameter(UnscramblerInterceptor.PARTS_COUNT_PARAM, parts.toString())
+                        .build()
+                        .toString()
+                }
+                Page(index, imageUrl = url)
+            }
         }
+
+    private fun Document.getPartsCount(): Int? {
+        return selectFirst("script:containsData(do_mergeImg):containsData(context0 =)")?.data()?.run {
+            substringBefore("canvas0.width")
+                .substringAfterLast("var ")
+                .substringBefore(';')
+                .trim()
+                .substringAfterLast(" ")
+                .toIntOrNull()
+        }
+    }
 
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
