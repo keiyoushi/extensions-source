@@ -144,7 +144,7 @@ class PortugaMangas : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val elements = document.select("div#capitulos_images img")
         return elements.mapIndexed { i, el ->
-            Page(el?.attr("pag")?.toInt() ?: i, document.location(), el.srcAttr())
+            Page(i + 1, document.location(), el.srcAttr())
         }
     }
 
