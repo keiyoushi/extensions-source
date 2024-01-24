@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -79,13 +80,26 @@ class TsukiMangas : HttpSource() {
         return MangasPage(listOf(details), false)
     }
 
+    override fun getFilterList() = TsukiMangasFilters.FILTER_LIST
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException()
+        val params = TsukiMangasFilters.getSearchParameters(filters)
+        val url = "$baseUrl/api/v2/mangas".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("title", query.trim())
+            .addIfNotBlank("filter", params.filter)
+            .addIfNotBlank("format", params.format)
+            .addIfNotBlank("status", params.status)
+            .addIfNotBlank("adult_content", params.adult)
+            .apply {
+                params.genres.forEach { addQueryParameter("genres[]", it) }
+                params.tags.forEach { addQueryParameter("tags[]", it) }
+            }.build()
+
+        return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(response: Response): SManga {
@@ -109,6 +123,11 @@ class TsukiMangas : HttpSource() {
     // ============================= Utilities ==============================
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream(it.body.byteStream())
+    }
+
+    private fun HttpUrl.Builder.addIfNotBlank(query: String, value: String): HttpUrl.Builder {
+        if (value.isNotBlank()) addQueryParameter(query, value)
+        return this
     }
 
     companion object {
