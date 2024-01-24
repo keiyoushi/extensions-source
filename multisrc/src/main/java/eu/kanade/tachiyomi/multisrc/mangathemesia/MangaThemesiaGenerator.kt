@@ -20,7 +20,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Animated Glitched Comics", "https://agscomics.com", "en"),
         SingleLang("Animated Glitched Scans", "https://anigliscans.xyz", "en", overrideVersionCode = 1),
         SingleLang("Arven Scans", "https://arvenscans.com", "en"),
-        SingleLang("AscalonScans", "https://ascalonscans.com", "en"),
+        SingleLang("AscalonScans", "https://ascalonscans.com", "en", overrideVersionCode = 1),
         SingleLang("Asura Scans", "https://asuratoon.com", "en"),
         SingleLang("Azure Scans", "https://azuremanga.com", "en", overrideVersionCode = 1),
         SingleLang("Banana-Scan", "https://banana-scan.com", "fr", className = "BananaScan", isNsfw = true),
