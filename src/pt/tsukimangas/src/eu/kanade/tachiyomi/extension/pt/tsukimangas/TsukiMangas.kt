@@ -153,7 +153,7 @@ class TsukiMangas : HttpSource() {
                 // which could ruin the automatic chapter number recognition system.
                 chapter_number = it.number.trim { char -> !char.isDigit() }.toFloatOrNull() ?: 1F
 
-                url = "/api/v2/chapter/versions/${it.id}"
+                url = "/api/v2/chapter/versions/${it.versionId}"
 
                 date_upload = it.created_at.orEmpty().toDate()
             }

@@ -60,7 +60,7 @@ data class ChapterDto(
     @Serializable
     data class Version(val id: Int)
 
-    val id = versions.first().id
+    val versionId = versions.first().id
 }
 
 @Serializable
