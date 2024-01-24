@@ -8,7 +8,7 @@ import java.util.Locale
 
 class Mangakyo : MangaThemesia(
     "Mangakyo",
-    "https://mangakyo.org",
+    "https://mangakyo.vip",
     "id",
     "/komik",
     SimpleDateFormat("MMM d, yyyy", Locale("id")),
