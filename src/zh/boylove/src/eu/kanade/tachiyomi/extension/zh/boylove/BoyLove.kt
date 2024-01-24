@@ -47,12 +47,10 @@ class BoyLove : HttpSource(), ConfigurableSource {
         "https://" + mirrors[index]
     }
 
-    override val client by lazy {
-        network.cloudflareClient.newBuilder()
-            .rateLimit(2)
-            .addInterceptor(UnscramblerInterceptor)
-            .build()
-    }
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .addInterceptor(UnscramblerInterceptor())
+        .build()
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/home/api/getpage/tp/1-topest-${page - 1}", headers)
@@ -132,7 +130,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
                     imageUrl
                 } else {
                     imageUrl.toHttpUrl().newBuilder()
-                        .addQueryParameter("parts", "$parts")
+                        .addQueryParameter(UnscramblerInterceptor.PARTS_COUNT_PARAM, parts.toString())
                         .build()
                         .toString()
                 }

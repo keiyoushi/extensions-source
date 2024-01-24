@@ -11,15 +11,19 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
-object UnscramblerInterceptor : Interceptor {
+class UnscramblerInterceptor : Interceptor {
+    companion object {
+        const val PARTS_COUNT_PARAM = "scrambled_parts_count"
+    }
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val parts = request.url.queryParameter("parts")?.toIntOrNull()
+        val parts = request.url.queryParameter(PARTS_COUNT_PARAM)?.toIntOrNull()
         return if (parts == null) {
             chain.proceed(request)
         } else {
             val newRequest = request.newBuilder()
-                .url(request.url.newBuilder().removeAllQueryParameters("parts").build())
+                .url(request.url.newBuilder().removeAllQueryParameters(PARTS_COUNT_PARAM).build())
                 .build()
             val response = chain.proceed(newRequest)
 
