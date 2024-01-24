@@ -24,6 +24,9 @@ data class SimpleMangaDto(
 
 @Serializable
 data class CompleteMangaDto(
+    val id: Int,
+    @SerialName("url") val slug: String,
+
     val title: String,
     val poster: String? = null,
     val cover: String? = null,
@@ -33,6 +36,8 @@ data class CompleteMangaDto(
     val genres: List<Genre> = emptyList(),
     val titles: List<Title> = emptyList(),
 ) {
+    val entryPath = "/$id/$slug"
+
     val imagePath = "/img/imgs/${poster ?: cover ?: "nobackground.jpg"}"
 
     @Serializable

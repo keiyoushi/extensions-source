@@ -67,16 +67,16 @@ class TsukiMangas : HttpSource() {
     // =============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val path = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/obra/$path"))
+            val id = query.removePrefix(PREFIX_SEARCH)
+            client.newCall(GET("$baseUrl/api/v2/mangas/$id", headers))
                 .asObservableSuccess()
-                .map(::searchMangaByPathParse)
+                .map(::searchMangaByIdParse)
         } else {
             super.fetchSearchManga(page, query, filters)
         }
     }
 
-    private fun searchMangaByPathParse(response: Response): MangasPage {
+    private fun searchMangaByIdParse(response: Response): MangasPage {
         val details = mangaDetailsParse(response)
         return MangasPage(listOf(details), false)
     }
@@ -110,6 +110,7 @@ class TsukiMangas : HttpSource() {
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val mangaDto = response.parseAs<CompleteMangaDto>()
+        url = "/obra" + mangaDto.entryPath
         thumbnail_url = baseUrl + mangaDto.imagePath
         title = mangaDto.title
         artist = mangaDto.staff
@@ -157,6 +158,6 @@ class TsukiMangas : HttpSource() {
     private fun String.getMangaId() = substringAfter("/obra/").substringBefore("/")
 
     companion object {
-        const val PREFIX_SEARCH = "path:"
+        const val PREFIX_SEARCH = "id:"
     }
 }

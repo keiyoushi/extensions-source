@@ -19,10 +19,10 @@ class TsukiMangasUrlActivity : Activity() {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
-            val path = pathSegments.drop(1).joinToString("/")
+            val id = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${TsukiMangas.PREFIX_SEARCH}$path")
+                putExtra("query", "${TsukiMangas.PREFIX_SEARCH}$id")
                 putExtra("filter", packageName)
             }
 
