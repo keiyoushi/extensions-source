@@ -26,7 +26,7 @@ class TsukiMangas : HttpSource() {
 
     override val lang = "pt-BR"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val client by lazy {
         network.client.newBuilder()
@@ -50,19 +50,17 @@ class TsukiMangas : HttpSource() {
                 title = it.title
             }
         }
-
         val hasNextPage = item.page < item.lastPage
         return MangasPage(mangas, hasNextPage)
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    // Yes, "lastests". High IQ move.
+    // Also yeah, there's a "?format=0" glued to the page number. Without this,
+    // the request will blow up with a HTTP 500.
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/v2/home/lastests?page=$page%3Fformat%3D0", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // =============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
