@@ -27,7 +27,7 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         add("Sec-Fetch-Mode", "navigate")
         add("Sec-Fetch-Site", "same-origin")
         add("Upgrade-Insecure-Requests", "1")
-        add("X-Requested-With", "") // added for webview, and removed in interceptor for normal use
+        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
     }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -51,7 +51,7 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
     // Tags are useless as they are just SEO keywords.
     override val mangaDetailsSelectorTag = ""
 
-    override val chapterUrlSelector = "a:not([href*=troll-page])"
+    override val chapterUrlSelector = "div.chapter-link:not([style~=display:\\snone]) a"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val urlElement = element.selectFirst(chapterUrlSelector)!!
@@ -105,6 +105,11 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         return chunked(2)
             .map { it.toInt(16).toByte() }
             .toByteArray()
+    }
+
+    private fun randomString(length: Int): String {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        return List(length) { charPool.random() }.joinToString("")
     }
 
     companion object {
