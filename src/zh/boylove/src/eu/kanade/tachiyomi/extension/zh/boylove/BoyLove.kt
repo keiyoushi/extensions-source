@@ -113,7 +113,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
 
     private fun fetchPageList(chapterUrl: String): Observable<List<Page>> =
         client.newCall(GET(baseUrl + chapterUrl, headers)).asObservableSuccess().map { response ->
-            val doc = response.use { it.asJsoup() }
+            val doc = response.asJsoup()
             val root = doc.selectFirst(Evaluator.Tag("section"))!!
             val images = root.select(Evaluator.Class("reader-cartoon-image"))
             val urlList = if (images.isEmpty()) {
