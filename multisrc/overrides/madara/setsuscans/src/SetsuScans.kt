@@ -17,6 +17,7 @@ class SetsuScans : Madara(
             if (url.host == "i0.wp.com") {
                 val newUrl = url.newBuilder()
                     .removeAllQueryParameters("fit")
+                    .removeAllQueryParameters("ssl")
                     .build()
 
                 return@addNetworkInterceptor chain.proceed(
