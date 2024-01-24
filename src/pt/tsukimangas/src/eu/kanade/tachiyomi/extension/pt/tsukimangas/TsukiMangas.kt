@@ -108,6 +108,8 @@ class TsukiMangas : HttpSource() {
         return GET("$baseUrl/api/v2/mangas/$id", headers)
     }
 
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val mangaDto = response.parseAs<CompleteMangaDto>()
         url = "/obra" + mangaDto.entryPath
