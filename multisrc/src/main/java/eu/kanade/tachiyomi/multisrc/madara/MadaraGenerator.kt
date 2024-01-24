@@ -408,7 +408,6 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Pornwha", "https://pornwha.com", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Portal Yaoi", "https://portalyaoi.com", "pt-BR", isNsfw = true),
         SingleLang("Prisma Hentais", "https://prismahentai.com", "pt-BR", isNsfw = true),
-        SingleLang("Projeto Scanlator", "https://projetoscanlator.com", "pt-BR", overrideVersionCode = 3),
         SingleLang("Ragnarok Scanlation", "https://ragnarokscanlation.com", "es"),
         SingleLang("RagnarokScan", "https://ragnarokscan.com", "es", overrideVersionCode = 1),
         SingleLang("Raijin Scans", "https://raijinscans.fr", "fr"),
