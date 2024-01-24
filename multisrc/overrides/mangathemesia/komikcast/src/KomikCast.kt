@@ -36,7 +36,7 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.lol", "id", "/d
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .set("Referer", baseUrl)
+            .set("Referer", "$baseUrl/")
             .build()
 
         return GET(page.imageUrl!!, newHeaders)

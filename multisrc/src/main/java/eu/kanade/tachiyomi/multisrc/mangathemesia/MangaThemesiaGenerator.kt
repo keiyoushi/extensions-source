@@ -58,7 +58,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("King of Shojo", "https://kingofshojo.com", "ar", overrideVersionCode = 1),
         SingleLang("Kiryuu", "https://kiryuu.id", "id", overrideVersionCode = 6),
         SingleLang("Komik AV", "https://komikav.com", "id", overrideVersionCode = 1),
-        SingleLang("Komik Cast", "https://komikcast.lol", "id", overrideVersionCode = 25),
+        SingleLang("Komik Cast", "https://komikcast.lol", "id", overrideVersionCode = 26),
         SingleLang("Komik Lab", "https://komiklab.com", "en", overrideVersionCode = 3),
         SingleLang("Komik Seru", "https://komikseru.me", "id", isNsfw = true),
         SingleLang("Komik Station", "https://komikstation.co", "id", overrideVersionCode = 4),
