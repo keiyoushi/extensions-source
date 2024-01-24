@@ -185,27 +185,23 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
                     }
                 }
                 is AuthorGroup -> {
-                    val authorToInclude = mutableListOf<AuthorDto>()
-                    filter.state.forEach { content ->
-                        if (content.state) {
-                            authorToInclude.add(content.author)
-                        }
-                    }
+                    val authorToInclude = filter.state.filter { it.state }.map { it.author }
+
                     authorToInclude.forEach {
                         url.addQueryParameter("author", "${it.name},${it.role}")
                     }
                 }
                 is Filter.Sort -> {
-                    var sortCriteria = when (filter.state?.index) {
+                    val state = filter.state ?: return@forEach
+
+                    val sortCriteria = when (state.index) {
                         0 -> if (type == "series") "metadata.titleSort" else "name"
                         1 -> "createdDate"
                         2 -> "lastModifiedDate"
-                        else -> ""
-                    }
-                    if (sortCriteria.isNotEmpty()) {
-                        sortCriteria += "," + if (filter.state?.ascending!!) "asc" else "desc"
-                        url.addQueryParameter("sort", sortCriteria)
-                    }
+                        else -> return@forEach
+                    } + "," + if (state.ascending) "asc" else "desc"
+
+                    url.addQueryParameter("sort", sortCriteria)
                 }
                 else -> {}
             }
