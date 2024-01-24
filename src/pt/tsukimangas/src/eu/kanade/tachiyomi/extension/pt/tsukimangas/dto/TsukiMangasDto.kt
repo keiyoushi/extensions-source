@@ -46,3 +46,19 @@ data class CompleteMangaDto(
     @Serializable
     data class Title(val title: String)
 }
+
+@Serializable
+data class ChapterListDto(val chapters: List<ChapterDto>)
+
+@Serializable
+data class ChapterDto(
+    val number: String,
+    val title: String? = null,
+    val created_at: String? = null,
+    private val versions: List<Version>,
+) {
+    @Serializable
+    data class Version(val id: Int)
+
+    val id = versions.first().id
+}

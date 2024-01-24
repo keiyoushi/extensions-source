@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.tsukimangas
 
+import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.CompleteMangaDto
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.MangaListDto
 import eu.kanade.tachiyomi.network.GET
@@ -19,6 +20,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class TsukiMangas : HttpSource() {
 
@@ -134,8 +137,26 @@ class TsukiMangas : HttpSource() {
     }
 
     // ============================== Chapters ==============================
+    override fun chapterListRequest(manga: SManga): Request {
+        val id = manga.url.getMangaId()
+        return GET("$baseUrl/api/v2/chapters/$id/all", headers)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException()
+        val parsed = response.parseAs<ChapterListDto>()
+
+        return parsed.chapters.reversed().map {
+            SChapter.create().apply {
+                name = "Capítulo ${it.number}"
+                // Sometimes the "number" attribute have letters or other characters,
+                // which could ruin the automatic chapter number recognition system.
+                chapter_number = it.number.trim { char -> !char.isDigit() }.toFloatOrNull() ?: 1F
+
+                url = "/api/v2/chapter/versions/${it.id}"
+
+                date_upload = it.created_at.orEmpty().toDate()
+            }
+        }
     }
 
     // =============================== Pages ================================
@@ -159,7 +180,15 @@ class TsukiMangas : HttpSource() {
 
     private fun String.getMangaId() = substringAfter("/obra/").substringBefore("/")
 
+    private fun String.toDate(): Long {
+        return runCatching { DATE_FORMATTER.parse(trim())?.time }
+            .getOrNull() ?: 0L
+    }
+
     companion object {
         const val PREFIX_SEARCH = "id:"
+        private val DATE_FORMATTER by lazy {
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+        }
     }
 }
