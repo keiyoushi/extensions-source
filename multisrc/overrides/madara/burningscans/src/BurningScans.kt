@@ -16,7 +16,7 @@ class BurningScans : Madara(
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
-    
+
     override val useNewChapterEndpoint = true
 
     override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
