@@ -67,4 +67,4 @@ data class ChapterDto(
 data class PageListDto(val pages: List<PageDto>)
 
 @Serializable
-data class PageDto(val server: Int, val url: String)
+data class PageDto(val url: String)

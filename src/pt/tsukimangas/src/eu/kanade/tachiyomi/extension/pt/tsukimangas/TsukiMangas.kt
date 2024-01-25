@@ -169,13 +169,25 @@ class TsukiMangas : HttpSource() {
     // =============================== Pages ================================
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<PageListDto>()
-        return data.pages.sortedBy { it.url.substringAfterLast("/") }.mapIndexed { index, item ->
-            val host = when (item.server) {
-                1 -> "$MAIN_CDN/tsuki"
-                else -> SECONDARY_CDN
-            }
+        val sortedPages = data.pages.sortedBy { it.url.substringAfterLast("/") }
+        val host = getImageHost(sortedPages.first().url)
 
+        return sortedPages.mapIndexed { index, item ->
             Page(index, imageUrl = host + item.url)
+        }
+    }
+
+    /**
+     * The source normally uses only one CDN per chapter, so we'll try to get
+     * the correct CDN before loading all pages, leaving the [imageCdnSwapper]
+     * as the last choice.
+     */
+    private fun getImageHost(path: String): String {
+        val pageCheck = super.client.newCall(GET(MAIN_CDN + path, headers)).execute()
+        pageCheck.close()
+        return when {
+            !pageCheck.isSuccessful -> SECONDARY_CDN
+            else -> MAIN_CDN
         }
     }
 
@@ -233,7 +245,7 @@ class TsukiMangas : HttpSource() {
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
         }
 
-        private const val MAIN_CDN = "https://cdn.tsuki-mangas.com"
+        private const val MAIN_CDN = "https://cdn.tsuki-mangas.com/tsuki"
         private const val SECONDARY_CDN = "https://cdn2.tsuki-mangas.com"
         private const val API_PATH = "/api/v2"
     }
