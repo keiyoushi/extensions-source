@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.twicomi
+package eu.kanade.tachiyomi.extension.all.twicomi
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -22,7 +22,7 @@ class Twicomi : HttpSource() {
 
     override val name = "Twicomi"
 
-    override val lang = "ja"
+    override val lang = "all"
 
     override val baseUrl = "https://twicomi.com"
 

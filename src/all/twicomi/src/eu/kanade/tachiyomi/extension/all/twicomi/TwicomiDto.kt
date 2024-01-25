@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.twicomi
+package eu.kanade.tachiyomi.extension.all.twicomi
 
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
