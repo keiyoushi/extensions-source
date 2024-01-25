@@ -15,6 +15,14 @@ class MangasChan : MangaThemesia(
 ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val headers = request.headers.newBuilder()
+                .removeAll("X-Requested-With")
+                .build()
+
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
