@@ -1,7 +1,0 @@
-ext {
-    extName = 'Purple Cress'
-    extClass = '.PurpleCress'
-    extVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"
