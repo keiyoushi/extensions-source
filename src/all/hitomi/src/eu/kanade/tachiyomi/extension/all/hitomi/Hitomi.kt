@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.hitomi
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -79,13 +80,16 @@ class Hitomi(
     private lateinit var searchResponse: List<Int>
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking { getSearchManga(page, query) }
+        runBlocking { getSearchManga(page, query, filters) }
     }
 
-    private suspend fun getSearchManga(page: Int, query: String): MangasPage {
+    private suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         if (page == 1) {
-            searchResponse = hitomiSearch(query.trim(), false, nozomiLang)
-                .toList()
+            searchResponse = hitomiSearch(
+                query.trim(),
+                filters.filterIsInstance<SortFilter>().firstOrNull()?.state == 0,
+                nozomiLang,
+            ).toList()
         }
 
         val end = min(page * 25, searchResponse.size)
@@ -93,6 +97,12 @@ class Hitomi(
             .toMangaList()
 
         return MangasPage(entries, end != searchResponse.size)
+    }
+
+    private class SortFilter : Filter.Select<String>("Sort By", arrayOf("Popularity", "Updated"))
+
+    override fun getFilterList(): FilterList {
+        return FilterList(SortFilter())
     }
 
     private fun Int.nextPageRange(): LongRange {
