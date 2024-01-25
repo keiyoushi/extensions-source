@@ -1,0 +1,7 @@
+ext {
+    extName = "Twicomi"
+    extClass = ".Twicomi"
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
