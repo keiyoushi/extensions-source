@@ -1,0 +1,8 @@
+ext {
+    extName = 'Tsuki Mangás'
+    extClass = '.TsukiMangas'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
