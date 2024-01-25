@@ -39,10 +39,10 @@ class TsukiMangas : HttpSource() {
 
     override val client by lazy {
         network.client.newBuilder()
+            .addInterceptor(::imageCdnSwapper)
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .rateLimitHost(MAIN_CDN.toHttpUrl(), 1)
             .rateLimitHost(SECONDARY_CDN.toHttpUrl(), 1)
-            .addInterceptor(::imageCdnSwapper)
             .build()
     }
 
