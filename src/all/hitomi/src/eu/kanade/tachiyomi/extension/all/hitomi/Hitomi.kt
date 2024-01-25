@@ -253,7 +253,7 @@ class Hitomi(
         return galleryIDs
     }
 
-    private suspend fun bSearch(
+    private tailrec suspend fun bSearch(
         key: UByteArray,
         node: Node,
     ): Pair<Long, Int>? {
@@ -540,7 +540,7 @@ class Hitomi(
         await().also {
             require(it.isSuccessful) {
                 it.close()
-                "Http Error ${it.code}"
+                "HTTP error ${it.code}"
             }
         }
 
