@@ -34,16 +34,14 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {
-                if (request.header("X-Requested-With")?.isBlank() == true) {
-                    removeAll("X-Requested-With")
-                }
+                removeAll("X-Requested-With")
             }.build()
 
             chain.proceed(request.newBuilder().headers(headers).build())
         }
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(2)
+        .rateLimit(3)
         .build()
 
     override val mangaSubString = "semua-series"
