@@ -1,7 +1,0 @@
-ext {
-    extName = 'DemoneCeleste'
-    extClass = '.DemoneCeleste'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
