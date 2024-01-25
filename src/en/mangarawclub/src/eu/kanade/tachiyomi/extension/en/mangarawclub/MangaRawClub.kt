@@ -21,7 +21,7 @@ class MangaRawClub : ParsedHttpSource() {
 
     override val id = 734865402529567092
     override val name = "MangaGeko"
-    override val baseUrl = "https://www.mangageko.com"
+    override val baseUrl = "https://www.mgeko.com"
     override val lang = "en"
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
