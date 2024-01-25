@@ -17,6 +17,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -41,6 +42,7 @@ class TsukiMangas : HttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .rateLimitHost(MAIN_CDN.toHttpUrl(), 1)
             .rateLimitHost(SECONDARY_CDN.toHttpUrl(), 1)
+            .addInterceptor(::imageCdnSwapper)
             .build()
     }
 
@@ -196,6 +198,32 @@ class TsukiMangas : HttpSource() {
     private fun String.toDate(): Long {
         return runCatching { DATE_FORMATTER.parse(trim())?.time }
             .getOrNull() ?: 0L
+    }
+
+    /**
+     * This may sound stupid (because it is), but a similar approach exists
+     * in the source itself, because they somehow don't know to which server
+     * each page belongs to. I thought the `server` attribute returned by page
+     * objects would be enough, but it turns out that it isn't. Day ruined.
+     */
+    private fun imageCdnSwapper(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        return if (response.code != 404) {
+            response
+        } else {
+            response.close()
+            val url = request.url.toString()
+            val newUrl = when {
+                url.startsWith(MAIN_CDN) -> url.replace("$MAIN_CDN/tsuki", SECONDARY_CDN)
+                url.startsWith(SECONDARY_CDN) -> url.replace(SECONDARY_CDN, "$MAIN_CDN/tsuki")
+                else -> url
+            }
+
+            val newRequest = GET(newUrl, request.headers)
+            chain.proceed(newRequest)
+        }
     }
 
     companion object {
