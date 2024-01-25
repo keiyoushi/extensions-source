@@ -18,9 +18,17 @@ class MangasChan : MangaThemesia(
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
+    override fun headersBuilder() = super.headersBuilder()
+        .set("X-Requested-With", randomString((10..20).random()))
+
     override val altNamePrefix = "Nomes alternativos: "
 
     override val seriesArtistSelector = ".tsinfo .imptdt:contains(Artista) > i"
     override val seriesAuthorSelector = ".tsinfo .imptdt:contains(Autor) > i"
     override val seriesTypeSelector = ".tsinfo .imptdt:contains(Tipo) > a"
+
+    private fun randomString(length: Int): String {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        return List(length) { charPool.random() }.joinToString("")
+    }
 }
