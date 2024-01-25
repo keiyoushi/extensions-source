@@ -37,6 +37,6 @@ class MangasChan : MangaThemesia(
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')
-        return List(length) { charPool.random() }.joinToString("")
+        return CharArray(length) { charPool.random() }.concatToString()
     }
 }
