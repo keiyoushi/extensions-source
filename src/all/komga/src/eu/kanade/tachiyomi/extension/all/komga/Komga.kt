@@ -215,6 +215,8 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1", "")
 
+    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url)
+
     override fun mangaDetailsParse(response: Response): SManga {
         return if (response.fromReadList()) {
             response.parseAs<ReadListDto>().toSManga()
