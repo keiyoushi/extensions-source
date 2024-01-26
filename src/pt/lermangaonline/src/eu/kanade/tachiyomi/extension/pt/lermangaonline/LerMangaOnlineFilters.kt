@@ -58,7 +58,7 @@ object LerMangaOnlineFilters {
             Genre("Magia", "magia"),
             Genre("Mangás", "mangas"),
             Genre("Manhwa", "manhwa"),
-            Genre("MartialArts", "martialArts"),
+            Genre("MartialArts", "martialarts"),
             Genre("Mechas", "mechas"),
             Genre("Militar", "militar"),
             Genre("Mistério", "mistério"),
