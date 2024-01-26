@@ -38,7 +38,7 @@ jobs:
           distribution: temurin
 
       - name: Generate multisrc sources
-        uses: gradle/gradle-build-action@a8f75513eafdebd8141bd1cd4e30fcd194af8dfa # v2
+        uses: gradle/gradle-build-action@4a8703fa348fe99fdb9d2ac233732f7dccea5437 # v3
         with:
           arguments: :multisrc:generateExtensions
 
@@ -89,14 +89,14 @@ jobs:
           echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
 
       - name: Generate sources from the multi-source library
-        uses: gradle/gradle-build-action@a8f75513eafdebd8141bd1cd4e30fcd194af8dfa # v2
+        uses: gradle/gradle-build-action@4a8703fa348fe99fdb9d2ac233732f7dccea5437 # v3
         env:
           CI_MODULE_GEN: "true"
         with:
           arguments: :multisrc:generateExtensions
 
       - name: Build extensions (chunk ${{ matrix.chunk }})
-        uses: gradle/gradle-build-action@a8f75513eafdebd8141bd1cd4e30fcd194af8dfa # v2
+        uses: gradle/gradle-build-action@4a8703fa348fe99fdb9d2ac233732f7dccea5437 # v3
         env:
           CI_MULTISRC: "true"
           CI_CHUNK_NUM: ${{ matrix.chunk }}
@@ -138,7 +138,7 @@ jobs:
           echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
 
       - name: Build extensions (chunk ${{ matrix.chunk }})
-        uses: gradle/gradle-build-action@a8f75513eafdebd8141bd1cd4e30fcd194af8dfa # v2
+        uses: gradle/gradle-build-action@4a8703fa348fe99fdb9d2ac233732f7dccea5437 # v3
         env:
           CI_MULTISRC: "false"
           CI_CHUNK_NUM: ${{ matrix.chunk }}
