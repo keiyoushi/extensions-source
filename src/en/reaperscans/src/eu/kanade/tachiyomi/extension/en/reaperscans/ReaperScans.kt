@@ -30,6 +30,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.util.Calendar
@@ -67,7 +68,7 @@ class ReaperScans : ParsedHttpSource() {
                 title = it.text()
                 setUrlWithoutDomain(it.attr("href"))
             }
-            thumbnail_url = element.select("img").attr("abs:src")
+            thumbnail_url = element.select("img").imgAttr()
         }
     }
 
@@ -84,7 +85,7 @@ class ReaperScans : ParsedHttpSource() {
                 title = it.text().trim()
                 setUrlWithoutDomain(it.attr("href"))
             }
-            thumbnail_url = element.select("img").attr("abs:src")
+            thumbnail_url = element.select("img").imgAttr()
         }
     }
 
@@ -144,7 +145,7 @@ class ReaperScans : ParsedHttpSource() {
         return SManga.create().apply {
             setUrlWithoutDomain(element.attr("href"))
             element.select("img").first()?.let {
-                thumbnail_url = it.attr("abs:src")
+                thumbnail_url = it.imgAttr()
             }
             title = element.select("p").first()!!.text()
         }
@@ -166,7 +167,7 @@ class ReaperScans : ParsedHttpSource() {
     // Details
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            thumbnail_url = document.select("div > img").first()!!.attr("abs:src")
+            thumbnail_url = document.select("div > img").first()!!.imgAttr()
             title = document.select("h1").first()!!.text()
 
             status = when (document.select("dt:contains(Release Status)").next().first()!!.text()) {
@@ -326,12 +327,14 @@ class ReaperScans : ParsedHttpSource() {
         }
     }
 
-    fun Element.imgAttr(): String = when {
+    private fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
         else -> attr("abs:src")
     }
+
+    private fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 
     // Unused
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
