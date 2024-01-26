@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.lermangaonline
 
+import eu.kanade.tachiyomi.extension.pt.lermangaonline.LerMangaOnlineFilters.GenresFilter
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -53,7 +54,7 @@ class LerMangaOnline : ParsedHttpSource() {
         setUrlWithoutDomain(element.selectFirst("div.poster a")!!.absUrl("href"))
     }
 
-    override fun latestUpdatesNextPageSelector() = "div.pagenavi"
+    override fun latestUpdatesNextPageSelector() = "div.wp-pagenavi [aria-current] + a"
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/capitulo/page/$page".toHttpUrl().newBuilder()
@@ -69,9 +70,7 @@ class LerMangaOnline : ParsedHttpSource() {
         description = info.selectFirst("div.sinopse div:nth-child(2)")?.text()
         thumbnail_url = info.selectFirst("div.poster img")?.srcAttr()
         initialized = true
-        genre = document.select("div.categorias-blog a")
-            .joinToString(", ") { it.text() }
-
+        genre = document.select("div.categorias-blog a").joinToString(", ") { it.text() }
         status = SManga.UNKNOWN
         setUrlWithoutDomain(document.location())
     }
@@ -95,21 +94,22 @@ class LerMangaOnline : ParsedHttpSource() {
     override fun popularMangaSelector() =
         throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        TODO("Not yet implemented")
-    }
+    override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
-    override fun searchMangaNextPageSelector(): String? {
-        TODO("Not yet implemented")
-    }
+    override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        TODO("Not yet implemented")
+        val filter = filters.first() as GenreFilter<*>
+        val genre = filter.selected
+        val url = "$baseUrl/${if (genre.isGlobal()) "" else genre.slug + "/"}page/$page".toHttpUrl().newBuilder()
+            .addQueryParameter("s", query)
+            .build()
+        return GET(url, headers)
     }
 
-    override fun searchMangaSelector(): String {
-        TODO("Not yet implemented")
-    }
+    override fun getFilterList(): FilterList = FilterList(GenresFilter)
+
+    override fun searchMangaSelector() = latestUpdatesSelector()
 
     private fun Element.srcAttr(): String = when {
         hasAttr("data-src") -> absUrl("data-src")
