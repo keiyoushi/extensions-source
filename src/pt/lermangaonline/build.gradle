@@ -1,0 +1,8 @@
+ext {
+    extName = 'Ler Manga Online'
+    extClass = '.LerMangaOnline'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
