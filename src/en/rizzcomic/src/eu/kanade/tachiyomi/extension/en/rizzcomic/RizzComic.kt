@@ -101,7 +101,7 @@ class RizzComic : HttpSource(), ConfigurableSource {
             updateCache()
         }
 
-        return urlPrefix!!
+        return urlPrefix ?: throw Exception("Unable to update dynamic urls")
     }
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
@@ -267,7 +267,6 @@ class RizzComic : HttpSource(), ConfigurableSource {
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
-            .set("Referer", page.url)
             .build()
 
         return GET(page.imageUrl!!, newHeaders)
