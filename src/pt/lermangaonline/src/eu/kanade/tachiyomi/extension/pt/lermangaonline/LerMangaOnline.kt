@@ -28,18 +28,24 @@ class LerMangaOnline : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
         .build()
+    private fun String.toChapterName() =
+        trim().replace("\\d{1,2}-\\d{1,2}-\\d{2,4}".toRegex(), "")
 
-    override fun chapterFromElement(element: Element): SChapter {
-        TODO("Not yet implemented")
+    private fun String.toChapterNumber(): Float =
+        "\\d+".toRegex().find(trim())?.value?.toFloat() ?: 0F
+
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst("div.capitulo")!!.text().toChapterName()
+        date_upload = (element.selectFirst("span")?.text() ?: "").toDate()
+        chapter_number = name.toChapterNumber()
+        setUrlWithoutDomain(element.absUrl("href"))
     }
 
-    override fun chapterListSelector(): String {
-        TODO("Not yet implemented")
-    }
+    override fun chapterListSelector() = "div.capitulos a"
 
-    override fun imageUrlParse(document: Document): String {
-        TODO("Not yet implemented")
-    }
+    override fun imageUrlParse(document: Document) = ""
+
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("section h3")!!.text()
@@ -57,14 +63,23 @@ class LerMangaOnline : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = "div.box-indx section.materias article"
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        TODO("Not yet implemented")
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val info = document.selectFirst("div.box-flex")
+        title = info!!.selectFirst("div.sinopse a")!!.text()
+        description = info.selectFirst("div.sinopse div:nth-child(2)")?.text()
+        thumbnail_url = info.selectFirst("div.poster img")?.srcAttr()
+        initialized = true
+        genre = document.select("div.categorias-blog a")
+            .joinToString(", ") { it.text() }
+
+        status = SManga.UNKNOWN
+        setUrlWithoutDomain(document.location())
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val elements = document.select("div.wp-pagenavi a.page, div.wp-pagenavi span")
+        val elements = document.select("div.images img")
         return elements.mapIndexed { i, el ->
-            Page(i + 1, document.location(), el.srcAttr())
+            Page(i, document.location(), el.srcAttr())
         }
     }
 
@@ -99,5 +114,15 @@ class LerMangaOnline : ParsedHttpSource() {
     private fun Element.srcAttr(): String = when {
         hasAttr("data-src") -> absUrl("data-src")
         else -> absUrl("src")
+    }
+
+    private fun String.toDate(): Long {
+        return runCatching { DATE_FORMATTER.parse(trim())?.time }
+            .getOrNull() ?: 0L
+    }
+    companion object {
+        private val DATE_FORMATTER by lazy {
+            SimpleDateFormat("dd-MM-yyyy", Locale("pt", "BR"))
+        }
     }
 }
