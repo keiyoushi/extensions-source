@@ -52,20 +52,22 @@ class Twicomi : HttpSource() {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchType = when (filters.find { it is TypeSelect }?.state) {
-            1 -> "author"
-            else -> "manga"
-        }
-
-        val url = "$apiUrl/$searchType/list".toHttpUrl().newBuilder().apply {
-            if (query.isNotBlank()) {
-                addQueryParameter("query", query)
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            when (filters.find { it is TypeSelect }?.state) {
+                1 -> {
+                    addPathSegment("author")
+                    filters.filterIsInstance<AuthorSortFilter>().firstOrNull()?.addToUrl(this)
+                }
+                else -> {
+                    addPathSegment("manga")
+                    filters.filterIsInstance<MangaSortFilter>().firstOrNull()?.addToUrl(this)
+                }
             }
 
-            if (searchType == "author") {
-                filters.filterIsInstance<AuthorSortFilter>().firstOrNull()?.addToUrl(this)
-            } else {
-                filters.filterIsInstance<MangaSortFilter>().firstOrNull()?.addToUrl(this)
+            addPathSegment("list")
+
+            if (query.isNotBlank()) {
+                addQueryParameter("query", query)
             }
 
             addQueryParameter("page_no", page.toString())
@@ -124,7 +126,7 @@ class Twicomi : HttpSource() {
         }
 
         val screenName = splitUrl[2]
-        return GET("$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=1&page_limit=500")
+        return paginatedChapterListRequest(screenName, 1)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -139,7 +141,7 @@ class Twicomi : HttpSource() {
         while (hasNextPage) {
             page += 1
 
-            val newRequest = GET("$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=500")
+            val newRequest = paginatedChapterListRequest(screenName, page)
             val newResponse = client.newCall(newRequest).execute()
             val newData = newResponse.parseAs<TwicomiResponse<MangaListWithCount>>()
 
@@ -155,6 +157,9 @@ class Twicomi : HttpSource() {
             }
         }.reversed()
     }
+    
+    private fun paginatedChapterListRequest(screenName: String, page: Int) =
+        GET("$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=500")
 
     private fun dummyChapterFromManga(manga: SManga) = SChapter.create().apply {
         url = manga.url
