@@ -19,4 +19,6 @@ class KnightNoScanlation : Madara(
         .build()
 
     override val mangaSubString = "sr"
+
+    override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) div.summary-content"
 }
