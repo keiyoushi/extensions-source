@@ -29,6 +29,7 @@ class LerMangaOnline : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
         .build()
+
     private fun String.toChapterName() =
         trim().replace("\\d{1,2}-\\d{1,2}-\\d{2,4}".toRegex(), "")
 
@@ -120,6 +121,7 @@ class LerMangaOnline : ParsedHttpSource() {
         return runCatching { DATE_FORMATTER.parse(trim())?.time }
             .getOrNull() ?: 0L
     }
+
     companion object {
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("dd-MM-yyyy", Locale("pt", "BR"))
