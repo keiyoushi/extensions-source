@@ -131,8 +131,8 @@ class Bakai : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.ipsType_pageTitle")?.text() ?: "Hentai"
         thumbnail_url = document.selectFirst("div.cCmsRecord_image img")?.absUrl("src")
-        artist = document.selectFirst("span.mangaInfo:contains(Artist:) + a")?.text()
-        genre = document.selectFirst("span.mangaInfo:contains(Tags:) + span")?.text()
+        artist = document.selectFirst("span.mangaInfo:has(strong:contains(Artist)) + a")?.text()
+        genre = document.selectFirst("span.mangaInfo:has(strong:contains(Tags)) + span")?.text()
         description = document.selectFirst("h2.ipsFieldRow_desc")?.let {
             // Alternative titles
             "Títulos alternativos: ${it.text()}"
