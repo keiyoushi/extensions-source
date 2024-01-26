@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.knightnoscanlation
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
@@ -15,7 +15,7 @@ class KnightNoScanlation : Madara(
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(),2, 1, TimeUnit.SECONDS)
+        .rateLimitHost(baseUrl.toHttpUrl(), 2, 1, TimeUnit.SECONDS)
         .build()
 
     override val mangaSubString = "sr"
