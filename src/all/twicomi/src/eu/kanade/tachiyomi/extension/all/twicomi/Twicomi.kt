@@ -84,7 +84,7 @@ class Twicomi : HttpSource() {
                 val manga = data.response.authorList.map { it.author.toSManga() }
 
                 val currentPage = response.request.url.queryParameter("page_no")!!.toInt()
-                val hasNextPage = currentPage * 24 < data.response.totalCount
+                val hasNextPage = currentPage * 12 < data.response.totalCount
 
                 MangasPage(manga, hasNextPage)
             }
@@ -157,7 +157,7 @@ class Twicomi : HttpSource() {
             }
         }.reversed()
     }
-    
+
     private fun paginatedChapterListRequest(screenName: String, page: Int) =
         GET("$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=500")
 
