@@ -71,7 +71,7 @@ object LerMangaOnlineFilters {
             Genre("SchoolLife", "schoollife"),
             Genre("Sci-Fi", "sci-fi"),
             Genre("Seinen", "seinen"),
-            Genre("shonen", "shonen"),
+            Genre("Shonen", "shonen"),
             Genre("Shoujo", "shoujo"),
             Genre("Shoujo Ai", "shoujo-ai"),
             Genre("Shounen", "shounen"),
