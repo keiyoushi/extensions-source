@@ -45,6 +45,13 @@ class AsuraScans : MangaThemesia(
         .addInterceptor(::urlChangeInterceptor)
         .addInterceptor(::domainChangeIntercept)
         .rateLimit(1, 3, TimeUnit.SECONDS)
+        .apply {
+            val interceptors = interceptors()
+            val index = interceptors.indexOfFirst { "Brotli" in it.javaClass.simpleName }
+            if (index >= 0) {
+                interceptors.add(interceptors.removeAt(index))
+            }
+        }
         .build()
 
     override val seriesDescriptionSelector = "div.desc p, div.entry-content p, div[itemprop=description]:not(:has(p))"
