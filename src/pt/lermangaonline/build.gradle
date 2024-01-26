@@ -1,5 +1,5 @@
 ext {
-    extName = 'Ler Manga Online'
+    extName = 'Ler Mangá Online'
     extClass = '.LerMangaOnline'
     extVersionCode = 1
     isNsfw = true

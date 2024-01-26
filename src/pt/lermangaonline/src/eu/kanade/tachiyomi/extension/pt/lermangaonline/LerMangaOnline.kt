@@ -12,10 +12,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class LerMangaOnline : ParsedHttpSource() {
-    override val name = "Ler Manga Online"
+    override val name = "Ler Mangá Online"
 
     override val baseUrl = "https://lermangaonline.com.br"
 
