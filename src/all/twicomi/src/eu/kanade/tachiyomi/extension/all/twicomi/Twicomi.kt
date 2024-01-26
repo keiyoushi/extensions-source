@@ -42,7 +42,8 @@ class Twicomi : HttpSource() {
         val manga = data.response.mangaList.map { it.toSManga() }
 
         val currentPage = response.request.url.queryParameter("page_no")!!.toInt()
-        val hasNextPage = currentPage * 24 < data.response.totalCount
+        val pageLimit = response.request.url.queryParameter("page_limit")?.toInt() ?: 10
+        val hasNextPage = currentPage * pageLimit < data.response.totalCount
 
         return MangasPage(manga, hasNextPage)
     }
@@ -84,7 +85,8 @@ class Twicomi : HttpSource() {
                 val manga = data.response.authorList.map { it.author.toSManga() }
 
                 val currentPage = response.request.url.queryParameter("page_no")!!.toInt()
-                val hasNextPage = currentPage * 12 < data.response.totalCount
+                val pageLimit = response.request.url.queryParameter("page_limit")?.toInt() ?: 10
+                val hasNextPage = currentPage * pageLimit < data.response.totalCount
 
                 MangasPage(manga, hasNextPage)
             }
@@ -135,8 +137,9 @@ class Twicomi : HttpSource() {
 
         val screenName = response.request.url.queryParameter("screen_name")!!
 
+        val pageLimit = response.request.url.queryParameter("page_limit")?.toInt() ?: 10
         var page = 1
-        var hasNextPage = page * 500 < data.response.totalCount
+        var hasNextPage = page * pageLimit < data.response.totalCount
 
         while (hasNextPage) {
             page += 1
@@ -147,7 +150,7 @@ class Twicomi : HttpSource() {
 
             results.addAll(newData.response.mangaList)
 
-            hasNextPage = page * 500 < data.response.totalCount
+            hasNextPage = page * pageLimit < data.response.totalCount
         }
 
         return results.mapIndexed { i, it ->
