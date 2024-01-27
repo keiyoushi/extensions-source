@@ -33,9 +33,6 @@ abstract class BlogTruyen(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-    },
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -48,6 +45,10 @@ abstract class BlogTruyen(
         .build()
 
     private val json: Json by injectLazy()
+
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    }
 
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/ajax/Search/AjaxLoadListManga?key=tatca&orderBy=3&p=$page", headers)
