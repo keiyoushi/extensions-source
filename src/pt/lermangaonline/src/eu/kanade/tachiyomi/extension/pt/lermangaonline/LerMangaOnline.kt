@@ -69,7 +69,7 @@ class LerMangaOnline : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val elements = document.select("div.images img")
         return elements.mapIndexed { i, el ->
-            Page(i, document.location(), el.srcAttr())
+            Page(i, imageUrl = el.srcAttr())
         }
     }
 
