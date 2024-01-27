@@ -10,6 +10,7 @@ class ArtistFilter : AdvSearchEntryFilter("Artists")
 class AuthorFilter : AdvSearchEntryFilter("Authors")
 class CircleFilter : AdvSearchEntryFilter("Circles")
 class EventFilter : AdvSearchEntryFilter("Events")
+class ParodyFilter : AdvSearchEntryFilter("Parodies", "parody")
 class MagazineFilter : AdvSearchEntryFilter("Magazines")
 class PublisherFilter : AdvSearchEntryFilter("Publishers")
 open class AdvSearchEntryFilter(

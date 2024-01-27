@@ -165,6 +165,7 @@ class HentaiNexus : ParsedHttpSource() {
         AuthorFilter(),
         CircleFilter(),
         EventFilter(),
+        ParodyFilter(),
         MagazineFilter(),
         PublisherFilter(),
 
