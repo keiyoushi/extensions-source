@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.blogtruyen
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -39,10 +38,6 @@ abstract class BlogTruyen(
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .build()
 
     private val json: Json by injectLazy()
 
