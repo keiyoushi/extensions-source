@@ -22,7 +22,7 @@ class FoolSlideGenerator : ThemeSourceGenerator {
         SingleLang("Menudo-Fansub", "https://www.menudo-fansub.com", "es", className = "MenudoFansub", overrideVersionCode = 1),
         SingleLang("NIFTeam", "http://read-nifteam.info", "it"),
         SingleLang("Rama", "https://www.ramareader.it", "it"),
-        SingleLang("Silent Sky", "https://reader.silentsky-scans.net", "en")
+        SingleLang("Silent Sky", "https://reader.silentsky-scans.net", "en"),
     )
 
     companion object {
