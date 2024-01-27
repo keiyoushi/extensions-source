@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.extension.zh.manhuaren
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.os.Build
 import android.text.format.DateFormat
 import android.util.Base64
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,11 +15,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -22,6 +31,8 @@ import okhttp3.Response
 import okio.Buffer
 import org.json.JSONArray
 import org.json.JSONObject
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 import java.security.KeyFactory
 import java.security.MessageDigest
@@ -35,7 +46,7 @@ import javax.crypto.Cipher
 import kotlin.random.Random
 import kotlin.random.nextUBytes
 
-class Manhuaren : HttpSource() {
+class Manhuaren : HttpSource(), ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "漫画人"
@@ -43,20 +54,30 @@ class Manhuaren : HttpSource() {
 
     private val pageSize = 20
     private val baseHttpUrl = baseUrl.toHttpUrl()
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     private val gsnSalt = "4e0a48e1c0b54041bce9c8f0e036124d"
     private val encodedPublicKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmFCg289dTws27v8GtqIffkP4zgFR+MYIuUIeVO5AGiBV0rfpRh5gg7i8RrT12E9j6XwKoe3xJz1khDnPc65P5f7CJcNJ9A8bj7Al5K4jYGxz+4Q+n0YzSllXPit/Vz/iW5jFdlP6CTIgUVwvIoGEL2sS4cqqqSpCDKHSeiXh9CtMsktc6YyrSN+8mQbBvoSSew18r/vC07iQiaYkClcs7jIPq9tuilL//2uR9kWn5jsp8zHKVjmXuLtHDhM9lObZGCVJwdlN2KDKTh276u/pzQ1s5u8z/ARtK26N8e5w8mNlGcHcHfwyhjfEQurvrnkqYH37+12U3jGk5YNHGyOPcwIDAQAB"
-    private val imei: String by lazy(mode = LazyThreadSafetyMode.SYNCHRONIZED) { generateIMEI() }
-    private val token: String by lazy(mode = LazyThreadSafetyMode.SYNCHRONIZED) { fetchToken() }
-    private var userId = "-1"
-    private var lastUsedTime = ""
+    private val imei: String by lazy { generateIMEI() }
+    private val token: String by lazy { fetchToken() }
+    private var userId: String = preferences.getString(USER_ID_PREF, null) ?: "-1"
+    private val lastUsedTime: String by lazy { generateLastUsedTime() }
+
+    override val client: OkHttpClient = network.client
+        .newBuilder()
+        .apply { interceptors().removeAll { it.javaClass.simpleName == "BrotliInterceptor" } }
+        .addInterceptor(ErrorResponseInterceptor(baseUrl, preferences))
+        .build()
+
+    private fun randomString(length: Int, pool: String): String {
+        return (1..length)
+            .map { Random.nextInt(0, pool.length).let { pool[it] } }
+            .joinToString("")
+    }
 
     private fun randomNumber(length: Int): String {
-        var str = ""
-        for (i in 1..length) {
-            str += (0..9).random().toString()
-        }
-        return str
+        return randomString(length, "0123456789")
     }
 
     private fun addLuhnCheckDigit(str: String): String {
@@ -86,21 +107,47 @@ class Manhuaren : HttpSource() {
         return addLuhnCheckDigit(randomNumber(14))
     }
 
-    private fun generateSimSerialNumber(): String {
-        return addLuhnCheckDigit("891253${randomNumber(12)}")
-    }
+    // private fun generateSimSerialNumber(): String {
+    //     return addLuhnCheckDigit("891253${randomNumber(12)}")
+    // }
+
+    @Serializable
+    data class TokenResult(
+        val parameter: String,
+        val scheme: String,
+    )
+
+    @Serializable
+    data class TokenResponse(
+        val initDeviceKey: String,
+        val nickName: String,
+        val tokenResult: TokenResult,
+        val userId: Long,
+        val userName: String,
+    )
+
+    @Serializable
+    data class GetAnonyUserBody(
+        val response: TokenResponse,
+    )
 
     private fun fetchToken(): String {
-        val res = client.newCall(getAnonyUser()).execute()
-        val body = JSONObject(res.body.string())
-        val response = body.getJSONObject("response")
-        val tokenResult = response.getJSONObject("tokenResult")
-        val scheme = tokenResult.getString("scheme")
-        val parameter = tokenResult.getString("parameter")
+        var token = preferences.getString(TOKEN_PREF, null)
+        if (token == null || userId == "-1") {
+            val res = client.newCall(getAnonyUser()).execute()
+            val tokenResponse = Json.decodeFromString<GetAnonyUserBody>(res.body.string()).response
+            val tokenResult = tokenResponse.tokenResult
 
-        userId = response.getString("userId")
-        lastUsedTime = generateLastUsedTime()
-        return "$scheme $parameter"
+            token = "${tokenResult.scheme} ${tokenResult.parameter}"
+            userId = tokenResponse.userId.toString()
+
+            preferences.edit().apply {
+                putString(TOKEN_PREF, token)
+                putString(USER_ID_PREF, userId)
+            }.apply()
+        }
+
+        return token
     }
 
     private fun generateLastUsedTime(): String {
@@ -122,9 +169,9 @@ class Manhuaren : HttpSource() {
             .addPathSegments("v1/user/createAnonyUser2")
             .build()
 
-        val simSerialNumber = generateSimSerialNumber()
-        val mac = Random.nextUBytes(6)
-            .joinToString(":") { it.toString(16).padStart(2, '0') }
+        // val simSerialNumber = generateSimSerialNumber()
+        // val mac = Random.nextUBytes(6)
+        //     .joinToString(":") { it.toString(16).padStart(2, '0') }
         val androidId = Random.nextUBytes(8)
             .joinToString("") { it.toString(16).padStart(2, '0') }
             .replaceFirst("^0+".toRegex(), "")
@@ -133,10 +180,28 @@ class Manhuaren : HttpSource() {
         val keysMap = ArrayList<HashMap<String, Any?>>().apply {
             add(
                 HashMap<String, Any?>().apply {
+                    put("key", encrypt(imei))
+                    put("keyType", "0")
+                },
+            )
+            // add(
+            //     HashMap<String, Any?>().apply {
+            //         put("key", encrypt("mac: $mac"))
+            //         put("keyType", "1")
+            //     },
+            // )
+            add(
+                HashMap<String, Any?>().apply {
                     put("key", encrypt(androidId)) // https://developer.android.com/reference/android/provider/Settings.Secure#ANDROID_ID
                     put("keyType", "2")
                 },
             )
+            // add(
+            //     HashMap<String, Any?>().apply {
+            //         put("key", encrypt(simSerialNumber)) // https://developer.android.com/reference/android/telephony/TelephonyManager#getSimSerialNumber()
+            //         put("keyType", "3")
+            //     },
+            // )
             add(
                 HashMap<String, Any?>().apply {
                     put("key", encrypt(UUID.randomUUID().toString()))
@@ -255,7 +320,7 @@ class Manhuaren : HttpSource() {
             put("cl", "dm5") // Umeng channel
             put("cy", "US") // country
             put("di", imei)
-            put("dm", "Pixel 6 Pro") // https://developer.android.com/reference/android/os/Build#MODEL
+            put("dm", Build.MODEL)
             put("fcl", "dm5") // Umeng channel config
             put("ft", "mhr") // from type
             put("fut", lastUsedTime) // first used time
@@ -267,7 +332,7 @@ class Manhuaren : HttpSource() {
             put("os", 1) // OS (int)
             put("ov", "33_13") // "{Build.VERSION.SDK_INT}_{Build.VERSION.RELEASE}"
             put("pt", "com.mhr.mangamini") // package name
-            put("rn", "1400x3120") // screen "{width}x{height}"
+            put("rn", "1080x1920") // screen "{width}x{height}"
             put("st", 0)
         }
         val yqppMap = HashMap<String, Any?>().apply {
@@ -292,7 +357,7 @@ class Manhuaren : HttpSource() {
             add("yq_is_anonymous", "1")
             add("x-request-id", UUID.randomUUID().toString())
             add("X-Yq-Yqpp", JSONObject(yqppMap).toString())
-            add("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 13; Pixel 6 Pro Build/TQ3A.230705.001)")
+            add("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 13; ${Build.MODEL} Build/${Build.ID})")
         }
     }
 
@@ -602,4 +667,16 @@ class Manhuaren : HttpSource() {
         fun getId() = vals[state].id
         fun getType() = vals[state].type
     }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SimpleEditTextPreference(screen.context).apply {
+            key = USER_ID_PREF
+            title = "用户ID"
+
+            setEnabled(false)
+        }.let(screen::addPreference)
+    }
 }
+
+internal const val TOKEN_PREF = "token"
+internal const val USER_ID_PREF = "userId"
