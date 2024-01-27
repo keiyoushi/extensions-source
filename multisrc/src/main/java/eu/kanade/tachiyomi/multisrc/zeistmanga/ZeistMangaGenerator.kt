@@ -14,7 +14,6 @@ class ZeistMangaGenerator : ThemeSourceGenerator {
     override val sources = listOf(
         SingleLang("AiYuManhua", "https://www.aiyumanhua.com", "es", className = "AiYuManhua", pkgName = "aiyumanga", overrideVersionCode = 28),
         SingleLang("AnimeXNovel", "https://www.animexnovel.com", "pt-BR"),
-        SingleLang("Asupan Komik", "https://www.asupankomik.my.id", "id", overrideVersionCode = 1),
         SingleLang("Celestial Moon", "https://www.celestialmoonscan.com", "es", isNsfw = true),
         SingleLang("Eleven Scanlator", "https://elevenscanlator.blogspot.com", "pt-BR"),
         SingleLang("Guilda Tier Draw", "https://www.guildatierdraw.com", "pt-BR", isNsfw = true),
