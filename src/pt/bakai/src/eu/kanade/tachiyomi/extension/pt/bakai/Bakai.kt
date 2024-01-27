@@ -11,6 +11,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -32,6 +35,21 @@ class Bakai : ParsedHttpSource() {
     override val client by lazy {
         network.client.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
+            .cookieJar(
+                object : CookieJar {
+                    private fun List<Cookie>.removeLimit() = filterNot {
+                        it.name.startsWith("ips4_") || it.path == "/search1"
+                    }
+
+                    private val cookieJar = network.client.cookieJar
+
+                    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) =
+                        cookieJar.saveFromResponse(url, cookies.removeLimit())
+
+                    override fun loadForRequest(url: HttpUrl) =
+                        cookieJar.loadForRequest(url).removeLimit()
+                },
+            )
             .build()
     }
 
@@ -113,8 +131,8 @@ class Bakai : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.ipsType_pageTitle")?.text() ?: "Hentai"
         thumbnail_url = document.selectFirst("div.cCmsRecord_image img")?.absUrl("src")
-        artist = document.selectFirst("span.mangaInfo:contains(Artist:) + a")?.text()
-        genre = document.selectFirst("span.mangaInfo:contains(Tags:) + span")?.text()
+        artist = document.selectFirst("span.mangaInfo:has(strong:contains(Artist)) + a")?.text()
+        genre = document.selectFirst("span.mangaInfo:has(strong:contains(Tags)) + span")?.text()
         description = document.selectFirst("h2.ipsFieldRow_desc")?.let {
             // Alternative titles
             "Títulos alternativos: ${it.text()}"
