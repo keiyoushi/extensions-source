@@ -46,7 +46,7 @@ class HentaiFox : ParsedHttpSource() {
                 title = it.text()
                 setUrlWithoutDomain(it.attr("href"))
             }
-            thumbnail_url = element.select("img").first()!!.attr("abs:src")
+            thumbnail_url = element.selectFirst("img")!!.imgAttr()
         }
     }
 
@@ -98,7 +98,7 @@ class HentaiFox : ParsedHttpSource() {
                 title = info.select("h1").text()
                 genre = info.select("ul.tags a").joinToString { it.ownText() }
                 artist = info.select("ul.artists a").joinToString { it.ownText() }
-                thumbnail_url = info.select("img").attr("abs:src")
+                thumbnail_url = info.select("img").first()!!.imgAttr()
                 description = info.select("ul.parodies a")
                     .let { e -> if (e.isNotEmpty()) "Parodies: ${e.joinToString { it.ownText() }}\n\n" else "" }
                 description += info.select("ul.characters a")
@@ -137,7 +137,7 @@ class HentaiFox : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String {
-        return document.select("img#gimg").attr("abs:data-src")
+        return document.selectFirst("img#gimg")!!.imgAttr()
     }
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
@@ -211,5 +211,13 @@ class HentaiFox : ParsedHttpSource() {
     private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
+    }
+
+    private fun Element.imgAttr() = when {
+        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
+        hasAttr("data-src") -> absUrl("data-src")
+        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
+        hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
+        else -> absUrl("src")
     }
 }
