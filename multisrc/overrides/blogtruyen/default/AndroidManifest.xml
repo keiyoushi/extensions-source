@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <activity android:name=".vi.blogtruyen.BlogTruyenUrlActivity"
+        <activity android:name="eu.kanade.tachiyomi.multisrc.blogtruyen.BlogTruyenUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -11,9 +11,9 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:host="blogtruyenmoi.com" />
-                <data android:host="m.blogtruyenmoi.com" />
-                <data android:scheme="https" />
+                <data android:host="${SOURCEHOST}" />
+                <data android:host="m.${SOURCEHOST}" />
+                <data android:scheme="${SOURCESCHEME}" />
 
                 <data android:pathPattern="/tac-gia/..*" />
                 <data android:pathPattern="/nhom-dich/..*" />
