@@ -113,10 +113,9 @@ class LerMangaOnline : ParsedHttpSource() {
         }
     }
 
-    private fun searchMangaBySlugParse(response: Response): MangasPage {
-        val details = mangaDetailsParse(response.asJsoup())
-        return MangasPage(listOf(details), false)
-    }
+    private fun searchMangaBySlugParse(response: Response): MangasPage =
+        MangasPage(listOf(mangaDetailsParse(response.asJsoup())), false)
+
 
     override fun getFilterList(): FilterList = FilterList(GenresFilter)
 
