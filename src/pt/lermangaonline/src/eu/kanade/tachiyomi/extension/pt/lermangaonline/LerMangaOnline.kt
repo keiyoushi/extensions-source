@@ -30,12 +30,6 @@ class LerMangaOnline : ParsedHttpSource() {
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
         .build()
 
-    private fun String.toChapterName() =
-        trim().replace("\\d{1,2}-\\d{1,2}-\\d{2,4}".toRegex(), "")
-
-    private fun String.toChapterNumber(): Float =
-        "\\d+".toRegex().find(trim())?.value?.toFloat() ?: 0F
-
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst("div.capitulo")!!.ownText()
         date_upload = (element.selectFirst("span")?.text() ?: "").toDate()
