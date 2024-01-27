@@ -346,14 +346,8 @@ abstract class BlogTruyen(
         text().replace("\\n", "\n").replace("\n ", "\n")
     }
 
-    private fun extractIdFromQuery(prefix: String, query: String): String {
-        val q = query.substringAfter(prefix).trim()
-        return if (q.contains("-")) {
-            q.substringAfterLast("-")
-        } else {
-            q
-        }
-    }
+    private fun extractIdFromQuery(prefix: String, query: String): String =
+        query.substringAfter(prefix).trimStart().substringAfterLast("-")
 
     private fun countView(document: Document) {
         val mangaId = document.getElementById("MangaId")!!.attr("value")
