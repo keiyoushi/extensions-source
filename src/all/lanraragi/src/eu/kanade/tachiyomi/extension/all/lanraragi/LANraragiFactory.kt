@@ -8,8 +8,11 @@ class LANraragiFactory : SourceFactory {
         val firstLrr = LANraragi("1")
         val lrrCount = firstLrr.preferences.getString(LANraragi.EXTRA_SOURCES_COUNT_KEY, LANraragi.EXTRA_SOURCES_COUNT_DEFAULT)!!.toInt()
 
-        return mutableListOf(firstLrr).apply {
-            (0 until lrrCount).map { add(LANraragi("${it + 2}")) }
+        return buildList(lrrCount) {
+            add(firstLrr)
+            for (i in 2..lrrCount) {
+                add(LANraragi("$i"))
+            }
         }
     }
 }
