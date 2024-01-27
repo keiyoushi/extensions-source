@@ -64,7 +64,6 @@ class LerMangaOnline : ParsedHttpSource() {
         thumbnail_url = info.selectFirst("div.poster img")?.srcAttr()
         genre = document.select("div.categorias-blog a").joinToString { it.text() }
         status = SManga.UNKNOWN
-        setUrlWithoutDomain(document.location())
     }
 
     override fun pageListParse(document: Document): List<Page> {
