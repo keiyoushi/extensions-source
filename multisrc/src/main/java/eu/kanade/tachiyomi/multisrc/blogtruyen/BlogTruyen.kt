@@ -35,8 +35,8 @@ abstract class BlogTruyen(
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-    }
-): ParsedHttpSource() {
+    },
+) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
@@ -99,7 +99,7 @@ abstract class BlogTruyen(
     override fun fetchSearchManga(
         page: Int,
         query: String,
-        filters: FilterList
+        filters: FilterList,
     ): Observable<MangasPage> = when {
         query.startsWith(PREFIX_ID_SEARCH) -> {
             var id = query.removePrefix(PREFIX_ID_SEARCH).trimStart()
@@ -114,7 +114,7 @@ abstract class BlogTruyen(
             fetchMangaDetails(
                 SManga.create().apply {
                     url = "/$id"
-                }
+                },
             )
                 .map { MangasPage(listOf(it), false) }
         }
@@ -264,7 +264,7 @@ abstract class BlogTruyen(
                         e.text()
                             .replace("\\n", "\n")
                             .replace("\n ", "\n")
-                            .trim()
+                            .trim(),
                     )
                 }
         }.trim()
