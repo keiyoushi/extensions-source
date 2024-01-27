@@ -13,7 +13,6 @@ class PaprikaGenerator : ThemeSourceGenerator {
 
     override val sources = listOf(
         SingleLang("MangaNelos.com", "http://manganelos.com", "en", className = "MangaNelosCom", overrideVersionCode = 1),
-        SingleLang("MangaHere.today", "http://mangahere.today", "en", className = "MangaHereToday"),
     )
 
     companion object {
