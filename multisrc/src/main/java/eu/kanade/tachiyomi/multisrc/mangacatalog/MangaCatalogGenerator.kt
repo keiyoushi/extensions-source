@@ -32,7 +32,6 @@ class MangaCatalogGenerator : ThemeSourceGenerator {
         SingleLang("Read One Piece Manga Online", "https://ww8.readonepiece.com", "en"),
         SingleLang("Read One-Punch Man Manga Online", "https://ww3.readopm.com", "en", className = "ReadOnePunchManMangaOnlineTwo", overrideVersionCode = 1), // exact same name as the one in mangamainac extension
         SingleLang("Read Solo Leveling Manga Manhwa Online", "https://readsololeveling.org", "en", overrideVersionCode = 2),
-        SingleLang("Read Sword Art Online Manga Online", "https://manga.watchsao.tv", "en"),
         SingleLang("Read The Promised Neverland Manga Online", "https://ww3.readneverland.com", "en", overrideVersionCode = 1),
         SingleLang("Read Tokyo Ghoul Re & Tokyo Ghoul Manga Online", "https://ww8.tokyoghoulre.com", "en", className = "ReadTokyoGhoulReTokyoGhoulMangaOnline", overrideVersionCode = 1),
         SingleLang("Read Tower of God Manhwa Manga Online", "https://ww1.readtowerofgod.com", "en", className = "ReadTowerOfGodManhwaMangaOnline", overrideVersionCode = 2),
