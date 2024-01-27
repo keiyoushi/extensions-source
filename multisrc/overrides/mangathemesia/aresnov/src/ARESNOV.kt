@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ar.iimanga
+package eu.kanade.tachiyomi.extension.ar.aresnov
 
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
@@ -12,24 +12,9 @@ import java.lang.IllegalArgumentException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ARESMangaFactory : SourceFactory {
-    override fun createSources(): List<Source> = listOf(
-        EnARESManga(),
-        ARESManga("ARESNOV", "https://aresnov.org"),
-    )
-}
-
-class EnARESManga : ARESManga("ARESManga", "https://en-aresmanga.com") {
-    // The scanlator changed their name.
-    override val id = 230017529540228175
-}
-
-open class ARESManga(
-    name: String,
-    baseUrl: String,
-) : MangaThemesia(
-    name,
-    baseUrl,
+class ARESNOV : MangaThemesia(
+    "ARESNOV",
+    "https://aresnov.org",
     "ar",
     mangaUrlDirectory = "/series",
     dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
