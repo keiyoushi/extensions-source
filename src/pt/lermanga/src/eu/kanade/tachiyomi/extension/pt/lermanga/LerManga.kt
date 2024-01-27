@@ -162,12 +162,13 @@ class LerManga : ParsedHttpSource() {
             .replace(PAGES_VARIABLE_REGEX, "")
             .substringBeforeLast(";")
             .let { json.decodeFromString<List<String>>(it) }
+            .filter { it.isNotBlank() }
             .mapIndexed { index, imageUrl ->
-                Page(index, document.location(), imageUrl)
+                Page(index, imageUrl = imageUrl)
             }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
