@@ -40,7 +40,6 @@ class LerMangaOnline : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = ""
 
-
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("section h3")!!.text()
         thumbnail_url = element.selectFirst("div.poster img")?.absUrl("src")
@@ -73,17 +72,17 @@ class LerMangaOnline : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaFromElement(element: Element) =
-        throw UnsupportedOperationException()
+    override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
-    override fun popularMangaNextPageSelector() =
-        throw UnsupportedOperationException()
+    override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
-    override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
+            .build()
+        return GET(url, headers)
+    }
 
-    override fun popularMangaSelector() =
-        throw UnsupportedOperationException()
+    override fun popularMangaSelector() = latestUpdatesSelector()
 
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
