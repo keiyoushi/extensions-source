@@ -1,0 +1,13 @@
+* @keiyoushi/maintainers
+
+/src/zh/ @stevenyomi
+
+/src/vi/ @beerpiss
+/multisrc/overrides/a3manga/ @beerpiss
+/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/a3manga/ @beerpiss
+/multisrc/overrides/blogtruyen/ @beerpiss
+/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/blogtruyen/ @beerpiss
+/multisrc/overrides/mymangacms/ @beerpiss
+/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/mymangacms/ @beerpiss
+/multisrc/overrides/otakusanctuary/ @beerpiss
+/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/otakusanctuary/ @beerpiss
