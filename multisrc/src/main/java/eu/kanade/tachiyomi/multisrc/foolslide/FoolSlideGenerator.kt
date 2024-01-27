@@ -18,17 +18,11 @@ class FoolSlideGenerator : ThemeSourceGenerator {
         SingleLang("Anata no Motokare", "https://motokare.xyz", "en", className = "AnataNoMotokare"),
         SingleLang("Death Toll Scans", "https://reader.deathtollscans.net", "en"),
         SingleLang("Evil Flowers", "https://reader.evilflowers.com", "en", overrideVersionCode = 1),
-        SingleLang("Le Cercle du Scan", "https://lel.lecercleduscan.com", "fr", className = "LeCercleDuScan", overrideVersionCode = 1),
-        SingleLang("Lilyreader", "https://manga.smuglo.li", "en"),
-        SingleLang("MangaScouts", "http://onlinereader.mangascouts.org", "de", overrideVersionCode = 1),
         SingleLang("Mangatellers", "https://reader.mangatellers.gr", "en"),
         SingleLang("Menudo-Fansub", "https://www.menudo-fansub.com", "es", className = "MenudoFansub", overrideVersionCode = 1),
         SingleLang("NIFTeam", "http://read-nifteam.info", "it"),
-        SingleLang("PowerManga", "https://reader.powermanga.org", "it", className = "PowerMangaIT"),
         SingleLang("Rama", "https://www.ramareader.it", "it"),
-        SingleLang("Silent Sky", "https://reader.silentsky-scans.net", "en"),
-        SingleLang("Wanted Team", "https://reader.onepiecenakama.pl", "pl"),
-        SingleLang("Русификация", "https://rusmanga.ru", "ru", className = "Russification"),
+        SingleLang("Silent Sky", "https://reader.silentsky-scans.net", "en")
     )
 
     companion object {
