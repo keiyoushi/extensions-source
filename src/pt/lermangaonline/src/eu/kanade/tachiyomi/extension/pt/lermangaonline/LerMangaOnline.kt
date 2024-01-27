@@ -46,7 +46,6 @@ class LerMangaOnline : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = ""
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("section h3")!!.text()
