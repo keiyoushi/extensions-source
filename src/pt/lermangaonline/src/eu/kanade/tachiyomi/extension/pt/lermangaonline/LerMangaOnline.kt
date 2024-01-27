@@ -112,6 +112,7 @@ class LerMangaOnline : ParsedHttpSource() {
     }
 
     companion object {
+        const val PREFIX_SLUG_SEARCH = "slug:"
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("dd-MM-yyyy", Locale("pt", "BR"))
         }
