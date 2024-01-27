@@ -62,7 +62,6 @@ class LerMangaOnline : ParsedHttpSource() {
         title = info!!.selectFirst("div.sinopse a")!!.text()
         description = info.selectFirst("div.sinopse div:nth-child(2)")?.text()
         thumbnail_url = info.selectFirst("div.poster img")?.srcAttr()
-        initialized = true
         genre = document.select("div.categorias-blog a").joinToString(", ") { it.text() }
         status = SManga.UNKNOWN
         setUrlWithoutDomain(document.location())
