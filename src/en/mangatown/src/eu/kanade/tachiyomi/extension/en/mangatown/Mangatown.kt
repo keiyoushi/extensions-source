@@ -122,9 +122,18 @@ class Mangatown : ParsedHttpSource() {
         }
     }
 
+    // check for paged first, then try longstrip
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("select#top_chapter_list ~ div.page_select option:not(:contains(featured))").mapIndexed { i, element ->
-            Page(i, element.attr("value").substringAfter("com"))
+        return document.select("select#top_chapter_list ~ div.page_select option:not(:contains(featured))").let { elements ->
+            if (elements.isNotEmpty()) {
+                elements.mapIndexed { i, e ->
+                    Page(i, e.attr("value").substringAfter("com"))
+                }
+            } else {
+                document.select("#viewer .image").mapIndexed { i, e ->
+                    Page(i, "", e.attr("abs:src"))
+                }
+            }
         }
     }
 
