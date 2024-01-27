@@ -39,7 +39,6 @@ class LerMangaOnline : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst("div.capitulo")!!.text().toChapterName()
         date_upload = (element.selectFirst("span")?.text() ?: "").toDate()
-        chapter_number = name.toChapterNumber()
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
