@@ -317,12 +317,20 @@ abstract class BlogTruyen(
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() = FilterList(
-        Author(),
-        Scanlator(),
-        Status(),
-        GenreList(getGenreList()),
-    )
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf<Filter<*>>(
+            Author(),
+            Scanlator(),
+            Status(),
+        )
+        val genres = getGenreList()
+
+        if (genres.isNotEmpty()) {
+            filters.add(GenreList(genres))
+        }
+
+        return FilterList(filters)
+    }
 
     // copy([...document.querySelectorAll(".CategoryFilter li")].map((e) => `Genre("${e.textContent.trim()}", "${e.dataset.id}"),`).join("\n"))
     open fun getGenreList(): List<Genre> = emptyList()
