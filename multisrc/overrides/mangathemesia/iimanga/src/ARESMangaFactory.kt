@@ -34,7 +34,7 @@ open class ARESManga(
     mangaUrlDirectory = "/series",
     dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
 ) {
-    override val seriesAuthorSelector = ".imptdt:contains(بواسطة) i"
+    override val seriesAuthorSelector = ".imptdt:contains(المؤلف) i"
     override val seriesArtistSelector = ".imptdt:contains(الرسام) i"
     override val seriesTypeSelector = ".imptdt:contains(النوع) i"
     override val seriesStatusSelector = ".imptdt:contains(الحالة) i"
