@@ -2,17 +2,22 @@ package eu.kanade.tachiyomi.extension.pt.lermangaonline
 
 import eu.kanade.tachiyomi.extension.pt.lermangaonline.LerMangaOnlineFilters.GenresFilter
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -95,6 +100,22 @@ class LerMangaOnline : ParsedHttpSource() {
             .addQueryParameter("s", query)
             .build()
         return GET(url, headers)
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+            client.newCall(GET("$baseUrl/$slug", headers))
+                .asObservableSuccess()
+                .map(::searchMangaBySlugParse)
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
+    }
+
+    private fun searchMangaBySlugParse(response: Response): MangasPage {
+        val details = mangaDetailsParse(response.asJsoup())
+        return MangasPage(listOf(details), false)
     }
 
     override fun getFilterList(): FilterList = FilterList(GenresFilter)
