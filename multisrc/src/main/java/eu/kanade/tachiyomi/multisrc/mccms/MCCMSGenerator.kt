@@ -9,14 +9,6 @@ class MCCMSGenerator : ThemeSourceGenerator {
     override val baseVersionCode = 6
     override val sources = listOf(
         SingleLang(
-            name = "Kuaikuai Manhua 3",
-            baseUrl = "https://mobile3.manhuaorg.com",
-            lang = "zh",
-            className = "Kuaikuai3",
-            sourceName = "快快漫画3",
-            overrideVersionCode = 0,
-        ),
-        SingleLang(
             name = "Manhuawu",
             baseUrl = "https://www.mhua5.com",
             lang = "zh",
