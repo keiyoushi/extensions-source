@@ -1,0 +1,12 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+ext {
+    extName = 'LANraragi'
+    pkgNameSuffix = 'all.lanraragi'
+    extClass = '.LANraragiFactory'
+    extVersionCode = 16
+}
+
+apply from: "$rootDir/common.gradle"
