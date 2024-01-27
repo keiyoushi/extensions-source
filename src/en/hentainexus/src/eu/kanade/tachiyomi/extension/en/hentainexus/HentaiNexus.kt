@@ -124,14 +124,16 @@ class HentaiNexus : ParsedHttpSource() {
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val id = response.request.url.pathSegments.last()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val id = manga.url.split("/").last()
 
-        return listOf(
-            SChapter.create().apply {
-                url = "/read/$id"
-                name = "Chapter"
-            },
+        return Observable.just(
+            listOf(
+                SChapter.create().apply {
+                    url = "/read/$id"
+                    name = "Chapter"
+                },
+            ),
         )
     }
 

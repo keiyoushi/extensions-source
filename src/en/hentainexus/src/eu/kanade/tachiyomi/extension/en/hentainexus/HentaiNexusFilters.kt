@@ -35,7 +35,8 @@ internal fun combineQuery(filters: FilterList): String {
                 append("-")
             }
 
-            append("${entry.key}:")
+            append(entry.key)
+            append(":")
             append(entry.text)
             append(" ")
         }
