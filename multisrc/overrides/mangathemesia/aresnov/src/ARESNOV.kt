@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.ar.aresnov
 
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.source.Source
-import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.Page
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
