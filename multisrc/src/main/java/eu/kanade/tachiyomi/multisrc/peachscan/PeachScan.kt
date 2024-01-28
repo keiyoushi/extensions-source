@@ -75,7 +75,7 @@ abstract class PeachScan(
 
     override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
 
-    override fun latestUpdatesSelector() = "div.comic"
+    override fun latestUpdatesSelector() = "div.comic:not(a.box-image > p:contains(Novel))"
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
