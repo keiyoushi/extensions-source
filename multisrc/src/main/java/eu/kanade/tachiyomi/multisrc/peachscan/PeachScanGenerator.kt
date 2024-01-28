@@ -15,7 +15,7 @@ class PeachScanGenerator : ThemeSourceGenerator {
         SingleLang("Mode Scanlator", "https://modescanlator.com", "pt-BR"),
         SingleLang("Nazarick Scan", "https://nazarickscan.com.br", "pt-BR"),
         SingleLang("RF Dragon Scan", "https://rfdragonscan.com", "pt-BR"),
-        SingleLang("Wicked Witch Scan (Novo)", "https://wicked-witch-scan.com", "pt-BR", className = "WickedWitchScan", pkgName = "wickedwitchscannovo", sourceName = "Wicked Witch Scan", overrideVersionCode = 1),
+        SingleLang("Wicked Witch Scan", "https://wicked-witch-scan.com", "pt-BR", className = "WickedWitchScan", pkgName = "wickedwitchscannovo", overrideVersionCode = 1),
     )
 
     companion object {
