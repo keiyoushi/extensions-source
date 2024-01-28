@@ -1,3 +1,5 @@
 dependencies {
-    compileOnly(libs.tachiyomi.image.decoder)
+    // Only PeachScan sources uses the image-decoder dependency.
+    //noinspection UseTomlInstead
+    compileOnly("com.github.tachiyomiorg:image-decoder:fbd6601290")
 }
