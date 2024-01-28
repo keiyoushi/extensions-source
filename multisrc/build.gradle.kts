@@ -30,6 +30,7 @@ configurations {
 
 dependencies {
     compileOnly(libs.bundles.common)
+    compileOnly("com.github.tachiyomiorg:image-decoder:fbd6601290")
 
     // Implements all :lib libraries on the multisrc generator
     // Note that this does not mean that generated sources are going to
