@@ -46,7 +46,9 @@ class TsukiMangas : HttpSource() {
             .build()
     }
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("X-Requested", "HttpsRequest")
 
     private val json: Json by injectLazy()
 
@@ -268,6 +270,6 @@ class TsukiMangas : HttpSource() {
 
         private const val MAIN_CDN = "https://cdn.tsuki-mangas.com/tsuki"
         private const val SECONDARY_CDN = "https://cdn2.tsuki-mangas.com"
-        private const val API_PATH = "/api/d1"
+        private const val API_PATH = "/api/v3"
     }
 }
