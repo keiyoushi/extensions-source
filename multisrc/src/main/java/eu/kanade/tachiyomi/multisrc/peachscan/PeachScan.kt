@@ -1,14 +1,14 @@
-package eu.kanade.tachiyomi.extension.pt.wickedwitchscannovo
+package eu.kanade.tachiyomi.multisrc.peachscan
 
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -39,36 +39,26 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
 @SuppressLint("WrongConstant")
-class WickedWitchScan : ParsedHttpSource() {
-
-    override val name = "Wicked Witch Scan"
-
-    override val lang = "pt-BR"
-
-    override val baseUrl = "https://wicked-witch-scan.com"
-
-    // Source changed from Madara to homegrown website
-    override val versionId = 2
+abstract class PeachScan(
+    override val name: String,
+    override val baseUrl: String,
+    override val lang: String,
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("d 'de' MMMM 'de' yyyy 'às' HH:mm", Locale("pt", "BR")).apply {
+        timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
+    }
+) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
         .newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
         .addInterceptor(::zipImageInterceptor)
         .build()
 
     private val json: Json by injectLazy()
-
-    private val simpleDateFormat by lazy {
-        SimpleDateFormat("d 'de' MMMM 'de' yyyy 'às' HH:mm", Locale("pt", "BR")).apply {
-            timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
-        }
-    }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/todas-as-obras/", headers)
 
@@ -106,10 +96,10 @@ class WickedWitchScan : ParsedHttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val manga = json.parseToJsonElement(response.body.string()).jsonArray.map {
+        val manga = json.parseToJsonElement(response.body.string()).jsonArray.mapNotNull {
             val element = Jsoup.parseBodyFragment(it.jsonObject["html"]!!.jsonPrimitive.content)
 
-            searchMangaFromElement(element)
+            runCatching { searchMangaFromElement(element) }.getOrNull()
         }
 
         return MangasPage(manga, false)
@@ -142,19 +132,6 @@ class WickedWitchScan : ParsedHttpSource() {
         description = "Tipo: $category\n\n$synopsis"
     }
 
-    override fun chapterListSelector() = ".link__capitulos"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-
-        name = element.selectFirst(".numero__capitulo")!!.text()
-        date_upload = runCatching {
-            val date = element.selectFirst(".data__lançamento")!!.text()
-
-            simpleDateFormat.parse(date)?.time
-        }.getOrNull() ?: 0L
-    }
-
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val mediaType = document.selectFirst(".categoria__comic")?.text()
@@ -167,9 +144,24 @@ class WickedWitchScan : ParsedHttpSource() {
         return document.select(chapterListSelector()).map { chapterFromElement(it) }
     }
 
+    override fun chapterListSelector() = ".link__capitulos"
+
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+
+        name = element.selectFirst(".numero__capitulo")!!.text()
+        date_upload = runCatching {
+            val date = element.selectFirst(".data__lançamento")!!.text()
+
+            dateFormat.parse(date)!!.time
+        }.getOrDefault(0L)
+    }
+
     override fun pageListParse(document: Document): List<Page> {
         val scriptElement = document.selectFirst("script:containsData(const urls =[)")
-            ?: throw Exception("Não foi possível encontrar o script com dados de imagem.")
+            ?: return document.select("#imageContainer img").mapIndexed { i, it ->
+                Page(i, imageUrl = it.attr("abs:src"))
+            }
 
         val urls = scriptElement.html().substringAfter("const urls =[").substringBefore("];")
 

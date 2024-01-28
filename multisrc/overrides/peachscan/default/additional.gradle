@@ -1,0 +1,3 @@
+dependencies {
+    compileOnly(libs.tachiyomi.image.decoder)
+}
