@@ -30,6 +30,9 @@ configurations {
 
 dependencies {
     compileOnly(libs.bundles.common)
+
+    // Only PeachScan sources uses the image-decoder dependency.
+    //noinspection UseTomlInstead
     compileOnly("com.github.tachiyomiorg:image-decoder:fbd6601290")
 
     // Implements all :lib libraries on the multisrc generator
