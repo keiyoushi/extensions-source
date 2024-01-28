@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.multisrc.peachscan
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.Application
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
@@ -48,7 +47,7 @@ abstract class PeachScan(
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("d 'de' MMMM 'de' yyyy 'às' HH:mm", Locale("pt", "BR")).apply {
         timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
-    }
+    },
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
