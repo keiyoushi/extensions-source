@@ -12,6 +12,7 @@ class PeachScanGenerator : ThemeSourceGenerator {
     override val baseVersionCode = 1
 
     override val sources = listOf(
+        SingleLang("Dango Scan", "https://dangoscan.com.br", "pt-BR"),
         SingleLang("Mode Scanlator", "https://modescanlator.com", "pt-BR"),
         SingleLang("Nazarick Scan", "https://nazarickscan.com.br", "pt-BR"),
         SingleLang("RF Dragon Scan", "https://rfdragonscan.com", "pt-BR"),
