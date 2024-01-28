@@ -14,12 +14,6 @@ android {
             res.srcDirs = ['res']
             assets.srcDirs = ['assets']
         }
-        release {
-            manifest.srcFile "AndroidManifest.xml"
-        }
-        debug {
-            manifest.srcFile "AndroidManifest.xml"
-        }
     }
 
     defaultConfig {
