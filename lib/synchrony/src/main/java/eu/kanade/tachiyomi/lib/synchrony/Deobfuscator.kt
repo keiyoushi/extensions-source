@@ -39,4 +39,4 @@ object Deobfuscator {
 }
 
 // Update this when the script is updated!
-private const val SCRIPT_NAME = "synchrony-v2.4.2.1.js"
+private const val SCRIPT_NAME = "synchrony-v2.4.5.1.js"
