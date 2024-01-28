@@ -11,7 +11,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:host="truyengihotne.net"
+                <data android:host="truyengihotqua.net"
                     android:scheme="https"
                     android:pathPattern="/truyen-..*" />
             </intent-filter>
