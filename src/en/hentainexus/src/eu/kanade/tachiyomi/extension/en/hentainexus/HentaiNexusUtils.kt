@@ -5,7 +5,7 @@ import android.util.Base64
 object HentaiNexusUtils {
     fun decryptData(data: String): String = decryptData(Base64.decode(data, Base64.DEFAULT))
 
-    private val primeNumbers = listOf(2, 3, 5, 7, 11, 13, 17)
+    private val primeNumbers = listOf(2, 3, 5, 7, 11, 13, 17, 19)
 
     private fun decryptData(data: ByteArray): String {
         val keyStream = data.slice(0 until 64).map { it.toUByte().toInt() }
