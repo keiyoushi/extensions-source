@@ -262,7 +262,7 @@ class TsukiMangas : HttpSource() {
         }
     }
 
-    private val apiHeadersRegex = Regex("""headers\.common(?:\.(?<key>[0-9A-Za-z_]+)|\[['"](?<key2>[0-9A-Za-z-_]+)['"]])\s*=\s*['"](?<value>[^'"]+)['"]""")
+    private val apiHeadersRegex = Regex("""headers\.common(?:\.(?<key>[0-9A-Za-z_]+)|\[['"](?<key2>[0-9A-Za-z-_]+)['"]])\s*=\s*['"](?<value>[a-zA-Z0-9_ :;.,\\/"'?!(){}\[\]@<>=\-+*#$&`|~^%]+)['"]""")
 
     private val apiHeaders by lazy {
         val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
