@@ -48,7 +48,7 @@ class TsukiMangas : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("X-Requested", "HttpsRequest")
+        .add("X-Requested", "HttpsRequests")
 
     private val json: Json by injectLazy()
 
