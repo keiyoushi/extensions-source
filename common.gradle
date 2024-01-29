@@ -98,5 +98,20 @@ dependencies {
     compileOnly(libs.bundles.common)
 }
 
-preBuild.dependsOn(lintKotlin)
+tasks.register("writeManifestFile") {
+    doLast {
+        def manifest = android.sourceSets.getByName("main").manifest
+        if (!manifest.srcFile.exists()) {
+            File tempFile = layout.buildDirectory.get().file("tempAndroidManifest.xml").getAsFile()
+            if (!tempFile.exists()) {
+                tempFile.withWriter {
+                    it.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
+                }
+            }
+            manifest.srcFile(tempFile.path)
+        }
+    }
+}
+
+preBuild.dependsOn(writeManifestFile, lintKotlin)
 lintKotlin.dependsOn(formatKotlin)
