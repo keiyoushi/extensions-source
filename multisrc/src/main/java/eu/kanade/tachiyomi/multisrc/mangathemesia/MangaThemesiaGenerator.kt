@@ -153,6 +153,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("أريا مانجا", "https://www.areascans.net", "ar", className = "AreaManga"),
         SingleLang("فيكس مانجا", "https://vexmanga.com", "ar", className = "VexManga", overrideVersionCode = 3),
         SingleLang("สดใสเมะ", "https://www.xn--l3c0azab5a2gta.com", "th", isNsfw = true, className = "Sodsaime", overrideVersionCode = 1),
+        SingleLang("Hikari Scan", "https://hikariscan.org", "pt-BR", isNsfw = true, overrideVersionCode = 1),
     )
 
     companion object {
