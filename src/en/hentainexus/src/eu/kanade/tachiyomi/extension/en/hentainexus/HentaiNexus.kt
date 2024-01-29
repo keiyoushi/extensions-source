@@ -146,9 +146,9 @@ class HentaiNexus : ParsedHttpSource() {
         val encoded = script.substringAfter("initReader(\"").substringBefore("\",")
         val data = HentaiNexusUtils.decryptData(encoded)
 
-        return json.parseToJsonElement(data).jsonArray.mapIndexed { i, it ->
-            Page(i, imageUrl = it.jsonObject["image"]!!.jsonPrimitive.content)
-        }
+        return json.parseToJsonElement(data).jsonArray
+            .filter { it.jsonObject["type"]!!.jsonPrimitive.content == "image" }
+            .mapIndexed { i, it -> Page(i, imageUrl = it.jsonObject["image"]!!.jsonPrimitive.content) }
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
