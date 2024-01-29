@@ -390,7 +390,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("NovelMic", "https://novelmic.com", "en", overrideVersionCode = 1),
         SingleLang("Novels Town", "https://novelstown.cyou", "ar"),
         SingleLang("Oh No Manga", "https://ohnomanga.com", "en", isNsfw = true),
-        SingleLang("Olaoe", "https://olaoe.cyou", "ar", overrideVersionCode = 1),
+        SingleLang("Olaoe", "https://olaoe.cyou", "ar"),
         SingleLang("OnlyManhwa", "https://onlymanhwa.org", "en", isNsfw = true),
         SingleLang("Pantheon Scan", "https://pantheon-scan.com", "fr", overrideVersionCode = 1),
         SingleLang("Paragon Scans", "https://paragonscans.com", "en", isNsfw = true),
