@@ -28,7 +28,6 @@ class ZeistMangaGenerator : ThemeSourceGenerator {
         SingleLang("Mikrokosmos Fansub", "https://mikrokosmosfb.blogspot.com", "tr", isNsfw = true),
         SingleLang("Shadow Çeviri", "https://shadowceviri.blogspot.com", "tr", className = "ShadowCeviri"),
         SingleLang("ShiyuraSub", "https://shiyurasub.blogspot.com", "id"),
-        SingleLang("SobatManKu", "https://www.sobatmanku19.site", "id"),
         SingleLang("Tooncubus", "https://www.tooncubus.top", "id", isNsfw = true),
         SingleLang("Tyrant Scans", "https://www.tyrantscans.com", "pt-BR"),
         SingleLang("Yokai", "https://yokai-team.blogspot.com", "ar", overrideVersionCode = 1),
