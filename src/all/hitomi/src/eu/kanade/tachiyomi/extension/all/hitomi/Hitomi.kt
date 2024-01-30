@@ -444,6 +444,7 @@ class Hitomi(
             parodys?.joinToString { it.formatted }?.let {
                 append("Parodies: ", it, "\n")
             }
+            append("Pages: ", files.size)
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
