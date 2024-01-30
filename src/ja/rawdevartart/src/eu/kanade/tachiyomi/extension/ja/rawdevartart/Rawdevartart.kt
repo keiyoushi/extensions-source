@@ -57,10 +57,11 @@ class Rawdevartart : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/spa".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+
             if (query.isNotEmpty()) {
                 addPathSegment("search")
                 addQueryParameter("query", query)
-                addQueryParameter("page", page.toString())
 
                 return@apply
             }
