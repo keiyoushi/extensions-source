@@ -32,21 +32,17 @@ class Taiyo : ParsedHttpSource() {
         .build()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+
+    override fun popularMangaSelector() = "main > div.flex > div.overflow-hidden div.flex > a"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        thumbnail_url = element.selectFirst("div.overflow-hidden > img")?.absUrl("srcset")?.substringBefore(" ")
+        title = element.selectFirst("p")!!.text()
     }
 
-    override fun popularMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaNextPageSelector() = null
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
