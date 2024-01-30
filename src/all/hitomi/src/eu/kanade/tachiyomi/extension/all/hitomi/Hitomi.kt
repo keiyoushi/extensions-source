@@ -459,10 +459,8 @@ class Hitomi(
         return GET("$ltnUrl/galleries/$id.js", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseScriptAs<Gallery>().let {
-            runBlocking { it.toSManga() }
-        }
+    override fun mangaDetailsParse(response: Response) = runBlocking {
+        response.parseScriptAs<Gallery>().toSManga()
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
@@ -503,22 +501,20 @@ class Hitomi(
         return GET("$ltnUrl/galleries/$id.js", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
+    override fun pageListParse(response: Response) = runBlocking {
         val gallery = response.parseScriptAs<Gallery>()
 
-        return gallery.files.mapIndexed { idx, img ->
-            runBlocking {
-                val hash = img.hash
-                val commonId = commonImageId()
-                val imageId = imageIdFromHash(hash)
-                val subDomain = 'a' + subdomainOffset(imageId)
+        gallery.files.mapIndexed { idx, img ->
+            val hash = img.hash
+            val commonId = commonImageId()
+            val imageId = imageIdFromHash(hash)
+            val subDomain = 'a' + subdomainOffset(imageId)
 
-                Page(
-                    idx,
-                    "$baseUrl/reader/$id.html",
-                    "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp",
-                )
-            }
+            Page(
+                idx,
+                "$baseUrl/reader/$id.html",
+                "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp",
+            )
         }
     }
 
