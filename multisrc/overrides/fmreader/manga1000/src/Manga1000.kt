@@ -1,21 +1,41 @@
 package eu.kanade.tachiyomi.extension.ja.manga1000
 
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import org.jsoup.nodes.Element
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Request
+import org.jsoup.nodes.Document
+import rx.Observable
 import java.util.Calendar
 
 class Manga1000 : FMReader("Manga1000", "https://manga1000.top", "ja") {
-    override fun chapterFromElement(element: Element, mangaTitle: String): SChapter {
-        return SChapter.create().apply {
-            element.let {
-                setUrlWithoutDomain(it.attr("abs:href"))
-                name = it.attr("title")
-            }
+    // source is picky about URL format
+    private fun mangaRequest(sortBy: String, page: Int): Request {
+        return GET("$baseUrl/manga-list.html?listType=pagination&page=$page&artist=&author=&group=&m_status=&name=&genre=&ungenre=&magazine=&sort=$sortBy&sort_type=DESC", headers)
+    }
 
-            date_upload = element.select(chapterTimeSelector)
-                .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
-        }
+    override fun popularMangaRequest(page: Int): Request = mangaRequest("views", page)
+
+    override fun latestUpdatesRequest(page: Int): Request = mangaRequest("last_update", page)
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val slug = manga.url.substringAfter("manga-").substringBefore(".html")
+
+        return client.newCall(GET("$baseUrl/app/manga/controllers/cont.Listchapterapi.php?slug=$slug", headers))
+            .asObservableSuccess()
+            .map { res ->
+                res.asJsoup().select(".at-series a").map {
+                    SChapter.create().apply {
+                        name = it.select(".chapter-name").text()
+                        url = it.attr("abs:href").substringAfter("controllers")
+                        date_upload = parseChapterDate(it.select(".chapter-time").text())
+                    }
+                }
+            }
     }
 
     private fun parseChapterDate(date: String): Long {
@@ -36,5 +56,19 @@ class Manga1000 : FMReader("Manga1000", "https://manga1000.top", "ja") {
         }
 
         return chapterDate.timeInMillis
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        return document.select("script:containsData(imgsListchap)")
+            .html()
+            .substringAfter("(")
+            .substringBefore(",")
+            .let { cid ->
+                client.newCall(GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$cid", headers)).execute().asJsoup()
+            }
+            .select(".lazyload")
+            .mapIndexed { i, e ->
+                Page(i, "", e.attr("abs:data-src"))
+            }
     }
 }

@@ -9,7 +9,7 @@ class FMReaderGenerator : ThemeSourceGenerator {
 
     override val themeClass = "FMReader"
 
-    override val baseVersionCode: Int = 8
+    override val baseVersionCode: Int = 9
 
     override val sources = listOf(
         SingleLang("KissLove", "https://klz9.com", "ja", isNsfw = true, overrideVersionCode = 4),
