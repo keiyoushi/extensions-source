@@ -49,7 +49,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Gremory Mangas", "https://gremorymangas.com", "es"),
         SingleLang("Hanuman Scan", "https://hanumanscan.com", "en"),
         SingleLang("Heroxia", "https://heroxia.com", "id", isNsfw = true),
-        SingleLang("Hikari Scan", "https://hikariscan.org", "pt-BR", isNsfw = true, overrideVersionCode = 1),
+        SingleLang("Hikari Scan", "https://hikariscan.org", "pt-BR", isNsfw = true, overrideVersionCode = 2),
         SingleLang("Imagine Scan", "https://imaginescan.com.br", "pt-BR", isNsfw = true, overrideVersionCode = 1),
         SingleLang("InariManga", "https://inarimanga.com", "es", overrideVersionCode = 7),
         SingleLang("Infernal Void Scans", "https://void-scans.com", "en", overrideVersionCode = 5),
