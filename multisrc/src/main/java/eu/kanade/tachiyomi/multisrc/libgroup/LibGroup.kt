@@ -352,8 +352,7 @@ abstract class LibGroup(
             }
     }
 
-    private fun sortChaptersByTranslator
-    (sortingList: String?, chaptersList: JsonArray?, slug: String, userId: String, branches: List<JsonElement>): List<SChapter>? {
+    private fun sortChaptersByTranslator(sortingList: String?, chaptersList: JsonArray?, slug: String, userId: String, branches: List<JsonElement>): List<SChapter>? {
         var chapters: List<SChapter>? = null
         val volume = "(?<=/v)[0-9]+(?=/c[0-9]+)".toRegex()
         val tempChaptersList = mutableListOf<SChapter>()
@@ -394,8 +393,7 @@ abstract class LibGroup(
         return chapters
     }
 
-    private fun chapterFromElement
-    (chapterItem: JsonElement, sortingList: String?, slug: String, userId: String, teamIdParam: Int? = null, branches: List<JsonElement>? = null, teams: List<JsonElement>? = null, chaptersList: JsonArray? = null): SChapter {
+    private fun chapterFromElement(chapterItem: JsonElement, sortingList: String?, slug: String, userId: String, teamIdParam: Int? = null, branches: List<JsonElement>? = null, teams: List<JsonElement>? = null, chaptersList: JsonArray? = null): SChapter {
         val chapter = SChapter.create()
 
         val volume = chapterItem.jsonObject["chapter_volume"]!!.jsonPrimitive.int

@@ -27,9 +27,15 @@ class BilibiliManga : Bilibili(
             return emptyList()
         }
 
-        return result.data!!.episodeList
-            .filter { episode -> episode.isInFree || !episode.isLocked }
-            .map { ep -> chapterFromObject(ep, result.data.id) }
+        val data = result.data!!
+        val id = data.id
+        return data.episodeList.mapNotNull { episode ->
+            if (episode.isInFree || !episode.isLocked) {
+                chapterFromObject(episode, id)
+            } else {
+                null
+            }
+        }
     }
 
     override val defaultPopularSort: Int = 0

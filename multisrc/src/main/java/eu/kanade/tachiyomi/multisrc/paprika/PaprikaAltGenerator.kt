@@ -12,7 +12,7 @@ class PaprikaAltGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 1
 
     override val sources = listOf(
-        SingleLang("MangaReader.cc", "http://mangareader.cc/", "en", className = "MangaReaderCC", overrideVersionCode = 1), // more sites in the future might use MangaReader.cc 's overrides as they did in the past
+        SingleLang("MangaReader.cc", "http://mangareader.cc", "en", className = "MangaReaderCC", overrideVersionCode = 2), // more sites in the future might use MangaReader.cc 's overrides as they did in the past
     )
 
     companion object {

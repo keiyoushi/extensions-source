@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.sinmh
 
-internal class ProgressiveParser(private val text: String) {
+class ProgressiveParser(private val text: String) {
     private var startIndex = 0
     fun substringBetween(left: String, right: String): String = with(text) {
         val leftIndex = indexOf(left, startIndex) + left.length
