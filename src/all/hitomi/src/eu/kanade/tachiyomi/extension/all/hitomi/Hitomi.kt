@@ -56,47 +56,41 @@ class Hitomi(
         .set("origin", baseUrl)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking { getPopularManga(page) }
-    }
+        runBlocking {
+            val entries = getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
+                .toMangaList()
 
-    private suspend fun getPopularManga(page: Int): MangasPage {
-        val entries = getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
-            .toMangaList()
-
-        return MangasPage(entries, entries.size >= 24)
+            MangasPage(entries, entries.size >= 24)
+        }
     }
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking { getLatestUpdates(page) }
-    }
+        runBlocking {
+            val entries = getGalleryIDsFromNozomi(null, "index", nozomiLang, page.nextPageRange())
+                .toMangaList()
 
-    private suspend fun getLatestUpdates(page: Int): MangasPage {
-        val entries = getGalleryIDsFromNozomi(null, "index", nozomiLang, page.nextPageRange())
-            .toMangaList()
-
-        return MangasPage(entries, entries.size >= 24)
+            MangasPage(entries, entries.size >= 24)
+        }
     }
 
     private lateinit var searchResponse: List<Int>
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking { getSearchManga(page, query, filters) }
-    }
+        runBlocking {
+            if (page == 1) {
+                searchResponse = hitomiSearch(
+                    query.trim(),
+                    filters.filterIsInstance<SortFilter>().firstOrNull()?.state == 0,
+                    nozomiLang,
+                ).toList()
+            }
 
-    private suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page == 1) {
-            searchResponse = hitomiSearch(
-                query.trim(),
-                filters.filterIsInstance<SortFilter>().firstOrNull()?.state == 0,
-                nozomiLang,
-            ).toList()
+            val end = min(page * 25, searchResponse.size)
+            val entries = searchResponse.subList((page - 1) * 25, end)
+                .toMangaList()
+
+            MangasPage(entries, end != searchResponse.size)
         }
-
-        val end = min(page * 25, searchResponse.size)
-        val entries = searchResponse.subList((page - 1) * 25, end)
-            .toMangaList()
-
-        return MangasPage(entries, end != searchResponse.size)
     }
 
     private class SortFilter : Filter.Select<String>("Sort By", arrayOf("Popularity", "Updated"))
