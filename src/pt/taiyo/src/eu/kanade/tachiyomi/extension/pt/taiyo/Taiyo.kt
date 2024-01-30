@@ -47,6 +47,7 @@ class Taiyo : ParsedHttpSource() {
 
     override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimitHost(IMG_CDN.toHttpUrl(), 2)
         .build()
 
     private val json: Json by injectLazy()
