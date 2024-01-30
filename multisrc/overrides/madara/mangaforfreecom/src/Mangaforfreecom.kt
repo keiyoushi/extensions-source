@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangaforfreecom
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 import okhttp3.OkHttpClient
@@ -12,7 +11,7 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import android.annotation.SuppressLint
 
-class Mangaforfreecom : Madara("Mangaforfreecom", "https://mangaforfree.com", "en") {
+class Mangaforfreecom : Madara("Mangaforfree.com", "https://mangaforfree.com", "en") {
     override val client = getUnsafeOkHttpClient()
 
     private fun getUnsafeOkHttpClient(): OkHttpClient {
