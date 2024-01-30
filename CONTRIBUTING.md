@@ -198,7 +198,7 @@ The simplest extension structure looks like this:
 ```console
 $ tree src/<lang>/<mysourcename>/
 src/<lang>/<mysourcename>/
-├── AndroidManifest.xml
+├── AndroidManifest.xml (optional)
 ├── build.gradle
 ├── res
 │   ├── mipmap-hdpi
@@ -227,15 +227,14 @@ src/<lang>/<mysourcename>/
 should be adapted from the site name, and can only contain lowercase ASCII letters and digits.
 Your extension code must be placed in the package `eu.kanade.tachiyomi.extension.<lang>.<mysourcename>`.
 
-#### AndroidManifest.xml
-A minimal [Android manifest file](https://developer.android.com/guide/topics/manifest/manifest-intro)
-is needed for Android to recognize an extension when it's compiled into an APK file. You can also add
-intent filters inside this file (see [URL intent filter](#url-intent-filter) for more information).
+#### AndroidManifest.xml (optional)
+You only need to create this file if you want to add deep linking to your extension.
+See [URL intent filter](#url-intent-filter) for more information.
 
 #### build.gradle
 Make sure that your new extension's `build.gradle` file follows the following structure:
 
-```gradle
+```groovy
 ext {
     extName = '<My source name>'
     extClass = '.<MySourceName>'
@@ -272,7 +271,7 @@ Referencing the actual implementation will help with understanding extensions' c
 for handling [base 64 encoded image data](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs)
 using an [OkHttp interceptor](https://square.github.io/okhttp/interceptors/).
 
-```gradle
+```groovy
 dependencies {
     implementation(project(':lib-dataimage'))
 }
@@ -284,7 +283,7 @@ dependencies {
 internationalization in the sources. It allows loading `.properties` files with messages located under
 the `assets/i18n` folder of each extension, that can be used to translate strings under the source.
 
-```gradle
+```groovy
 dependencies {
     implementation(project(':lib-i18n'))
 }
