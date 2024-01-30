@@ -3,6 +3,9 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
 apply plugin: 'org.jmailen.kotlinter'
 
+assert !ext.has("pkgNameSuffix")
+assert !ext.has("libVersion")
+
 android {
     compileSdk AndroidConfig.compileSdk
 
@@ -21,14 +24,15 @@ android {
         targetSdk AndroidConfig.targetSdk
         applicationIdSuffix project.parent.name + "." + project.name
         versionCode extVersionCode
-        versionName project.ext.properties.getOrDefault("libVersion", "1.4") + ".$extVersionCode"
+        versionName "1.4.$versionCode"
         base {
             archivesName = "tachiyomi-$applicationIdSuffix-v$versionName"
         }
+        assert extClass.startsWith(".")
         manifestPlaceholders = [
                 appName : "Tachiyomi: $extName",
                 extClass: extClass,
-                nsfw: project.ext.properties.getOrDefault("isNsfw", false) ? 1 : 0,
+                nsfw: ext.find("isNsfw") ? 1 : 0,
         ]
     }
 
