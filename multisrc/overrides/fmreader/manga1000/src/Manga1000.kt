@@ -71,6 +71,4 @@ class Manga1000 : FMReader("Manga1000", "https://manga1000.top", "ja") {
                 Page(i, "", e.attr("abs:data-src"))
             }
     }
-
-
 }
