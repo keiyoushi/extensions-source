@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.pt.taiyo
 
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ResponseDto
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchResultDto
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,12 +13,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.injectLazy
 
 class Taiyo : ParsedHttpSource() {
 
@@ -30,6 +42,8 @@ class Taiyo : ParsedHttpSource() {
     override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
+
+    private val json: Json by injectLazy()
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
@@ -77,7 +91,31 @@ class Taiyo : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException()
+        val jsonObj = buildJsonObject {
+            putJsonObject("0") {
+                putJsonObject("json") {
+                    put("title", query)
+                }
+            }
+        }
+
+        val requestBody = json.encodeToString(JsonObject.serializer(), jsonObj).toRequestBody(MEDIA_TYPE)
+
+        return POST("$baseUrl/api/trpc/medias.search?batch=1", headers, requestBody)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val obj = response.parseAs<List<ResponseDto<List<SearchResultDto>>>>().first()
+        val mangas = obj.data.map { item ->
+            SManga.create().apply {
+                url = "/media/${item.id}"
+                title = item.title
+                thumbnail_url = item.coverId?.let {
+                    "$baseUrl/_next/image?url=$IMG_CDN/${item.id}/covers/$it.jpg&w=256&q=75"
+                }
+            }
+        }
+        return MangasPage(mangas, false)
     }
 
     override fun searchMangaSelector(): String {
@@ -118,7 +156,15 @@ class Taiyo : ParsedHttpSource() {
     // ============================= Utilities ==============================
     private fun Element.getImageUrl() = absUrl("srcset").substringBefore(" ")
 
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
+
     companion object {
         const val PREFIX_SEARCH = "id:"
+
+        private const val IMG_CDN = "https://cdn.taiyo.moe/medias"
+
+        private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }
