@@ -80,7 +80,7 @@ class Hitomi(
             if (page == 1) {
                 searchResponse = hitomiSearch(
                     query.trim(),
-                    filters.filterIsInstance<SortFilter>().firstOrNull()?.state == 0,
+                    filters.filterIsInstance<SortFilter>().firstOrNull()?.state == 1,
                     nozomiLang,
                 ).toList()
             }
@@ -93,7 +93,7 @@ class Hitomi(
         }
     }
 
-    private class SortFilter : Filter.Select<String>("Sort By", arrayOf("Popularity", "Updated"))
+    private class SortFilter : Filter.Select<String>("Sort By", arrayOf("Updated", "Popularity"))
 
     override fun getFilterList(): FilterList {
         return FilterList(SortFilter())
