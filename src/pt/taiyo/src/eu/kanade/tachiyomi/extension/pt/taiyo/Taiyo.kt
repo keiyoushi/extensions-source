@@ -139,6 +139,7 @@ class Taiyo : ParsedHttpSource() {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        setUrlWithoutDomain(document.location())
         thumbnail_url = document.selectFirst("section:has(h2) img")?.getImageUrl()
         title = document.selectFirst("p.media-title")!!.text()
 
