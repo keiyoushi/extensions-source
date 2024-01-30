@@ -52,3 +52,18 @@ enum class Genre(val portugueseName: String) {
 
 @Serializable
 data class TitleDto(val title: String, val language: String)
+
+@Serializable
+data class ChapterListDto(val chapters: List<ChapterDto>, val totalPages: Int)
+
+@Serializable
+data class ChapterDto(
+    val id: String,
+    val number: Float,
+    val scans: List<ScanDto>,
+    val title: String?,
+    val createdAt: String? = null,
+)
+
+@Serializable
+data class ScanDto(val name: String)

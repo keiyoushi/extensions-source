@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.taiyo
 
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.AdditionalInfoDto
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ResponseDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchResultDto
 import eu.kanade.tachiyomi.network.GET
@@ -30,6 +31,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Taiyo : ParsedHttpSource() {
@@ -172,6 +174,46 @@ class Taiyo : ParsedHttpSource() {
     }
 
     // ============================== Chapters ==============================
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val id = manga.url.substringAfter("/media/").trimEnd('/')
+        var page = 1
+        val apiUrl = "$baseUrl/api/trpc/mediaChapters.getByMediaId?batch=1".toHttpUrl()
+        val chapters = buildList {
+            do {
+                val input = buildJsonObject {
+                    putJsonObject("0") {
+                        putJsonObject("json") {
+                            put("mediaId", id)
+                            put("page", page)
+                            put("perPage", 50)
+                        }
+                    }
+                }
+
+                page++
+
+                val pageUrl = apiUrl.newBuilder()
+                    .addQueryParameter("input", json.encodeToString(input))
+                    .build()
+
+                val res = client.newCall(GET(pageUrl, headers)).execute()
+                val parsed = res.parseAs<List<ResponseDto<ChapterListDto>>>().first().data
+                addAll(
+                    parsed.chapters.map {
+                        SChapter.create().apply {
+                            chapter_number = it.number
+                            name = it.title ?: "Capítulo ${it.number}".replace(".0", "")
+                            url = "/chapter/${it.id}/1"
+                            date_upload = it.createdAt.orEmpty().toDate()
+                        }
+                    },
+                )
+            } while (page <= parsed.totalPages)
+        }
+
+        return Observable.just(chapters.sortedByDescending { it.chapter_number })
+    }
+
     override fun chapterListSelector(): String {
         throw UnsupportedOperationException()
     }
@@ -196,11 +238,20 @@ class Taiyo : ParsedHttpSource() {
         json.decodeFromStream(it.body.byteStream())
     }
 
+    private fun String.toDate(): Long {
+        return runCatching { DATE_FORMATTER.parse(this)?.time }
+            .getOrNull() ?: 0L
+    }
+
     companion object {
         const val PREFIX_SEARCH = "id:"
 
         private const val IMG_CDN = "https://cdn.taiyo.moe/medias"
 
         private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+
+        private val DATE_FORMATTER by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ENGLISH)
+        }
     }
 }
