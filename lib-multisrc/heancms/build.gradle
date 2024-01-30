@@ -1,3 +1,4 @@
 apply from: "$rootDir/lib-multisrc/common.gradle"
 
 ext.baseVersionCode = 20
+ext.requireBaseUrlHost = true

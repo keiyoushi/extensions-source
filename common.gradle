@@ -31,7 +31,15 @@ android {
                 appName : "Tachiyomi: $extName",
                 extClass: extClass,
                 nsfw: project.ext.properties.getOrDefault("isNsfw", false) ? 1 : 0,
+<<<<<<< HEAD
+=======
+                hasReadme: hasReadme ? 1 : 0,
+                hasChangelog: hasChangelog ? 1 : 0,
+>>>>>>> 2cdcb247 (boolean for required baseUrlHost)
         ]
+        if (theme?.requireBaseUrlHost == true) {
+            manifestPlaceholders["baseUrlHost"] = project.baseUrlHost
+        }
     }
 
     signingConfigs {
