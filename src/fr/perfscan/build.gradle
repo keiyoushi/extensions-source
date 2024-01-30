@@ -1,18 +1,10 @@
 ext {
     extName = 'Perf Scan'
     extClass = '.PerfScan'
-    theme = 'heancms'
+    multisrc = 'heancms'
+    baseUrlHost = 'perf-scan.fr'
     extVersionCode = 0
     isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
-
-android {
-    defaultConfig {
-        manifestPlaceholders += [
-            SOURCEHOST: "perf-scan.fr",
-            SOURCESCHEME: "https"
-        ]
-    }
-}

@@ -1,18 +1,10 @@
 ext {
     extName = 'YugenMangas'
     extClass = '.YugenMangas'
-    theme = 'heancms'
+    multisrc = 'heancms'
+    baseUrlHost = 'yugenmangas.net'
     extVersionCode = 9
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-android {
-    defaultConfig {
-        manifestPlaceholders += [
-            SOURCEHOST: "yugenmangas.net",
-            SOURCESCHEME: "https"
-        ]
-    }
-}

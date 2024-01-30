@@ -3,10 +3,11 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
 
 android {
+    compileSdk AndroidConfig.compileSdk
+
     defaultConfig {
-        compileSdk AndroidConfig.compileSdk
-        minSdkVersion AndroidConfig.minSdk
-        targetSdkVersion AndroidConfig.targetSdk
+        minSdk AndroidConfig.minSdk
+        targetSdk AndroidConfig.targetSdk
     }
 
     namespace "eu.kanade.tachiyomi.multisrc.${project.name}"
@@ -17,7 +18,13 @@ android {
         }
     }
 
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
     kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8.toString()
         freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
     }
 }
