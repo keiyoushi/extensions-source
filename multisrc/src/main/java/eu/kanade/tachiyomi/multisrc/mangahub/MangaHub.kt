@@ -39,14 +39,14 @@ import java.util.Locale
 
 abstract class MangaHub(
     override val name: String,
-    override val baseUrl: String,
+    final override val baseUrl: String,
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MM-dd-yyyy", Locale.US),
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    private var baseApiUrl = "https://api.mghcdn.com"
+    private var baseApiUrl = "$baseUrl/api"
     private var baseCdnUrl = "https://imgx.mghcdn.com"
 
     override val client: OkHttpClient = super.client.newBuilder()
