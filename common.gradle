@@ -5,6 +5,9 @@ apply plugin: 'org.jmailen.kotlinter'
 
 def theme = ext.has("multisrc") ? project(":lib-multisrc:$multisrc") : null
 
+assert !ext.has("pkgNameSuffix")
+assert !ext.has("libVersion")
+
 android {
     compileSdk AndroidConfig.compileSdk
 
@@ -23,14 +26,15 @@ android {
         targetSdk AndroidConfig.targetSdk
         applicationIdSuffix project.parent.name + "." + project.name
         versionCode extVersionCode + (theme?.baseVersionCode ?: 0)
-        versionName project.ext.properties.getOrDefault("libVersion", "1.4") + ".$versionCode"
+        versionName "1.4.$versionCode"
         base {
             archivesName = "tachiyomi-$applicationIdSuffix-v$versionName"
         }
+        assert extClass.startsWith(".")
         manifestPlaceholders = [
                 appName : "Tachiyomi: $extName",
                 extClass: extClass,
-                nsfw: project.ext.properties.getOrDefault("isNsfw", false) ? 1 : 0,
+                nsfw: project.ext.find("isNsfw") ? 1 : 0,
         ]
         if (theme?.requireBaseUrlHost == true) {
             manifestPlaceholders["baseUrlHost"] = project.baseUrlHost
