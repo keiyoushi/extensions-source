@@ -6,10 +6,7 @@
     <application android:icon="@mipmap/ic_launcher" android:allowBackup="false" android:label="${appName}">
 
         <meta-data android:name="tachiyomi.extension.class" android:value="${extClass}" />
-        <meta-data android:name="tachiyomi.extension.factory" android:value="${extFactory}" />
         <meta-data android:name="tachiyomi.extension.nsfw" android:value="${nsfw}" />
-        <meta-data android:name="tachiyomi.extension.hasReadme" android:value="${hasReadme}" />
-        <meta-data android:name="tachiyomi.extension.hasChangelog" android:value="${hasChangelog}" />
 
     </application>
 

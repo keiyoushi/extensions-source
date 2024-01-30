@@ -25,22 +25,10 @@ android {
         base {
             archivesName = "tachiyomi-$applicationIdSuffix-v$versionName"
         }
-        def readmes = project.projectDir.listFiles({ File file ->
-            file.name == "README.md" || file.name == "CHANGELOG.md"
-        } as FileFilter)
-        def hasReadme = readmes != null && readmes.any { File file ->
-            file.name.startsWith("README")
-        }
-        def hasChangelog = readmes != null && readmes.any { File file ->
-            file.name.startsWith("CHANGELOG")
-        }
         manifestPlaceholders = [
                 appName : "Tachiyomi: $extName",
                 extClass: extClass,
-                extFactory: project.ext.properties.getOrDefault("extFactory", ""),
                 nsfw: project.ext.properties.getOrDefault("isNsfw", false) ? 1 : 0,
-                hasReadme: hasReadme ? 1 : 0,
-                hasChangelog: hasChangelog ? 1 : 0,
         ]
     }
 
