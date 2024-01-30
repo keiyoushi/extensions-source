@@ -37,4 +37,5 @@ class Mangaforfreecom : Madara("Mangaforfreecom", "https://mangaforfree.com", "e
             .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
             .hostnameVerifier { _, _ -> true }.build()
     }
+
 }
