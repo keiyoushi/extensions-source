@@ -25,7 +25,7 @@ class Taiyo : ParsedHttpSource() {
 
     override val lang = "pt-BR"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
@@ -38,28 +38,26 @@ class Taiyo : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        thumbnail_url = element.selectFirst("div.overflow-hidden > img")?.absUrl("srcset")?.substringBefore(" ")
+        thumbnail_url = element.selectFirst("div.overflow-hidden > img")?.getImageUrl()
         title = element.selectFirst("p")!!.text()
     }
 
     override fun popularMangaNextPageSelector() = null
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
+
+    override fun latestUpdatesSelector() = "main div.grow div.flex:has(div.grow)"
+
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        with(element.selectFirst("a.line-clamp-1")!!) {
+            setUrlWithoutDomain(attr("href"))
+            title = text()
+        }
+        thumbnail_url = element.selectFirst("img")?.getImageUrl()?.replace("&w=128", "&w=256")
     }
 
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException()
-    }
-
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun latestUpdatesNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesNextPageSelector() = null
 
     // =============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -116,6 +114,9 @@ class Taiyo : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException()
     }
+
+    // ============================= Utilities ==============================
+    private fun Element.getImageUrl() = absUrl("srcset").substringBefore(" ")
 
     companion object {
         const val PREFIX_SEARCH = "id:"
