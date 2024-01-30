@@ -59,7 +59,7 @@ class ManhwaXXL : ParsedHttpSource() {
             } else {
                 val filterList = if (filters.isEmpty()) getFilterList() else filters
                 val genreFilter = filterList.find { it is GenreFilter } as GenreFilter
-                val genreId = genreFilter.values[genreFilter.state].id
+                val genreId = genreFilter.genres[genreFilter.state].id
 
                 if (genreId.isEmpty()) {
                     addPathSegment("popular")
@@ -133,7 +133,7 @@ class ManhwaXXL : ParsedHttpSource() {
         override fun toString() = name
     }
 
-    private class GenreFilter(genres: Array<Genre>) : Filter.Select<Genre>("Genre", genres)
+    private class GenreFilter(val genres: Array<Genre>) : Filter.Select<String>("Genre", genres.map { it.id }.toTypedArray())
 
     // https://manhwaxxl.com/genres
     // copy([...document.querySelectorAll("section#page ul li a:not([class])")].map((e) => `Genre("${e.textContent.trim()}", "${e.href.split("/").slice(-1)[0].replace(/#page$/u, "")}"),`).join("\n"))
