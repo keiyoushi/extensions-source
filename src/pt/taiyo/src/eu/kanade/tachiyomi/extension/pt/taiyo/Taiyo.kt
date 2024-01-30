@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.taiyo
 
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.AdditionalInfoDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ResponseDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchResultDto
 import eu.kanade.tachiyomi.network.GET
@@ -13,8 +14,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.put
@@ -28,6 +30,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.util.Locale
 
 class Taiyo : ParsedHttpSource() {
 
@@ -99,7 +102,7 @@ class Taiyo : ParsedHttpSource() {
             }
         }
 
-        val requestBody = json.encodeToString(JsonObject.serializer(), jsonObj).toRequestBody(MEDIA_TYPE)
+        val requestBody = json.encodeToString(jsonObj).toRequestBody(MEDIA_TYPE)
 
         return POST("$baseUrl/api/trpc/medias.search?batch=1", headers, requestBody)
     }
@@ -131,8 +134,41 @@ class Taiyo : ParsedHttpSource() {
     }
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document): SManga {
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        thumbnail_url = document.selectFirst("section:has(h2) img")?.getImageUrl()
+        title = document.selectFirst("p.media-title")!!.text()
+
+        val additionalDataObj = document.selectFirst("script:containsData(media\\\\\":):containsData(\\\"6:\\[)")
+            ?.data()
+            ?.run {
+                val obj = substringAfter(",{\\\"media\\\":")
+                    .substringBefore(",\\\"trackers\\\"")
+                    .replace("\\", "")
+                runCatching {
+                    json.decodeFromString<AdditionalInfoDto>(obj + "}")
+                }.onFailure { it.printStackTrace() }.getOrNull()
+            }
+
+        genre = additionalDataObj?.genres?.joinToString { it.portugueseName }
+        status = when (additionalDataObj?.status.orEmpty()) {
+            "FINISHED" -> SManga.COMPLETED
+            "RELEASING" -> SManga.ONGOING
+            else -> SManga.UNKNOWN
+        }
+
+        description = buildString {
+            val synopsis = document.selectFirst("section > div.flex + div p")?.text()
+                ?: additionalDataObj?.synopsis
+            synopsis?.also { append("$it\n\n") }
+
+            additionalDataObj?.titles?.takeIf { it.isNotEmpty() }?.run {
+                append("Títulos alternativos:")
+                forEach {
+                    val languageName = Locale(it.language.substringBefore("_")).displayLanguage
+                    append("\n\t$languageName: ${it.title}")
+                }
+            }
+        }
     }
 
     // ============================== Chapters ==============================

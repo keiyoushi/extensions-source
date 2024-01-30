@@ -19,3 +19,36 @@ data class SearchResultDto(
     val title: String,
     val coverId: String? = null,
 )
+
+@Serializable
+data class AdditionalInfoDto(
+    val synopsis: String? = null,
+    val status: String? = null,
+    val genres: List<Genre>? = null,
+    val titles: List<TitleDto>? = null,
+)
+
+enum class Genre(val portugueseName: String) {
+    ACTION("Ação"),
+    ADVENTURE("Aventura"),
+    COMEDY("Comédia"),
+    DRAMA("Drama"),
+    ECCHI("Ecchi"),
+    FANTASY("Fantasia"),
+    HENTAI("Hentai"),
+    HORROR("Horror"),
+    MAHOU_SHOUJO("Mahou Shoujo"),
+    MECHA("Mecha"),
+    MUSIC("Música"),
+    MYSTERY("Mistério"),
+    PSYCHOLOGICAL("Psicológico"),
+    ROMANCE("Romance"),
+    SCI_FI("Sci-fi"),
+    SLICE_OF_LIFE("Slice of Life"),
+    SPORTS("Esportes"),
+    SUPERNATURAL("Sobrenatural"),
+    THRILLER("Thriller"),
+}
+
+@Serializable
+data class TitleDto(val title: String, val language: String)
