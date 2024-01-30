@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.taiyo
 
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.AdditionalInfoDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ChapterListDto
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.MediaChapterDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ResponseDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchResultDto
 import eu.kanade.tachiyomi.network.GET
@@ -140,16 +141,9 @@ class Taiyo : ParsedHttpSource() {
         thumbnail_url = document.selectFirst("section:has(h2) img")?.getImageUrl()
         title = document.selectFirst("p.media-title")!!.text()
 
-        val additionalDataObj = document.selectFirst("script:containsData(media\\\\\":):containsData(\\\"6:\\[)")
-            ?.data()
-            ?.run {
-                val obj = substringAfter(",{\\\"media\\\":")
-                    .substringBefore(",\\\"trackers\\\"")
-                    .replace("\\", "")
-                runCatching {
-                    json.decodeFromString<AdditionalInfoDto>(obj + "}")
-                }.onFailure { it.printStackTrace() }.getOrNull()
-            }
+        val additionalDataObj = document.parseJsonFromDocument<AdditionalInfoDto> {
+            substringBefore(",\\\"trackers\\\"") + "}"
+        }
 
         genre = additionalDataObj?.genres?.joinToString { it.portugueseName }
         status = when (additionalDataObj?.status.orEmpty()) {
@@ -224,7 +218,15 @@ class Taiyo : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        throw UnsupportedOperationException()
+        val chapterObj = document.parseJsonFromDocument<MediaChapterDto>("mediaChapter") {
+            substringBefore(",\\\"chapters\\\"") + "}}"
+        }!!
+
+        val base = "$IMG_CDN/${chapterObj.media.id}/chapters/${chapterObj.id}"
+
+        return chapterObj.pages.mapIndexed { index, item ->
+            Page(index, imageUrl = "$base/${item.id}.jpg")
+        }
     }
 
     override fun imageUrlParse(document: Document): String {
@@ -241,6 +243,19 @@ class Taiyo : ParsedHttpSource() {
     private fun String.toDate(): Long {
         return runCatching { DATE_FORMATTER.parse(this)?.time }
             .getOrNull() ?: 0L
+    }
+
+    private inline fun <reified T> Document.parseJsonFromDocument(
+        itemName: String = "media",
+        crossinline transformer: String.() -> String,
+    ): T? {
+        return runCatching {
+            val script = selectFirst("script:containsData($itemName\\\\\":):containsData(\\\"6:\\[)")!!.data()
+            val obj = script.substringAfter(",{\\\"$itemName\\\":")
+                .run(transformer)
+                .replace("\\", "")
+            json.decodeFromString<T>(obj)
+        }.onFailure { it.printStackTrace() }.getOrNull()
     }
 
     companion object {

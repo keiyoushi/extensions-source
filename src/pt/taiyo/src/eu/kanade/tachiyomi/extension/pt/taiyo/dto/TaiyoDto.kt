@@ -67,3 +67,13 @@ data class ChapterDto(
 
 @Serializable
 data class ScanDto(val name: String)
+
+@Serializable
+data class MediaChapterDto(
+    val id: String,
+    val media: ItemId,
+    val pages: List<ItemId>,
+)
+
+@Serializable
+data class ItemId(val id: String)
