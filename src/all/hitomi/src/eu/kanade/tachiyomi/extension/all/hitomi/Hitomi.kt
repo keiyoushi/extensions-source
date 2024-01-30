@@ -56,50 +56,44 @@ class Hitomi(
         .set("origin", baseUrl)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking { getPopularManga(page) }
-    }
+        runBlocking {
+            val entries = getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
+                .toMangaList()
 
-    private suspend fun getPopularManga(page: Int): MangasPage {
-        val entries = getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
-            .toMangaList()
-
-        return MangasPage(entries, entries.size >= 24)
+            MangasPage(entries, entries.size >= 24)
+        }
     }
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking { getLatestUpdates(page) }
-    }
+        runBlocking {
+            val entries = getGalleryIDsFromNozomi(null, "index", nozomiLang, page.nextPageRange())
+                .toMangaList()
 
-    private suspend fun getLatestUpdates(page: Int): MangasPage {
-        val entries = getGalleryIDsFromNozomi(null, "index", nozomiLang, page.nextPageRange())
-            .toMangaList()
-
-        return MangasPage(entries, entries.size >= 24)
+            MangasPage(entries, entries.size >= 24)
+        }
     }
 
     private lateinit var searchResponse: List<Int>
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking { getSearchManga(page, query, filters) }
-    }
+        runBlocking {
+            if (page == 1) {
+                searchResponse = hitomiSearch(
+                    query.trim(),
+                    filters.filterIsInstance<SortFilter>().firstOrNull()?.state == 1,
+                    nozomiLang,
+                ).toList()
+            }
 
-    private suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page == 1) {
-            searchResponse = hitomiSearch(
-                query.trim(),
-                filters.filterIsInstance<SortFilter>().firstOrNull()?.state == 0,
-                nozomiLang,
-            ).toList()
+            val end = min(page * 25, searchResponse.size)
+            val entries = searchResponse.subList((page - 1) * 25, end)
+                .toMangaList()
+
+            MangasPage(entries, end != searchResponse.size)
         }
-
-        val end = min(page * 25, searchResponse.size)
-        val entries = searchResponse.subList((page - 1) * 25, end)
-            .toMangaList()
-
-        return MangasPage(entries, end != searchResponse.size)
     }
 
-    private class SortFilter : Filter.Select<String>("Sort By", arrayOf("Popularity", "Updated"))
+    private class SortFilter : Filter.Select<String>("Sort By", arrayOf("Updated", "Popularity"))
 
     override fun getFilterList(): FilterList {
         return FilterList(SortFilter())
@@ -450,6 +444,7 @@ class Hitomi(
             parodys?.joinToString { it.formatted }?.let {
                 append("Parodies: ", it, "\n")
             }
+            append("Pages: ", files.size)
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -464,10 +459,8 @@ class Hitomi(
         return GET("$ltnUrl/galleries/$id.js", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseScriptAs<Gallery>().let {
-            runBlocking { it.toSManga() }
-        }
+    override fun mangaDetailsParse(response: Response) = runBlocking {
+        response.parseScriptAs<Gallery>().toSManga()
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
@@ -508,22 +501,20 @@ class Hitomi(
         return GET("$ltnUrl/galleries/$id.js", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
+    override fun pageListParse(response: Response) = runBlocking {
         val gallery = response.parseScriptAs<Gallery>()
 
-        return gallery.files.mapIndexed { idx, img ->
-            runBlocking {
-                val hash = img.hash
-                val commonId = commonImageId()
-                val imageId = imageIdFromHash(hash)
-                val subDomain = 'a' + subdomainOffset(imageId)
+        gallery.files.mapIndexed { idx, img ->
+            val hash = img.hash
+            val commonId = commonImageId()
+            val imageId = imageIdFromHash(hash)
+            val subDomain = 'a' + subdomainOffset(imageId)
 
-                Page(
-                    idx,
-                    "$baseUrl/reader/$id.html",
-                    "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp",
-                )
-            }
+            Page(
+                idx,
+                "$baseUrl/reader/$id.html",
+                "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp",
+            )
         }
     }
 
