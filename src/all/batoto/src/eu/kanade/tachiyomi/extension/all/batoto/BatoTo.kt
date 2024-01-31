@@ -470,13 +470,10 @@ open class BatoTo(
 
         return imageUrls.mapIndexed { i, it ->
             val acc = imgAccList.getOrNull(i)
-            val url = buildString(it.length) {
-                append(it)
-
-                if (acc != null) {
-                    append("?")
-                    append(acc)
-                }
+            val url = if (acc != null) {
+                "$it?$acc"
+            } else {
+                it
             }
 
             Page(i, imageUrl = url)
