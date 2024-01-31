@@ -6,7 +6,7 @@ import generator.ThemeSourceGenerator
 class SinMHGenerator : ThemeSourceGenerator {
     override val themeClass = "SinMH"
     override val themePkg = "sinmh"
-    override val baseVersionCode = 10
+    override val baseVersionCode = 11
     override val sources = listOf(
         SingleLang(
             name = "Gufeng Manhua",
@@ -16,18 +16,11 @@ class SinMHGenerator : ThemeSourceGenerator {
             sourceName = "古风漫画网",
             overrideVersionCode = 6,
         ),
-        SingleLang(
-            name = "Imitui Manhua",
-            baseUrl = "https://www.imitui.com",
-            lang = "zh",
-            className = "Imitui",
-            sourceName = "爱米推漫画",
-            overrideVersionCode = 3,
-        ),
         SingleLang( // This site blocks IP outside China
             name = "YKMH",
             baseUrl = "http://www.ykmh.com",
             lang = "zh",
+            isNsfw = true,
             className = "YKMH",
             pkgName = "manhuadui",
             sourceName = "优酷漫画",
@@ -35,19 +28,20 @@ class SinMHGenerator : ThemeSourceGenerator {
         ),
         SingleLang(
             name = "Qinqin Manhua",
-            baseUrl = "https://www.acgud.com",
+            baseUrl = "http://www.acgwd.com",
             lang = "zh",
             className = "Qinqin",
             sourceName = "亲亲漫画",
             overrideVersionCode = 2,
         ),
         SingleLang(
-            name = "57Manhua",
-            baseUrl = "http://www.wuqimh.net",
+            name = "92Manhua",
+            baseUrl = "http://www.92mh.com",
             lang = "zh",
-            className = "WuqiManga",
-            sourceName = "57漫画",
-            overrideVersionCode = 5,
+            isNsfw = true,
+            className = "JiuerManhua",
+            sourceName = "92漫画",
+            overrideVersionCode = 0,
         ),
     )
 

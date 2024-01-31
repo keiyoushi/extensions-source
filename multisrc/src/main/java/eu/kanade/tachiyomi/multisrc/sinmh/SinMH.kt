@@ -37,6 +37,7 @@ abstract class SinMH(
     override val client = network.client.newBuilder().rateLimit(2).build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("User-Agent", System.getProperty("http.agent")!!)
         .add("Referer", baseUrl)
 
     protected open val nextPageSelector = "ul.pagination > li.next:not(.disabled)"
@@ -100,6 +101,8 @@ abstract class SinMH(
 
     // Details
 
+    override fun getMangaUrl(manga: SManga) = mobileUrl + manga.url
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(".book-title > h1")!!.text()
         val detailsList = document.selectFirst(Evaluator.Class("detail-list"))!!
@@ -130,13 +133,13 @@ abstract class SinMH(
         title = detailsDiv.selectFirst(Evaluator.Tag("h1"))!!.text()
         val details = detailsDiv.select("> ul > li")
         val linkSelector = Evaluator.Tag("a")
-        author = details[0].selectFirst(linkSelector)!!.text()
+        author = details[0].text().removePrefix("作者：").trimStart()
         status = when (details[1].selectFirst(linkSelector)!!.text()) {
             "连载中" -> SManga.ONGOING
             "已完结" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        genre = mutableListOf<Element>().apply {
+        genre = buildList {
             add(details[2].selectFirst(linkSelector)!!) // 类别
             addAll(details[3].select(linkSelector)) // 类型
             if (hasBreadcrumb) addAll(document.selectFirst("div.mianbao")!!.select("a[href^=/list/]"))
@@ -175,19 +178,21 @@ abstract class SinMH(
     /** 必须是 "section item" */
     override fun chapterListSelector() = ".chapter-body li > a"
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        runCatching { setUrlWithoutDomain(element.attr("href")) }.onFailure { url = "" }
+        setUrlWithoutDomain(element.attr("href"))
         val children = element.children()
         name = if (children.isEmpty()) element.text() else children[0].text()
     }
 
     // Pages
 
+    override fun getChapterUrl(chapter: SChapter) = mobileUrl + chapter.url
+
     override fun pageListRequest(chapter: SChapter) = GET(mobileUrl + chapter.url, headers)
 
     protected open val imageHost: String by lazy {
         client.newCall(GET("$baseUrl/js/config.js", headers)).execute().let {
             Regex("""resHost:.+?"?domain"?:\["(.+?)"""").find(it.body.string())!!
-                .groupValues[1].substringAfter(':').run { "https:$this" }
+                .groupValues[1]
         }
     }
 
