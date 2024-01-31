@@ -8,6 +8,7 @@ on:
       - '**'
       - '!**.md'
       - '!.github/**'
+      - '.github/scripts/**'
       - '.github/workflows/build_push.yml'
 
 concurrency:
