@@ -45,7 +45,7 @@ body:
       label: Acknowledgements
       description: Your issue will be closed if you haven't done these steps.
       options:
-        - label: I have checked that the extension does not already exist by searching the [GitHub repository](https://github.com/keiyoushi/extensions-source/) and verified it does not appear in the code base.
+        - label: I have checked that the extension does not already exist by searching the [extension listing](https://keiyoushi.github.io/extensions/) and verified it does not appear there.
           required: true
         - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
           required: true

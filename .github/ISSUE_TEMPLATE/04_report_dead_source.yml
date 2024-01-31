@@ -16,7 +16,7 @@ body:
       description: |
         You can find the extension name in **Browse → Extensions**.
       placeholder: |
-        Example: "NotRealScans"
+        Example: "Not Real Scans"
     validations:
       required: true
 
