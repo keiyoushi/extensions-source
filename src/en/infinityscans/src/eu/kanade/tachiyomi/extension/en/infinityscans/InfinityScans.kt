@@ -23,7 +23,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
-import java.io.IOException
 
 class InfinityScans : HttpSource() {
 
@@ -37,14 +36,7 @@ class InfinityScans : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            if (response.code == 401) {
-                response.close()
-                throw IOException("Solve Captcha in WebView")
-            }
-            response
-        }
+        .addInterceptor(WebviewInterceptor(baseUrl))
         .rateLimit(1)
         .build()
 
