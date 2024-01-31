@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.mangaforfreecom
+package eu.kanade.tachiyomi.extension.en.mangaforfreecom
 
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
