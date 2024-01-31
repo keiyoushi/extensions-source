@@ -37,10 +37,11 @@ jobs:
           java-version: 17
           distribution: temurin
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3
+
       - name: Generate multisrc sources
-        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0-rc.1
-        with:
-          arguments: :multisrc:generateExtensions
+        run: ./gradlew :multisrc:generateExtensions
 
       - name: Get number of modules
         run: |
@@ -88,23 +89,22 @@ jobs:
         run: |
           echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3
+
       - name: Generate sources from the multi-source library
-        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0-rc.1
         env:
           CI_MODULE_GEN: "true"
-        with:
-          arguments: :multisrc:generateExtensions
+        run: ./gradlew :multisrc:generateExtensions
 
       - name: Build extensions (chunk ${{ matrix.chunk }})
-        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0-rc.1
         env:
           CI_MULTISRC: "true"
           CI_CHUNK_NUM: ${{ matrix.chunk }}
           ALIAS: ${{ secrets.ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        with:
-          arguments: assembleRelease
+        run: ./gradlew assembleRelease
 
       - name: Upload APKs (chunk ${{ matrix.chunk }})
         uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4
@@ -137,16 +137,17 @@ jobs:
         run: |
           echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3
+
       - name: Build extensions (chunk ${{ matrix.chunk }})
-        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0-rc.1
         env:
           CI_MULTISRC: "false"
           CI_CHUNK_NUM: ${{ matrix.chunk }}
           ALIAS: ${{ secrets.ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        with:
-          arguments: assembleRelease
+        run: ./gradlew assembleRelease
 
       - name: Upload APKs (chunk ${{ matrix.chunk }})
         uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4
