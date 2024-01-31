@@ -15,5 +15,4 @@ class Olaoe : Madara(
     override val mangaSubString = "works"
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/page/$page/?m_orderby=views", headers)
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)" // Filter fake chapters
-
 }
