@@ -15,7 +15,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
 
     override val sources = listOf(
         MultiLang("Miau Scan", "https://miaucomics.org", listOf("es", "pt-BR"), overrideVersionCode = 2),
-        SingleLang("Ainz Scans ID", "https://ainzscans.site", "id"),
+        SingleLang("Ainz Scans ID", "https://ainzscans.net", "id", overrideVersionCode = 1),
         SingleLang("Alceascan", "https://alceascan.my.id", "id"),
         SingleLang("Animated Glitched Comics", "https://agscomics.com", "en"),
         SingleLang("Animated Glitched Scans", "https://anigliscans.xyz", "en", overrideVersionCode = 1),
