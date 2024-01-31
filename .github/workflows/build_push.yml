@@ -4,9 +4,12 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - '.github/workflows/issue_moderator.yml'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!.github/**'
+      - '.github/scripts/**'
+      - '.github/workflows/build_push.yml'
 
 concurrency:
   group: ${{ github.workflow }}
