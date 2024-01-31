@@ -64,7 +64,7 @@ jobs:
           echo "isIndividualChanged=$isIndividualChanged" >> $GITHUB_OUTPUT
           echo "isMultisrcChanged=$isMultisrcChanged" >> $GITHUB_OUTPUT
 
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3
 
       - name: Generate multisrc sources
