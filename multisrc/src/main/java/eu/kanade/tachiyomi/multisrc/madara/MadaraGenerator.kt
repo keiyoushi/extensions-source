@@ -370,6 +370,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Oh No Manga", "https://ohnomanga.com", "en", isNsfw = true),
         SingleLang("Olaoe", "https://olaoe.cyou", "ar"),
         SingleLang("OnlyManhwa", "https://onlymanhwa.org", "en", isNsfw = true),
+        SingleLang("OPSCANS", "https://opchapters.com", "en"),
         SingleLang("Pantheon Scan", "https://pantheon-scan.com", "fr", overrideVersionCode = 1),
         SingleLang("Paragon Scans", "https://paragonscans.com", "en", isNsfw = true),
         SingleLang("Passa Mão Scan", "https://passamaoscan.com", "pt-BR", isNsfw = true, className = "PassaMaoScan"),
