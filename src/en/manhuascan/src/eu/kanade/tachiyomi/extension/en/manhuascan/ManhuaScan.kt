@@ -30,9 +30,8 @@ class ManhuaScan : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "ManhuaScan"
 
-    private val preferences: SharedPreferences by lazy {
+    private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
     override val baseUrl = getMirror()
 
@@ -56,7 +55,7 @@ class ManhuaScan : ConfigurableSource, ParsedHttpSource() {
         thumbnail_url = element.selectFirst(".thumb img")?.imgAttr()
         element.selectFirst(".title a")!!.run {
             title = text()
-            setUrlWithoutDomain(attr("abs:href") + "#${text()}")
+            setUrlWithoutDomain(attr("abs:href"))
         }
     }
 
@@ -173,10 +172,10 @@ class ManhuaScan : ConfigurableSource, ParsedHttpSource() {
         val chapterHeaders = headersBuilder().apply {
             add("Accept", "*/*")
             add("Host", baseUrl.toHttpUrl().host)
-            set("Referer", baseUrl + manga.url.substringBefore("#"))
+            set("Referer", baseUrl + manga.url)
         }.build()
 
-        val url = "$baseUrl/service/backend/chaplist/?manga_id=$id&manga_name=${manga.url.substringAfter("#")}"
+        val url = "$baseUrl/service/backend/chaplist/?manga_id=$id&manga_name=${manga.title}"
 
         return GET(url, chapterHeaders)
     }
