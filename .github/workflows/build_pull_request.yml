@@ -64,11 +64,12 @@ jobs:
           echo "isIndividualChanged=$isIndividualChanged" >> $GITHUB_OUTPUT
           echo "isMultisrcChanged=$isMultisrcChanged" >> $GITHUB_OUTPUT
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3
+
       - name: Generate multisrc sources
         if: ${{ steps.parse-changed-files.outputs.isMultisrcChanged == '1' }}
-        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0-rc.1
-        with:
-          arguments: :multisrc:generateExtensions
+        run: ./gradlew :multisrc:generateExtensions
 
       - name: Get number of modules
         run: |
@@ -113,22 +114,21 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      - name: Generate sources from the multi-source library
-        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0-rc.1
-        env:
-          CI_MODULE_GEN: "true"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3
         with:
-          arguments: :multisrc:generateExtensions
           cache-read-only: true
 
+      - name: Generate sources from the multi-source library
+        env:
+          CI_MODULE_GEN: "true"
+        run: ./gradlew :multisrc:generateExtensions
+
       - name: Build extensions (chunk ${{ matrix.chunk }})
-        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0-rc.1
         env:
           CI_MULTISRC: "true"
           CI_CHUNK_NUM: ${{ matrix.chunk }}
-        with:
-          arguments: assembleDebug
-          cache-read-only: true
+        run: ./gradlew assembleDebug
 
   build_individual:
     name: Build individual modules
@@ -147,11 +147,13 @@ jobs:
           java-version: 17
           distribution: temurin
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3
+        with:
+          cache-read-only: true
+
       - name: Build extensions (chunk ${{ matrix.chunk }})
-        uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0-rc.1
         env:
           CI_MULTISRC: "false"
           CI_CHUNK_NUM: ${{ matrix.chunk }}
-        with:
-          arguments: assembleDebug
-          cache-read-only: true
+        run: ./gradlew assembleDebug
