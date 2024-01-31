@@ -2,11 +2,9 @@ name: PR build check
 
 on:
   pull_request:
-    paths:
-      - '**'
-      - '!**.md'
-      - '!.github/**'
-      - '.github/workflows/build_pull_request.yml'
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/issue_moderator.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
