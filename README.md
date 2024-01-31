@@ -1,12 +1,23 @@
 ### Please give the repo a :star:
 
-| Build | Support Server |
-|-------|---------|
+| Build                                                                                                                                                                               | Support Server                                                                                                                                              |
+|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [![CI](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml/badge.svg)](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml) | [![Discord](https://img.shields.io/discord/1193460528052453448.svg?label=discord&labelColor=7289da&color=2c2f33&style=flat)](https://discord.gg/3FbCpdKbdY) |
 
 # Usage
 
 [Getting started](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo)
+
+# Requests
+
+To request a new source or bug fix, [create an issue](https://github.com/keiyoushi/extensions-source/issues/new/choose).
+
+Please note that creating an issue does not mean that the source will be added or fixed in a timely
+fashion, because the work is volunteer-based. Some sources may also be impossible to do or prohibitively
+difficult to maintain.
+
+If you would like to see a request fulfilled and have the necessary skills to do so, consider contributing!
+Issues are up-for-grabs for any developer if there is no assigned user already.
 
 # Contributing
 
@@ -32,5 +43,8 @@ Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-sou
 
 ## Disclaimer
 
-This project is not affiliated with Tachiyomi. Don't ask for help about these extensions at the official support means of Tachiyomi. All credits to the codebase goes to the original contributors.
+This project does not have any affiliation with the content providers available.
+
+This project is not affiliated with Mihon/Tachiyomi. Don't ask for help about these extensions at the
+official support means of Mihon/Tachiyomi. All credits to the codebase goes to the original contributors.
 
