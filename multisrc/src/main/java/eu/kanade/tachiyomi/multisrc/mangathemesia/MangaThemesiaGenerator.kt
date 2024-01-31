@@ -97,7 +97,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("ManhwaIndo", "https://manhwaindo.id", "id", isNsfw = true, overrideVersionCode = 4),
         SingleLang("ManhwaLand.mom", "https://manhwaland.lat", "id", isNsfw = true, className = "ManhwaLandMom", overrideVersionCode = 5),
         SingleLang("ManhwaList", "https://manhwalist.com", "id", overrideVersionCode = 4),
-        SingleLang("Manhwax", "https://manhwax.com", "en", isNsfw = true),
+        SingleLang("Manhwax", "https://manhwax.org", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("MELOKOMIK", "https://melokomik.xyz", "id"),
         SingleLang("Mihentai", "https://mihentai.com", "all", isNsfw = true, overrideVersionCode = 2),
         SingleLang("Mirai Scans", "https://miraiscans.com", "id"),
