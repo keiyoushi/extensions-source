@@ -468,8 +468,18 @@ open class BatoTo(
         val imgAccListString = CryptoAES.decrypt(batoWord.removeSurrounding("\""), evaluatedPass)
         val imgAccList = json.parseToJsonElement(imgAccListString).jsonArray.map { it.jsonPrimitive.content }
 
-        return imageUrls.zip(imgAccList).mapIndexed { i, (imgUrl, imgAcc) ->
-            Page(i, imageUrl = "$imgUrl?$imgAcc")
+        return imageUrls.mapIndexed { i, it ->
+            val acc = imgAccList.getOrNull(i)
+            val url = buildString(it.length) {
+                append(it)
+
+                if (acc != null) {
+                    append("?")
+                    append(acc)
+                }
+            }
+
+            Page(i, imageUrl = url)
         }
     }
 
