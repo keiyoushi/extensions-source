@@ -1,10 +1,10 @@
-package eu.kanade.tachiyomi.extension.ar.manjanoon
+package eu.kanade.tachiyomi.extension.ar.manganoon
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Manjanoon : MangaThemesia(
+class MangaNoon : MangaThemesia(
     "مانجا نون",
     "https://manjanoon.com",
     "ar",
