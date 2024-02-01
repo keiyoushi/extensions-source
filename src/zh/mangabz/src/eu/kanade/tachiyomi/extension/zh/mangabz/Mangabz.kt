@@ -2,6 +2,10 @@ package eu.kanade.tachiyomi.extension.zh.mangabz
 
 import android.app.Application
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.lib.unpacker.SubstringExtractor
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
@@ -30,15 +34,22 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
     override val client: OkHttpClient
 
     private val urlSuffix: String
+    private val preferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     init {
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
         val mirror = preferences.mirror
         baseUrl = "https://" + mirror.domain
         urlSuffix = mirror.urlSuffix
 
         val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie, preferences.lang)
-        client = network.client.newBuilder()
+        client = network.cloudflareClient.newBuilder()
+            .setRandomUserAgent(
+                userAgentType = preferences.getPrefUAType(),
+                customUA = preferences.getPrefCustomUA(),
+                filterInclude = listOf("chrome"),
+            )
             .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)
             .build()
@@ -140,7 +151,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
         }
     }
 
-    var categories = emptyList<CategoryData>()
+    private var categories = emptyList<CategoryData>()
 
     override fun parseFilters(document: Document) {
         if (categories.isEmpty()) categories = parseCategories(document)
@@ -149,7 +160,9 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
     override fun getFilterList() = getFilterListInternal(categories)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        getPreferencesInternal(screen.context).forEach(screen::addPreference)
+        val context = screen.context
+        getPreferencesInternal(context).forEach(screen::addPreference)
+        addRandomUAPreferenceToScreen(screen)
     }
 
     companion object {
