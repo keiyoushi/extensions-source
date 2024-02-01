@@ -17,7 +17,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-// URL can be found at https://www.wnacglink.top/
 class wnacg : ParsedHttpSource(), ConfigurableSource {
     override val name = "紳士漫畫"
     override val lang = "zh"

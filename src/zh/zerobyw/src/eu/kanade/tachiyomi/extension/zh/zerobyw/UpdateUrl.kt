@@ -34,7 +34,7 @@ fun getBaseUrlPreference(context: Context) = EditTextPreference(context).apply {
     key = BASE_URL_PREF
     title = "网址"
     summary = "正常情况下会自动更新。" +
-        "如果出现错误，请在 GitHub 上报告，并且可以在 GitHub 仓库 zerozzz123456/1 找到最新网址手动填写。" +
+        "如果出现错误，请在 GitHub 上报告，并且可以在 https://zerobyw.github.io/ 找到最新网址手动填写。" +
         "填写时按照 $DEFAULT_BASE_URL 格式。"
     setDefaultValue(DEFAULT_BASE_URL)
 
