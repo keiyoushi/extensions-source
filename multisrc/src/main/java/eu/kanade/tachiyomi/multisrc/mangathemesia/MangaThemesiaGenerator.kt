@@ -99,6 +99,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("ManhwaLand.mom", "https://manhwaland.lat", "id", isNsfw = true, className = "ManhwaLandMom", overrideVersionCode = 5),
         SingleLang("ManhwaList", "https://manhwalist.com", "id", overrideVersionCode = 4),
         SingleLang("Manhwax", "https://manhwax.org", "en", isNsfw = true, overrideVersionCode = 1),
+        SingleLang("Manjanoon", "https://manjanoon.com", "ar", sourceName = "مانجا نون"),
         SingleLang("MELOKOMIK", "https://melokomik.xyz", "id"),
         SingleLang("Mihentai", "https://mihentai.com", "all", isNsfw = true, overrideVersionCode = 2),
         SingleLang("Mirai Scans", "https://miraiscans.com", "id"),
@@ -155,7 +156,6 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Zahard", "https://zahard.xyz", "en"),
         SingleLang("أريا مانجا", "https://www.areascans.net", "ar", className = "AreaManga"),
         SingleLang("فيكس مانجا", "https://vexmanga.com", "ar", className = "VexManga", overrideVersionCode = 3),
-        SingleLang("مانجا نون", "https://manjanoon.com", "ar"),
         SingleLang("สดใสเมะ", "https://www.xn--l3c0azab5a2gta.com", "th", isNsfw = true, className = "Sodsaime", overrideVersionCode = 1),
     )
 

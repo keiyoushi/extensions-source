@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManjaNoon : MangaThemesia(
+class Manjanoon : MangaThemesia(
     "مانجا نون",
     "https://manjanoon.com",
     "ar",
