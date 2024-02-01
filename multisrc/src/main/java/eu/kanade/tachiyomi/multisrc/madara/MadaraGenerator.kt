@@ -41,6 +41,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Atlantis Scan", "https://scansatlanticos.com", "es", isNsfw = true),
         SingleLang("Azora", "https://azoramoon.com", "ar", overrideVersionCode = 7),
         SingleLang("Babel Wuxia", "https://babelwuxia.com", "en", overrideVersionCode = 1),
+        SingleLang("Baka Manhua", "https://bakamh.com", "zh", isNsfw = true, className = "Bakamh", sourceName = "巴卡漫画"),
         SingleLang("Bakaman", "https://bakaman.net", "th", overrideVersionCode = 1),
         SingleLang("Banana Manga", "https://bananamanga.net", "en", isNsfw = true),
         SingleLang("BarManga", "https://barmanga.com", "es"),
@@ -503,7 +504,6 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("مانجا ليك", "https://manga-lek.net", "ar", className = "Mangalek", overrideVersionCode = 4),
         SingleLang("مانجا ليكس", "https://mangaleks.com", "ar", className = "MangaLeks"),
         SingleLang("مانجا لينك", "https://mangalink.io", "ar", className = "MangaLinkio", overrideVersionCode = 3),
-        SingleLang("巴卡漫画", "https://bakamh.com", "zh", isNsfw = true, className = "Bakamh"),
     )
 
     companion object {
