@@ -24,8 +24,6 @@ abstract class MangabzTheme(
 
     override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", baseUrl)
-
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga-list-p$page/", headers)
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
