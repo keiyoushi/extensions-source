@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -30,9 +31,21 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
     override val client: OkHttpClient
 
     private val urlSuffix: String
+    private val preferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    override fun headersBuilder(): Headers.Builder {
+        val builder = super.headersBuilder()
+        val userAgent = preferences.getString(USER_AGENT_PREF, "")!!
+        return if (userAgent.isNotBlank()) {
+            builder.set("User-Agent", userAgent)
+        } else {
+            builder
+        }
+    }
 
     init {
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
         val mirror = preferences.mirror
         baseUrl = "https://" + mirror.domain
         urlSuffix = mirror.urlSuffix
@@ -140,7 +153,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
         }
     }
 
-    var categories = emptyList<CategoryData>()
+    private var categories = emptyList<CategoryData>()
 
     override fun parseFilters(document: Document) {
         if (categories.isEmpty()) categories = parseCategories(document)
@@ -149,10 +162,12 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
     override fun getFilterList() = getFilterListInternal(categories)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        getPreferencesInternal(screen.context).forEach(screen::addPreference)
+        val context = screen.context
+        getPreferencesInternal(context).forEach(screen::addPreference)
     }
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
+        const val USER_AGENT_PREF = "userAgent"
     }
 }

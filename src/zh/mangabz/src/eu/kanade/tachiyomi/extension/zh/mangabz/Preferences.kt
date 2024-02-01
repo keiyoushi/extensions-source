@@ -2,8 +2,11 @@ package eu.kanade.tachiyomi.extension.zh.mangabz
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
+import okhttp3.Headers
 
 fun getPreferencesInternal(context: Context) = arrayOf(
     ListPreference(context).apply {
@@ -23,6 +26,21 @@ fun getPreferencesInternal(context: Context) = arrayOf(
         title = "使用繁体中文"
         summary = "重启生效，已添加的漫画需要迁移才能更新标题"
         setDefaultValue(false)
+    },
+
+    EditTextPreference(context).apply {
+        key = Mangabz.USER_AGENT_PREF
+        title = "User Agent"
+        summary = "留空则使用应用设置中的默认 User Agent，重启生效"
+        setOnPreferenceChangeListener { _, newValue ->
+            try {
+                Headers.Builder().add("User-Agent", newValue as String)
+                true
+            } catch (e: Throwable) {
+                Toast.makeText(context, "User Agent 无效：${e.message}", Toast.LENGTH_LONG).show()
+                false
+            }
+        }
     },
 )
 
