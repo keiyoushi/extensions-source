@@ -47,7 +47,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 
     private val isCi = System.getenv("CI") == "true"
     override val baseUrl get() = when {
-        isCi -> MIRRORS.joinToString("#, ") { "https://$it" }
+        isCi -> MIRRORS.joinToString("#, ") { "https://" + it.domain }
         else -> _baseUrl
     }
 
