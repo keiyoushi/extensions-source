@@ -6,7 +6,7 @@ import java.util.Locale
 
 class ThunderScans : MangaThemesia(
     "Thunder Scans",
-    "https://ThunderScans.com",
+    "https://thunderscans.com",
     "ar",
     dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
 )
