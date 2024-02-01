@@ -142,6 +142,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Tempest Fansub", "https://tempestfansub.com", "tr", isNsfw = true),
         SingleLang("Tenshi.id", "https://tenshi.id", "id", className = "TenshiId", pkgName = "masterkomik", overrideVersionCode = 4),
         SingleLang("The Apollo Team", "https://theapollo.team", "en"),
+        SingleLang("Thunder Scans", "https://thunderscans.com", "ar"),
         SingleLang("Tres Daos Scan", "https://tresdaos.com", "es"),
         SingleLang("Tsundoku Traduções", "https://tsundoku.com.br", "pt-BR", className = "TsundokuTraducoes", overrideVersionCode = 9),
         SingleLang("TukangKomik", "https://tukangkomik.id", "id", overrideVersionCode = 1),
