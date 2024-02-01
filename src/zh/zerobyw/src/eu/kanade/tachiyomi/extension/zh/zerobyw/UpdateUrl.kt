@@ -11,7 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 
-private const val DEFAULT_BASE_URL = "http://www.zerobyw007.com"
+private const val DEFAULT_BASE_URL = "http://www.zerobywgbo2.com"
 
 private const val BASE_URL_PREF = "ZEROBYW_BASEURL"
 private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
