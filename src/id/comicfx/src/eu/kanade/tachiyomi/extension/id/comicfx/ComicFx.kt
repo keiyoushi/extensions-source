@@ -207,11 +207,8 @@ class ComicFx : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        document.select("#all img").mapIndexed { i, element ->
-            val image = element.attr("abs:src")
-            if (image != "") {
-                pages.add(Page(i, "", image))
-            }
+        Regex(""""page_image":"([^"]*)"""").findAll(document.toString()).asIterable().mapIndexed { i, it ->
+            pages.add(Page(i, "", it.groupValues[1].replace(Regex("""^https?://|/+"""), "")))
         }
 
         return pages
