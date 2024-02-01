@@ -21,6 +21,10 @@
                     android:host="xmanhua.com"
                     android:pathPattern="/..*"
                     android:scheme="https" />
+                <data
+                    android:host="yymanhua.com"
+                    android:pathPattern="/..*"
+                    android:scheme="https" />
             </intent-filter>
         </activity>
     </application>

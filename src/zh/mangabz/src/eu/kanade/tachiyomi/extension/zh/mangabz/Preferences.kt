@@ -47,6 +47,7 @@ val MIRRORS
     get() = arrayOf(
         Mirror("mangabz.com", "bz/", "mangabz_lang"),
         Mirror("xmanhua.com", "xm/", "xmanhua_lang"),
+        Mirror("yymanhua.com", "yy/", "yymanhua_lang"),
     )
 
 class Mirror(
