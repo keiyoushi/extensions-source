@@ -13,6 +13,7 @@ class MadThemeGenerator : ThemeSourceGenerator {
 
     override val sources = listOf(
         SingleLang("BeeHentai", "https://beehentai.com", "en", isNsfw = true),
+        SingleLang("BoxManhwa", "https://boxmanhwa.com", "en", isNsfw = true),
         SingleLang("MangaBuddy", "https://mangabuddy.com", "en", isNsfw = true, overrideVersionCode = 2),
         SingleLang("MangaCute", "https://mangacute.com", "en", isNsfw = true),
         SingleLang("MangaForest", "https://mangaforest.me", "en", isNsfw = true, overrideVersionCode = 1),
