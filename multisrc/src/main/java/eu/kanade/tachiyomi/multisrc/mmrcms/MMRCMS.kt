@@ -48,13 +48,13 @@ abstract class MMRCMS @Suppress("UNUSED") constructor(
 
     vararg forbiddens: Forbidden,
 
-    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US),
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US),
     protected val itemPath: String = "manga",
-    protected val fetchFilterOptions: Boolean = true,
-    protected val supportsAdvancedSearch: Boolean = true,
-    protected val detailsTitleSelector: String = ".listmanga-header, .widget-title",
-    protected val chapterNamePrefix: String = "",
-    protected val chapterString: String = when (lang) {
+    private val fetchFilterOptions: Boolean = true,
+    private val supportsAdvancedSearch: Boolean = true,
+    private val detailsTitleSelector: String = ".listmanga-header, .widget-title",
+    private val chapterNamePrefix: String = "",
+    private val chapterString: String = when (lang) {
         "es" -> "Capítulo"
         "fr" -> "Chapitre"
         else -> "Chapter"
