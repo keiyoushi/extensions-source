@@ -15,7 +15,13 @@ data class Chapter(
 )
 
 @Serializable
-data class SearchResult(
-    @SerialName("value") val name: String,
-    @SerialName("data") val slug: String,
+data class LatestManga(
+    @SerialName("manga_name") val name: String,
+    @SerialName("manga_slug") val slug: String,
+)
+
+@Serializable
+data class LatestUpdateResponse(
+    val data: List<LatestManga>,
+    val totalPages: Int,
 )
