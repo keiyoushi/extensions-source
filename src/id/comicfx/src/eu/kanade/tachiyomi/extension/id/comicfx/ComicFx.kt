@@ -207,8 +207,9 @@ class ComicFx : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        Regex(""""page_image":"([^"]*)"""").findAll(document.toString()).asIterable().mapIndexed { i, it ->
-            pages.add(Page(i, "", it.groupValues[1].replace(Regex("""^https?://|/+"""), "")))
+        val pages = document.toString().substringAfter("var pages = ").substringBefore(";")
+        return json.parseToJsonElement(pages).jsonArray.mapIndexed { i, it ->
+            Page(i, imageUrl = it.jsonObject["page_image"]!!.jsonPrimitive.content
         }
 
         return pages
