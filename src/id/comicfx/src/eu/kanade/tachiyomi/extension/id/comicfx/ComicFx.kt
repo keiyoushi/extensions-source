@@ -210,8 +210,6 @@ class ComicFx : ParsedHttpSource() {
         return json.parseToJsonElement(pages).jsonArray.mapIndexed { i, it ->
             Page(i, imageUrl = it.jsonObject["page_image"]!!.jsonPrimitive.content)
         }
-
-        return pages
     }
 
     // filters
