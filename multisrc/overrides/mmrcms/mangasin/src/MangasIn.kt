@@ -4,13 +4,20 @@ import android.util.Base64
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
+import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMSUtils
+import eu.kanade.tachiyomi.multisrc.mmrcms.SuggestionDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -22,6 +29,59 @@ class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    override val supportsAdvancedSearch = false
+
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/lasted?p=$page", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        runCatching { fetchFilterOptions() }
+
+        val data = json.decodeFromString<LatestUpdateResponse>(response.body.string())
+        val manga = data.data.map {
+            SManga.create().apply {
+                url = "/$itemPath/${it.slug}"
+                title = it.name
+                thumbnail_url = MMRCMSUtils.guessCover(baseUrl, url, null)
+            }
+        }
+        val hasNextPage = response.request.url.queryParameter("p")!!.toInt() < data.totalPages
+
+        return MangasPage(manga, hasNextPage)
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isEmpty()) {
+            return super.searchMangaRequest(page, query, filters)
+        }
+
+        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("q", query)
+        }.build()
+
+        return GET(url, headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val searchType = response.request.url.pathSegments.last()
+
+        if (searchType != "search") {
+            return super.searchMangaParse(response)
+        }
+
+        searchDirectory = json.decodeFromString<List<SuggestionDto>>(response.body.string())
+
+        return parseSearchDirectory(1)
+    }
+
+    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
+        status = when (document.selectFirst("div.manga-name span.label")?.text()?.lowercase()) {
+            in detailStatusComplete -> SManga.COMPLETED
+            in detailStatusOngoing -> SManga.ONGOING
+            in detailStatusDropped -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+    }
 
     private var key = ""
 
@@ -56,7 +116,12 @@ class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
 
         return chapters.map {
             SChapter.create().apply {
-                name = "Capítulo ${it.number}: ${it.name}"
+                name = if (it.name == "Capítulo ${it.number}") {
+                    it.name
+                } else {
+                    "Capítulo ${it.number}: ${it.name}"
+                }
+
                 date_upload = it.createdAt.parseDate()
                 setUrlWithoutDomain("$mangaUrl/${it.slug}")
             }

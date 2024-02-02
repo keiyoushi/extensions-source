@@ -114,7 +114,7 @@ abstract class MMRCMS(
 
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    private var searchDirectory = emptyList<SuggestionDto>()
+    protected var searchDirectory = emptyList<SuggestionDto>()
 
     private var searchQuery = ""
 
@@ -203,7 +203,7 @@ abstract class MMRCMS(
 
     override fun searchMangaNextPageSelector(): String? = ".pagination a[rel=next]"
 
-    private fun parseSearchDirectory(page: Int): MangasPage {
+    protected fun parseSearchDirectory(page: Int): MangasPage {
         val manga = mutableListOf<SManga>()
         val endRange = ((page * 24) - 1).let { if (it <= searchDirectory.lastIndex) it else searchDirectory.lastIndex }
 
@@ -221,11 +221,11 @@ abstract class MMRCMS(
     }
 
     protected open val detailAuthor = setOf("author(s)", "autor(es)", "auteur(s)", "著作", "yazar(lar)", "mangaka(lar)", "pengarang/penulis", "pengarang", "penulis", "autor", "المؤلف", "перевод", "autor/autorzy")
-    protected open val detailArtist = setOf("artist(s)", "artiste(s)", "sanatçi(lar)", "artista(s)", "artist(s)/ilustrator", "الرسام", "seniman", "rysownik/rysownicy")
-    protected open val detailGenre = setOf("categories", "categorías", "catégories", "ジャンル", "kategoriler", "categorias", "kategorie", "التصنيفات", "жанр", "kategori", "tagi")
+    protected open val detailArtist = setOf("artist(s)", "artiste(s)", "sanatçi(lar)", "artista(s)", "artist(s)/ilustrator", "الرسام", "seniman", "rysownik/rysownicy", "artista")
+    protected open val detailGenre = setOf("categories", "categorías", "catégories", "ジャンル", "kategoriler", "categorias", "kategorie", "التصنيفات", "жанр", "kategori", "tagi", "género")
     protected open val detailStatus = setOf("status", "statut", "estado", "状態", "durum", "الحالة", "статус")
-    protected open val detailStatusComplete = setOf("complete", "مكتملة", "complet", "completo", "zakończone", "concluído")
-    protected open val detailStatusOngoing = setOf("ongoing", "مستمرة", "en cours", "em lançamento", "prace w toku", "ativo", "em andamento")
+    protected open val detailStatusComplete = setOf("complete", "مكتملة", "complet", "completo", "zakończone", "concluído", "finalizado")
+    protected open val detailStatusOngoing = setOf("ongoing", "مستمرة", "en cours", "em lançamento", "prace w toku", "ativo", "em andamento", "activo")
     protected open val detailStatusDropped = setOf("dropped")
 
     protected open val detailsTitleSelector = ".listmanga-header, .widget-title"
