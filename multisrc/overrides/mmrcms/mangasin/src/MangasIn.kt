@@ -23,8 +23,6 @@ import java.util.Locale
 
 class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
 
-    private val json: Json by injectLazy()
-
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .build()
@@ -41,41 +39,6 @@ class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
 
         return KEY_REGEX.find(deobfuscatedScript)?.groupValues?.get(1)
             ?: throw Exception("No se pudo encontrar la clave")
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url: Uri.Builder
-        when {
-            query.isNotBlank() -> {
-                url = Uri.parse("$baseUrl/search")!!.buildUpon()
-                url.appendQueryParameter("q", query)
-            }
-            else -> {
-                url = Uri.parse("$baseUrl/filterList?page=$page")!!.buildUpon()
-                filters.filterIsInstance<UriFilter>()
-                    .forEach { it.addToUri(url) }
-            }
-        }
-        return GET(url.toString(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        return if (listOf("query", "q").any { it in response.request.url.queryParameterNames }) {
-            val searchResult = json.decodeFromString<List<SearchResult>>(response.body.string())
-            MangasPage(
-                searchResult
-                    .map {
-                        SManga.create().apply {
-                            url = getUrlWithoutBaseUrl(itemUrl + it.slug)
-                            title = it.name
-                            thumbnail_url = "$baseUrl/uploads/manga/${it.slug}/cover/cover_250x350.jpg"
-                        }
-                    },
-                false,
-            )
-        } else {
-            internalMangaParse(response)
-        }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {

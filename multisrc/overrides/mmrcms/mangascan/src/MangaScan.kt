@@ -3,21 +3,16 @@ package eu.kanade.tachiyomi.extension.fr.mangascan
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
-import okhttp3.Response
 
 class MangaScan : MMRCMS("Manga-Scan", "https://mangascan-fr.com", "fr") {
+    override val supportsAdvancedSearch = false
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return super.mangaDetailsParse(response).apply {
-            title = title.substringBefore("Chapitres en ligne").substringAfter("Scan").trim()
-        }
-    }
+    override val detailsTitleSelector = "div.col-sm-12 h1"
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
-            .set("Referer", baseUrl)
+            .set("Referer", "$baseUrl/")
             .set("Accept", "image/avif,image/webp,*/*")
             .build()
 

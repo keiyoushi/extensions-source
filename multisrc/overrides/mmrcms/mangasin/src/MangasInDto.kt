@@ -13,9 +13,3 @@ data class Chapter(
     val number: String,
     @SerialName("created_at") val createdAt: String,
 )
-
-@Serializable
-data class SearchResult(
-    @SerialName("value") val name: String,
-    @SerialName("data") val slug: String,
-)
