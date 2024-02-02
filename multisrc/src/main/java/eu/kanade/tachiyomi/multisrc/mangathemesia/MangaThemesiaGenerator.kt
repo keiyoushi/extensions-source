@@ -53,7 +53,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Imagine Scan", "https://imaginescan.com.br", "pt-BR", isNsfw = true, overrideVersionCode = 1),
         SingleLang("InariManga", "https://inarimanga.com", "es", overrideVersionCode = 7),
         SingleLang("Infernal Void Scans", "https://void-scans.com", "en", overrideVersionCode = 5),
-        SingleLang("Kai Scans", "https://kaiscans.com", "en"),
+        SingleLang("Kai Scans", "https://kaiscans.org", "en", overrideVersionCode = 1),
         SingleLang("Kanzenin", "https://kanzenin.info", "id", isNsfw = true, overrideVersionCode = 1),
         SingleLang("KataKomik", "https://katakomik.my.id", "id", overrideVersionCode = 1),
         SingleLang("King of Shojo", "https://kingofshojo.com", "ar", overrideVersionCode = 1),
@@ -79,8 +79,10 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Manga Kings", "https://mangakings.com.tr", "tr"),
         SingleLang("Manga Raw.org", "https://mangaraw.org", "ja", className = "MangaRawOrg", overrideVersionCode = 1),
         SingleLang("Mangacim", "https://www.mangacim.com", "tr", overrideVersionCode = 1),
+        SingleLang("MangaFlame", "https://mangaflame.org", "ar"),
         SingleLang("MangaKita", "https://mangakita.id", "id", overrideVersionCode = 2),
         SingleLang("Mangakyo", "https://mangakyo.vip", "id", overrideVersionCode = 4),
+        SingleLang("MangaNoon", "https://manjanoon.com", "ar", sourceName = "مانجا نون"),
         SingleLang("MangaPro", "https://mangapro.pro", "ar"),
         SingleLang("MangaShiina", "https://mangashiina.com", "es"),
         SingleLang("MangaShiro", "https://mangashiro.me", "id"),
@@ -143,6 +145,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Tempest Fansub", "https://tempestfansub.com", "tr", isNsfw = true),
         SingleLang("Tenshi.id", "https://tenshi.id", "id", className = "TenshiId", pkgName = "masterkomik", overrideVersionCode = 4),
         SingleLang("The Apollo Team", "https://theapollo.team", "en"),
+        SingleLang("Thunder Scans", "https://thunderscans.com", "ar"),
         SingleLang("Tres Daos Scan", "https://tresdaos.com", "es"),
         SingleLang("Tsundoku Traduções", "https://tsundoku.com.br", "pt-BR", className = "TsundokuTraducoes", overrideVersionCode = 9),
         SingleLang("TukangKomik", "https://tukangkomik.id", "id", overrideVersionCode = 1),
@@ -157,6 +160,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("أريا مانجا", "https://www.areascans.net", "ar", className = "AreaManga"),
         SingleLang("فيكس مانجا", "https://vexmanga.com", "ar", className = "VexManga", overrideVersionCode = 3),
         SingleLang("สดใสเมะ", "https://www.xn--l3c0azab5a2gta.com", "th", isNsfw = true, className = "Sodsaime", overrideVersionCode = 1),
+
     )
 
     companion object {
