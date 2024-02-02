@@ -5,8 +5,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MangaFlame : MangaThemesia(
-    "MangaFlame",
+    "Manga Flame",
     "https://mangaflame.org",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-)
+) {
+    override val id = 1501237443119573205
+}
