@@ -435,7 +435,7 @@ abstract class MMRCMS @Suppress("UNUSED") constructor(
             return@fromCallable
         }
 
-        val result = runCatching {
+        fetchFiltersFailed = try {
             if (supportsAdvancedSearch) {
                 val document = client.newCall(GET("$baseUrl/advanced-search", headers)).execute().asJsoup()
 
@@ -458,12 +458,13 @@ abstract class MMRCMS @Suppress("UNUSED") constructor(
                     it.text() to it.attr("href").toHttpUrl().pathSegments.last()
                 }
             }
-        }
-            .onFailure {
-                Log.e(name, "Could not fetch filtering options", it)
-            }
 
-        fetchFiltersFailed = result.isFailure
+             false
+        } catch (e: Throwable) {
+            Log.e(name, "Could not fetch filtering options", e)
+            true
+        }
+
         fetchFiltersAttempts++
         fetchFiltersLock.unlock()
     }
