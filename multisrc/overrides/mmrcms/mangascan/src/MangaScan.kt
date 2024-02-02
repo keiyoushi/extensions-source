@@ -5,11 +5,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.Request
 
-class MangaScan : MMRCMS("Manga-Scan", "https://mangascan-fr.com", "fr") {
-    override val supportsAdvancedSearch = false
-
-    override val detailsTitleSelector = "div.col-sm-12 h1"
-
+class MangaScan : MMRCMS(
+    "Manga-Scan",
+    "https://mangascan-fr.com",
+    "fr",
+    supportsAdvancedSearch = false,
+    detailsTitleSelector = "div.col-sm-12 h1",
+) {
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "$baseUrl/")
