@@ -156,9 +156,9 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("xCaliBR Scans", "https://xcalibrscans.com", "en", overrideVersionCode = 5),
         SingleLang("YumeKomik", "https://yumekomik.com", "id", isNsfw = true, className = "YumeKomik", pkgName = "inazumanga", overrideVersionCode = 6),
         SingleLang("Zahard", "https://zahard.xyz", "en"),
-        SingleLang("أريا مانجا", "https://www.areascans.net", "ar", className = "AreaManga"),
-        SingleLang("فيكس مانجا", "https://vexmanga.com", "ar", className = "VexManga", overrideVersionCode = 3),
-        SingleLang("สดใสเมะ", "https://www.xn--l3c0azab5a2gta.com", "th", isNsfw = true, className = "Sodsaime", overrideVersionCode = 1),
+        SingleLang("Area Manga", "https://www.areascans.net", "ar", sourceName = "أريا مانجا"),
+        SingleLang("Vex Manga", "https://vexmanga.com", "ar", sourceName = "فيكس مانجا", overrideVersionCode = 3),
+        SingleLang("Sodsaime", "https://www.xn--l3c0azab5a2gta.com", "th", isNsfw = true, sourceName = "สดใสเมะ", overrideVersionCode = 1),
     )
 
     companion object {
