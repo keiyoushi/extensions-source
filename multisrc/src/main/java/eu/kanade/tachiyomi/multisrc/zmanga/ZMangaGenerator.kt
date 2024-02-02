@@ -17,9 +17,7 @@ class ZMangaGenerator : ThemeSourceGenerator {
         SingleLang("KomikIndo.info", "http://komikindo.info", "id", isNsfw = true, className = "KomikIndoInfo"),
         SingleLang("KomikPlay", "https://komikplay.com", "id", overrideVersionCode = 1),
         SingleLang("Maid - Manga", "https://www.maid.my.id", "id", overrideVersionCode = 10, className = "MaidManga"),
-        SingleLang("Neumanga", "https://neumanga.net", "id"),
         SingleLang("ShiroDoujin", "https://shirodoujin.com", "id", isNsfw = true, overrideVersionCode = 1, className = "Shirodoujin"),
-        SingleLang("Sekte Komik", "https://sektekomik.com", "id", overrideVersionCode = 25),
     )
 
     companion object {
