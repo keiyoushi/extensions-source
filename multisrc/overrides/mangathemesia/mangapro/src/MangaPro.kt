@@ -5,8 +5,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MangaPro : MangaThemesia(
-    "MangaPro",
+    "Manga Pro",
     "https://mangapro.pro",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-)
+) {
+    override val versionId = 3
+}
