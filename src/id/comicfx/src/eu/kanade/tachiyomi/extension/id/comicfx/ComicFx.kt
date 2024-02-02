@@ -205,16 +205,11 @@ class ComicFx : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = ""
 
     override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
+        val pages = document.toString().substringAfter("var pages = ").substringBefore(";")
 
-        document.select("#all img").mapIndexed { i, element ->
-            val image = element.attr("abs:src")
-            if (image != "") {
-                pages.add(Page(i, "", image))
-            }
+        return json.parseToJsonElement(pages).jsonArray.mapIndexed { i, it ->
+            Page(i, imageUrl = it.jsonObject["page_image"]!!.jsonPrimitive.content)
         }
-
-        return pages
     }
 
     // filters
