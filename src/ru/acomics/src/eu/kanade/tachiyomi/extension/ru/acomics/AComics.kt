@@ -119,13 +119,14 @@ class AComics : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select(".about-summary").first()!!
-        val manga = SManga.create()
-        manga.author = infoElement.select(".about-summary > p:contains(Автор)").text().split(":")[1]
-        manga.genre = infoElement.select("a.button").joinToString { it.text() }
-        manga.description = infoElement.ownText()
-        return manga
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val article = document.selectFirst("article.common-article")!!
+        with(article) {
+            title = selectFirst(".page-header-with-menu h1")!!.text()
+            genre = select("p.serial-about-badges a.category").joinToString { it.text() }
+            author = select("p.serial-about-authors a, p:contains(Автор оригинала)").joinToString { it.ownText() }
+            description = selectFirst("section.serial-about-text")?.text()
+        }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
