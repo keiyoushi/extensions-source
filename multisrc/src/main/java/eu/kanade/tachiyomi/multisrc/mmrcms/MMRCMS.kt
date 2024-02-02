@@ -46,7 +46,7 @@ abstract class MMRCMS @Suppress("UNUSED") constructor(
     override val baseUrl: String,
     final override val lang: String,
 
-    vararg forbiddens: Forbidden,
+    vararg useNamedArgumentsBelow: Forbidden,
 
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US),
     protected val itemPath: String = "manga",
