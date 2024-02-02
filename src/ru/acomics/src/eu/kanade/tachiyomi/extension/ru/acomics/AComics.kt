@@ -152,8 +152,8 @@ class AComics : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
-        val imageElement = document.select("img#mainImage").first()!!
-        return listOf(Page(0, imageUrl = baseUrl + imageElement.attr("src")))
+        val imageElement = document.selectFirst("img.issue")!!
+        return listOf(Page(0, imageUrl = imageElement.absUrl("src")))
     }
 
     override fun imageUrlParse(document: Document) = ""
