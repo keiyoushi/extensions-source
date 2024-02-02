@@ -485,14 +485,11 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Zinmanhwa", "https://zinmanhwa.com", "en"),
         SingleLang("ZuttoManga", "https://zuttomanga.com", "en", overrideVersionCode = 1),
         SingleLang("Çizgi Roman Arşivi", "https://cizgiromanarsivi.com", "tr", className = "CizgiRomanArsivi"),
-        SingleLang("شبكة كونان العربية", "https://manga.detectiveconanar.com", "ar", className = "DetectiveConanAr", overrideVersionCode = 2),
-        SingleLang("عرب تونز", "https://arabtoons.net", "ar", isNsfw = true, className = "ArabToons"),
-        SingleLang("فالكون مانجا", "https://falconmanga.com", "ar", className = "FalconManga"),
-        SingleLang("كوميك العرب", "https://comicarab.com", "ar", isNsfw = true, className = "ComicArab"),
-        SingleLang("مانجا العاشق", "https://3asq.org", "ar", className = "Manga3asq", overrideVersionCode = 2),
-        SingleLang("مانجا ليك", "https://manga-lek.net", "ar", className = "Mangalek", overrideVersionCode = 4),
-        SingleLang("مانجا ليكس", "https://mangaleks.com", "ar", className = "MangaLeks"),
-        SingleLang("مانجا لينك", "https://mangalink.io", "ar", className = "MangaLinkio", overrideVersionCode = 3),
+        SingleLang("Detective Conan Ar", "https://manga.detectiveconanar.com", "ar", sourceName = "شبكة كونان العربية", overrideVersionCode = 2),
+        SingleLang("Arab Toons", "https://arabtoons.net", "ar", isNsfw = true, sourceName = "عرب تونز"),
+        SingleLang("Comic Arab", "https://comicarab.com", "ar", isNsfw = true, sourceName = "كوميك العرب"),
+        SingleLang("3asq", "https://3asq.org", "ar", className = "Manga3asq", sourceName = "مانجا العاشق", overrideVersionCode = 2),
+        SingleLang("Mangalek", "https://manga-lek.net", "ar", sourceName = "مانجا ليك", overrideVersionCode = 4),
     )
 
     companion object {

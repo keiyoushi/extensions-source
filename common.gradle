@@ -6,6 +6,8 @@ apply plugin: 'org.jmailen.kotlinter'
 assert !ext.has("pkgNameSuffix")
 assert !ext.has("libVersion")
 
+assert extName.chars().max().asInt < 0x180 : "Extension name should be romanized"
+
 android {
     compileSdk AndroidConfig.compileSdk
 
