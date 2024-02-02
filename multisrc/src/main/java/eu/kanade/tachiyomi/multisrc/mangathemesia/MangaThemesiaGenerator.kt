@@ -83,7 +83,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("MangaKita", "https://mangakita.id", "id", overrideVersionCode = 2),
         SingleLang("Mangakyo", "https://mangakyo.vip", "id", overrideVersionCode = 4),
         SingleLang("MangaNoon", "https://manjanoon.com", "ar", sourceName = "مانجا نون"),
-        SingleLang("MangaPro", "https://mangapro.pro", "ar"),
+      SingleLang("MangaPro", "https://mangapro.pro", "ar"),
         SingleLang("MangaShiina", "https://mangashiina.com", "es"),
         SingleLang("MangaShiro", "https://mangashiro.me", "id"),
         SingleLang("Mangasusu", "https://mangasusuku.xyz", "id", isNsfw = true, overrideVersionCode = 3),
@@ -160,7 +160,6 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("أريا مانجا", "https://www.areascans.net", "ar", className = "AreaManga"),
         SingleLang("فيكس مانجا", "https://vexmanga.com", "ar", className = "VexManga", overrideVersionCode = 3),
         SingleLang("สดใสเมะ", "https://www.xn--l3c0azab5a2gta.com", "th", isNsfw = true, className = "Sodsaime", overrideVersionCode = 1),
-
     )
 
     companion object {
