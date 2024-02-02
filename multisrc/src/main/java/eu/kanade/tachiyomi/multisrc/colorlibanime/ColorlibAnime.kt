@@ -106,7 +106,7 @@ abstract class ColorlibAnime(
         val doc = response.asJsoup()
 
         val time = timeRegex.find(doc.select("script:containsData(lastUpdated)").html())
-            ?.let {it.groupValues[1].toLong() } ?: 0
+            ?.let { it.groupValues[1].toLong() } ?: 0
 
         return doc.select(chapterListSelector())
             .map { chapterFromElement(it) }
@@ -135,14 +135,14 @@ abstract class ColorlibAnime(
 
     // Filters
     override fun getFilterList() = FilterList(
-        OrderFilter()
+        OrderFilter(),
     )
 
     class OrderFilter(state: Int = 0) : UriPartFilter(
         "Order By",
         arrayOf(
             Pair("Views", "view"),
-            Pair("Updated", "updated")
+            Pair("Updated", "updated"),
         ),
         state,
     )
