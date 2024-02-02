@@ -322,7 +322,7 @@ abstract class MMRCMS(
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>().apply {
+        val filters = buildList<Filter<*>> {
             add(Filter.Header("Note: Ignored if using text search!"))
 
             if (supportsAdvancedSearch) {
