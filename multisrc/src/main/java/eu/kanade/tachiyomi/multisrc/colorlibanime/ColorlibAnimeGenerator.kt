@@ -15,7 +15,7 @@ class ColorlibAnimeGenerator : ThemeSourceGenerator {
         SingleLang("Sekte Komik", "https://sektekomik.xyz", "id", overrideVersionCode = 26),
         SingleLang("Komikzoid", "https://komikzoid.id", "id"),
         SingleLang("Neumanga", "https://neumanga.xyz", "id", overrideVersionCode = 1),
-        )
+    )
 
     companion object {
         @JvmStatic
