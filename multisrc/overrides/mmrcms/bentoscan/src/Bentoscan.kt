@@ -5,11 +5,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.Request
 
-class Bentoscan : MMRCMS("Bentoscan", "https://bentoscan.com", "fr") {
-    override val supportsAdvancedSearch = false
-
-    override val chapterNamePrefix = "Scan "
-
+class Bentoscan : MMRCMS(
+    "Bentoscan",
+    "https://bentoscan.com",
+    "fr",
+    supportsAdvancedSearch = false,
+    chapterNamePrefix = "Scan ",
+) {
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "https://scansmangas.me/")

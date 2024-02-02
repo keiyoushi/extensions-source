@@ -21,16 +21,18 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangasIn : MMRCMS("Mangas.in", "https://mangas.in", "es") {
-
+class MangasIn : MMRCMS(
+    "Mangas.in",
+    "https://mangas.in",
+    "es",
+    supportsAdvancedSearch = false
+) {
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-
-    override val supportsAdvancedSearch = false
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/lasted?p=$page", headers)
 

@@ -4,10 +4,13 @@ import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
 
-class Onma : MMRCMS("مانجا اون لاين", "https://onma.top", "ar") {
+class Onma : MMRCMS(
+    "مانجا اون لاين",
+    "https://onma.top",
+    "ar",
+    detailsTitleSelector = ".panel-heading"
+) {
     override fun searchMangaSelector() = "div.chapter-container"
-
-    override val detailsTitleSelector = ".panel-heading"
 
     override fun mangaDetailsParse(document: Document): SManga {
         return super.mangaDetailsParse(document).apply {

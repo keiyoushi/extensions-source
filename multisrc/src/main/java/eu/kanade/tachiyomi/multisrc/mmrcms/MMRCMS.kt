@@ -32,11 +32,33 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.locks.ReentrantLock
 
-abstract class MMRCMS(
+/**
+ * @param dateFormat The date format used for parsing chapter dates.
+ * @param itemPath The path used in the URL for entries.
+ * @param fetchFilterOptions Whether to fetch filtering options (categories, types, tags).
+ * @param supportsAdvancedSearch Whether the source supports advanced search under /advanced-search.
+ * @param detailsTitleSelector Selector for the entry's title in its details page.
+ * @param chapterNamePrefix A word that always precedes the chapter title, e.g. "Scan "
+ * @param chapterString The word for "Chapter" in the source's language.
+ */
+abstract class MMRCMS @Suppress("UNUSED") constructor(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US),
+
+    vararg forbiddens: Forbidden,
+
+    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US),
+    protected val itemPath: String = "manga",
+    protected val fetchFilterOptions: Boolean = true,
+    protected val supportsAdvancedSearch: Boolean = true,
+    protected val detailsTitleSelector: String = ".listmanga-header, .widget-title",
+    protected val chapterNamePrefix: String = "",
+    protected val chapterString: String = when (lang) {
+        "es" -> "Capítulo"
+        "fr" -> "Chapitre"
+        else -> "Chapter"
+    },
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -45,23 +67,6 @@ abstract class MMRCMS(
         .add("Referer", "$baseUrl/")
 
     protected open val json: Json by injectLazy()
-
-    /**
-     * The path used in the URL for the manga pages. Can be
-     * changed if needed as some sites modify it to other words.
-     */
-    protected open val itemPath = "manga"
-
-    /**
-     * Disable if you don't want filtering options (i.e. categories and types)
-     * to be fetched.
-     */
-    protected open val fetchFilterOptions = true
-
-    /**
-     * Whether the source supports advanced search under $baseUrl/advanced-search.
-     */
-    protected open val supportsAdvancedSearch = true
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/filterList?page=$page&sortBy=views&asc=false")
 
@@ -229,8 +234,6 @@ abstract class MMRCMS(
     protected open val detailStatusOngoing = hashSetOf("ongoing", "مستمرة", "en cours", "em lançamento", "prace w toku", "ativo", "em andamento", "activo")
     protected open val detailStatusDropped = hashSetOf("dropped")
 
-    protected open val detailsTitleSelector = ".listmanga-header, .widget-title"
-
     @SuppressLint("DefaultLocale")
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(detailsTitleSelector)!!.text()
@@ -288,16 +291,6 @@ abstract class MMRCMS(
     /**
      * The word for "Chapter" in your language.
      */
-    protected open val chapterString = when (lang) {
-        "es" -> "Capítulo"
-        "fr" -> "Chapitre"
-        else -> "Chapter"
-    }
-
-    /**
-     * A word that always precedes the chapter title, e.g. Scan
-     */
-    protected open val chapterNamePrefix = ""
 
     /**
      * Function to clean up chapter names. Mostly useful for sites that
