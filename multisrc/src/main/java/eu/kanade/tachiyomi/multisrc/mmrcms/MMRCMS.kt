@@ -25,6 +25,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import rx.Single
+import rx.Subscription
 import rx.schedulers.Schedulers
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
@@ -326,9 +327,7 @@ abstract class MMRCMS(
             add(Filter.Header("Note: Ignored if using text search!"))
 
             if (supportsAdvancedSearch) {
-                val optionsNotFullyFetched = categories.isEmpty() || statuses.isEmpty()
-
-                if (optionsNotFullyFetched && fetchFilterOptions) {
+                if (fetchFilterOptions && fetchFiltersAttempts > 0 && fetchFiltersFailed) {
                     add(Filter.Header("Press 'Reset' to attempt to show filter options"))
                 }
 
@@ -354,12 +353,12 @@ abstract class MMRCMS(
                     )
                 }
 
-                if (types.isNotEmpty()) {
+                if (tags.isNotEmpty()) {
                     add(
                         UriMultiSelectFilter(
                             "Types",
                             "types[]",
-                            types.toTypedArray(),
+                            tags.toTypedArray(),
                         ),
                     )
                 }
@@ -367,9 +366,7 @@ abstract class MMRCMS(
                 add(TextFilter("Year of release", "release"))
                 add(TextFilter("Author", "author"))
             } else {
-                val optionsNotFullyFetched = categories.isEmpty()
-
-                if (optionsNotFullyFetched && fetchFilterOptions) {
+                if (fetchFilterOptions && fetchFiltersAttempts > 0 && fetchFiltersFailed) {
                     add(Filter.Header("Press 'Reset' to attempt to show filter options"))
                 }
 
@@ -425,8 +422,6 @@ abstract class MMRCMS(
 
     private var statuses = emptyList<Pair<String, String>>()
 
-    private var types = emptyList<Pair<String, String>>()
-
     private var tags = emptyList<Pair<String, String>>()
 
     private var fetchFiltersFailed = false
@@ -435,53 +430,51 @@ abstract class MMRCMS(
 
     private val fetchFiltersLock = ReentrantLock()
 
-    protected open fun fetchFilterOptions() {
-        Single.fromCallable {
-            if (!fetchFilterOptions) {
-                return@fromCallable
-            }
-
-            fetchFiltersLock.lock()
-
-            if (fetchFiltersAttempts > 3 || (fetchFiltersAttempts > 0 && !fetchFiltersFailed)) {
-                fetchFiltersLock.unlock()
-                return@fromCallable
-            }
-
-            val result = runCatching {
-                if (supportsAdvancedSearch) {
-                    val document = client.newCall(GET("$baseUrl/advanced-search", headers)).execute().asJsoup()
-
-                    categories = document.select("select[name='categories[]'] option").map {
-                        it.text() to it.attr("value")
-                    }
-                    statuses = document.select("select[name='status[]'] option").map {
-                        it.text() to it.attr("value")
-                    }
-                    types = document.select("select[name='types[]'] option").map {
-                        it.text() to it.attr("value")
-                    }
-                } else {
-                    val document = client.newCall(GET("$baseUrl/$itemPath-list", headers)).execute().asJsoup()
-
-                    categories = document.select("a.category").map {
-                        it.text() to it.attr("href").toHttpUrl().queryParameter("cat")!!
-                    }
-                    tags = document.select("div.tag-links a").map {
-                        it.text() to it.attr("href").toHttpUrl().pathSegments.last()
-                    }
-                }
-            }
-                .onFailure {
-                    Log.e(name, "Could not fetch filtering options", it)
-                }
-
-            fetchFiltersFailed = result.isFailure
-            fetchFiltersAttempts++
-            fetchFiltersLock.unlock()
+    protected open fun fetchFilterOptions(): Subscription = Single.fromCallable {
+        if (!fetchFilterOptions) {
+            return@fromCallable
         }
-            .subscribeOn(Schedulers.io())
-            .observeOn(Schedulers.io())
-            .subscribe()
+
+        fetchFiltersLock.lock()
+
+        if (fetchFiltersAttempts > 3 || (fetchFiltersAttempts > 0 && !fetchFiltersFailed)) {
+            fetchFiltersLock.unlock()
+            return@fromCallable
+        }
+
+        val result = runCatching {
+            if (supportsAdvancedSearch) {
+                val document = client.newCall(GET("$baseUrl/advanced-search", headers)).execute().asJsoup()
+
+                categories = document.select("select[name='categories[]'] option").map {
+                    it.text() to it.attr("value")
+                }
+                statuses = document.select("select[name='status[]'] option").map {
+                    it.text() to it.attr("value")
+                }
+                tags = document.select("select[name='types[]'] option").map {
+                    it.text() to it.attr("value")
+                }
+            } else {
+                val document = client.newCall(GET("$baseUrl/$itemPath-list", headers)).execute().asJsoup()
+
+                categories = document.select("a.category").map {
+                    it.text() to it.attr("href").toHttpUrl().queryParameter("cat")!!
+                }
+                tags = document.select("div.tag-links a").map {
+                    it.text() to it.attr("href").toHttpUrl().pathSegments.last()
+                }
+            }
+        }
+            .onFailure {
+                Log.e(name, "Could not fetch filtering options", it)
+            }
+
+        fetchFiltersFailed = result.isFailure
+        fetchFiltersAttempts++
+        fetchFiltersLock.unlock()
     }
+        .subscribeOn(Schedulers.io())
+        .observeOn(Schedulers.io())
+        .subscribe()
 }
