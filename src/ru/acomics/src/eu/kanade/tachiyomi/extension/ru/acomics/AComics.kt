@@ -130,21 +130,21 @@ class AComics : ParsedHttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val res = mutableListOf<SChapter>()
-        val count = response.asJsoup()
-            .select(".about-summary > p:contains(Количество выпусков:)")
-            .text()
-            .split("Количество выпусков: ")[1].toInt()
+        val doc = response.asJsoup()
+        val count = doc
+            .selectFirst("p:has(b:contains(Количество выпусков:))")!!
+            .ownText()
+            .toInt()
 
-        for (index in count downTo 1) {
-            val chapter = SChapter.create()
-            chapter.chapter_number = index.toFloat()
-            chapter.name = index.toString()
-            val url = response.request.url.toString().split("/about")[0].split(baseUrl)[1]
-            chapter.url = "$url/$index"
-            res.add(chapter)
+        val comicPath = doc.location().substringAfter(baseUrl).substringBefore("/about")
+
+        return (count downTo 1).map {
+            SChapter.create().apply {
+                chapter_number = it.toFloat()
+                name = it.toString()
+                url = "$comicPath/$it"
+            }
         }
-        return res
     }
 
     override fun chapterListSelector(): Nothing = throw UnsupportedOperationException()
