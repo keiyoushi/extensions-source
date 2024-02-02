@@ -41,7 +41,9 @@ import java.util.concurrent.locks.ReentrantLock
  * @param chapterNamePrefix A word that always precedes the chapter title, e.g. "Scan "
  * @param chapterString The word for "Chapter" in the source's language.
  */
-abstract class MMRCMS @Suppress("UNUSED") constructor(
+abstract class MMRCMS
+@Suppress("UNUSED")
+constructor(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,

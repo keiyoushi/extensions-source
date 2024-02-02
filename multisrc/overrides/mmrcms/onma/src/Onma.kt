@@ -8,7 +8,7 @@ class Onma : MMRCMS(
     "مانجا اون لاين",
     "https://onma.top",
     "ar",
-    detailsTitleSelector = ".panel-heading"
+    detailsTitleSelector = ".panel-heading",
 ) {
     override fun searchMangaSelector() = "div.chapter-container"
 

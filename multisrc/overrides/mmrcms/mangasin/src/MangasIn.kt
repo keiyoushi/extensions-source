@@ -25,7 +25,7 @@ class MangasIn : MMRCMS(
     "Mangas.in",
     "https://mangas.in",
     "es",
-    supportsAdvancedSearch = false
+    supportsAdvancedSearch = false,
 ) {
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
