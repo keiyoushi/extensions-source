@@ -9,4 +9,4 @@ class MangaPro : MangaThemesia(
     "https://mangapro.pro",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-) 
+)
