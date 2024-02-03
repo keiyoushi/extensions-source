@@ -7,4 +7,5 @@ class ReadComicsOnline : MMRCMS(
     "https://readcomicsonline.ru",
     "en",
     itemPath = "comic",
+    chapterString = "",
 )
