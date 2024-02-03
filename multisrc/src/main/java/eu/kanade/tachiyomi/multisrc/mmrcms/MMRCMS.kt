@@ -72,11 +72,6 @@ constructor(
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/filterList?page=$page&sortBy=views&asc=false")
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        runCatching { fetchFilterOptions() }
-        return super.popularMangaParse(response)
-    }
-
     override fun popularMangaSelector() = searchMangaSelector()
 
     override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
@@ -91,8 +86,6 @@ constructor(
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest-release?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        runCatching { fetchFilterOptions() }
-
         val document = response.asJsoup()
 
         if (response.request.url.queryParameter("page") == "1") {
@@ -169,8 +162,6 @@ constructor(
     private val searchTokenRegex = Regex("""['"]_token['"]\s*:\s*['"]([0-9A-Za-z]+)['"]""")
 
     override fun searchMangaParse(response: Response): MangasPage {
-        runCatching { fetchFilterOptions() }
-
         val searchType = response.request.url.pathSegments.last()
 
         if (searchType == "filterList") {
@@ -303,7 +294,7 @@ constructor(
 
         val splits = initialName.split(":", limit = 2).map { it.trim() }
 
-        return if (splits[0] == splits[1]) {
+        return if (splits.size < 2 || splits[0] == splits[1]) {
             splits[0]
         } else {
             "${splits[0]}: ${splits[1]}"
@@ -318,11 +309,13 @@ constructor(
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList {
+        runCatching { fetchFilterOptions() }
+
         val filters = buildList<Filter<*>> {
             add(Filter.Header("Note: Ignored if using text search!"))
 
             if (supportsAdvancedSearch) {
-                if (fetchFilterOptions && fetchFiltersAttempts > 0 && fetchFiltersFailed) {
+                if (fetchFilterOptions && (categories.isEmpty() || statuses.isEmpty())) {
                     add(Filter.Header("Press 'Reset' to attempt to show filter options"))
                 }
 
@@ -361,7 +354,7 @@ constructor(
                 add(TextFilter("Year of release", "release"))
                 add(TextFilter("Author", "author"))
             } else {
-                if (fetchFilterOptions && fetchFiltersAttempts > 0 && fetchFiltersFailed) {
+                if (fetchFilterOptions && categories.isEmpty()) {
                     add(Filter.Header("Press 'Reset' to attempt to show filter options"))
                 }
 
