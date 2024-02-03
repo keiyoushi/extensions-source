@@ -32,21 +32,19 @@ class CutieComics : ParsedHttpSource() {
         .build()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page", headers)
+
+    override fun popularMangaSelector() = "#dle-content > div.w25"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        with(element.selectFirst("strong.field-content > a")!!) {
+            title = ownText()
+            setUrlWithoutDomain(attr("href"))
+        }
+        thumbnail_url = element.selectFirst("a > img")?.absUrl("src")
     }
 
-    override fun popularMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaNextPageSelector() = ".navigation > a > i.fa-angle-right"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
