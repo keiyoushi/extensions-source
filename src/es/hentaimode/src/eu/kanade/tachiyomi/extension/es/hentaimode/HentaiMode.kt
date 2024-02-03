@@ -107,7 +107,11 @@ class HentaiMode : ParsedHttpSource() {
 
             description = buildString {
                 additionalInfos.forEach { info ->
-                    getInfo(info)?.also { append("$info: $it\n") }
+                    getInfo(info)?.also {
+                        append(info)
+                        append(": ")
+                        append(it)
+                    }
                 }
             }
         }
