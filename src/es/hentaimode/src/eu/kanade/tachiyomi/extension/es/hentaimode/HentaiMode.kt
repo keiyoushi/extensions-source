@@ -118,6 +118,16 @@ class HentaiMode : ParsedHttpSource() {
     }
 
     // ============================== Chapters ==============================
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val chapter = SChapter.create().apply {
+            url = manga.url.replace("/g/", "/leer/")
+            chapter_number = 1F
+            name = "Hentai"
+        }
+
+        return Observable.just(listOf(chapter))
+    }
+
     override fun chapterListSelector(): String {
         throw UnsupportedOperationException()
     }
