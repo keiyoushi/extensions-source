@@ -84,7 +84,6 @@ private val SITE_ENTRIES_ARRAY_DESCRIPTION get() = arrayOf(
     "东南亚线路2",
 )
 
-// List is based on https://jmcomic1.bet/
 // Please also update AndroidManifest
 private val SITE_ENTRIES_ARRAY get() = arrayOf(
     "18comic.vip",
@@ -93,7 +92,7 @@ private val SITE_ENTRIES_ARRAY get() = arrayOf(
     "jmcomic1.me",
 )
 
-private const val DEFAULT_LIST = "jm-comic3.art,jm-comic1.art,jm-comic2.ark"
+private const val DEFAULT_LIST = "18comic-cn.vip,18comic-c.xyz,18comic-c.art"
 private const val DEFAULT_LIST_PREF = "defaultBaseUrlList"
 private const val URL_LIST_PREF = "baseUrlList"
 

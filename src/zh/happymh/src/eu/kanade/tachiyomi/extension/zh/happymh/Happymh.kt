@@ -1,12 +1,15 @@
 package eu.kanade.tachiyomi.extension.zh.happymh
 
 import android.app.Application
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.zh.happymh.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.zh.happymh.dto.PageListResponseDto
 import eu.kanade.tachiyomi.extension.zh.happymh.dto.PopularResponseDto
+import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_CUSTOM_UA
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -21,7 +24,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -34,21 +36,20 @@ class Happymh : HttpSource(), ConfigurableSource {
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
     override val baseUrl: String = "https://m.happymh.com"
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient
     private val json: Json by injectLazy()
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
-
-    override fun headersBuilder(): Headers.Builder {
-        val builder = super.headersBuilder()
-        val userAgent = preferences.getString(USER_AGENT_PREF, "")!!
-        return if (userAgent.isNotBlank()) {
-            builder.set("User-Agent", userAgent)
-        } else {
-            builder
+    init {
+        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val oldUa = preferences.getString("userAgent", null)
+        if (oldUa != null) {
+            val editor = preferences.edit().remove("userAgent")
+            if (oldUa.isNotBlank()) editor.putString(PREF_KEY_CUSTOM_UA, oldUa)
+            editor.apply()
         }
+        client = network.cloudflareClient.newBuilder()
+            .setRandomUserAgent(preferences.getPrefUAType(), preferences.getPrefCustomUA())
+            .build()
     }
 
     // Popular
@@ -146,30 +147,10 @@ class Happymh : HttpSource(), ConfigurableSource {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val context = screen.context
-
-        EditTextPreference(context).apply {
-            key = USER_AGENT_PREF
-            title = "User Agent"
-            summary = "留空则使用应用设置中的默认 User Agent，重启生效"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    Headers.Builder().add("User-Agent", newValue as String)
-                    true
-                } catch (e: Throwable) {
-                    Toast.makeText(context, "User Agent 无效：${e.message}", Toast.LENGTH_LONG).show()
-                    false
-                }
-            }
-        }.let(screen::addPreference)
+        addRandomUAPreferenceToScreen(screen)
     }
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream(it.body.byteStream())
-    }
-
-    companion object {
-        private const val USER_AGENT_PREF = "userAgent"
     }
 }
