@@ -75,7 +75,9 @@ class HentaiMode : ParsedHttpSource() {
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
-        val details = mangaDetailsParse(response.asJsoup())
+        val doc = response.asJsoup()
+        val details = mangaDetailsParse(doc)
+            .apply { setUrlWithoutDomain(doc.location()) }
         return MangasPage(listOf(details), false)
     }
 
