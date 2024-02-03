@@ -135,7 +135,9 @@ class CutieComics : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        throw UnsupportedOperationException()
+        return document.select("div.galery > img").mapIndexed { index, item ->
+            Page(index, imageUrl = item.absUrl("src"))
+        }
     }
 
     override fun imageUrlParse(document: Document): String {
