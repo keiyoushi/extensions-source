@@ -138,7 +138,18 @@ class HentaiMode : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        throw UnsupportedOperationException()
+        val script = document.selectFirst("script:containsData(page_image)")!!.data()
+        val pagePaths = script.substringAfter("pages = [")
+            .substringBefore(",]")
+            .substringBefore("]") // Just to make sure
+            .split(',')
+            .map {
+                it.substringAfter(":").substringAfter('"').substringBefore('"')
+            }
+
+        return pagePaths.mapIndexed { index, path ->
+            Page(index, imageUrl = baseUrl + path)
+        }
     }
 
     override fun imageUrlParse(document: Document): String {
