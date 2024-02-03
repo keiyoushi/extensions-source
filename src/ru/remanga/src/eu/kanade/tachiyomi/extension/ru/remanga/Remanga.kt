@@ -500,10 +500,10 @@ class Remanga : ConfigurableSource, HttpSource() {
                         branch.filter { it.id != selectedBranch.id }.maxByOrNull { selector(it) }!!
                     if (selectedBranch2.count_chapters > 0) {
                         if (selectedBranch.count_chapters < (
-                            json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(
+                                json.decodeFromString<SeriesWrapperDto<List<BookDto>>>(
                                     chapterListRequest(selectedBranch2.id, 1).body.string(),
                                 ).content.firstOrNull()?.chapter?.toFloatOrNull() ?: -2F
-                            )
+                                )
                         ) {
                             (1..(selectedBranch2.count_chapters / 300 + 1)).map {
                                 val response = chapterListRequest(selectedBranch2.id, it)
@@ -905,6 +905,7 @@ class Remanga : ConfigurableSource, HttpSource() {
 
     private fun getMyList() = listOf(
         MyListUnit("Каталог", "-"),
+        MyListUnit("Все закладки", "all"),
         MyListUnit("Читаю", "1"),
         MyListUnit("Буду читать", "2"),
         MyListUnit("Прочитано", "3"),
