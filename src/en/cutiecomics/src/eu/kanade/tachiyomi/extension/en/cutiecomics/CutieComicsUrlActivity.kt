@@ -19,7 +19,7 @@ class CutieComicsUrlActivity : Activity() {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.isNotEmpty()) {
-            val item = pathSegments.first()
+            val item = pathSegments[0]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 putExtra("query", "${CutieComics.PREFIX_SEARCH}$item")
