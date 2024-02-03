@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.cutiecomics
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -81,20 +83,23 @@ class CutieComics : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException()
+        require(query.isNotBlank() && query.length >= 4) { "Invalid search! It should have at least 4 non-blank characters." }
+        val body = FormBody.Builder()
+            .add("do", "search")
+            .add("subaction", "search")
+            .add("full_search", "0")
+            .add("search_start", "$page")
+            .add("result_from", "${(page - 1) * 20 + 1}")
+            .add("story", query)
+            .build()
+        return POST("$baseUrl/index.php?do=search", headers, body)
     }
 
-    override fun searchMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document): SManga {
