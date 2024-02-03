@@ -905,6 +905,7 @@ class Remanga : ConfigurableSource, HttpSource() {
 
     private fun getMyList() = listOf(
         MyListUnit("Каталог", "-"),
+        MyListUnit("Все закладки", "all"),
         MyListUnit("Читаю", "1"),
         MyListUnit("Буду читать", "2"),
         MyListUnit("Прочитано", "3"),
