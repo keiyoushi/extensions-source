@@ -41,6 +41,7 @@ abstract class MangaHub(
     override val name: String,
     final override val baseUrl: String,
     override val lang: String,
+    private val mangaSource: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MM-dd-yyyy", Locale.US),
 ) : ParsedHttpSource() {
 
@@ -345,19 +346,6 @@ abstract class MangaHub(
             put(
                 "variables",
                 buildJsonObject {
-                    val mangaSource = when (name) {
-                        "MangaHub" -> "m01"
-                        "MangaReader.site" -> "mr01"
-                        "MangaPanda.onl" -> "mr02"
-                        "1Manga.co" -> "mn03"
-                        "MangaFox.fun" -> "mf01"
-                        "MangaHere.onl", "OneManga.info" -> "mh01"
-                        "Mangakakalot.fun" -> "mn01"
-                        "MangaNel" -> "mn05"
-                        "MangaOnline.fun" -> "m02"
-                        "MangaToday" -> "m03"
-                        else -> null
-                    }
                     val chapterUrl = chapter.url.split("/")
 
                     put("mangaSource", mangaSource)
