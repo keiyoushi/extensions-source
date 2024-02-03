@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.multisrc.mccms
 
+import android.util.Log
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import org.jsoup.nodes.Document
+import kotlin.concurrent.thread
 
 open class MCCMSFilter(
     name: String,
@@ -45,6 +50,20 @@ class GenreData(hasCategoryPage: Boolean) {
     var status = if (hasCategoryPage) NOT_FETCHED else NO_DATA
     lateinit var genreFilter: GenreFilter
 
+    fun fetchGenres(source: HttpSource) {
+        if (status != NOT_FETCHED) return
+        status = FETCHING
+        thread {
+            try {
+                val response = source.client.newCall(GET("${source.baseUrl}/category/", pcHeaders)).execute()
+                parseGenres(response.asJsoup(), this)
+            } catch (e: Exception) {
+                status = NOT_FETCHED
+                Log.e("MCCMS/${source.name}", "failed to fetch genres", e)
+            }
+        }
+    }
+
     companion object {
         const val NOT_FETCHED = 0
         const val FETCHING = 1
@@ -54,7 +73,13 @@ class GenreData(hasCategoryPage: Boolean) {
 }
 
 internal fun parseGenres(document: Document, genreData: GenreData) {
-    val genres = document.select("a[href^=/category/tags/]")
+    if (genreData.status == GenreData.FETCHED || genreData.status == GenreData.NO_DATA) return
+    val box = document.selectFirst(".cate-selector, .cy_list_l")
+    if (box == null || "/tags/" in document.location()) {
+        genreData.status = GenreData.NOT_FETCHED
+        return
+    }
+    val genres = box.select("a[href*=/tags/]")
     if (genres.isEmpty()) {
         genreData.status = GenreData.NO_DATA
         return
