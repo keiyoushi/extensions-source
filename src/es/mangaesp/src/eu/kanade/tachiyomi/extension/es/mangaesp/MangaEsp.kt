@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.mangaesp
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -152,10 +151,6 @@ class MangaEsp : HttpSource() {
         }
 
         val hasNextPage = filteredList.size > page * MANGAS_PER_PAGE
-
-        Log.d("Bapeey", "filteredList.size: ${filteredList.size}")
-        Log.d("Bapeey", "page: $page")
-        Log.d("Bapeey", "comics.size: ${comicsList.size}")
 
         return MangasPage(
             filteredList.subList((page - 1) * MANGAS_PER_PAGE, filteredList.size)
