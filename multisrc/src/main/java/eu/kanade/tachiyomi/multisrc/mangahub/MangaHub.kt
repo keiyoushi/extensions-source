@@ -135,7 +135,7 @@ abstract class MangaHub(
         val url: String,
         val title: String,
         val thumbnailUrl: String,
-        val signature: String
+        val signature: String,
     )
 
     private fun Element.toSignature(): String {
@@ -164,7 +164,7 @@ abstract class MangaHub(
                     it.select("h4 a").attr("abs:href"),
                     it.select("h4 a").text(),
                     it.select("img").attr("abs:src"),
-                    it.toSignature()
+                    it.toSignature(),
                 )
             }
             .distinctBy { it.signature }
