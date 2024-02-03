@@ -83,7 +83,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                     status = SManga.COMPLETED
                 }
             }.toList(),
-            (data.page + 1) * data.limit < data.total,
+            data.page * data.limit < data.total,
         )
     }
 
