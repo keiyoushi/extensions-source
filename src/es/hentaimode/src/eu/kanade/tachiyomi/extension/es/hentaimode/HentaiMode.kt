@@ -128,7 +128,7 @@ class HentaiMode : ParsedHttpSource() {
         val chapter = SChapter.create().apply {
             url = manga.url.replace("/g/", "/leer/")
             chapter_number = 1F
-            name = "Hentai"
+            name = "Chapter"
         }
 
         return Observable.just(listOf(chapter))
