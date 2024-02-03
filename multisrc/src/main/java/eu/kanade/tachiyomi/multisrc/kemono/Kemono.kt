@@ -37,7 +37,7 @@ open class Kemono(
 ) : HttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
-    override val client = network.client.newBuilder().rateLimit(2).build()
+    override val client = network.client.newBuilder().rateLimit(1).build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
