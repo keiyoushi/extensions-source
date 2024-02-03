@@ -124,13 +124,13 @@ class AComics : ParsedHttpSource() {
             .ownText()
             .toInt()
 
-        val comicPath = doc.location().substringAfter(baseUrl).substringBefore("/about")
+        val comicPath = doc.location().substringBefore("/about")
 
         return (count downTo 1).map {
             SChapter.create().apply {
                 chapter_number = it.toFloat()
                 name = it.toString()
-                url = "$comicPath/$it"
+                setUrlWithoutDomain("$comicPath/$it")
             }
         }
     }
