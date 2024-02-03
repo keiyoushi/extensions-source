@@ -7,6 +7,15 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.lang.reflect.Method
 
+/**
+ * TachiyomiJ2K is on a 2-year-old version of ImageDecoder at the time of writing,
+ * with a different signature than the one being used as a compile-only dependency.
+ *
+ * Because of this, if [ImageDecoder.decode] is called as-is on TachiyomiJ2K, we
+ * end up with a [NoSuchMethodException].
+ *
+ * This is a hack for determining which signature to call when decoding images.
+ */
 object PeachScanUtils {
     private var decodeMethod: Method
 
