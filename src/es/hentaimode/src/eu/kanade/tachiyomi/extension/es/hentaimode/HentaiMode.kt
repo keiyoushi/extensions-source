@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -37,7 +38,7 @@ class HentaiMode : ParsedHttpSource() {
     override fun popularMangaSelector() = "div.row div.book-list > a"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
+        setUrlWithoutDomain(element.absUrl("href"))
         title = element.selectFirst(".book-description > p")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
@@ -90,8 +91,30 @@ class HentaiMode : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = null
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document): SManga {
-        throw UnsupportedOperationException()
+    private val additionalInfos = listOf("Serie", "Tipo", "Personajes", "Idioma")
+
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        thumbnail_url = document.selectFirst("div#cover img")?.absUrl("src")
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        with(document.selectFirst("div#info-block > div#info")!!) {
+            title = selectFirst("h1")!!.text()
+            genre = getInfo("Categorías")
+            author = getInfo("Grupo")
+            artist = getInfo("Artista")
+
+            description = buildString {
+                additionalInfos.forEach { info ->
+                    getInfo(info)?.also { append("$info: $it\n") }
+                }
+            }
+        }
+    }
+
+    private fun Element.getInfo(text: String): String? {
+        return select("div.tag-container:containsOwn($text) a.tag")
+            .joinToString { it.text() }
+            .takeUnless(String::isBlank)
     }
 
     // ============================== Chapters ==============================
