@@ -32,21 +32,17 @@ class HentaiMode : ParsedHttpSource() {
         .build()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+
+    override fun popularMangaSelector() = "div.row div.book-list > a"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.selectFirst(".book-description > p")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun popularMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaNextPageSelector() = null
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
