@@ -79,20 +79,15 @@ class HentaiMode : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException()
+        require(query.length >= 3) { "Please use at least 3 characters!" }
+        return GET("$baseUrl/buscar?s=$query")
     }
 
-    override fun searchMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaNextPageSelector() = null
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document): SManga {
