@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.mccms
+package eu.kanade.tachiyomi.extension.zh.kuaikuai3
 
 import android.util.Base64
 import okhttp3.Interceptor

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.kuaikuai3
 
-import eu.kanade.tachiyomi.multisrc.mccms.DecryptInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
