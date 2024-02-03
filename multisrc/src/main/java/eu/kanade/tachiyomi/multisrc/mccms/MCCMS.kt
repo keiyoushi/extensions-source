@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mccms
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -10,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Headers
@@ -19,7 +17,7 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import kotlin.concurrent.thread
+import java.net.URLEncoder
 
 /**
  * 漫城CMS http://mccms.cn/
@@ -28,7 +26,7 @@ open class MCCMS(
     override val name: String,
     override val baseUrl: String,
     override val lang: String = "zh",
-    hasCategoryPage: Boolean = false,
+    private val config: MCCMSConfig = MCCMSConfig(),
 ) : HttpSource() {
     override val supportsLatest = true
 
@@ -37,25 +35,19 @@ open class MCCMS(
     override val client by lazy {
         network.client.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
-            .addInterceptor(DecryptInterceptor)
             .build()
     }
-
-    val pcHeaders by lazy { super.headersBuilder().build() }
 
     override fun headersBuilder() = Headers.Builder()
         .add("User-Agent", System.getProperty("http.agent")!!)
         .add("Referer", baseUrl)
-
-    protected open fun SManga.cleanup(): SManga = this
-    protected open fun MangaDto.prepare(): MangaDto = this
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=hits", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val list: List<MangaDto> = response.parseAs()
-        return MangasPage(list.map { it.prepare().toSManga().cleanup() }, list.size >= PAGE_SIZE)
+        return MangasPage(list.map { it.toSManga() }, list.size >= PAGE_SIZE)
     }
 
     override fun latestUpdatesRequest(page: Int): Request =
@@ -68,7 +60,7 @@ open class MCCMS(
             add("page=$page")
             add("size=$PAGE_SIZE")
             val isTextSearch = query.isNotBlank()
-            if (isTextSearch) add("key=$query")
+            if (isTextSearch) add("key=" + URLEncoder.encode(query, "UTF-8"))
             for (filter in filters) if (filter is MCCMSFilter) {
                 if (isTextSearch && filter.isTypeQuery) continue
                 val part = filter.query
@@ -84,22 +76,24 @@ open class MCCMS(
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    // preserve mangaDetailsRequest for WebView
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         val url = "$baseUrl/api/data/comic".toHttpUrl().newBuilder()
             .addQueryParameter("key", manga.title)
             .toString()
+        val mangaUrl = manga.url
         return client.newCall(GET(url, headers))
             .asObservableSuccess().map { response ->
-                val list = response.parseAs<List<MangaDto>>().map { it.prepare() }
-                list.find { it.url == manga.url }!!.toSManga().cleanup()
+                val list = response.parseAs<List<MangaDto>>()
+                list.first { it.cleanUrl == mangaUrl }.toSManga()
             }
     }
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val id = getMangaId(manga.url)
+        val id = manga.thumbnail_url!!.substringAfterLast('#', missingDelimiterValue = "").ifEmpty { throw Exception("请刷新漫画") }
         val dataResponse = client.newCall(GET("$baseUrl/api/data/chapter?mid=$id", headers)).execute()
         val dataList: List<ChapterDataDto> = dataResponse.parseAs() // unordered
         val dateMap = HashMap<Int, Long>(dataList.size * 2)
@@ -110,48 +104,28 @@ open class MCCMS(
         result
     }
 
-    protected open fun getMangaId(url: String) = url.substringAfterLast('/')
-
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter): Request =
-        GET(baseUrl + chapter.url, pcHeaders)
+        GET(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders)
 
-    protected open val lazyLoadImageAttr = "data-original"
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("img[$lazyLoadImageAttr]").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr(lazyLoadImageAttr))
-        }
+        return config.pageListParse(response)
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
+    // Don't send referer
     override fun imageRequest(page: Page) = GET(page.imageUrl!!, pcHeaders)
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream<ResultDto<T>>(it.body.byteStream()).data
     }
 
-    val genreData = GenreData(hasCategoryPage)
-
-    fun fetchGenres() {
-        if (genreData.status != GenreData.NOT_FETCHED) return
-        genreData.status = GenreData.FETCHING
-        thread {
-            try {
-                val response = client.newCall(GET("$baseUrl/category/", pcHeaders)).execute()
-                parseGenres(response.asJsoup(), genreData)
-            } catch (e: Exception) {
-                genreData.status = GenreData.NOT_FETCHED
-                Log.e("MCCMS/$name", "failed to fetch genres", e)
-            }
-        }
-    }
-
     override fun getFilterList(): FilterList {
-        fetchGenres()
+        val genreData = config.genreData.also { it.fetchGenres(this) }
         return getFilters(genreData)
     }
 }
