@@ -338,7 +338,7 @@ class Remanga : ConfigurableSource, HttpSource() {
             2 -> SManga.ON_HIATUS // Заморожен
             3 -> SManga.ON_HIATUS // Нет переводчика
             4 -> SManga.ONGOING // Анонс
-            5 -> SManga.LICENSED // Лицензировано
+            // 5 -> SManga.LICENSED // Лицензировано // Hides available chapters!
             else -> SManga.UNKNOWN
         }
     }
@@ -439,7 +439,7 @@ class Remanga : ConfigurableSource, HttpSource() {
             val series = json.decodeFromJsonElement<MangaDetDto>(content)
             branches[series.dir] = series.branches
             mangaIDs[series.dir] = series.id
-            if (parseStatus(series.status.id) == SManga.LICENSED && series.branches.maxByOrNull { selector(it) }!!.count_chapters == 0) {
+            if (series.status.id == 5 && series.branches.maxByOrNull { selector(it) }!!.count_chapters == 0) {
                 throw Exception("Лицензировано - Нет глав")
             }
             series.branches
@@ -472,7 +472,7 @@ class Remanga : ConfigurableSource, HttpSource() {
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val branch = branches.getOrElse(manga.url.substringAfter("/api/titles/").substringBefore("/").substringBefore("?")) { mangaBranches(manga) }
         return when {
-            manga.status == SManga.LICENSED && branch.maxByOrNull { selector(it) }!!.count_chapters == 0 -> {
+            branch.maxByOrNull { selector(it) }!!.count_chapters == 0 -> {
                 Observable.error(Exception("Лицензировано - Нет глав"))
             }
             branch.isEmpty() -> {
