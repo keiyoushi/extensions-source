@@ -163,12 +163,23 @@ open class Kemono(
         val result = ArrayList<SChapter>()
         while (offset < maxPosts && hasNextPage) {
             val request = GET("$baseUrl/$apiPath${manga.url}?limit=$POST_PAGE_SIZE&o=$offset", headers)
-            val page: List<KemonoPostDto> = client.newCall(request).execute().parseAs()
+            val page: List<KemonoPostDto> = retry(request).parseAs()
             page.forEach { post -> if (post.images.isNotEmpty()) result.add(post.toSChapter()) }
             offset += POST_PAGE_SIZE
             hasNextPage = page.size == POST_PAGE_SIZE
         }
         result
+    }
+
+    private fun retry(request: Request): Response {
+        var code = 0
+        repeat(3) {
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) return response
+            response.close()
+            code = response.code
+        }
+        throw Exception("HTTP error $code")
     }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
