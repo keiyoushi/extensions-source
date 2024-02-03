@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
@@ -102,8 +103,13 @@ class CutieComics : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document): SManga {
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+
+        title = document.selectFirst("h1#page-title")!!.text()
+        thumbnail_url = document.selectFirst("div.galery > img")?.absUrl("src")
+        genre = document.select("h3.field-label ~ span").joinToString { it.text() }
     }
 
     // ============================== Chapters ==============================
