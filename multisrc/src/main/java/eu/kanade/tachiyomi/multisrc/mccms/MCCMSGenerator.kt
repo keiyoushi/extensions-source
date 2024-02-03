@@ -17,41 +17,41 @@ class MCCMSGenerator : ThemeSourceGenerator {
             overrideVersionCode = 0,
         ),
         SingleLang(
-            name = "Manhuawu",
-            baseUrl = "https://www.mhua5.com",
+            name = "6Manhua",
+            baseUrl = "https://www.liumanhua.com",
             lang = "zh",
-            className = "Manhuawu",
-            sourceName = "漫画屋",
+            className = "SixMH",
+            sourceName = "六漫画",
+            overrideVersionCode = 4,
+        ),
+        SingleLang(
+            name = "Miaoshang Manhua",
+            baseUrl = "https://www.miaoshangmanhua.com",
+            lang = "zh",
+            className = "Miaoshang",
+            sourceName = "喵上漫画",
             overrideVersionCode = 0,
         ),
-        // The following sources are from https://www.yy123.cyou/ and are configured to use MCCMSNsfw
-        SingleLang( // 103=校园梦精记, same as: www.hmanwang.com, www.quanman8.com, www.lmmh.cc, www.xinmanba.com
+        // The following sources are from https://www.yy123.cyou/
+        SingleLang( // 103=他的那里, same as: www.hmanwang.com, www.lmmh.cc, www.999mh.net
             name = "Dida Manhua",
-            baseUrl = "https://www.didamanhua.com",
+            baseUrl = "https://www.didamanhua.com/index.php",
             lang = "zh",
             isNsfw = true,
             className = "DidaManhua",
             sourceName = "嘀嗒漫画",
-            overrideVersionCode = 0,
+            overrideVersionCode = 1,
         ),
-        SingleLang( // 103=脱身之法, same as: www.quanmanba.com, www.999mh.net
-            name = "Dimanba",
-            baseUrl = "https://www.dimanba.com",
+        SingleLang( // 103=青春男女(完结), same as: www.hanman.men
+            name = "Damao Manhua",
+            baseUrl = "https://www.hanman.cyou/index.php",
             lang = "zh",
             isNsfw = true,
-            className = "Dimanba",
-            sourceName = "滴漫吧",
+            className = "DamaoManhua",
+            sourceName = "大猫漫画",
             overrideVersionCode = 0,
         ),
     )
-
-    override fun createAll() {
-        val userDir = System.getProperty("user.dir")!!
-        sources.forEach {
-            val themeClass = if (it.isNsfw) "MCCMSNsfw" else themeClass
-            ThemeSourceGenerator.createGradleProject(it, themePkg, themeClass, baseVersionCode, userDir)
-        }
-    }
 
     companion object {
         @JvmStatic
