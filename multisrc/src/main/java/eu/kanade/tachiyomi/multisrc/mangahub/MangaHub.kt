@@ -41,6 +41,7 @@ abstract class MangaHub(
     override val name: String,
     final override val baseUrl: String,
     override val lang: String,
+    private val mangaSource: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MM-dd-yyyy", Locale.US),
 ) : ParsedHttpSource() {
 
@@ -131,19 +132,57 @@ abstract class MangaHub(
         client.newCall(request).execute()
     }
 
+    data class SMangaDTO(
+        val url: String,
+        val title: String,
+        val thumbnailUrl: String,
+        val signature: String,
+    )
+
+    private fun Element.toSignature(): String {
+        val author = this.select("small").text()
+        val chNum = this.select(".col-sm-6 a:contains(#)").text()
+        val genres = this.select(".genre-label").joinToString { it.text() }
+
+        return author + chNum + genres
+    }
+
     // popular
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/popular/page/$page", headers)
     }
 
+    // often enough there will be nearly identical entries with slightly different
+    // titles, URLs, and image names. in order to cut these "duplicates" down,
+    // assign a "signature" based on author name, chapter number, and genres
+    // if all of those are the same, then it it's the same manga
+    override fun popularMangaParse(response: Response): MangasPage {
+        val doc = response.asJsoup()
+
+        val mangas = doc.select(popularMangaSelector())
+            .map {
+                SMangaDTO(
+                    it.select("h4 a").attr("abs:href"),
+                    it.select("h4 a").text(),
+                    it.select("img").attr("abs:src"),
+                    it.toSignature(),
+                )
+            }
+            .distinctBy { it.signature }
+            .map {
+                SManga.create().apply {
+                    setUrlWithoutDomain(it.url)
+                    title = it.title
+                    thumbnail_url = it.thumbnailUrl
+                }
+            }
+        return MangasPage(mangas, doc.select(popularMangaNextPageSelector()).isNotEmpty())
+    }
+
     override fun popularMangaSelector() = ".col-sm-6:not(:has(a:contains(Yaoi)))"
 
     override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.select("h4 a").attr("abs:href"))
-            title = element.select("h4 a").text()
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+        throw UnsupportedOperationException()
     }
 
     override fun popularMangaNextPageSelector() = "ul.pager li.next > a"
@@ -153,10 +192,14 @@ abstract class MangaHub(
         return GET("$baseUrl/updates/page/$page", headers)
     }
 
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        return popularMangaParse(response)
+    }
+
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
+        throw UnsupportedOperationException()
     }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
@@ -184,34 +227,11 @@ abstract class MangaHub(
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
+        throw UnsupportedOperationException()
     }
 
-    // not sure if this still works, some duplicates i found is also using different thumbnail_url
     override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        /*
-         * To remove duplicates we group by the thumbnail_url, which is
-         * common between duplicates. The duplicates have a suffix in the
-         * url "-by-{name}". Here we select the shortest url, to avoid
-         * removing manga that has "by" in the title already.
-         * Example:
-         * /manga/tales-of-demons-and-gods (kept)
-         * /manga/tales-of-demons-and-gods-by-mad-snail (removed)
-         * /manga/leveling-up-by-only-eating (kept)
-         */
-        val mangas = document.select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }.groupBy { it.thumbnail_url }.mapValues { (_, values) ->
-            values.minByOrNull { it.url.length }!!
-        }.values.toList()
-
-        val hasNextPage = searchMangaNextPageSelector().let { selector ->
-            document.select(selector).first()
-        } != null
-
-        return MangasPage(mangas, hasNextPage)
+        return popularMangaParse(response)
     }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
@@ -326,12 +346,6 @@ abstract class MangaHub(
             put(
                 "variables",
                 buildJsonObject {
-                    val mangaSource = when (name) {
-                        "MangaHub" -> "m01"
-                        "MangaReader.site" -> "mr01"
-                        "MangaPanda.onl" -> "mr02"
-                        else -> null
-                    }
                     val chapterUrl = chapter.url.split("/")
 
                     put("mangaSource", mangaSource)
