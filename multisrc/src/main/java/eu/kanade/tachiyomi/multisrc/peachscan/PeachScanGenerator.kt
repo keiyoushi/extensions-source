@@ -9,7 +9,7 @@ class PeachScanGenerator : ThemeSourceGenerator {
 
     override val themeClass = "PeachScan"
 
-    override val baseVersionCode = 1
+    override val baseVersionCode = 2
 
     override val sources = listOf(
         SingleLang("Aurora Scan", "https://aurorascan.net", "pt-BR"),
