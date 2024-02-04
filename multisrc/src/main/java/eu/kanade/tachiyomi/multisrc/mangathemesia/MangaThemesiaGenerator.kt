@@ -155,7 +155,6 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Walpurgi Scan", "https://www.walpurgiscan.it", "it", overrideVersionCode = 7, className = "WalpurgisScan"),
         SingleLang("West Manga", "https://westmanga.fun", "id", overrideVersionCode = 3),
         SingleLang("xCaliBR Scans", "https://xcalibrscans.com", "en", overrideVersionCode = 5),
-        SingleLang("YumeKomik", "https://yumekomik.com", "id", isNsfw = true, className = "YumeKomik", pkgName = "inazumanga", overrideVersionCode = 6),
         SingleLang("Zahard", "https://zahard.xyz", "en"),
         SingleLang("Area Manga", "https://www.areascans.net", "ar", sourceName = "أريا مانجا"),
         SingleLang("Vex Manga", "https://vexmanga.com", "ar", sourceName = "فيكس مانجا", overrideVersionCode = 3),
