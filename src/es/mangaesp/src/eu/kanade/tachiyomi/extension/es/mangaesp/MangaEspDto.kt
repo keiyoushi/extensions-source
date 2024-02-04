@@ -48,15 +48,13 @@ data class SeriesDto(
     val artists: List<SeriesArtistDto> = emptyList(),
 
 ) {
-    fun toSimpleSManga(imgCdnUrl: String): SManga {
+    fun toSimpleSManga(): SManga {
         return SManga.create().apply {
             title = name
-            thumbnail_url = thumbnail?.let { "$imgCdnUrl/${it.removeProtocol()}" }
+            thumbnail_url = thumbnail
             url = "/ver/$slug"
         }
     }
-
-    private fun String.removeProtocol(): String = replaceFirst(Regex("https?://"), "")
 }
 
 @Serializable

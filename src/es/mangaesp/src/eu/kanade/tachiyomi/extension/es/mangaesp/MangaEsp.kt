@@ -23,6 +23,7 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.min
 
 class MangaEsp : HttpSource() {
 
@@ -31,8 +32,6 @@ class MangaEsp : HttpSource() {
     override val baseUrl = "https://mangaesp.co"
 
     private val apiBaseUrl = "https://apis.mangaesp.co"
-
-    private val imgCdnUrl = "https://cdn.statically.io/img"
 
     override val lang = "es"
 
@@ -61,7 +60,7 @@ class MangaEsp : HttpSource() {
         val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }.map { series ->
             SManga.create().apply {
                 title = series.name
-                thumbnail_url = series.thumbnail?.let { "$imgCdnUrl/${it.removeProtocol()}" }
+                thumbnail_url = series.thumbnail
                 url = "/ver/${series.slug}"
             }
         }
@@ -77,7 +76,7 @@ class MangaEsp : HttpSource() {
         val mangas = responseData.response.map { series ->
             SManga.create().apply {
                 title = series.name
-                thumbnail_url = series.thumbnail?.let { "$imgCdnUrl/${it.removeProtocol()}" }
+                thumbnail_url = series.thumbnail
                 url = "/ver/${series.slug}"
             }
         }
@@ -116,7 +115,7 @@ class MangaEsp : HttpSource() {
     private fun parseComicsList(page: Int, query: String, filterList: FilterList): MangasPage {
         if (page == 1) {
             filteredList.clear()
-            
+
             if (query.isNotBlank()) {
                 if (query.length < 2) throw Exception("La búsqueda debe tener al menos 2 caracteres")
                 filteredList.addAll(comicsList.filter { it.name.contains(query, ignoreCase = true) })
@@ -154,8 +153,8 @@ class MangaEsp : HttpSource() {
         val hasNextPage = filteredList.size > page * MANGAS_PER_PAGE
 
         return MangasPage(
-            filteredList.subList((page - 1) * MANGAS_PER_PAGE, filteredList.size)
-                .map { it.toSimpleSManga(imgCdnUrl) },
+            filteredList.subList((page - 1) * MANGAS_PER_PAGE, min(page * MANGAS_PER_PAGE, filteredList.size))
+                .map { it.toSimpleSManga() },
             hasNextPage,
         )
     }
@@ -169,7 +168,7 @@ class MangaEsp : HttpSource() {
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
         return SManga.create().apply {
             title = series.name
-            thumbnail_url = series.thumbnail?.let { "$imgCdnUrl/${it.removeProtocol()}" }
+            thumbnail_url = series.thumbnail
             description = series.synopsis
             genre = series.genders.joinToString { it.gender.name }
             author = series.authors.joinToString { it.author.name }
@@ -247,8 +246,6 @@ class MangaEsp : HttpSource() {
         filterIsInstance<R>().firstOrNull()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private fun String.removeProtocol(): String = replaceFirst(Regex("https?://"), "")
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
