@@ -162,7 +162,7 @@ class MangaEsp : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val responseBody = response.body.string()
         val mangaDetailsJson = MANGA_DETAILS_REGEX.find(responseBody)?.groupValues?.get(1)
-            ?: throw Exception("Could not find manga details in response")
+            ?: throw Exception("No se pudo encontrar los detalles del manga")
         val unescapedJson = mangaDetailsJson.replace("\\", "")
 
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
@@ -179,7 +179,7 @@ class MangaEsp : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val responseBody = response.body.string()
         val mangaDetailsJson = MANGA_DETAILS_REGEX.find(responseBody)?.groupValues?.get(1)
-            ?: throw Exception("Could not find manga details in response")
+            ?: throw Exception("No se pudo encontrar la lista de capítulos")
         val unescapedJson = mangaDetailsJson.replace("\\", "")
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
         return series.chapters.map { chapter ->
