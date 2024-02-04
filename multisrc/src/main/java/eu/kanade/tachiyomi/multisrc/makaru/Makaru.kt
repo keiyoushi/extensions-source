@@ -19,13 +19,12 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-// multisrc SDK is 29 but extension SDK is 24.
+// multisrc SDK is 29 but extension SDK is 21.
 @SuppressLint("ObsoleteSdkInt")
 abstract class Makaru(
     override val name: String,
