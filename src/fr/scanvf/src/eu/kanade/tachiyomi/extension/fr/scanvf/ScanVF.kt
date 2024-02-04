@@ -112,13 +112,6 @@ class ScanVF : ParsedHttpSource() {
         }
     }
 
-    // Disable redirects, since an out of range page request redirects us back
-    // to the manga details page.
-    private val pageListClient = client.newBuilder()
-        .followRedirects(false)
-        .followSslRedirects(false)
-        .build()
-
     override fun pageListParse(document: Document): List<Page> {
         // This should be the URL we got from chapterListParse, i.e. /scan/:id
         // However, if there's a page number stuck onto it, we remove it first,
@@ -130,6 +123,16 @@ class ScanVF : ParsedHttpSource() {
             Page(it, "$url/$it")
         }
     }
+
+    override fun imageUrlParse(document: Document): String =
+        document.selectFirst("div.book-page img")!!.absUrl("src")
+
+    // Disable redirects, since an out of range page request redirects us back
+    // to the manga details page.
+    private val pageListClient = client.newBuilder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
 
     private fun findPageCount(url: String): Int {
         val path = url.toHttpUrl().encodedPath
@@ -190,7 +193,4 @@ class ScanVF : ParsedHttpSource() {
             low = pageCount + 1
         }
     }
-
-    override fun imageUrlParse(document: Document): String =
-        document.selectFirst("div.book-page img")!!.absUrl("src")
 }
