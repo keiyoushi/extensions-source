@@ -1,6 +1,7 @@
-package eu.kanade.tachiyomi.extension.fr.scanvf
+package eu.kanade.tachiyomi.extension.fr.scanvforg
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,13 +16,14 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class ScanVF : ParsedHttpSource() {
 
-    override val name = "scanvf"
+    override val name = "scanvf.org"
 
     override val baseUrl = "https://scanvf.org"
 
@@ -61,6 +63,35 @@ class ScanVF : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+            val url = "/manga/$slug"
+            val manga = SManga.create().apply {
+                this.url = url
+            }
+
+            client.newCall(mangaDetailsRequest(manga))
+                .asObservableSuccess()
+                .map {
+                    MangasPage(
+                        listOf(
+                            mangaDetailsParse(it).apply {
+                                this.url = url
+                            },
+                        ),
+                        false,
+                    )
+                }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -192,5 +223,9 @@ class ScanVF : ParsedHttpSource() {
 
             low = pageCount + 1
         }
+    }
+
+    companion object {
+        internal const val PREFIX_SLUG_SEARCH = "slug:"
     }
 }

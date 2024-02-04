@@ -1,5 +1,5 @@
 ext {
-    extName = "scanvf"
+    extName = "scanvf.org"
     extClass = ".ScanVF"
     extVersionCode = 1
 }
