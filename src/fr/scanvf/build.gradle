@@ -1,0 +1,7 @@
+ext {
+    extName = "scanvf"
+    extClass = ".ScanVF"
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
