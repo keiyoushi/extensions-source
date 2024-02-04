@@ -116,36 +116,37 @@ class MangaEsp : HttpSource() {
     private fun parseComicsList(page: Int, query: String, filterList: FilterList): MangasPage {
         if (page == 1) {
             filteredList.clear()
+            
             if (query.isNotBlank()) {
                 if (query.length < 2) throw Exception("La búsqueda debe tener al menos 2 caracteres")
                 filteredList.addAll(comicsList.filter { it.name.contains(query, ignoreCase = true) })
             } else {
                 filteredList.addAll(comicsList)
             }
-        }
 
-        val statusFilter = filterList.firstInstanceOrNull<StatusFilter>()
+            val statusFilter = filterList.firstInstanceOrNull<StatusFilter>()
 
-        if (statusFilter != null) {
-            filteredList = filteredList.filter { it.status == statusFilter.toUriPart() }.toMutableList()
-        }
+            if (statusFilter != null) {
+                filteredList = filteredList.filter { it.status == statusFilter.toUriPart() }.toMutableList()
+            }
 
-        val sortByFilter = filterList.firstInstanceOrNull<SortByFilter>()
+            val sortByFilter = filterList.firstInstanceOrNull<SortByFilter>()
 
-        if (sortByFilter != null) {
-            if (sortByFilter.state?.ascending == true) {
-                when (sortByFilter.selected) {
-                    "name" -> filteredList.sortBy { it.name }
-                    "views" -> filteredList.sortBy { it.trending?.views }
-                    "updated_at" -> filteredList.sortBy { it.lastChapterDate }
-                    "created_at" -> filteredList.sortBy { it.createdAt }
-                }
-            } else {
-                when (sortByFilter.selected) {
-                    "name" -> filteredList.sortByDescending { it.name }
-                    "views" -> filteredList.sortByDescending { it.trending?.views }
-                    "updated_at" -> filteredList.sortByDescending { it.lastChapterDate }
-                    "created_at" -> filteredList.sortByDescending { it.createdAt }
+            if (sortByFilter != null) {
+                if (sortByFilter.state?.ascending == true) {
+                    when (sortByFilter.selected) {
+                        "name" -> filteredList.sortBy { it.name }
+                        "views" -> filteredList.sortBy { it.trending?.views }
+                        "updated_at" -> filteredList.sortBy { it.lastChapterDate }
+                        "created_at" -> filteredList.sortBy { it.createdAt }
+                    }
+                } else {
+                    when (sortByFilter.selected) {
+                        "name" -> filteredList.sortByDescending { it.name }
+                        "views" -> filteredList.sortByDescending { it.trending?.views }
+                        "updated_at" -> filteredList.sortByDescending { it.lastChapterDate }
+                        "created_at" -> filteredList.sortByDescending { it.createdAt }
+                    }
                 }
             }
         }
