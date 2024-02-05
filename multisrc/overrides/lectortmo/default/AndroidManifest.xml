@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".es.lectormanga.LectorMangaUrlActivity"
+            android:name="eu.kanade.tachiyomi.multisrc.lectortmo.LectorTmoUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -12,11 +12,10 @@
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
-                    android:host="lectormanga.com"
-                    android:pathPattern="/gotobook/..*"
-                    android:scheme="https" />
+                    android:host="${SOURCEHOST}"
+                    android:pathPattern="/library/..*/..*/..*"
+                    android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
     </application>
