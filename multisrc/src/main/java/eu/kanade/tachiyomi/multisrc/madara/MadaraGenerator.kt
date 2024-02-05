@@ -480,7 +480,6 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Zandy no Fansub", "https://zandynofansub.aishiteru.org", "en"),
         SingleLang("ZinChanManga", "https://zinchanmanga.net", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Zinmanga", "https://zinmanga.com", "en", overrideVersionCode = 1),
-        SingleLang("ZinManga.top (unoriginal)", "https://zinmanga.top", "en", className = "ZinMangaTop"),
         SingleLang("Zinmanhwa", "https://zinmanhwa.com", "en"),
         SingleLang("ZuttoManga", "https://zuttomanga.com", "en", overrideVersionCode = 1),
         SingleLang("Çizgi Roman Arşivi", "https://cizgiromanarsivi.com", "tr", className = "CizgiRomanArsivi"),
