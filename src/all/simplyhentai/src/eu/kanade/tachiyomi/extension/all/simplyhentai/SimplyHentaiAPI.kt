@@ -3,13 +3,16 @@ package eu.kanade.tachiyomi.extension.all.simplyhentai
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SHList<T>(val pagination: SHPagination, val data: List<T>)
+data class SHList<T>(val pagination: SHPagination, val data: T)
 
 @Serializable
 data class SHPagination(val next: Int?)
 
 @Serializable
 data class SHWrapper(val `object`: SHObject)
+
+@Serializable
+data class SHDataAlbum(val albums: List<SHObject>)
 
 @Serializable
 data class SHObject(

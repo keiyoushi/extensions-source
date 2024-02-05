@@ -21,7 +21,11 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSource() {
+open class SimplyHentai(
+    override val lang: String,
+    private val langName: String,
+) : ConfigurableSource, HttpSource() {
+
     override val name = "Simply Hentai"
 
     override val baseUrl = "https://www.simply-hentai.com"
@@ -34,10 +38,6 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
 
     private val apiUrl = "https://api.simply-hentai.com/v3"
 
-    private val langName by lazy {
-        Locale.forLanguageTag(lang).displayName
-    }
-
     private val json by lazy { Injekt.get<Json>() }
 
     private val preferences by lazy {
@@ -45,19 +45,16 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
     }
 
     override fun popularMangaRequest(page: Int) =
-        Uri.parse("$apiUrl/albums").buildUpon().run {
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
-            appendQueryParameter("language", langName)
-            appendQueryParameter("sort", "spotlight")
+        Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
+            appendQueryParameter("type", "language")
             appendQueryParameter("page", page.toString())
             GET(build().toString(), headers)
         }
 
     override fun popularMangaParse(response: Response) =
-        response.decode<SHList<SHObject>>().run {
+        response.decode<SHList<SHDataAlbum>>().run {
             MangasPage(
-                data.map {
+                data.albums.map {
                     SManga.create().apply {
                         url = it.path
                         title = it.title
@@ -116,7 +113,7 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
         }
 
     override fun searchMangaParse(response: Response) =
-        response.decode<SHList<SHWrapper>>().run {
+        response.decode<SHList<List<SHWrapper>>>().run {
             MangasPage(
                 data.map {
                     SManga.create().apply {
