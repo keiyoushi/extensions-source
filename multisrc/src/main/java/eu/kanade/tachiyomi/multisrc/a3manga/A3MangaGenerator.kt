@@ -15,7 +15,6 @@ class A3MangaGenerator : ThemeSourceGenerator {
         SingleLang("A3 Manga", "https://www.a3manga.online", "vi", overrideVersionCode = 1),
         SingleLang("Team Lanh Lung", "https://teamlanhlung.me", "vi", sourceName = "Team Lạnh Lùng", overrideVersionCode = 1),
         SingleLang("Ngon Phong", "https://www.ngonphong.com", "vi", sourceName = "Ngôn Phong", overrideVersionCode = 1),
-        SingleLang("O Cu Meo", "https://www.ocumoe.com", "vi", sourceName = "Ổ Cú Mèo", overrideVersionCode = 1),
     )
 
     companion object {
