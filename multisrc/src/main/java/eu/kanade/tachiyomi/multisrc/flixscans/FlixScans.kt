@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
@@ -170,18 +169,7 @@ abstract class FlixScans(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val searchBody = SearchInput(query.trim())
-                .let(json::encodeToString)
-                .replace("\"", "\\\"")
-
-            val requestBody = """{
-                |"path":"search/serie?page=$page",
-                |"headers":{"Content-type":"application/json"},
-                |"method":"POST","body":"$searchBody"
-                |}
-            """.trimMargin().toRequestBody(JSON_MEDIA_TYPE)
-
-            return POST(apiUrl, headers, requestBody)
+            return postPath("search/serie/${query.trim()}?page=$page")
         }
 
         val advSearchBody = buildString {
