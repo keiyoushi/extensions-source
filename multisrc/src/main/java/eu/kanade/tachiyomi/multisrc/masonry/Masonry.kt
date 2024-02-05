@@ -46,7 +46,7 @@ abstract class Masonry(
         return super.popularMangaParse(response)
     }
 
-    override fun popularMangaSelector() = ".list-gallery figure:not(:has(a[href*=/video/]))"
+    override fun popularMangaSelector() = ".list-gallery:not(.static) figure:not(:has(a[href*=/video/]))"
     override fun popularMangaNextPageSelector() = ".pagination-a li.next"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
@@ -90,7 +90,8 @@ abstract class Masonry(
                         }
                     }
                 } else {
-                    addEncodedPathSegments(tagFilter.selected)
+                    addPathSegment("tag")
+                    addPathSegment(tagFilter.selected)
                     sortFilter.getUriPartIfNeeded("tag").also {
                         if (it.isBlank()) {
                             addEncodedPathSegments("page/$page/")
@@ -112,16 +113,13 @@ abstract class Masonry(
     private fun getTags() {
         if (tags.isEmpty() && tagsFetchAttempt < 3) {
             runCatching {
-                tags = client.newCall(GET("$baseUrl/tags/", headers))
+                tags = client.newCall(GET("$baseUrl/updates/sort/newest/", headers))
                     .execute().asJsoup()
-                    .select(".list-gallery p")
+                    .select("#filter-a span:has(> input)")
                     .mapNotNull {
-                        val a = it.select("a").last() ?: return@mapNotNull null
                         Pair(
-                            a.text(),
-                            a.attrAsRelativeUrl("href")
-                                .removePrefix("/")
-                                .removeSuffix("/"),
+                            it.select("label").text(),
+                            it.select("input").attr("value"),
                         )
                     }.let {
                         listOf(Pair("", "")) + it
@@ -182,8 +180,8 @@ abstract class Masonry(
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(".list-gallery img").mapIndexed { idx, img ->
-            Page(idx, "", img.imgAttr())
+        return document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
+            Page(idx, "", img.absUrl("href"))
         }
     }
 
@@ -197,11 +195,5 @@ abstract class Masonry(
             hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
             else -> attr("abs:src")
         }
-    }
-
-    protected fun Element.attrAsRelativeUrl(attributeKey: String): String {
-        val attr = absUrl(attributeKey)
-        val host = baseUri().toHttpUrl().host
-        return attr.substringAfter(host)
     }
 }
