@@ -136,9 +136,9 @@ open class SimplyHentai(
             title = album.title
             description = buildString {
                 if (!album.description.isNullOrEmpty()) {
-                    append("${album.description}\n\n")
+                    append(album.description, "\n\n")
                 }
-                append("Series: ${album.series.title}\n")
+                append("Series: ", album.series.title, "\n")
                 album.characters.joinTo(this, prefix = "Characters: ") { it.title }
             }
             thumbnail_url = album.preview.sizes.thumb
@@ -149,10 +149,8 @@ open class SimplyHentai(
         }
 
     override fun chapterListRequest(manga: SManga) =
-        Uri.parse("$apiUrl/album").buildUpon().run {
+        Uri.parse("$apiUrl/manga").buildUpon().run {
             appendEncodedPath(manga.url.split('/')[2])
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
             GET(build().toString(), headers)
         }
 
@@ -160,18 +158,16 @@ open class SimplyHentai(
         SChapter.create().apply {
             val album = response.decode<SHAlbum>().data
             name = "Chapter"
-            chapter_number = -1f
+            chapter_number = -1F
             url = "${album.path}/all-pages"
             scanlator = album.translators.joinToString { it.title }
             date_upload = dateFormat.parse(album.created_at)?.time ?: 0L
         }.let(::listOf)
 
     override fun pageListRequest(chapter: SChapter) =
-        Uri.parse("$apiUrl/album").buildUpon().run {
+        Uri.parse("$apiUrl/manga").buildUpon().run {
             appendEncodedPath(chapter.url.split('/')[2])
-            appendEncodedPath("/pages")
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
+            appendEncodedPath("pages")
             GET(build().toString(), headers)
         }
 
