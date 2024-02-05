@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.es.tumangaonline
+package eu.kanade.tachiyomi.multisrc.lectortmo
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -7,11 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-/**
- * Springboard that accepts https://visortmo.com/library/:type/:id/:slug intents and redirects them to
- * the main Tachiyomi process.
- */
-class TuMangaOnlineUrlActivity : Activity() {
+class LectorTmoUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
@@ -23,17 +19,17 @@ class TuMangaOnlineUrlActivity : Activity() {
 
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${TuMangaOnline.PREFIX_ID_SEARCH}$type/$id/$slug")
+                putExtra("query", "${LectorTmo.PREFIX_SLUG_SEARCH}$type/$id/$slug")
                 putExtra("filter", packageName)
             }
 
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("TMOUrlActivity", e.toString())
+                Log.e("LectorTmoUrlActivity", e.toString())
             }
         } else {
-            Log.e("TMOUrlActivity", "could not parse uri from intent $intent")
+            Log.e("LectorTmoUrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()

@@ -1,8 +1,0 @@
-ext {
-    extName = 'LectorManga'
-    extClass = '.LectorManga'
-    extVersionCode = 34
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
