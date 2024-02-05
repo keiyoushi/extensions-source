@@ -23,7 +23,7 @@ class LectorManga : LectorTmo("LectorManga", "https://lectormanga.com", "es") {
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        document.selectFirst("h1:has(small)")?.let { title = it.ownText()}
+        document.selectFirst("h1:has(small)")?.let { title = it.ownText() }
         genre = document.select("a.py-2").joinToString(", ") {
             it.text()
         }
