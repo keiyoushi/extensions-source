@@ -482,7 +482,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("ZinChanManga", "https://zinchanmanga.net", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Zinmanga", "https://zinmanga.com", "en", overrideVersionCode = 1),
         SingleLang("ZinManga.top (unoriginal)", "https://zinmanga.top", "en", className = "ZinMangaTop"),
-        SingleLang("Zinmanhwa", "https://zinmanga.io", "en"),
+        SingleLang("Zinmanhwa", "https://zinmanga.io", "en", overrideVersionCode = 1),
         SingleLang("ZuttoManga", "https://zuttomanga.com", "en", overrideVersionCode = 1),
         SingleLang("Çizgi Roman Arşivi", "https://cizgiromanarsivi.com", "tr", className = "CizgiRomanArsivi"),
         SingleLang("Detective Conan Ar", "https://manga.detectiveconanar.com", "ar", sourceName = "شبكة كونان العربية", overrideVersionCode = 2),
