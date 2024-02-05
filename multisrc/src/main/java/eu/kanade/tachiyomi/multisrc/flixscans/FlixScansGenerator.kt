@@ -9,7 +9,7 @@ class FlixScansGenerator : ThemeSourceGenerator {
 
     override val themeClass = "FlixScans"
 
-    override val baseVersionCode: Int = 4
+    override val baseVersionCode: Int = 5
 
     override val sources = listOf(
         SingleLang("Flix Scans", "https://flixscans.org", "en", className = "FlixScansNet", pkgName = "flixscans"),
