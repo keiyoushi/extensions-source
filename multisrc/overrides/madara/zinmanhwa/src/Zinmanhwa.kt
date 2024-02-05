@@ -6,7 +6,7 @@ import java.util.Locale
 
 class Zinmanhwa : Madara(
     "Zinmanhwa",
-    "https://zinmanhwa.com",
+    "https://zinmanga.io",
     "en",
     dateFormat = SimpleDateFormat("dd/MM/yy", Locale.US),
 )
