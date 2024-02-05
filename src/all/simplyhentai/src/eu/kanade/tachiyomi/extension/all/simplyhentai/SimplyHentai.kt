@@ -78,18 +78,16 @@ open class SimplyHentai(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
         Uri.parse("$apiUrl/search/complex").buildUpon().run {
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
             appendQueryParameter("query", query)
             appendQueryParameter("page", page.toString())
             appendQueryParameter("blacklist", blacklist)
-            appendQueryParameter("filter[languages][0]", langName)
+            appendQueryParameter("filter[language][0]", langName.replaceFirstChar(Char::uppercase))
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> {
                         appendQueryParameter("sort", filter.orders[filter.state])
                     }
-                    is SeriesFilter -> filter.value?.let {
+                    is SeriesFilter -> filter.value?.also {
                         appendQueryParameter("filter[series_title][0]", it)
                     }
                     is TagsFilter -> filter.value?.forEachIndexed { idx, tag ->
