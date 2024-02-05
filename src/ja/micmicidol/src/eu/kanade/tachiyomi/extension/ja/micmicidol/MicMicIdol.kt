@@ -108,7 +108,7 @@ class MicMicIdol : HttpSource() {
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val date = "$baseUrl${manga.url}".toHttpUrl().fragment
+        val date = manga.url.substringAfter("#")
 
         return Observable.just(
             listOf(
@@ -116,7 +116,7 @@ class MicMicIdol : HttpSource() {
                     url = manga.url.substringBefore("#")
                     name = "Gallery"
                     date_upload = runCatching {
-                        dateFormat.parse(date!!)!!.time
+                        dateFormat.parse(dat)!!.time
                     }.getOrDefault(0L)
                 },
             ),
