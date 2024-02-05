@@ -12,8 +12,8 @@ class LectorTmoGenerator : ThemeSourceGenerator {
     override val baseVersionCode: Int = 1
 
     override val sources = listOf(
-        SingleLang("TuMangaOnline", "https://visortmo.com", "es", isNsfw = true, overrideVersionCode = 49),
         SingleLang("LectorManga", "https://lectormanga.com", "es", isNsfw = true, overrideVersionCode = 34),
+        SingleLang("TuMangaOnline", "https://visortmo.com", "es", isNsfw = true, overrideVersionCode = 49),
     )
 
     companion object {
