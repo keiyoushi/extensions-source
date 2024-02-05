@@ -181,7 +181,7 @@ abstract class Masonry(
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
-            Page(idx, "", img.absUrl("href"))
+            Page(idx, imageUrl = img.absUrl("href"))
         }
     }
 
