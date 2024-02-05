@@ -116,7 +116,7 @@ class MicMicIdol : HttpSource() {
                     url = manga.url.substringBefore("#")
                     name = "Gallery"
                     date_upload = runCatching {
-                        dateFormat.parse(dat)!!.time
+                        dateFormat.parse(date)!!.time
                     }.getOrDefault(0L)
                 },
             ),
