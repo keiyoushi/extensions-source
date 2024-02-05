@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,11 +12,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -32,13 +32,11 @@ open class SimplyHentai(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     override val versionId = 2
 
     private val apiUrl = "https://api.simply-hentai.com/v3"
 
-    private val json by lazy { Injekt.get<Json>() }
+    private val json: Json by injectLazy()
 
     private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
@@ -54,13 +52,7 @@ open class SimplyHentai(
     override fun popularMangaParse(response: Response) =
         response.decode<SHList<SHDataAlbum>>().run {
             MangasPage(
-                data.albums.map {
-                    SManga.create().apply {
-                        url = it.path
-                        title = it.title
-                        thumbnail_url = it.preview.sizes.thumb
-                    }
-                },
+                data.albums.map(SHObject::toSManga),
                 pagination.next != null,
             )
         }
@@ -111,23 +103,12 @@ open class SimplyHentai(
     override fun searchMangaParse(response: Response) =
         response.decode<SHList<List<SHWrapper>>>().run {
             MangasPage(
-                data.map {
-                    SManga.create().apply {
-                        url = it.`object`.path
-                        title = it.`object`.title
-                        thumbnail_url = it.`object`.preview.sizes.thumb
-                    }
-                },
+                data.map { it.`object`.toSManga() },
                 pagination.next != null,
             )
         }
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET(baseUrl + manga.url, headers)
-
-    override fun fetchMangaDetails(manga: SManga) =
-        client.newCall(chapterListRequest(manga))
-            .asObservableSuccess().map(::mangaDetailsParse)!!
+    override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
 
     override fun mangaDetailsParse(response: Response) =
         SManga.create().apply {
@@ -204,8 +185,8 @@ open class SimplyHentai(
     private inline val blacklist: String
         get() = preferences.getString("blacklist", "")!!
 
-    private inline fun <reified T> Response.decode() =
-        json.decodeFromString<T>(body.string())
+    private inline fun <reified T> Response.decode(): T =
+        json.decodeFromStream(body.byteStream())
 
     override fun imageUrlParse(response: Response) =
         throw UnsupportedOperationException()

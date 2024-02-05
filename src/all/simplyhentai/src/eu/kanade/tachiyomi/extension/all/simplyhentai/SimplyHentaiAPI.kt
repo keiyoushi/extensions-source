@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.simplyhentai
 
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -21,7 +22,11 @@ data class SHObject(
     val slug: String,
     val title: String,
 ) {
-    val path by lazy { "/${series.slug}/$slug" }
+    fun toSManga() = SManga.create().apply {
+        url = "/${series.slug}/$slug"
+        title = this@SHObject.title
+        thumbnail_url = preview.sizes.thumb
+    }
 }
 
 @Serializable
