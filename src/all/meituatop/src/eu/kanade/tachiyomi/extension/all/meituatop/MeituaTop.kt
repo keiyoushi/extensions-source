@@ -36,7 +36,7 @@ class MeituaTop : HttpSource() {
                 title = image.attr("alt")
                 thumbnail_url = image.attr("src")
                 val info = it.selectFirst(Evaluator.Tag("p"))!!.ownText().split(" - ")
-                genre = info[0]
+                genre = translate(info[0])
                 description = info[1]
                 status = SManga.COMPLETED
                 initialized = true
@@ -104,11 +104,15 @@ class MeituaTop : HttpSource() {
     )
 
     private fun getRegionList(): Array<String> {
-        return if (Locale.getDefault().equals("zh")) {
-            arrayOf("全部", "国产美女", "韩国美女", "台湾美女", "日本美女", "欧美美女", "泰国美女")
-        } else {
-            arrayOf("All", "Chinese beauty", "Korean beauty", "Taiwanese beauty", "Japanese beauty", "European and American beauty", "Thailand beauty")
-        }
+        return arrayOf(
+            translate("全部"),
+            translate("国产美女"),
+            translate("韩国美女"),
+            translate("台湾美女"),
+            translate("日本美女"),
+            translate("欧美美女"),
+            translate("泰国美女"),
+        )
     }
 
     private fun String.pageNumber() = numberRegex.findAll(this).last().value.toInt()
@@ -116,4 +120,18 @@ class MeituaTop : HttpSource() {
     private val numberRegex by lazy { Regex("""\d+""") }
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH) }
+
+    private fun translate(chinese: String): String {
+        if (Locale.getDefault().equals("zh")) return chinese
+        return when (chinese) {
+            "全部" -> "All"
+            "国产美女" -> "Chinese beauty"
+            "韩国美女" -> "Korean beauty"
+            "台湾美女" -> "Taiwanese beauty"
+            "日本美女" -> "Japanese beauty"
+            "欧美美女" -> "European and American beauty"
+            "泰国美女" -> "Thailand beauty"
+            else -> chinese
+        }
+    }
 }
