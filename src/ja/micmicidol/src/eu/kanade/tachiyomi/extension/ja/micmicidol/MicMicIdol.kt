@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.micmicidol
 
 import android.os.Build
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -50,6 +51,9 @@ class MicMicIdol : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = json.decodeFromString<BloggerDto>(response.body.string())
+
+        categories = data.feed.category.map { it.term }
+
         val manga = data.feed.entry.map { entry ->
             val content = Jsoup.parseBodyFragment(entry.content.t, baseUrl)
 
@@ -135,11 +139,32 @@ class MicMicIdol : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() = FilterList(
-        LabelFilter("Type", getTypes()),
-        LabelFilter("Japan Magazine", getJapanMagazines()),
-        LabelFilter("Japan Fashion", getJapanFashion()),
-    )
+    override fun getFilterList(): FilterList {
+        val types = getTypes()
+        val japanMagazines = getJapanMagazines()
+        val japanFashion = getJapanFashion()
+
+        val filters = mutableListOf<Filter<*>>(
+            LabelFilter("Type", types.map { Label(it) }),
+            LabelFilter("Japan Magazine", japanMagazines.map { Label(it) }),
+            LabelFilter("Japan Fashion", japanFashion.map { Label(it) }),
+        ).apply {
+            if (categories.isEmpty()) {
+                add(0, Filter.Header("Press 'Reset' to show extra filters"))
+                add(1, Filter.Separator())
+                return@apply
+            }
+
+            val others = categories
+                .filterNot { types.contains(it) || japanMagazines.contains(it) || japanFashion.contains(it) }
+
+            add(LabelFilter("Other", others.map { Label(it) }))
+        }
+
+        return FilterList(filters)
+    }
+
+    private var categories = emptyList<String>()
 
     private fun apiUrlBuilder(page: Int) = baseUrl.toHttpUrl().newBuilder().apply {
         // Blogger indices start from 1
