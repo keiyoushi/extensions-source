@@ -32,6 +32,8 @@ open class SimplyHentai(
 
     override val supportsLatest = true
 
+    override val client = network.cloudflareClient
+
     override val versionId = 2
 
     private val apiUrl = "https://api.simply-hentai.com/v3"
