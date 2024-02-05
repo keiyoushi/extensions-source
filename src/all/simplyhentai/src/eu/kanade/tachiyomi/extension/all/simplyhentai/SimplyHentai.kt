@@ -66,12 +66,10 @@ open class SimplyHentai(
         }
 
     override fun latestUpdatesRequest(page: Int) =
-        Uri.parse("$apiUrl/albums").buildUpon().run {
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
-            appendQueryParameter("language", langName)
-            appendQueryParameter("sort", "newest")
+        Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
+            appendQueryParameter("type", "language")
             appendQueryParameter("page", page.toString())
+            appendQueryParameter("sort", "newest")
             GET(build().toString(), headers)
         }
 
