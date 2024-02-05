@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.hentaicosplay
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -68,9 +67,6 @@ class HentaiCosplay : HttpSource() {
                     title = element.selectFirst("span:not(.posted)")!!.text()
                     element.selectFirst("span.posted")
                         ?.text()?.also { dateCache[url] = it }
-                    update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                    status = SManga.COMPLETED
-                    initialized = true
                 }
             }
         val hasNextPage = document.selectFirst("a.paginator_page[rel=next]") != null
@@ -89,9 +85,6 @@ class HentaiCosplay : HttpSource() {
                     title = element.select(".image-list-item-title").text()
                     element.selectFirst(".image-list-item-regist-date")
                         ?.text()?.also { dateCache[url] = it }
-                    update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                    status = SManga.COMPLETED
-                    initialized = true
                 }
             }
         val hasNextPage = document.selectFirst("div.wp-pagenavi > a[rel=next]") != null
@@ -127,11 +120,6 @@ class HentaiCosplay : HttpSource() {
                             return GET("$baseUrl${filter.selected}page/$page/", headers)
                         }
                     }
-                    is KeywordFilter -> {
-                        if (filter.selected.isNotEmpty()) {
-                            return GET("$baseUrl${filter.selected}page/$page/", headers)
-                        }
-                    }
                     else -> {}
                 }
             }
@@ -142,11 +130,9 @@ class HentaiCosplay : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    private var keyWordCache: List<Pair<String, String>> = emptyList()
     private var tagCache: List<Pair<String, String>> = emptyList()
 
     private fun fetchFilters() {
-        if (keyWordCache.isEmpty()) fetchKeywords()
         if (tagCache.isEmpty()) fetchTags()
     }
 
@@ -170,35 +156,7 @@ class HentaiCosplay : HttpSource() {
         }
             .subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())
-            .subscribe(
-                {},
-                {
-                    Log.e(name, it.stackTraceToString())
-                },
-            )
-    }
-
-    private fun fetchKeywords() {
-        Single.fromCallable {
-            client.newCall(GET("$baseUrl/ranking-keyword/", headers))
-                .execute().asJsoup()
-                .run {
-                    keyWordCache = buildList {
-                        add(Pair("", ""))
-                        select("#tags a").map {
-                            add(Pair(it.text(), it.attr("href")))
-                        }
-                    }
-                }
-        }
-            .subscribeOn(Schedulers.io())
-            .observeOn(Schedulers.io())
-            .subscribe(
-                {},
-                {
-                    Log.e(name, it.stackTraceToString())
-                },
-            )
+            .subscribe()
     }
 
     private abstract class SelectFilter(
@@ -212,29 +170,30 @@ class HentaiCosplay : HttpSource() {
     }
 
     private class TagFilter(name: String, options: List<Pair<String, String>>) : SelectFilter(name, options)
-    private class KeywordFilter(name: String, options: List<Pair<String, String>>) : SelectFilter(name, options)
 
     override fun getFilterList(): FilterList {
-        return if (keyWordCache.isEmpty()) {
+        return if (tagCache.isEmpty()) {
             FilterList(Filter.Header("Press reset to attempt to load filters"))
         } else {
             FilterList(
                 Filter.Header("Ignored with text search"),
-                Filter.Header("Tag Filtered is preferred over Keyword filter"),
                 Filter.Separator(),
                 TagFilter("Ranked Tags", tagCache),
-                KeywordFilter("Ranked Keywords", keyWordCache),
             )
         }
     }
 
-    override fun fetchMangaDetails(manga: SManga) = Observable.fromCallable {
-        manga.apply { initialized = true }
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+
+        return SManga.create().apply {
+            genre = document.select("#detail_tag a[href*=/tag/]").eachText().joinToString()
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.COMPLETED
+        }
     }
 
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun fetchChapterList(manga: SManga) = Observable.fromCallable {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         SChapter.create().apply {
             name = "Gallery"
             url = manga.url.removeSuffix("/").plus("/attachment/1/")
@@ -248,6 +207,7 @@ class HentaiCosplay : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        val pageUrl = document.location().substringBeforeLast("/1/")
 
         val totalPages = document.selectFirst("#right_sidebar > h3, #title > h2")
             ?.text()?.trim()
@@ -255,21 +215,23 @@ class HentaiCosplay : HttpSource() {
             ?.toIntOrNull()
             ?: return emptyList()
 
-        val imgUrl = document.selectFirst("#display_image_detail img, #detail_list img")
-            ?.absUrl("src")
-            ?.replace("http://", "https://")
-            ?.run { replace(hdRegex, "/") }
-            ?: return emptyList()
-
-        val imgUrlPrefix = imgUrl.substringBeforeLast("/")
-        val ext = imgUrl.substringAfterLast(".")
-
-        return (1..totalPages).map {
-            Page(it, "", "$imgUrlPrefix/$it.$ext")
+        val pages = (1..totalPages).map {
+            Page(it, "$pageUrl/$it/")
         }
+
+        pages[0].imageUrl = imageUrlParse(document)
+
+        return pages
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = imageUrlParse(response.asJsoup())
+
+    private fun imageUrlParse(document: Document): String {
+        return document.selectFirst("#display_image_detail img, #detail_list img")!!
+            .absUrl("src")
+            .replace("http://", "https://")
+            .replace(hdRegex, "/")
+    }
 
     companion object {
         private val tagNumRegex = Regex("""(\(\d+\))""")
