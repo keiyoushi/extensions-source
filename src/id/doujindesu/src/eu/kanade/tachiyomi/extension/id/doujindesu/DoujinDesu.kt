@@ -442,7 +442,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     companion object {
         private val PREF_DOMAIN_KEY = "preferred_domain_name_v${AppInfo.getVersionName()}"
         private const val PREF_DOMAIN_TITLE = "Override BaseUrl"
-        private const val PREF_DOMAIN_DEFAULT = "https://doujindesu.tv"
+        private const val PREF_DOMAIN_DEFAULT = "https://www.doujindesu.to"
         private const val PREF_DOMAIN_SUMMARY = "Override default domain with a different one"
     }
 
