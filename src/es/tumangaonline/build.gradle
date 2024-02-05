@@ -1,8 +1,0 @@
-ext {
-    extName = 'TuMangaOnline'
-    extClass = '.TuMangaOnline'
-    extVersionCode = 49
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
