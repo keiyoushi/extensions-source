@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,15 +12,20 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSource() {
+open class SimplyHentai(
+    override val lang: String,
+    private val langName: String,
+) : ConfigurableSource, HttpSource() {
+
     override val name = "Simply Hentai"
 
     override val baseUrl = "https://www.simply-hentai.com"
@@ -34,47 +38,32 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
 
     private val apiUrl = "https://api.simply-hentai.com/v3"
 
-    private val langName by lazy {
-        Locale.forLanguageTag(lang).displayName
-    }
-
-    private val json by lazy { Injekt.get<Json>() }
+    private val json: Json by injectLazy()
 
     private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
     }
 
     override fun popularMangaRequest(page: Int) =
-        Uri.parse("$apiUrl/albums").buildUpon().run {
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
-            appendQueryParameter("language", langName)
-            appendQueryParameter("sort", "spotlight")
+        Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
+            appendQueryParameter("type", "language")
             appendQueryParameter("page", page.toString())
             GET(build().toString(), headers)
         }
 
     override fun popularMangaParse(response: Response) =
-        response.decode<SHList<SHObject>>().run {
+        response.decode<SHList<SHDataAlbum>>().run {
             MangasPage(
-                data.map {
-                    SManga.create().apply {
-                        url = it.path
-                        title = it.title
-                        thumbnail_url = it.preview.sizes.thumb
-                    }
-                },
+                data.albums.map(SHObject::toSManga),
                 pagination.next != null,
             )
         }
 
     override fun latestUpdatesRequest(page: Int) =
-        Uri.parse("$apiUrl/albums").buildUpon().run {
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
-            appendQueryParameter("language", langName)
-            appendQueryParameter("sort", "newest")
+        Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
+            appendQueryParameter("type", "language")
             appendQueryParameter("page", page.toString())
+            appendQueryParameter("sort", "newest")
             GET(build().toString(), headers)
         }
 
@@ -83,18 +72,16 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
         Uri.parse("$apiUrl/search/complex").buildUpon().run {
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
             appendQueryParameter("query", query)
             appendQueryParameter("page", page.toString())
             appendQueryParameter("blacklist", blacklist)
-            appendQueryParameter("filter[languages][0]", langName)
+            appendQueryParameter("filter[language][0]", langName.replaceFirstChar(Char::uppercase))
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> {
                         appendQueryParameter("sort", filter.orders[filter.state])
                     }
-                    is SeriesFilter -> filter.value?.let {
+                    is SeriesFilter -> filter.value?.also {
                         appendQueryParameter("filter[series_title][0]", it)
                     }
                     is TagsFilter -> filter.value?.forEachIndexed { idx, tag ->
@@ -116,25 +103,14 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
         }
 
     override fun searchMangaParse(response: Response) =
-        response.decode<SHList<SHWrapper>>().run {
+        response.decode<SHList<List<SHWrapper>>>().run {
             MangasPage(
-                data.map {
-                    SManga.create().apply {
-                        url = it.`object`.path
-                        title = it.`object`.title
-                        thumbnail_url = it.`object`.preview.sizes.thumb
-                    }
-                },
+                data.map { it.`object`.toSManga() },
                 pagination.next != null,
             )
         }
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET(baseUrl + manga.url, headers)
-
-    override fun fetchMangaDetails(manga: SManga) =
-        client.newCall(chapterListRequest(manga))
-            .asObservableSuccess().map(::mangaDetailsParse)!!
+    override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
 
     override fun mangaDetailsParse(response: Response) =
         SManga.create().apply {
@@ -143,9 +119,9 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
             title = album.title
             description = buildString {
                 if (!album.description.isNullOrEmpty()) {
-                    append("${album.description}\n\n")
+                    append(album.description, "\n\n")
                 }
-                append("Series: ${album.series.title}\n")
+                append("Series: ", album.series.title, "\n")
                 album.characters.joinTo(this, prefix = "Characters: ") { it.title }
             }
             thumbnail_url = album.preview.sizes.thumb
@@ -156,10 +132,8 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
         }
 
     override fun chapterListRequest(manga: SManga) =
-        Uri.parse("$apiUrl/album").buildUpon().run {
+        Uri.parse("$apiUrl/manga").buildUpon().run {
             appendEncodedPath(manga.url.split('/')[2])
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
             GET(build().toString(), headers)
         }
 
@@ -167,18 +141,15 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
         SChapter.create().apply {
             val album = response.decode<SHAlbum>().data
             name = "Chapter"
-            chapter_number = -1f
             url = "${album.path}/all-pages"
             scanlator = album.translators.joinToString { it.title }
             date_upload = dateFormat.parse(album.created_at)?.time ?: 0L
         }.let(::listOf)
 
     override fun pageListRequest(chapter: SChapter) =
-        Uri.parse("$apiUrl/album").buildUpon().run {
+        Uri.parse("$apiUrl/manga").buildUpon().run {
             appendEncodedPath(chapter.url.split('/')[2])
-            appendEncodedPath("/pages")
-            appendQueryParameter("si", "0")
-            appendQueryParameter("locale", lang)
+            appendEncodedPath("pages")
             GET(build().toString(), headers)
         }
 
@@ -215,8 +186,8 @@ open class SimplyHentai(override val lang: String) : ConfigurableSource, HttpSou
     private inline val blacklist: String
         get() = preferences.getString("blacklist", "")!!
 
-    private inline fun <reified T> Response.decode() =
-        json.decodeFromString<T>(body.string())
+    private inline fun <reified T> Response.decode(): T =
+        json.decodeFromStream(body.byteStream())
 
     override fun imageUrlParse(response: Response) =
         throw UnsupportedOperationException()
