@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.kingdombrasilscantrad
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -29,12 +29,25 @@ class KingdomBrasilScantrad : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+
+            if (request.url.pathSegments[0] != "blog-frontend-adapter-public" || response.code != 403) {
+                return@addInterceptor response
+            }
+
+            response.close()
+            getWixCookies()
+            chain.proceed(request)
+        }
+        .build()
 
     private val json: Json by injectLazy()
 
     private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault())
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
     }
 
     override fun headersBuilder() = super.headersBuilder()
@@ -53,12 +66,7 @@ class KingdomBrasilScantrad : HttpSource() {
             initialized = true
         }
 
-        // Call the site so we can get the cookies we need to fetch the chapter list
-        return client.newCall(GET("$baseUrl/_api/v2/dynamicmodel", headers))
-            .asObservableSuccess()
-            .map {
-                MangasPage(listOf(manga), false)
-            }
+        return Observable.just(MangasPage(listOf(manga), false))
     }
 
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
@@ -87,15 +95,15 @@ class KingdomBrasilScantrad : HttpSource() {
     override fun searchMangaParse(response: Response) =
         throw UnsupportedOperationException()
 
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+
     private fun pagedChapterListRequest(page: Int) =
         GET(
             "$baseUrl/blog-frontend-adapter-public/v2/post-feed-page?includeContent=false&languageCode=pt&page=$page&pageSize=50&type=ALL_POSTS",
             headers,
         )
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga) = pagedChapterListRequest(1)
 
@@ -140,6 +148,9 @@ class KingdomBrasilScantrad : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    private fun getWixCookies() =
+        client.newCall(GET("$baseUrl/_api/v2/dynamicmodel", headers)).execute().close()
 
     private inline fun <reified T> Response.parseAs(): T =
         json.decodeFromString(body.string())
