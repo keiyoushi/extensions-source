@@ -2,15 +2,24 @@ package eu.kanade.tachiyomi.extension.en.creepyscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.CacheControl
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
+import rx.Observable
 import java.util.concurrent.TimeUnit
 
 class CreepyScans : Madara(
@@ -47,9 +56,37 @@ class CreepyScans : Madara(
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) throw Exception("Search not available")
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return if (query.isNotBlank()) {
+            val form = FormBody.Builder()
+                .add("action", "wp-manga-search-manga")
+                .add("title", query)
+                .build()
+            client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", headers, form)).asObservableSuccess().map { res ->
+                json.parseToJsonElement(res.body.string()).jsonObject.let { obj ->
+                    if (obj["success"]!!.jsonPrimitive.content == "false") {
+                        MangasPage(emptyList(), false)
+                    } else {
+                        val mangas = obj["data"]!!.jsonArray.map {
+                            SManga.create().apply {
+                                title = it.jsonObject["title"]!!.jsonPrimitive.content
+                                setUrlWithoutDomain(it.jsonObject["url"]!!.jsonPrimitive.content)
+                            }
+                        }
+                        MangasPage(mangas, false)
+                    }
+                }
+            }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
+    }
 
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/$mangaSubString/".toHttpUrl().newBuilder()
         filters.forEach { filter ->
             when (filter) {
