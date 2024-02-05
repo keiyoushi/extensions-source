@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.xinmeitulu
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,13 +10,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.util.Locale
 
 class Xinmeitulu : ParsedHttpSource() {
     override val baseUrl = "https://www.xinmeitulu.com"
@@ -49,8 +53,29 @@ class Xinmeitulu : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/page/$page?s=$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
+
+        val url = baseUrl.toHttpUrl().newBuilder()
+
+        if (!filterList.isEmpty()) {
+            filterList.forEach { filter ->
+                when (filter) {
+                    is RegionFilter -> filter.toUriPart()?.let {
+                        url
+                            .addPathSegment("area")
+                            .addPathSegment(it)
+                    }
+                    else -> {}
+                }
+            }
+        }
+
+        url.addPathSegment("page").addPathSegment(page.toString())
+        url.addQueryParameter("s", query)
+
+        return GET(url.toString(), headers)
+    }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith("SLUG:")) {
@@ -87,6 +112,45 @@ class Xinmeitulu : ParsedHttpSource() {
         }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+
+    // Filters
+
+    override fun getFilterList(): FilterList {
+        return FilterList(
+            RegionFilter(getRegionList()),
+        )
+    }
+
+    private class RegionFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Region", vals)
+
+    private fun getRegionList(): Array<Pair<String?, String>> {
+        return if (Locale.getDefault().equals("zh")) {
+            arrayOf(
+                null to "全部",
+                "zhongguodalumeinyu" to "中国大陆美女",
+                "taiguomeinyu" to "泰国美女",
+                "ribenmeinyu" to "日本美女",
+                "hanguomeinyu" to "韩国美女",
+                "taiwanmeinyu" to "台湾美女",
+                "oumeimeinyu" to "欧美美女",
+            )
+        } else {
+            arrayOf(
+                null to "All",
+                "zhongguodalumeinyu" to "Chinese beauty",
+                "taiguomeinyu" to "Thailand beauty",
+                "ribenmeinyu" to "Japanese beauty",
+                "hanguomeinyu" to "Korean beauty",
+                "taiwanmeinyu" to "Taiwanese beauty",
+                "oumeimeinyu" to "European & American beauty",
+            )
+        }
+    }
+
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String?, String>>) :
+        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
+        fun toUriPart() = vals[state].first
+    }
 
     companion object {
         private fun contentTypeIntercept(chain: Interceptor.Chain): Response {
