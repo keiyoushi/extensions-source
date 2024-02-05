@@ -141,7 +141,6 @@ open class SimplyHentai(
         SChapter.create().apply {
             val album = response.decode<SHAlbum>().data
             name = "Chapter"
-            chapter_number = -1F
             url = "${album.path}/all-pages"
             scanlator = album.translators.joinToString { it.title }
             date_upload = dateFormat.parse(album.created_at)?.time ?: 0L
