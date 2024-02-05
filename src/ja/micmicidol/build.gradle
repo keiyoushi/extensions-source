@@ -1,0 +1,7 @@
+ext {
+    extName = "MIC MIC IDOL"
+    extClass = ".MicMicIdol"
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
