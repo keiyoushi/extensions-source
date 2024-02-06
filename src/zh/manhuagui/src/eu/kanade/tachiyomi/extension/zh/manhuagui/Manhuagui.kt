@@ -75,16 +75,54 @@ class Manhuagui(
     override val client: OkHttpClient =
         if (getShowR18()) {
             network.client.newBuilder()
-                .rateLimitHost(baseHttpUrl, preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(), 10)
-                .rateLimitHost(imageServer[0].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .rateLimitHost(imageServer[1].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
+                .rateLimitHost(
+                    baseHttpUrl,
+                    preferences.getString(
+                        MAINSITE_RATELIMIT_PREF,
+                        MAINSITE_RATELIMIT_DEFAULT_VALUE,
+                    )!!.toInt(),
+                    10,
+                )
+                .rateLimitHost(
+                    imageServer[0].toHttpUrl(),
+                    preferences.getString(
+                        IMAGE_CDN_RATELIMIT_PREF,
+                        IMAGE_CDN_RATELIMIT_DEFAULT_VALUE,
+                    )!!.toInt(),
+                )
+                .rateLimitHost(
+                    imageServer[1].toHttpUrl(),
+                    preferences.getString(
+                        IMAGE_CDN_RATELIMIT_PREF,
+                        IMAGE_CDN_RATELIMIT_DEFAULT_VALUE,
+                    )!!.toInt(),
+                )
                 .addNetworkInterceptor(AddCookieHeaderInterceptor(baseHttpUrl.host))
                 .build()
         } else {
             network.client.newBuilder()
-                .rateLimitHost(baseHttpUrl, preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(), 10)
-                .rateLimitHost(imageServer[0].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .rateLimitHost(imageServer[1].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
+                .rateLimitHost(
+                    baseHttpUrl,
+                    preferences.getString(
+                        MAINSITE_RATELIMIT_PREF,
+                        MAINSITE_RATELIMIT_DEFAULT_VALUE,
+                    )!!.toInt(),
+                    10,
+                )
+                .rateLimitHost(
+                    imageServer[0].toHttpUrl(),
+                    preferences.getString(
+                        IMAGE_CDN_RATELIMIT_PREF,
+                        IMAGE_CDN_RATELIMIT_DEFAULT_VALUE,
+                    )!!.toInt(),
+                )
+                .rateLimitHost(
+                    imageServer[1].toHttpUrl(),
+                    preferences.getString(
+                        IMAGE_CDN_RATELIMIT_PREF,
+                        IMAGE_CDN_RATELIMIT_DEFAULT_VALUE,
+                    )!!.toInt(),
+                )
                 .build()
         }
 
@@ -310,7 +348,7 @@ class Manhuagui(
                 }
             } else {
                 // "You need to enable R18 switch and restart Tachiyomi to read this manga"
-                error("您需要打开R18作品显示开关并重启软件才能阅读此作品")
+                error(R18_NEED_ENABLE)
             }
         }
         val latestChapterHref = document.select("div.book-detail > ul.detail-list > li.status > span > a.blue").first()?.attr("href")
@@ -362,10 +400,8 @@ class Manhuagui(
         manga.author = document.select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a").text().trim().replace(" ", ", ")
         manga.genre = document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a").text().trim().replace(" ", ", ")
         manga.status = when (document.select("div.book-detail > ul.detail-list > li.status > span > span").first()!!.text()) {
-            "连载中" -> SManga.ONGOING
-            "已完结" -> SManga.COMPLETED
-            "連載中" -> SManga.ONGOING
-            "已完結" -> SManga.COMPLETED
+            STT_ONGOING -> SManga.ONGOING
+            STT_COMPLETED -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
 
@@ -394,7 +430,7 @@ class Manhuagui(
         // will always exist if this manga is R18 limited whether R18 verification cookies has been sent or not.
         // But it will not interfere parse mechanism below.
         if (document.select("#erroraudit_show").first() != null && !getShowR18()) {
-            error("R18作品显示开关未开启或未生效") // "R18 setting didn't enabled or became effective"
+            error(R18_NOT_EFFECTIVE) // "R18 setting didn't enabled or became effective"
         }
 
         val html = document.html()
@@ -522,181 +558,314 @@ class Manhuagui(
     }
 
     override fun getFilterList() = FilterList(
-        SortFilter(),
-        LocaleFilter(),
-        GenreFilter(),
-        ReaderFilter(),
-        PublishDateFilter(),
-        FirstLetterFilter(),
-        StatusFilter(),
-    )
-
-    private class SortFilter : UriPartFilter(
-        "排序方式",
-        arrayOf(
-            Pair("人气最旺", "view"), // Same to popularMangaRequest()
-            Pair("最新发布", ""), // Publish date
-            Pair("最新更新", "update"),
-            Pair("评分最高", "rate"),
+        SortFilter(
+            SORT_BY,
+            arrayOf(
+                Pair(SORT_BY_POPULAR, "view"), // Same to popularMangaRequest()
+                Pair(SORT_BY_RELEASE, ""), // Publish date
+                Pair(SORT_BY_UPDATE, "update"),
+                Pair(SORT_BY_RATE, "rate"),
+            ),
+        ),
+        LocaleFilter(
+            BY_REGION,
+            arrayOf(
+                Pair(REGION_ALL, ""), // all
+                Pair(REGION_JAPAN, "japan"),
+                Pair(REGION_HONGKONG, "hongkong"),
+                Pair(REGION_OTHER, "other"),
+                Pair(REGION_EUROPE, "europe"),
+                Pair(REGION_CHINA, "china"),
+                Pair(REGION_KOREA, "korea"),
+            ),
+        ),
+        GenreFilter(
+            BY_GENRE,
+            arrayOf(
+                Pair(GENRE_ALL, ""),
+                Pair(GENRE_rexue, "rexue"),
+                Pair(GENRE_maoxian, "maoxian"),
+                Pair(GENRE_mohuan, "mohuan"),
+                Pair(GENRE_shengui, "shengui"),
+                Pair(GENRE_gaoxiao, "gaoxiao"),
+                Pair(GENRE_mengxi, "mengxi"),
+                Pair(GENRE_aiqing, "aiqing"),
+                Pair(GENRE_kehuan, "kehuan"),
+                Pair(GENRE_mofa, "mofa"),
+                Pair(GENRE_gedou, "gedou"),
+                Pair(GENRE_wuxia, "wuxia"),
+                Pair(GENRE_jizhan, "jizhan"),
+                Pair(GENRE_zhanzheng, "zhanzheng"),
+                Pair(GENRE_jingji, "jingji"),
+                Pair(GENRE_tiyu, "tiyu"),
+                Pair(GENRE_xiaoyuan, "xiaoyuan"),
+                Pair(GENRE_shenghuo, "shenghuo"),
+                Pair(GENRE_lizhi, "lizhi"),
+                Pair(GENRE_lishi, "lishi"),
+                Pair(GENRE_weiniang, "weiniang"),
+                Pair(GENRE_zhainan, "zhainan"),
+                Pair(GENRE_funv, "funv"),
+                Pair(GENRE_danmei, "danmei"),
+                Pair(GENRE_baihe, "baihe"),
+                Pair(GENRE_hougong, "hougong"),
+                Pair(GENRE_zhiyu, "zhiyu"),
+                Pair(GENRE_meishi, "meishi"),
+                Pair(GENRE_tuili, "tuili"),
+                Pair(GENRE_xuanyi, "xuanyi"),
+                Pair(GENRE_kongbu, "kongbu"),
+                Pair(GENRE_sige, "sige"),
+                Pair(GENRE_zhichang, "zhichang"),
+                Pair(GENRE_zhentan, "zhentan"),
+                Pair(GENRE_shehui, "shehui"),
+                Pair(GENRE_yinyue, "yinyue"),
+                Pair(GENRE_wudao, "wudao"),
+                Pair(GENRE_zazhi, "zazhi"),
+                Pair(GENRE_heidao, "heidao"),
+            ),
+        ),
+        ReaderFilter(
+            BY_AUDIENCE,
+            arrayOf(
+                Pair(AUDIENCE_ALL, ""),
+                Pair(AUDIENCE_shaonv, "shaonv"),
+                Pair(AUDIENCE_shaonian, "shaonian"),
+                Pair(AUDIENCE_qingnian, "qingnian"),
+                Pair(AUDIENCE_ertong, "ertong"),
+                Pair(AUDIENCE_tongyong, "tongyong"),
+            ),
+        ),
+        PublishDateFilter(
+            BY_YEAR,
+            arrayOf(
+                Pair(YEAR_ALL, ""),
+                Pair(YEAR_2020, "2020"),
+                Pair(YEAR_2019, "2019"),
+                Pair(YEAR_2018, "2018"),
+                Pair(YEAR_2017, "2017"),
+                Pair(YEAR_2016, "2016"),
+                Pair(YEAR_2015, "2015"),
+                Pair(YEAR_2014, "2014"),
+                Pair(YEAR_2013, "2013"),
+                Pair(YEAR_2012, "2012"),
+                Pair(YEAR_2011, "2011"),
+                Pair(YEAR_2010, "2010"),
+                Pair(YEAR_200x, "200x"),
+                Pair(YEAR_199x, "199x"),
+                Pair(YEAR_198x, "198x"),
+                Pair(YEAR_197x, "197x"),
+            ),
+        ),
+        FirstLetterFilter(
+            BY_FIRST_LETER,
+            arrayOf(
+                Pair(FIRST_LETTER_ALL, ""),
+                Pair("A", "a"),
+                Pair("B", "b"),
+                Pair("C", "c"),
+                Pair("D", "d"),
+                Pair("E", "e"),
+                Pair("F", "f"),
+                Pair("G", "g"),
+                Pair("H", "h"),
+                Pair("I", "i"),
+                Pair("J", "j"),
+                Pair("K", "k"),
+                Pair("L", "l"),
+                Pair("M", "m"),
+                Pair("N", "n"),
+                Pair("O", "o"),
+                Pair("P", "p"),
+                Pair("Q", "q"),
+                Pair("R", "r"),
+                Pair("S", "s"),
+                Pair("T", "t"),
+                Pair("U", "u"),
+                Pair("V", "v"),
+                Pair("W", "w"),
+                Pair("X", "x"),
+                Pair("Y", "y"),
+                Pair("Z", "z"),
+                Pair("0-9", "0-9"),
+            ),
+        ),
+        StatusFilter(
+            STT_BY_PROGRESS,
+            arrayOf(
+                Pair(STT_ALL, ""),
+                Pair(STT_ONGOING, "lianzai"),
+                Pair(STT_COMPLETED, "wanjie"),
+            ),
         ),
     )
 
-    private class LocaleFilter : UriPartFilter(
-        "按地区",
-        arrayOf(
-            Pair("全部", ""), // all
-            Pair("日本", "japan"),
-            Pair("港台", "hongkong"),
-            Pair("其它", "other"),
-            Pair("欧美", "europe"),
-            Pair("内地", "china"),
-            Pair("韩国", "korea"),
-        ),
-    )
+    private class SortFilter(
+        displayName: String,
+        pairs: Array<Pair<String, String>>,
+    ) : UriPartFilter(displayName, pairs)
 
-    private class GenreFilter : UriPartFilter(
-        "按剧情",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("热血", "rexue"),
-            Pair("冒险", "maoxian"),
-            Pair("魔幻", "mohuan"),
-            Pair("神鬼", "shengui"),
-            Pair("搞笑", "gaoxiao"),
-            Pair("萌系", "mengxi"),
-            Pair("爱情", "aiqing"),
-            Pair("科幻", "kehuan"),
-            Pair("魔法", "mofa"),
-            Pair("格斗", "gedou"),
-            Pair("武侠", "wuxia"),
-            Pair("机战", "jizhan"),
-            Pair("战争", "zhanzheng"),
-            Pair("竞技", "jingji"),
-            Pair("体育", "tiyu"),
-            Pair("校园", "xiaoyuan"),
-            Pair("生活", "shenghuo"),
-            Pair("励志", "lizhi"),
-            Pair("历史", "lishi"),
-            Pair("伪娘", "weiniang"),
-            Pair("宅男", "zhainan"),
-            Pair("腐女", "funv"),
-            Pair("耽美", "danmei"),
-            Pair("百合", "baihe"),
-            Pair("后宫", "hougong"),
-            Pair("治愈", "zhiyu"),
-            Pair("美食", "meishi"),
-            Pair("推理", "tuili"),
-            Pair("悬疑", "xuanyi"),
-            Pair("恐怖", "kongbu"),
-            Pair("四格", "sige"),
-            Pair("职场", "zhichang"),
-            Pair("侦探", "zhentan"),
-            Pair("社会", "shehui"),
-            Pair("音乐", "yinyue"),
-            Pair("舞蹈", "wudao"),
-            Pair("杂志", "zazhi"),
-            Pair("黑道", "heidao"),
-        ),
-    )
+    private class LocaleFilter(
+        displayName: String,
+        pairs: Array<Pair<String, String>>,
+    ) : UriPartFilter(displayName, pairs)
 
-    private class ReaderFilter : UriPartFilter(
-        "按受众",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("少女", "shaonv"),
-            Pair("少年", "shaonian"),
-            Pair("青年", "qingnian"),
-            Pair("儿童", "ertong"),
-            Pair("通用", "tongyong"),
-        ),
-    )
+    private class GenreFilter(
+        displayName: String,
+        pairs: Array<Pair<String, String>>,
+    ) : UriPartFilter(displayName, pairs)
 
-    private class PublishDateFilter : UriPartFilter(
-        "按年份",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("2020年", "2020"),
-            Pair("2019年", "2019"),
-            Pair("2018年", "2018"),
-            Pair("2017年", "2017"),
-            Pair("2016年", "2016"),
-            Pair("2015年", "2015"),
-            Pair("2014年", "2014"),
-            Pair("2013年", "2013"),
-            Pair("2012年", "2012"),
-            Pair("2011年", "2011"),
-            Pair("2010年", "2010"),
-            Pair("00年代", "200x"),
-            Pair("90年代", "199x"),
-            Pair("80年代", "198x"),
-            Pair("更早", "197x"),
-        ),
-    )
+    private class ReaderFilter(
+        displayName: String,
+        pairs: Array<Pair<String, String>>,
+    ) : UriPartFilter(displayName, pairs)
 
-    private class FirstLetterFilter : UriPartFilter(
-        "按字母",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("A", "a"),
-            Pair("B", "b"),
-            Pair("C", "c"),
-            Pair("D", "d"),
-            Pair("E", "e"),
-            Pair("F", "f"),
-            Pair("G", "g"),
-            Pair("H", "h"),
-            Pair("I", "i"),
-            Pair("J", "j"),
-            Pair("K", "k"),
-            Pair("L", "l"),
-            Pair("M", "m"),
-            Pair("N", "n"),
-            Pair("O", "o"),
-            Pair("P", "p"),
-            Pair("Q", "q"),
-            Pair("R", "r"),
-            Pair("S", "s"),
-            Pair("T", "t"),
-            Pair("U", "u"),
-            Pair("V", "v"),
-            Pair("W", "w"),
-            Pair("X", "x"),
-            Pair("Y", "y"),
-            Pair("Z", "z"),
-            Pair("0-9", "0-9"),
-        ),
-    )
+    private class PublishDateFilter(
+        displayName: String,
+        pairs: Array<Pair<String, String>>,
+    ) : UriPartFilter(displayName, pairs)
 
-    private class StatusFilter : UriPartFilter(
-        "按进度",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("连载", "lianzai"),
-            Pair("完结", "wanjie"),
-        ),
-    )
+    private class FirstLetterFilter(
+        displayName: String,
+        pairs: Array<Pair<String, String>>,
+    ) : UriPartFilter(displayName, pairs)
+
+    private class StatusFilter(
+        displayName: String,
+        pairs: Array<Pair<String, String>>,
+    ) : UriPartFilter(displayName, pairs)
+
+    private val isChinese = Locale.getDefault().equals("zh")
+
+    private val SHOW_R18_PREF_TITLE = if (isChinese) "显示R18作品" else "Show R18 contents"
+    private val SHOW_R18_PREF_SUMMARY = if (isChinese) {
+        "请确认您的IP不在漫画柜的屏蔽列表内，例如中国大陆IP。需要重启软件以生效。\n开启后如需关闭，需要到Tachiyomi高级设置内清除Cookies后才能生效。"
+    } else {
+        "Please make sure your IP is not in Manhuagui's ban list, e.g., China mainland IP. Tachiyomi restart required. If you want to close this switch after enabled it, you need to clear cookies in Tachiyomi advanced setting too."
+    }
+
+    private val SHOW_ZH_HANT_WEBSITE_PREF_TITLE = if (isChinese) "使用繁体版网站" else "Use traditional chinese version website"
+    private val SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY = if (isChinese) "需要重启软件以生效。" else "You need to restart Tachiyomi"
+
+    private val USE_MIRROR_URL_PREF_TITLE = if (isChinese) "使用镜像网址" else "Use mirror URL"
+    private val USE_MIRROR_URL_PREF_SUMMARY = if (isChinese) "使用镜像网址: mhgui.com，部分漫画可能无法观看。" else "Use mirror url. Some manga may be hidden."
+
+    private val MAINSITE_RATELIMIT_PREF_TITLE = if (isChinese) "主站每十秒连接数限制" else "Ratelimit permits per 10 seconds for main website"
+    private val MAINSITE_RATELIMIT_PREF_SUMMARY = if (isChinese) {
+        "此值影响更新书架时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s"
+    } else {
+        "This value affects network request amount for updating library. Lower this value may reduce the chance to get IP Ban, but loading speed will be slower too. Tachiyomi restart required."
+    }
+
+    private val IMAGE_CDN_RATELIMIT_PREF_TITLE = if (isChinese) "图片CDN每秒连接数限制" else "Ratelimit permits per second for image CDN"
+    private val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = if (isChinese) {
+        "此值影响加载图片时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s"
+    } else {
+        "This value affects network request amount for loading image. Lower this value may reduce the chance to get IP Ban, but loading speed will be slower too. Tachiyomi restart required."
+    }
+
+    private val R18_NEED_ENABLE = if (isChinese) "您需要打开R18作品显示开关并重启软件才能阅读此作品" else "You need to enable R18 switch and restart Tachiyomi to read this manga"
+    private val R18_NOT_EFFECTIVE = if (isChinese) "R18作品显示开关未开启或未生效" else "R18 setting didn't enabled or became effective"
+
+    private val STT_ALL = if (isChinese) "全部" else "All"
+    private val STT_ONGOING = if (isChinese) "连载中" else "Ongoing"
+    private val STT_COMPLETED = if (isChinese) "已完结" else "Completed"
+    private val STT_BY_PROGRESS = if (isChinese) "按进度" else "By progress"
+
+    private val SORT_BY = if (isChinese) "排序方式" else "Sort by"
+    private val SORT_BY_POPULAR = if (isChinese) "人气最旺" else "Most view"
+    private val SORT_BY_RELEASE = if (isChinese) "最新发布" else "Latest release"
+    private val SORT_BY_UPDATE = if (isChinese) "最新更新" else "Latest update"
+    private val SORT_BY_RATE = if (isChinese) "评分最高" else "Most rate"
+
+    private val BY_REGION = if (isChinese) "按地区" else "By region"
+    private val REGION_ALL = if (isChinese) "全部" else "All"
+    private val REGION_JAPAN = if (isChinese) "日本" else "Japan"
+    private val REGION_HONGKONG = if (isChinese) "港台" else "Hongkong"
+    private val REGION_OTHER = if (isChinese) "其它" else "Other"
+    private val REGION_EUROPE = if (isChinese) "欧美" else "Europe"
+    private val REGION_CHINA = if (isChinese) "内地" else "China"
+    private val REGION_KOREA = if (isChinese) "韩国" else "Korea"
+
+    private val BY_GENRE = if (isChinese) "按剧情" else "By genre"
+    private val GENRE_ALL = if (isChinese) "全部" else "All"
+    private val GENRE_rexue = if (isChinese) "热血" else "Passionate"
+    private val GENRE_maoxian = if (isChinese) "冒险" else "Adventure"
+    private val GENRE_mohuan = if (isChinese) "魔幻" else "Fantasy"
+    private val GENRE_shengui = if (isChinese) "神鬼" else "Gods and ghosts"
+    private val GENRE_gaoxiao = if (isChinese) "搞笑" else "Funny"
+    private val GENRE_mengxi = if (isChinese) "萌系" else "Cute"
+    private val GENRE_aiqing = if (isChinese) "爱情" else "Love"
+    private val GENRE_kehuan = if (isChinese) "科幻" else "Science fiction"
+    private val GENRE_mofa = if (isChinese) "魔法" else "Magic"
+    private val GENRE_gedou = if (isChinese) "格斗" else "Fighting"
+    private val GENRE_wuxia = if (isChinese) "武侠" else "Martial arts"
+    private val GENRE_jizhan = if (isChinese) "机战" else "Aircraft warfare"
+    private val GENRE_zhanzheng = if (isChinese) "战争" else "War"
+    private val GENRE_jingji = if (isChinese) "竞技" else "Sports"
+    private val GENRE_tiyu = if (isChinese) "体育" else "Physical education"
+    private val GENRE_xiaoyuan = if (isChinese) "校园" else "Campus"
+    private val GENRE_shenghuo = if (isChinese) "生活" else "Life"
+    private val GENRE_lizhi = if (isChinese) "励志" else "Inspirational"
+    private val GENRE_lishi = if (isChinese) "历史" else "History"
+    private val GENRE_weiniang = if (isChinese) "伪娘" else "Femboy"
+    private val GENRE_zhainan = if (isChinese) "宅男" else "Otaku"
+    private val GENRE_funv = if (isChinese) "腐女" else "Fujoshi"
+    private val GENRE_danmei = if (isChinese) "耽美" else "Boys love"
+    private val GENRE_baihe = if (isChinese) "百合" else "Lily"
+    private val GENRE_hougong = if (isChinese) "后宫" else "Harem"
+    private val GENRE_zhiyu = if (isChinese) "治愈" else "Cure"
+    private val GENRE_meishi = if (isChinese) "美食" else "Gourmet food"
+    private val GENRE_tuili = if (isChinese) "推理" else "Reasoning"
+    private val GENRE_xuanyi = if (isChinese) "悬疑" else "Suspense"
+    private val GENRE_kongbu = if (isChinese) "恐怖" else "Fear"
+    private val GENRE_sige = if (isChinese) "四格" else "Four grids"
+    private val GENRE_zhichang = if (isChinese) "职场" else "Workplace"
+    private val GENRE_zhentan = if (isChinese) "侦探" else "Detective"
+    private val GENRE_shehui = if (isChinese) "社会" else "Society"
+    private val GENRE_yinyue = if (isChinese) "音乐" else "Music"
+    private val GENRE_wudao = if (isChinese) "舞蹈" else "Dance"
+    private val GENRE_zazhi = if (isChinese) "杂志" else "Magazine"
+    private val GENRE_heidao = if (isChinese) "黑道" else "Underworld"
+
+    private val BY_AUDIENCE = if (isChinese) "按受众" else "By audience"
+    private val AUDIENCE_ALL = if (isChinese) "全部" else "All"
+    private val AUDIENCE_shaonv = if (isChinese) "少女" else "Girl"
+    private val AUDIENCE_shaonian = if (isChinese) "少年" else "Juvenile"
+    private val AUDIENCE_qingnian = if (isChinese) "青年" else "Youth"
+    private val AUDIENCE_ertong = if (isChinese) "儿童" else "Child"
+    private val AUDIENCE_tongyong = if (isChinese) "通用" else "Universal"
+
+    private val BY_YEAR = if (isChinese) "按年份" else "By year"
+    private val YEAR_ALL = if (isChinese) "全部" else "All"
+    private val YEAR_2020 = if (isChinese) "2020年" else "2020"
+    private val YEAR_2019 = if (isChinese) "2019年" else "2019"
+    private val YEAR_2018 = if (isChinese) "2018年" else "2018"
+    private val YEAR_2017 = if (isChinese) "2017年" else "2017"
+    private val YEAR_2016 = if (isChinese) "2016年" else "2016"
+    private val YEAR_2015 = if (isChinese) "2015年" else "2015"
+    private val YEAR_2014 = if (isChinese) "2014年" else "2014"
+    private val YEAR_2013 = if (isChinese) "2013年" else "2013"
+    private val YEAR_2012 = if (isChinese) "2012年" else "2012"
+    private val YEAR_2011 = if (isChinese) "2011年" else "2011"
+    private val YEAR_2010 = if (isChinese) "2010年" else "2010"
+    private val YEAR_200x = if (isChinese) "00年代" else "20s"
+    private val YEAR_199x = if (isChinese) "90年代" else "90s"
+    private val YEAR_198x = if (isChinese) "80年代" else "80s"
+    private val YEAR_197x = if (isChinese) "更早" else "Earlier"
+
+    private val BY_FIRST_LETER = if (isChinese) "按字母" else "By first leter"
+    private val FIRST_LETTER_ALL = if (isChinese) "全部" else "All"
 
     companion object {
         private const val SHOW_R18_PREF = "showR18Default"
-        private const val SHOW_R18_PREF_TITLE = "显示R18作品" // "Show R18 contents"
-        private const val SHOW_R18_PREF_SUMMARY = "请确认您的IP不在漫画柜的屏蔽列表内，例如中国大陆IP。需要重启软件以生效。\n开启后如需关闭，需要到Tachiyomi高级设置内清除Cookies后才能生效。" // "Please make sure your IP is not in Manhuagui's ban list, e.g., China mainland IP. Tachiyomi restart required. If you want to close this switch after enabled it, you need to clear cookies in Tachiyomi advanced setting too.
 
         private const val SHOW_ZH_HANT_WEBSITE_PREF = "showZhHantWebsite"
-        private const val SHOW_ZH_HANT_WEBSITE_PREF_TITLE = "使用繁体版网站" // "Use traditional chinese version website"
-        private const val SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY = "需要重启软件以生效。" // "You need to restart Tachiyomi"
 
         private const val USE_MIRROR_URL_PREF = "useMirrorWebsitePreference"
-        private const val USE_MIRROR_URL_PREF_TITLE = "使用镜像网址"
-        private const val USE_MIRROR_URL_PREF_SUMMARY = "使用镜像网址: mhgui.com，部分漫画可能无法观看。" // "Use mirror url. Some manga may be hidden."
 
         private const val MAINSITE_RATELIMIT_PREF = "mainSiteRatelimitPreference"
-        private const val MAINSITE_RATELIMIT_PREF_TITLE = "主站每十秒连接数限制" // "Ratelimit permits per 10 seconds for main website"
-        private const val MAINSITE_RATELIMIT_PREF_SUMMARY = "此值影响更新书架时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s" // "This value affects network request amount for updating library. Lower this value may reduce the chance to get IP Ban, but loading speed will be slower too. Tachiyomi restart required."
         private const val MAINSITE_RATELIMIT_DEFAULT_VALUE = "10"
 
         private const val IMAGE_CDN_RATELIMIT_PREF = "imgCDNRatelimitPreference"
-        private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "图片CDN每秒连接数限制" // "Ratelimit permits per second for image CDN"
-        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "此值影响加载图片时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s" // "This value affects network request amount for loading image. Lower this value may reduce the chance to get IP Ban, but loading speed will be slower too. Tachiyomi restart required."
         private const val IMAGE_CDN_RATELIMIT_DEFAULT_VALUE = "4"
 
         private val ENTRIES_ARRAY = (1..10).map { i -> i.toString() }.toTypedArray()
