@@ -45,7 +45,7 @@ class Mangaku : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Mangaku"
 
-    override val baseUrl by lazy { preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!! }
+    override val baseUrl = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
 
     override val lang = "id"
 
