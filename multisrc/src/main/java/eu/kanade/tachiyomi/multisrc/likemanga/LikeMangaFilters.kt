@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.likemanga
+package eu.kanade.tachiyomi.multisrc.likemanga
 
 import eu.kanade.tachiyomi.source.model.Filter
 
