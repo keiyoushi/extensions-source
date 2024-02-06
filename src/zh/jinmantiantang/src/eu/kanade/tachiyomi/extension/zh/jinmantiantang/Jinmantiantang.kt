@@ -177,10 +177,11 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun Element.extractThumbnailUrl(): String {
-        return attr("data-original").ifEmpty {
-            attr("src")
-        }.ifEmpty {
-            attr("data-cfsrc")
+        return when {
+            hasAttr("data-original") -> attr("data-original")
+            hasAttr("src") -> attr("src")
+            hasAttr("data-cfsrc") -> attr("data-cfsrc")
+            else -> ""
         }
     }
 
