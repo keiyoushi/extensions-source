@@ -92,13 +92,13 @@ class Xinmeitulu : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         setUrlWithoutDomain(document.selectFirst("link[rel=canonical]")!!.attr("abs:href"))
-        title = document.select(".container > h1").text().trim()
+        title = document.select(".container > h1").text()
         status = SManga.COMPLETED
         thumbnail_url = document.selectFirst("figure img")!!.attr("abs:data-original")
         description = document.select(".container > p").joinToString("\n") {
             val str = it.text()
             if (str.contains("拍摄机构：")) {
-                author = str.replace("拍摄机构：", "").trim()
+                author = str.replace("拍摄机构：", "")
             }
             str.replace("拍摄机构：", "${translate("拍摄机构")}: ")
                 .replace("相关编号：", "${translate("相关编号")}: ")
@@ -112,7 +112,6 @@ class Xinmeitulu : ParsedHttpSource() {
                 .replace("杯", "-${translate("杯")}")
                 .replace("匿名", translate("匿名"))
                 .replace("；", "")
-                .trim()
         }
     }
 
@@ -155,7 +154,7 @@ class Xinmeitulu : ParsedHttpSource() {
     }
 
     private fun translate(it: String): String {
-        if (Locale.getDefault().equals("zh")) return it
+        if (Locale.getDefault().language == "zh") return it
         return when (it) {
             // Region
             "全部" -> "All"
@@ -167,7 +166,7 @@ class Xinmeitulu : ParsedHttpSource() {
             "欧美美女" -> "European & American beauty"
             // Descriptions
             "拍摄机构" -> "Studio"
-            "相关编号" -> "Related"
+            "相关编号" -> "Issue number"
             "图片数量" -> "Photos"
             "出镜模特" -> "Model"
             "别名" -> "Alias"

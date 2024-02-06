@@ -122,7 +122,7 @@ class MeituaTop : HttpSource() {
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH) }
 
     private fun translate(chinese: String): String {
-        if (Locale.getDefault().equals("zh")) return chinese
+        if (Locale.getDefault().language == "zh") return chinese
         return when (chinese) {
             "全部" -> "All"
             "国产美女" -> "Chinese beauty"
