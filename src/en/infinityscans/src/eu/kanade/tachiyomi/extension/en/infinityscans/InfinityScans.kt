@@ -40,8 +40,17 @@ class InfinityScans : HttpSource() {
         .rateLimit(1)
         .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder().apply {
+        add("Referer", "$baseUrl/")
+    }
+
+    private val apiHeaders = headersBuilder().apply {
+        add("Accept", "*/*")
+        add("Sec-Fetch-Dest", "empty")
+        add("Sec-Fetch-Mode", "cors")
+        add("Sec-Fetch-Site", "same-origin")
+        add("X-Requested-With", "XMLHttpRequest")
+    }.build()
 
     private val json: Json by injectLazy()
 
@@ -64,10 +73,6 @@ class InfinityScans : HttpSource() {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchHeaders = headersBuilder().apply {
-            add("X-Requested-With", "XMLHttpRequest")
-        }.build()
-
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("ajax/comics")
             .addQueryParameter("page", page.toString())
@@ -97,6 +102,10 @@ class InfinityScans : HttpSource() {
         }
 
         if (query.isNotBlank()) url.addQueryParameter("title", query)
+
+        val searchHeaders = apiHeaders.newBuilder().apply {
+            set("Referer", url.build().newBuilder().removePathSegment(0).build().toString())
+        }.build()
 
         return GET(url.build(), searchHeaders)
     }
@@ -206,13 +215,11 @@ class InfinityScans : HttpSource() {
             add("comic_id", id)
         }.build()
 
-        val chapterHeaders = headersBuilder().apply {
-            add("Accept", "*/*")
+        val chapterHeaders = apiHeaders.newBuilder().apply {
             add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
             add("Host", baseUrl.toHttpUrl().host)
             add("Origin", baseUrl)
             set("Referer", url.toString())
-            add("X-Requested-With", "XMLHttpRequest")
         }.build()
 
         val chapterListData = client.newCall(
@@ -249,12 +256,10 @@ class InfinityScans : HttpSource() {
             )
         }.build()
 
-        val pageListHeaders = headersBuilder().apply {
-            add("Accept", "*/*")
+        val pageListHeaders = apiHeaders.newBuilder().apply {
             add("Host", url.host)
             add("Origin", baseUrl)
             set("Referer", url.toString())
-            add("X-Requested-With", "XMLHttpRequest")
         }.build()
 
         val pageListData = client.newCall(
