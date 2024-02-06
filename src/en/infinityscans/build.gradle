@@ -1,7 +1,7 @@
 ext {
     extName = 'InfinityScans'
     extClass = '.InfinityScans'
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = true
 }
 
