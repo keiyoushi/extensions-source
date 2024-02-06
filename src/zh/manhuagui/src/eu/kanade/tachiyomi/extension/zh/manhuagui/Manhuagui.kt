@@ -75,54 +75,16 @@ class Manhuagui(
     override val client: OkHttpClient =
         if (getShowR18()) {
             network.client.newBuilder()
-                .rateLimitHost(
-                    baseHttpUrl,
-                    preferences.getString(
-                        MAINSITE_RATELIMIT_PREF,
-                        MAINSITE_RATELIMIT_DEFAULT_VALUE,
-                    )!!.toInt(),
-                    10,
-                )
-                .rateLimitHost(
-                    imageServer[0].toHttpUrl(),
-                    preferences.getString(
-                        IMAGE_CDN_RATELIMIT_PREF,
-                        IMAGE_CDN_RATELIMIT_DEFAULT_VALUE,
-                    )!!.toInt(),
-                )
-                .rateLimitHost(
-                    imageServer[1].toHttpUrl(),
-                    preferences.getString(
-                        IMAGE_CDN_RATELIMIT_PREF,
-                        IMAGE_CDN_RATELIMIT_DEFAULT_VALUE,
-                    )!!.toInt(),
-                )
+                .rateLimitHost(baseHttpUrl, preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(), 10)
+                .rateLimitHost(imageServer[0].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
+                .rateLimitHost(imageServer[1].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
                 .addNetworkInterceptor(AddCookieHeaderInterceptor(baseHttpUrl.host))
                 .build()
         } else {
             network.client.newBuilder()
-                .rateLimitHost(
-                    baseHttpUrl,
-                    preferences.getString(
-                        MAINSITE_RATELIMIT_PREF,
-                        MAINSITE_RATELIMIT_DEFAULT_VALUE,
-                    )!!.toInt(),
-                    10,
-                )
-                .rateLimitHost(
-                    imageServer[0].toHttpUrl(),
-                    preferences.getString(
-                        IMAGE_CDN_RATELIMIT_PREF,
-                        IMAGE_CDN_RATELIMIT_DEFAULT_VALUE,
-                    )!!.toInt(),
-                )
-                .rateLimitHost(
-                    imageServer[1].toHttpUrl(),
-                    preferences.getString(
-                        IMAGE_CDN_RATELIMIT_PREF,
-                        IMAGE_CDN_RATELIMIT_DEFAULT_VALUE,
-                    )!!.toInt(),
-                )
+                .rateLimitHost(baseHttpUrl, preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(), 10)
+                .rateLimitHost(imageServer[0].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
+                .rateLimitHost(imageServer[1].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
                 .build()
         }
 
@@ -399,8 +361,10 @@ class Manhuagui(
         manga.genre = document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a").text().trim()
             .split(' ').joinToString(transform = ::translateGenre)
         manga.status = when (document.select("div.book-detail > ul.detail-list > li.status > span > span").first()?.text()) {
-            STT_ONGOING -> SManga.ONGOING
-            STT_COMPLETED -> SManga.COMPLETED
+            "连载中" -> SManga.ONGOING
+            "已完结" -> SManga.COMPLETED
+            "連載中" -> SManga.ONGOING
+            "已完結" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
 
@@ -766,8 +730,8 @@ class Manhuagui(
 
     private val BY_PROGRESS = if (isChinese) "按进度" else "By progress"
     private val PROGRESS_ALL = if (isChinese) "全部" else "All"
-    private val PROGRESS_ONGOING = if (isChinese) "连载中" else "Ongoing"
-    private val PROGRESS_COMPLETED = if (isChinese) "已完结" else "Completed"
+    private val PROGRESS_ONGOING = if (isChinese) "连载" else "Ongoing"
+    private val PROGRESS_COMPLETED = if (isChinese) "完结" else "Completed"
 
     private val SORT_BY = if (isChinese) "排序方式" else "Sort by"
     private val SORT_BY_POPULAR = if (isChinese) "人气最旺" else "Most view"
@@ -900,9 +864,6 @@ class Manhuagui(
     private val FIRST_LETTER_ALL = if (isChinese) "全部" else "All"
 
     companion object {
-        private const val STT_ONGOING = "连载中"
-        private const val STT_COMPLETED = "已完结"
-
         private const val SHOW_R18_PREF = "showR18Default"
 
         private const val SHOW_ZH_HANT_WEBSITE_PREF = "showZhHantWebsite"
