@@ -92,10 +92,28 @@ class Xinmeitulu : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         setUrlWithoutDomain(document.selectFirst("link[rel=canonical]")!!.attr("abs:href"))
-        title = document.select(".container > h1").text()
-        description = document.select(".container > *:not(div)").text()
+        title = document.select(".container > h1").text().trim()
         status = SManga.COMPLETED
         thumbnail_url = document.selectFirst("figure img")!!.attr("abs:data-original")
+        description = document.select(".container > p").joinToString("\n") {
+            val str = it.text()
+            if (str.contains("拍摄机构：")) {
+                author = str.replace("拍摄机构：", "").trim()
+            }
+            str.replace("拍摄机构：", "${translate("拍摄机构")}: ")
+                .replace("相关编号：", "${translate("相关编号")}: ")
+                .replace("图片数量：", "${translate("图片数量")}: ")
+                .replace("出镜模特：", "${translate("出镜模特")}: ")
+                .replace("别名：", "\n${translate("别名")}: ")
+                .replace("生日：", "\n${translate("生日")}: ")
+                .replace("身高：", "\n${translate("身高")}: ")
+                .replace("三围：", "\n${translate("三围")}: ")
+                .replace("罩杯：", "\n${translate("罩杯")}: ")
+                .replace("杯", "-${translate("杯")}")
+                .replace("匿名", translate("匿名"))
+                .replace("；", "")
+                .trim()
+        }
     }
 
     // Chapters
@@ -104,7 +122,7 @@ class Xinmeitulu : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("link[rel=canonical]")!!.attr("abs:href"))
-        name = element.select(".container > h1").text()
+        name = "Gallery"
     }
 
     override fun pageListParse(document: Document) =
@@ -139,6 +157,7 @@ class Xinmeitulu : ParsedHttpSource() {
     private fun translate(it: String): String {
         if (Locale.getDefault().equals("zh")) return it
         return when (it) {
+            // Region
             "全部" -> "All"
             "中国大陆美女" -> "Chinese beauty"
             "泰国美女" -> "Thailand beauty"
@@ -146,6 +165,18 @@ class Xinmeitulu : ParsedHttpSource() {
             "韩国美女" -> "Korean beauty"
             "台湾美女" -> "Taiwanese beauty"
             "欧美美女" -> "European & American beauty"
+            // Descriptions
+            "拍摄机构" -> "Studio"
+            "相关编号" -> "Related"
+            "图片数量" -> "Photos"
+            "出镜模特" -> "Model"
+            "别名" -> "Alias"
+            "生日" -> "Birthday"
+            "身高" -> "Height"
+            "三围" -> "Measurements"
+            "罩杯" -> "Cup size"
+            "杯" -> "cup"
+            "匿名" -> "Unknown"
             else -> { it }
         }
     }
