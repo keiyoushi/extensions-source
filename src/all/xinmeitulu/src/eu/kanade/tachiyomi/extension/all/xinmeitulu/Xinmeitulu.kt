@@ -45,7 +45,8 @@ class Xinmeitulu : ParsedHttpSource() {
         setUrlWithoutDomain(element.select("figure > a").attr("abs:href"))
         title = element.select("figcaption").text()
         thumbnail_url = element.select("img").attr("abs:data-original-")
-        genre = element.select("a.tag").joinToString(", ") { it.text() }
+        genre = element.select("a[rel='tag category']").last()?.text()
+            ?.removeSuffix("写真")?.let { translate(it) }
     }
 
     // Search
@@ -124,26 +125,28 @@ class Xinmeitulu : ParsedHttpSource() {
     private class RegionFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Region", vals)
 
     private fun getRegionList(): Array<Pair<String?, String>> {
-        return if (Locale.getDefault().equals("zh")) {
-            arrayOf(
-                null to "全部",
-                "zhongguodalumeinyu" to "中国大陆美女",
-                "taiguomeinyu" to "泰国美女",
-                "ribenmeinyu" to "日本美女",
-                "hanguomeinyu" to "韩国美女",
-                "taiwanmeinyu" to "台湾美女",
-                "oumeimeinyu" to "欧美美女",
-            )
-        } else {
-            arrayOf(
-                null to "All",
-                "zhongguodalumeinyu" to "Chinese beauty",
-                "taiguomeinyu" to "Thailand beauty",
-                "ribenmeinyu" to "Japanese beauty",
-                "hanguomeinyu" to "Korean beauty",
-                "taiwanmeinyu" to "Taiwanese beauty",
-                "oumeimeinyu" to "European & American beauty",
-            )
+        return arrayOf(
+            null to translate("全部"),
+            "zhongguodalumeinyu" to translate("中国大陆美女"),
+            "taiguomeinyu" to translate("泰国美女"),
+            "ribenmeinyu" to translate("日本美女"),
+            "hanguomeinyu" to translate("韩国美女"),
+            "taiwanmeinyu" to translate("台湾美女"),
+            "oumeimeinyu" to translate("欧美美女"),
+        )
+    }
+
+    private fun translate(it: String): String {
+        if (Locale.getDefault().equals("zh")) return it
+        return when (it) {
+            "全部" -> "All"
+            "中国大陆美女" -> "Chinese beauty"
+            "泰国美女" -> "Thailand beauty"
+            "日本美女" -> "Japanese beauty"
+            "韩国美女" -> "Korean beauty"
+            "台湾美女" -> "Taiwanese beauty"
+            "欧美美女" -> "European & American beauty"
+            else -> { it }
         }
     }
 
