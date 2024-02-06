@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -68,7 +69,7 @@ class CreepyScans : Madara(
                 .build()
             client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", headers, form)).asObservableSuccess().map { res ->
                 json.parseToJsonElement(res.body.string()).jsonObject.let { obj ->
-                    if (obj["success"]!!.jsonPrimitive.content == "false") {
+                    if (!obj["success"]!!.jsonPrimitive.boolean) {
                         MangasPage(emptyList(), false)
                     } else {
                         val mangas = obj["data"]!!.jsonArray.map {
