@@ -47,10 +47,7 @@ object MangaFunUtils {
         thumbnail_url = getImageUrlFromHash(thumbnailUrl)
         status = publishedStatusToStatus(publishedStatus)
         genre = buildList {
-            titleType?.let {
-                titleTypeMap[titleType]?.let { add(it) }
-            }
-
+            titleTypeMap[titleType]?.let { add(it) }
             addAll(genres.mapNotNull { genresMap[it] })
         }.joinToString()
     }
@@ -65,10 +62,7 @@ object MangaFunUtils {
         status = publishedStatusToStatus(publishedStatus)
         thumbnail_url = thumbnailURL
         genre = buildList {
-            titleType?.let {
-                titleTypeMap[titleType]?.let { add(it) }
-            }
-
+            titleTypeMap[titleType]?.let { add(it) }
             addAll(genres.mapNotNull { genresMap[it.id] })
         }.joinToString()
     }
