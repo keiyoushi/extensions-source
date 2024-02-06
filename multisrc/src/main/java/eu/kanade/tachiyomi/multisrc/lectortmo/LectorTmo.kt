@@ -3,6 +3,9 @@ package eu.kanade.tachiyomi.multisrc.lectortmo
 import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
+import androidx.preference.CheckBoxPreference
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -39,7 +42,7 @@ abstract class LectorTmo(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-) : ConfigurableSource, ParsedHttpSource() {
+) : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -85,35 +88,39 @@ abstract class LectorTmo(
         return this
     }
 
-    private val ignoreSslClient = network.client.newBuilder()
-        .ignoreAllSSLErrors()
-        .followRedirects(false)
-        .rateLimit(
-            preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
-            60,
-        )
-        .build()
+    private val ignoreSslClient: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .ignoreAllSSLErrors()
+            .followRedirects(false)
+            .rateLimit(
+                preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
+                60,
+            )
+            .build()
+    }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-            if (url.host.contains("japanreader.com")) {
-                return@addInterceptor ignoreSslClient.newCall(request).execute()
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val url = request.url
+                if (url.host.contains("japanreader.com")) {
+                    return@addInterceptor ignoreSslClient.newCall(request).execute()
+                }
+                chain.proceed(request)
             }
-            chain.proceed(request)
-        }
-        .rateLimitHost(
-            baseUrl.toHttpUrl(),
-            preferences.getString(WEB_RATELIMIT_PREF, WEB_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
-            60,
-        )
-        .rateLimitImageCDNs(
-            imageCDNUrls,
-            preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
-            60,
-        )
-        .build()
+            .rateLimitHost(
+                baseUrl.toHttpUrl(),
+                preferences.getString(WEB_RATELIMIT_PREF, WEB_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
+                60,
+            )
+            .rateLimitImageCDNs(
+                imageCDNUrls,
+                preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
+                60,
+            )
+            .build()
+    }
 
     // Marks erotic content as false and excludes: Ecchi(6), GirlsLove(17), BoysLove(18), Harem(19), Trap(94) genders
     private fun getSFWUrlPart(): String = if (getSFWModePref()) "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false" else ""
@@ -401,76 +408,6 @@ abstract class LectorTmo(
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val sfwModePref = androidx.preference.CheckBoxPreference(screen.context).apply {
-            key = SFW_MODE_PREF
-            title = SFW_MODE_PREF_TITLE
-            summary = SFW_MODE_PREF_SUMMARY
-            setDefaultValue(SFW_MODE_PREF_DEFAULT_VALUE)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(SFW_MODE_PREF, checkValue).commit()
-            }
-        }
-
-        val scanlatorPref = androidx.preference.CheckBoxPreference(screen.context).apply {
-            key = SCANLATOR_PREF
-            title = SCANLATOR_PREF_TITLE
-            summary = SCANLATOR_PREF_SUMMARY
-            setDefaultValue(SCANLATOR_PREF_DEFAULT_VALUE)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(SCANLATOR_PREF, checkValue).commit()
-            }
-        }
-
-        // Rate limit
-        val apiRateLimitPreference = androidx.preference.ListPreference(screen.context).apply {
-            key = WEB_RATELIMIT_PREF
-            title = WEB_RATELIMIT_PREF_TITLE
-            summary = WEB_RATELIMIT_PREF_SUMMARY
-            entries = ENTRIES_ARRAY
-            entryValues = ENTRIES_ARRAY
-
-            setDefaultValue(WEB_RATELIMIT_PREF_DEFAULT_VALUE)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(WEB_RATELIMIT_PREF, newValue as String).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
-        }
-
-        val imgCDNRateLimitPreference = androidx.preference.ListPreference(screen.context).apply {
-            key = IMAGE_CDN_RATELIMIT_PREF
-            title = IMAGE_CDN_RATELIMIT_PREF_TITLE
-            summary = IMAGE_CDN_RATELIMIT_PREF_SUMMARY
-            entries = ENTRIES_ARRAY
-            entryValues = ENTRIES_ARRAY
-
-            setDefaultValue(IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(IMAGE_CDN_RATELIMIT_PREF, newValue as String).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
-        }
-
-        screen.addPreference(sfwModePref)
-        screen.addPreference(scanlatorPref)
-        screen.addPreference(apiRateLimitPreference)
-        screen.addPreference(imgCDNRateLimitPreference)
-    }
-
     override fun getFilterList() = FilterList(
         FilterBy(),
         Filter.Separator(),
@@ -590,6 +527,46 @@ abstract class LectorTmo(
     protected fun getScanlatorPref(): Boolean = preferences.getBoolean(SCANLATOR_PREF, SCANLATOR_PREF_DEFAULT_VALUE)
 
     protected fun getSFWModePref(): Boolean = preferences.getBoolean(SFW_MODE_PREF, SFW_MODE_PREF_DEFAULT_VALUE)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val sfwModePref = CheckBoxPreference(screen.context).apply {
+            key = SFW_MODE_PREF
+            title = SFW_MODE_PREF_TITLE
+            summary = SFW_MODE_PREF_SUMMARY
+            setDefaultValue(SFW_MODE_PREF_DEFAULT_VALUE)
+        }
+
+        val scanlatorPref = CheckBoxPreference(screen.context).apply {
+            key = SCANLATOR_PREF
+            title = SCANLATOR_PREF_TITLE
+            summary = SCANLATOR_PREF_SUMMARY
+            setDefaultValue(SCANLATOR_PREF_DEFAULT_VALUE)
+        }
+
+        // Rate limit
+        val apiRateLimitPreference = ListPreference(screen.context).apply {
+            key = WEB_RATELIMIT_PREF
+            title = WEB_RATELIMIT_PREF_TITLE
+            summary = WEB_RATELIMIT_PREF_SUMMARY
+            entries = ENTRIES_ARRAY
+            entryValues = ENTRIES_ARRAY
+            setDefaultValue(WEB_RATELIMIT_PREF_DEFAULT_VALUE)
+        }
+
+        val imgCDNRateLimitPreference = ListPreference(screen.context).apply {
+            key = IMAGE_CDN_RATELIMIT_PREF
+            title = IMAGE_CDN_RATELIMIT_PREF_TITLE
+            summary = IMAGE_CDN_RATELIMIT_PREF_SUMMARY
+            entries = ENTRIES_ARRAY
+            entryValues = ENTRIES_ARRAY
+            setDefaultValue(IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)
+        }
+
+        screen.addPreference(sfwModePref)
+        screen.addPreference(scanlatorPref)
+        screen.addPreference(apiRateLimitPreference)
+        screen.addPreference(imgCDNRateLimitPreference)
+    }
 
     companion object {
         private const val SCANLATOR_PREF = "scanlatorPref"
