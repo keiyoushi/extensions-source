@@ -66,7 +66,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Comicz.net v2", "https://v2.comiz.net", "all", isNsfw = true, className = "ComiczNetV2"),
         SingleLang("Cookie Kiara", "https://18.kiara.cool", "en", isNsfw = true),
         SingleLang("CopyPasteScan", "https://copypastescan.xyz", "es", overrideVersionCode = 1),
-        SingleLang("CreepyScans", "https://creepyscans.com", "en"),
+        SingleLang("CreepyScans", "https://creepyscans.com", "en", overrideVersionCode = 1),
         SingleLang("DapRob", "https://daprob.com", "es"),
         SingleLang("Dark Scans", "https://darkscans.com", "en", overrideVersionCode = 1),
         SingleLang("Dark-scan", "https://dark-scan.com", "en", isNsfw = true, className = "DarkScan"),
