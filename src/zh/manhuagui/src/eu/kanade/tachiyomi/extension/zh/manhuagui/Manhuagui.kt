@@ -396,8 +396,9 @@ class Manhuagui(
         manga.description = document.select("div#intro-all").text().trim()
         manga.thumbnail_url = document.select("p.hcover > img").attr("abs:src")
         manga.author = document.select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a").text().trim().replace(" ", ", ")
-        manga.genre = document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a").text().trim().replace(" ", ", ")
-        manga.status = when (document.select("div.book-detail > ul.detail-list > li.status > span > span").first()!!.text()) {
+        manga.genre = document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a").text().trim()
+            .split(' ').joinToString(transform = ::translateGenre)
+        manga.status = when (document.select("div.book-detail > ul.detail-list > li.status > span > span").first()?.text()) {
             STT_ONGOING -> SManga.ONGOING
             STT_COMPLETED -> SManga.COMPLETED
             else -> SManga.UNKNOWN
@@ -785,44 +786,89 @@ class Manhuagui(
 
     private val BY_GENRE = if (isChinese) "按剧情" else "By genre"
     private val GENRE_ALL = if (isChinese) "全部" else "All"
-    private val GENRE_rexue = if (isChinese) "热血" else "Passionate"
-    private val GENRE_maoxian = if (isChinese) "冒险" else "Adventure"
-    private val GENRE_mohuan = if (isChinese) "魔幻" else "Fantasy"
-    private val GENRE_shengui = if (isChinese) "神鬼" else "Gods and ghosts"
-    private val GENRE_gaoxiao = if (isChinese) "搞笑" else "Funny"
-    private val GENRE_mengxi = if (isChinese) "萌系" else "Cute"
-    private val GENRE_aiqing = if (isChinese) "爱情" else "Love"
-    private val GENRE_kehuan = if (isChinese) "科幻" else "Science fiction"
-    private val GENRE_mofa = if (isChinese) "魔法" else "Magic"
-    private val GENRE_gedou = if (isChinese) "格斗" else "Fighting"
-    private val GENRE_wuxia = if (isChinese) "武侠" else "Martial arts"
-    private val GENRE_jizhan = if (isChinese) "机战" else "Aircraft warfare"
-    private val GENRE_zhanzheng = if (isChinese) "战争" else "War"
-    private val GENRE_jingji = if (isChinese) "竞技" else "Sports"
-    private val GENRE_tiyu = if (isChinese) "体育" else "Physical education"
-    private val GENRE_xiaoyuan = if (isChinese) "校园" else "Campus"
-    private val GENRE_shenghuo = if (isChinese) "生活" else "Life"
-    private val GENRE_lizhi = if (isChinese) "励志" else "Inspirational"
-    private val GENRE_lishi = if (isChinese) "历史" else "History"
-    private val GENRE_weiniang = if (isChinese) "伪娘" else "Femboy"
-    private val GENRE_zhainan = if (isChinese) "宅男" else "Otaku"
-    private val GENRE_funv = if (isChinese) "腐女" else "Fujoshi"
-    private val GENRE_danmei = if (isChinese) "耽美" else "Boys love"
-    private val GENRE_baihe = if (isChinese) "百合" else "Lily"
-    private val GENRE_hougong = if (isChinese) "后宫" else "Harem"
-    private val GENRE_zhiyu = if (isChinese) "治愈" else "Cure"
-    private val GENRE_meishi = if (isChinese) "美食" else "Gourmet food"
-    private val GENRE_tuili = if (isChinese) "推理" else "Reasoning"
-    private val GENRE_xuanyi = if (isChinese) "悬疑" else "Suspense"
-    private val GENRE_kongbu = if (isChinese) "恐怖" else "Fear"
-    private val GENRE_sige = if (isChinese) "四格" else "Four grids"
-    private val GENRE_zhichang = if (isChinese) "职场" else "Workplace"
-    private val GENRE_zhentan = if (isChinese) "侦探" else "Detective"
-    private val GENRE_shehui = if (isChinese) "社会" else "Society"
-    private val GENRE_yinyue = if (isChinese) "音乐" else "Music"
-    private val GENRE_wudao = if (isChinese) "舞蹈" else "Dance"
-    private val GENRE_zazhi = if (isChinese) "杂志" else "Magazine"
-    private val GENRE_heidao = if (isChinese) "黑道" else "Underworld"
+    private val GENRE_rexue = translateGenre("热血")
+    private val GENRE_maoxian = translateGenre("冒险")
+    private val GENRE_mohuan = translateGenre("魔幻")
+    private val GENRE_shengui = translateGenre("神鬼")
+    private val GENRE_gaoxiao = translateGenre("搞笑")
+    private val GENRE_mengxi = translateGenre("萌系")
+    private val GENRE_aiqing = translateGenre("爱情")
+    private val GENRE_kehuan = translateGenre("科幻")
+    private val GENRE_mofa = translateGenre("魔法")
+    private val GENRE_gedou = translateGenre("格斗")
+    private val GENRE_wuxia = translateGenre("武侠")
+    private val GENRE_jizhan = translateGenre("机战")
+    private val GENRE_zhanzheng = translateGenre("战争")
+    private val GENRE_jingji = translateGenre("竞技")
+    private val GENRE_tiyu = translateGenre("体育")
+    private val GENRE_xiaoyuan = translateGenre("校园")
+    private val GENRE_shenghuo = translateGenre("生活")
+    private val GENRE_lizhi = translateGenre("励志")
+    private val GENRE_lishi = translateGenre("历史")
+    private val GENRE_weiniang = translateGenre("伪娘")
+    private val GENRE_zhainan = translateGenre("宅男")
+    private val GENRE_funv = translateGenre("腐女")
+    private val GENRE_danmei = translateGenre("耽美")
+    private val GENRE_baihe = translateGenre("百合")
+    private val GENRE_hougong = translateGenre("后宫")
+    private val GENRE_zhiyu = translateGenre("治愈")
+    private val GENRE_meishi = translateGenre("美食")
+    private val GENRE_tuili = translateGenre("推理")
+    private val GENRE_xuanyi = translateGenre("悬疑")
+    private val GENRE_kongbu = translateGenre("恐怖")
+    private val GENRE_sige = translateGenre("四格")
+    private val GENRE_zhichang = translateGenre("职场")
+    private val GENRE_zhentan = translateGenre("侦探")
+    private val GENRE_shehui = translateGenre("社会")
+    private val GENRE_yinyue = translateGenre("音乐")
+    private val GENRE_wudao = translateGenre("舞蹈")
+    private val GENRE_zazhi = translateGenre("杂志")
+    private val GENRE_heidao = translateGenre("黑道")
+
+    private fun translateGenre(it: String): String {
+        if (isChinese) return it
+        return when (it) {
+            "热血" -> "Passionate"
+            "冒险" -> "Adventure"
+            "魔幻" -> "Fantasy"
+            "神鬼" -> "Gods and ghosts"
+            "搞笑" -> "Funny"
+            "萌系" -> "Cute"
+            "爱情" -> "Love"
+            "科幻" -> "Science fiction"
+            "魔法" -> "Magic"
+            "格斗" -> "Fighting"
+            "武侠" -> "Martial arts"
+            "机战" -> "Aircraft warfare"
+            "战争" -> "War"
+            "竞技" -> "Sports"
+            "体育" -> "Physical education"
+            "校园" -> "Campus"
+            "生活" -> "Life"
+            "励志" -> "Inspirational"
+            "历史" -> "History"
+            "伪娘" -> "Femboy"
+            "宅男" -> "Otaku"
+            "腐女" -> "Fujoshi"
+            "耽美" -> "Boys love"
+            "百合" -> "Lily"
+            "后宫" -> "Harem"
+            "治愈" -> "Cure"
+            "美食" -> "Gourmet food"
+            "推理" -> "Reasoning"
+            "悬疑" -> "Suspense"
+            "恐怖" -> "Fear"
+            "四格" -> "4-panel strip"
+            "职场" -> "Workplace"
+            "侦探" -> "Detective"
+            "社会" -> "Society"
+            "音乐" -> "Music"
+            "舞蹈" -> "Dance"
+            "杂志" -> "Magazine"
+            "黑道" -> "Underworld"
+            else -> it
+        }
+    }
 
     private val BY_AUDIENCE = if (isChinese) "按受众" else "By audience"
     private val AUDIENCE_ALL = if (isChinese) "全部" else "All"
