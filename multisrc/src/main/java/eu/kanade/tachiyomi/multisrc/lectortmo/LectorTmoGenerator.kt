@@ -9,7 +9,7 @@ class LectorTmoGenerator : ThemeSourceGenerator {
 
     override val themeClass = "LectorTmo"
 
-    override val baseVersionCode: Int = 1
+    override val baseVersionCode: Int = 2
 
     override val sources = listOf(
         SingleLang("LectorManga", "https://lectormanga.com", "es", isNsfw = true, overrideVersionCode = 34),
