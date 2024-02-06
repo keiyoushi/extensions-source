@@ -48,6 +48,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Glory Scans", "https://gloryscans.fr", "fr"),
         SingleLang("Gremory Mangas", "https://gremorymangas.com", "es"),
         SingleLang("Hanuman Scan", "https://hanumanscan.com", "en"),
+        SingleLang("Hentai20", "https://hentai20.io", "en", isNsfw = true, overrideVersionCode = 4),
         SingleLang("Heroxia", "https://heroxia.com", "id", isNsfw = true),
         SingleLang("Hikari Scan", "https://hikariscan.org", "pt-BR", isNsfw = true, overrideVersionCode = 2),
         SingleLang("Imagine Scan", "https://imaginescan.com.br", "pt-BR", isNsfw = true, overrideVersionCode = 1),
