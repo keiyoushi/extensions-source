@@ -2,15 +2,21 @@ package eu.kanade.tachiyomi.extension.id.mangaku
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -35,11 +41,11 @@ import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Mangaku : ParsedHttpSource() {
+class Mangaku : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Mangaku"
 
-    override val baseUrl = "https://mangaku.mom"
+    override val baseUrl by lazy { preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!! }
 
     override val lang = "id"
 
@@ -48,6 +54,10 @@ class Mangaku : ParsedHttpSource() {
     override val client = network.cloudflareClient
 
     private lateinit var directory: Elements
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     override fun headersBuilder(): Headers.Builder =
         super.headersBuilder().add("Referer", "$baseUrl/")
@@ -251,5 +261,28 @@ class Mangaku : ParsedHttpSource() {
         javaClass
             .getResource("/assets/crypto-js.min.js")!!
             .readText() // CryptoJS v4.0.0 (on site: cpr2.js)
+    }
+
+    companion object {
+        private val PREF_DOMAIN_KEY = "preferred_domain_name_v${AppInfo.getVersionName()}"
+        private const val PREF_DOMAIN_TITLE = "Override BaseUrl"
+        private const val PREF_DOMAIN_DEFAULT = "https://mangaku.bio"
+        private const val PREF_DOMAIN_SUMMARY = "Override default domain with a different one"
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = PREF_DOMAIN_KEY
+            title = PREF_DOMAIN_TITLE
+            dialogTitle = PREF_DOMAIN_TITLE
+            summary = PREF_DOMAIN_SUMMARY
+            dialogMessage = "Default: $PREF_DOMAIN_DEFAULT"
+            setDefaultValue(PREF_DOMAIN_DEFAULT)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                Toast.makeText(screen.context, "Restart App to apply new setting.", Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
     }
 }
