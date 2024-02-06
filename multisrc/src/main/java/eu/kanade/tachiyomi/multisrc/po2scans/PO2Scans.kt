@@ -36,7 +36,7 @@ abstract class PO2Scans(
 
     override fun popularMangaSelector() = "div.series-list"
 
-    override fun popularMangaFromElement(element: Element) =SManga.create().apply {
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("div > a")!!.absUrl("href"))
         title = element.selectFirst("div > h2")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
