@@ -22,7 +22,7 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangalike : Madara("MangaLike", "https://manga-like.org", "ar", SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))) {
+class MangaLike : Madara("MangaLike", "https://manga-like.org", "ar", SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))) {
 
     override val chapterUrlSuffix = ""
 
