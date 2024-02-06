@@ -340,12 +340,10 @@ class Manhuagui(
                     ) as String
                 }
                 val hiddenChapterList = Jsoup.parse(decodedHiddenChapterList, response.request.url.toString())
-                if (hiddenChapterList != null) {
-                    // Replace R18 warning with actual chapter list
-                    document.select("#erroraudit_show").first()!!.replaceWith(hiddenChapterList)
-                    // Remove hidden chapter list element
-                    document.select("#__VIEWSTATE").first()!!.remove()
-                }
+                // Replace R18 warning with actual chapter list
+                document.select("#erroraudit_show").first()!!.replaceWith(hiddenChapterList)
+                // Remove hidden chapter list element
+                document.select("#__VIEWSTATE").first()!!.remove()
             } else {
                 // "You need to enable R18 switch and restart Tachiyomi to read this manga"
                 error(R18_NEED_ENABLE)
@@ -364,7 +362,7 @@ class Manhuagui(
                 chapterList.forEach {
                     val currentChapter = SChapter.create()
                     currentChapter.url = it.attr("href")
-                    currentChapter.name = it?.attr("title")?.trim() ?: it.select("span").first()!!.ownText()
+                    currentChapter.name = it.attr("title").trim().ifEmpty { it.select("span").first()!!.ownText() }
                     currentChapter.chapter_number = chNumRegex.find(currentChapter.name)?.value?.toFloatOrNull() ?: -1F
 
                     // Manhuagui only provide upload date for latest chapter
