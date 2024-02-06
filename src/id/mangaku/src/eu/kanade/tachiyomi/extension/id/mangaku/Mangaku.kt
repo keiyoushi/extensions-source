@@ -12,7 +12,6 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -45,6 +44,10 @@ class Mangaku : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Mangaku"
 
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
     override val baseUrl = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
 
     override val lang = "id"
@@ -54,10 +57,6 @@ class Mangaku : ParsedHttpSource(), ConfigurableSource {
     override val client = network.cloudflareClient
 
     private lateinit var directory: Elements
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
     override fun headersBuilder(): Headers.Builder =
         super.headersBuilder().add("Referer", "$baseUrl/")
@@ -264,7 +263,7 @@ class Mangaku : ParsedHttpSource(), ConfigurableSource {
     }
 
     companion object {
-        private val PREF_DOMAIN_KEY = "preferred_domain_name_v${AppInfo.getVersionName()}"
+        private const val PREF_DOMAIN_KEY = "mangakuUrlPreference"
         private const val PREF_DOMAIN_TITLE = "Override BaseUrl"
         private const val PREF_DOMAIN_DEFAULT = "https://mangaku.bio"
         private const val PREF_DOMAIN_SUMMARY = "Override default domain with a different one"
