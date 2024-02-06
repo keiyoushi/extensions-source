@@ -118,7 +118,6 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Hentai Manga", "https://hentaimanga.me", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Hentai Teca", "https://hentaiteca.net", "pt-BR", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Hentai-Scantrad", "https://hentai.scantrad-vf.cc", "fr", isNsfw = true, className = "HentaiScantrad", overrideVersionCode = 1),
-        SingleLang("Hentai20", "https://hentai20.io", "en", isNsfw = true, overrideVersionCode = 3),
         SingleLang("Hentai3z", "https://hentai3z.xyz", "en", isNsfw = true),
         SingleLang("Hentai4Free", "https://hentai4free.net", "en", isNsfw = true),
         SingleLang("HentaiRead", "https://hentairead.com", "en", isNsfw = true, className = "Hentairead", overrideVersionCode = 3),
