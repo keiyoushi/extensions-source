@@ -80,7 +80,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         title = children[1].text()
         setUrlWithoutDomain(children[0].selectFirst("a")!!.attr("href"))
         val img = children[0].selectFirst("img")!!
-        thumbnail_url = img.attr("data-original").ifEmpty { img.attr("src") }.substringBeforeLast('?')
+        thumbnail_url = img.extractThumbnailUrl().substringBeforeLast('?')
         author = children[2].select("a").joinToString(", ") { it.text() }
         genre = children[3].select("a").joinToString(", ") { it.text() }
     }
@@ -166,7 +166,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")!!.text()
         // keep thumbnail_url same as the one in popularMangaFromElement()
-        thumbnail_url = document.selectFirst(".thumb-overlay > img")!!.attr("src").substringBeforeLast('.') + "_3x4.jpg"
+        thumbnail_url = document.selectFirst(".thumb-overlay > img")!!.extractThumbnailUrl().substringBeforeLast('.') + "_3x4.jpg"
         author = selectAuthor(document)
         genre = selectDetailsStatusAndGenre(document, 0).trim().split(" ").joinToString(", ")
 
@@ -174,6 +174,15 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         // it will definitely return a String type of 0, 1 or 2. This warning can be ignored
         status = selectDetailsStatusAndGenre(document, 1).trim().toInt()
         description = document.selectFirst("#intro-block .p-t-5.p-b-5")!!.text().substringAfter("敘述：").trim()
+    }
+
+    private fun Element.extractThumbnailUrl(): String {
+        return when {
+            hasAttr("data-original") -> attr("data-original")
+            hasAttr("src") -> attr("src")
+            hasAttr("data-cfsrc") -> attr("data-cfsrc")
+            else -> ""
+        }
     }
 
     // 查询作者信息
