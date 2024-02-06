@@ -687,11 +687,11 @@ class Manhuagui(
             ),
         ),
         StatusFilter(
-            STT_BY_PROGRESS,
+            BY_PROGRESS,
             arrayOf(
-                Pair(STT_ALL, ""),
-                Pair(STT_ONGOING, "lianzai"),
-                Pair(STT_COMPLETED, "wanjie"),
+                Pair(PROGRESS_ALL, ""),
+                Pair(PROGRESS_ONGOING, "lianzai"),
+                Pair(PROGRESS_COMPLETED, "wanjie"),
             ),
         ),
     )
@@ -763,10 +763,10 @@ class Manhuagui(
     private val R18_NEED_ENABLE = if (isChinese) "您需要打开R18作品显示开关并重启软件才能阅读此作品" else "You need to enable R18 switch and restart Tachiyomi to read this manga"
     private val R18_NOT_EFFECTIVE = if (isChinese) "R18作品显示开关未开启或未生效" else "R18 setting didn't enabled or became effective"
 
-    private val STT_ALL = if (isChinese) "全部" else "All"
-    private val STT_ONGOING = if (isChinese) "连载中" else "Ongoing"
-    private val STT_COMPLETED = if (isChinese) "已完结" else "Completed"
-    private val STT_BY_PROGRESS = if (isChinese) "按进度" else "By progress"
+    private val BY_PROGRESS = if (isChinese) "按进度" else "By progress"
+    private val PROGRESS_ALL = if (isChinese) "全部" else "All"
+    private val PROGRESS_ONGOING = if (isChinese) "连载中" else "Ongoing"
+    private val PROGRESS_COMPLETED = if (isChinese) "已完结" else "Completed"
 
     private val SORT_BY = if (isChinese) "排序方式" else "Sort by"
     private val SORT_BY_POPULAR = if (isChinese) "人气最旺" else "Most view"
@@ -854,6 +854,9 @@ class Manhuagui(
     private val FIRST_LETTER_ALL = if (isChinese) "全部" else "All"
 
     companion object {
+        private const val STT_ONGOING = "连载中"
+        private const val STT_COMPLETED = "已完结"
+
         private const val SHOW_R18_PREF = "showR18Default"
 
         private const val SHOW_ZH_HANT_WEBSITE_PREF = "showZhHantWebsite"
