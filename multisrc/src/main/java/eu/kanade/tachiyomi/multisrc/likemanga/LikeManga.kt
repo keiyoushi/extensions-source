@@ -1,8 +1,7 @@
-package eu.kanade.tachiyomi.extension.en.likemanga
+package eu.kanade.tachiyomi.multisrc.likemanga
 
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -25,19 +24,15 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LikeManga : ParsedHttpSource() {
-
-    override val name = "LikeManga"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://likemanga.io"
+abstract class LikeManga(
+    override val name: String,
+    override val baseUrl: String,
+    override val lang: String,
+) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2)
-        .build()
+    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -189,8 +184,7 @@ class LikeManga : ParsedHttpSource() {
 
         val lastPage = document.select("div.chapters_pagination a:not(.next)").last()
             ?.attr("onclick")
-            ?.substringAfter("(")
-            ?.substringBefore(")")
+            ?.run { chapterPageCountRegex.find(this)?.groupValues?.get(1) }
             ?.toIntOrNull()
             ?: return chapters
 
@@ -289,5 +283,6 @@ class LikeManga : ParsedHttpSource() {
         val dateFormat by lazy {
             SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH)
         }
+        private val chapterPageCountRegex = Regex("""load_list_chapter\((\d+)\)""")
     }
 }
