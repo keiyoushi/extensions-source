@@ -19,7 +19,7 @@ abstract class PO2Scans(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd MMMM, yy", Locale.ENGLISH)
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd MMMM, yy", Locale.ENGLISH),
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
