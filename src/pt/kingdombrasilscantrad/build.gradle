@@ -1,0 +1,7 @@
+ext {
+    extName = "Kingdom Brasil Scantrad"
+    extClass = ".KingdomBrasilScantrad"
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
