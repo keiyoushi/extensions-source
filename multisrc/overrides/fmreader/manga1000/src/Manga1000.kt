@@ -59,12 +59,12 @@ class Manga1000 : FMReader("Manga1000", "https://manga1000.top", "ja") {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("script:containsData(imgsListchap)")
+        return document.select("script:containsData(imgsChapter)")
             .html()
             .substringAfter("(")
             .substringBefore(",")
             .let { cid ->
-                client.newCall(GET("$baseUrl/app/manga/controllers/cont.imgsList.php?cid=$cid", headers)).execute().asJsoup()
+                client.newCall(GET("$baseUrl/app/manga/controllers/cont.Showimage.php?cid=$cid", headers)).execute().asJsoup()
             }
             .select(".lazyload")
             .mapIndexed { i, e ->
