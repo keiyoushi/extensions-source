@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.zh.manhuagui
 import android.app.Application
 import android.content.SharedPreferences
 import app.cash.quickjs.QuickJs
-import eu.kanade.tachiyomi.lib.lzstring.LZString
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -296,13 +295,19 @@ class Manhuagui(
         if (hiddenEncryptedChapterList != null) {
             if (getShowR18()) {
                 // Hidden chapter list is LZString encoded
-                val decodedHiddenChapterList = LZString.decompressFromBase64(hiddenEncryptedChapterList.`val`())
+                val decodedHiddenChapterList = QuickJs.create().use {
+                    it.evaluate(
+                        jsDecodeFunc +
+                            """LZString.decompressFromBase64('${hiddenEncryptedChapterList.`val`()}');""",
+                    ) as String
+                }
                 val hiddenChapterList = Jsoup.parse(decodedHiddenChapterList, response.request.url.toString())
-
-                // Replace R18 warning with actual chapter list
-                document.select("#erroraudit_show").first()!!.replaceWith(hiddenChapterList)
-                // Remove hidden chapter list element
-                document.select("#__VIEWSTATE").first()!!.remove()
+                if (hiddenChapterList != null) {
+                    // Replace R18 warning with actual chapter list
+                    document.select("#erroraudit_show").first()!!.replaceWith(hiddenChapterList)
+                    // Remove hidden chapter list element
+                    document.select("#__VIEWSTATE").first()!!.remove()
+                }
             } else {
                 // "You need to enable R18 switch and restart Tachiyomi to read this manga"
                 error("您需要打开R18作品显示开关并重启软件才能阅读此作品")
