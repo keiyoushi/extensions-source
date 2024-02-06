@@ -98,7 +98,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("FreeMangaTop", "https://freemangatop.com", "en", overrideVersionCode = 2),
         SingleLang("FreeWebtoonCoins", "https://freewebtooncoins.com", "en", overrideVersionCode = 1),
         SingleLang("GalaxyDegenScans", "https://gdscans.com", "en", overrideVersionCode = 4),
-        SingleLang("Gatemanga", "https://gatemanga.com", "ar", overrideVersionCode = 1),
+        SingleLang("Gatemanga", "https://gatemanga.com", "ar", overrideVersionCode = 2),
         SingleLang("Gekkou Scans", "https://gekkou.site", "pt-BR", isNsfw = true, pkgName = "gekkouscan", overrideVersionCode = 2),
         SingleLang("Ghost Scan", "https://ghostscan.com.br", "pt-BR", isNsfw = true),
         SingleLang("Girls Love Manga!", "https://glmanga.com", "en", isNsfw = true, className = "GirlsLoveManga"),
