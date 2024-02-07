@@ -98,7 +98,7 @@ class Xinmeitulu : ParsedHttpSource() {
         description = document.select(".container > p").joinToString("\n") {
             val str = it.text()
             if (str.contains("拍摄机构：")) {
-                author = str.replace("拍摄机构：", "")
+                author = str.replace("拍摄机构：", "").trim()
             }
             str.replace("拍摄机构：", "${translate("拍摄机构")}: ")
                 .replace("相关编号：", "${translate("相关编号")}: ")
@@ -112,6 +112,7 @@ class Xinmeitulu : ParsedHttpSource() {
                 .replace("杯", "-${translate("杯")}")
                 .replace("匿名", translate("匿名"))
                 .replace("；", "")
+                .trim()
         }
     }
 
