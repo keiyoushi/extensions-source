@@ -122,6 +122,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Ngomik", "https://ngomik.net", "id", overrideVersionCode = 2),
         SingleLang("NIGHT SCANS", "https://nightscans.net", "en", isNsfw = true, className = "NightScans", overrideVersionCode = 3),
         SingleLang("Noromax", "https://noromax.my.id", "id"),
+        SingleLang("NTR-Manga", "https://www.ntr-manga.com", "th", isNsfw = true, className = "NTRManga"),
         SingleLang("Origami Orpheans", "https://origami-orpheans.com", "pt-BR", overrideVersionCode = 10),
         SingleLang("Otsugami", "https://otsugami.id", "id"),
         SingleLang("Ozul Scans", "https://kingofmanga.com", "ar", overrideVersionCode = 2),
