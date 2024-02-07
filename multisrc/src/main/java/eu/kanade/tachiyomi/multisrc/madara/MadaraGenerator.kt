@@ -398,7 +398,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Rüya Manga", "https://www.ruyamanga.com", "tr", className = "RuyaManga", overrideVersionCode = 1),
         SingleLang("S2Manga", "https://www.s2manga.com", "en", overrideVersionCode = 2),
         SingleLang("Sagrado Império da Britannia", "https://imperiodabritannia.com", "pt-BR", className = "ImperioDaBritannia"),
-        SingleLang("SamuraiScan", "https://samuraiscan.com", "es", overrideVersionCode = 3),
+        SingleLang("SamuraiScan", "https://samuraiscan.org", "es", overrideVersionCode = 4),
         SingleLang("Sawamics", "https://sawamics.com", "en"),
         SingleLang("ScamberTraslator", "https://scambertraslator.com", "es", overrideVersionCode = 3),
         SingleLang("Scan Hentai Menu", "https://scan.hentai.menu", "fr", isNsfw = true, overrideVersionCode = 1),
