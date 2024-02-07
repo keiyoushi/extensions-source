@@ -21,23 +21,22 @@ data class ComikeyComic(
 
 @Serializable
 data class ComikeyChapterListResponse(
-    val status: Int,
-    val data: ComikeyChapterListData,
-)
-
-@Serializable
-data class ComikeyChapterListData(
-    val episodes: List<ComikeyEpisode>,
+    val episodes: List<ComikeyEpisode> = emptyList(),
 )
 
 @Serializable
 data class ComikeyEpisode(
     val id: String,
-    val number: String,
-    val name: List<ComikeyNameWrapper>,
-    val language: String,
-    val publishedAt: Long,
-    val saleAt: Long?,
+    val number: Float = 0F,
+    val title: String,
+    val subtitle: String? = null,
+    val releasedAt: String,
+    val availability: ComikeyEpisodeAvailability,
+)
+
+@Serializable
+data class ComikeyEpisodeAvailability(
+    val purchaseEnabled: Boolean = false,
 )
 
 @Serializable

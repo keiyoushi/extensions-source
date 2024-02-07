@@ -11,8 +11,9 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
 
+                <data android:host="comikey.com" />
+                <data android:host="br.comikey.com" />
                 <data
-                    android:host="comikey.com"
                     android:pathPattern="/comics/..*/..*/"
                     android:scheme="https"/>
             </intent-filter>

@@ -9,9 +9,12 @@ import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -32,14 +35,18 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Comikey(override val lang: String) : ParsedHttpSource() {
-
-    override val name = "Comikey"
-
-    override val baseUrl = "https://comikey.com"
+open class Comikey(
+    final override val lang: String,
+    override val name: String = "Comikey",
+    override val baseUrl: String = "https://comikey.com",
+    private val gundamUrl: String = "https://gundam.comikey.net",
+    private val defaultLanguage: String = "en",
+) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
@@ -50,10 +57,25 @@ class Comikey(override val lang: String) : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    private val dateFormat by lazy {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT)
+    }
+
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
         isLenient = true
+    }
+
+    private val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "pt-BR"),
+        classLoader = this::class.java.classLoader!!,
+    )
+
+    private val preferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/comics/?order=-views&page=$page", headers)
@@ -113,7 +135,7 @@ class Comikey(override val lang: String) : ParsedHttpSource() {
         element
             .selectFirst("div.series-data span.subtitle")
             ?.text()
-            ?.removePrefix("by ")
+            ?.removePrefix("${intl["by"]} ")
             ?.split(" | ", limit = 2)
             ?.let {
                 author = it.getOrNull(0)
@@ -151,48 +173,63 @@ class Comikey(override val lang: String) : ParsedHttpSource() {
         }
     }
 
+    protected open fun makeEpisodeSlug(episode: ComikeyEpisode, defaultChapterPrefix: String): String {
+        val e4pid = episode.id.split("-", limit = 2).last()
+        val chapterPrefix = if (defaultChapterPrefix == "chapter" && lang != defaultLanguage) {
+            when (lang) {
+                "es" -> "capitulo-espanol"
+                "pt-br" -> "capitulo-portugues"
+                "fr" -> "chapitre-francais"
+                "id" -> "bab-bahasa"
+                else -> "chapter"
+            }
+        } else {
+            defaultChapterPrefix
+        }
+
+        return "$e4pid/$chapterPrefix-${episode.number.toString().replace(".", "-")}"
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val comicData = json.decodeFromString<ComikeyComic>(
+        val mangaData = json.decodeFromString<ComikeyComic>(
             document.selectFirst("script#comic")!!.data(),
         )
-        val e4pid = comicData.e4pid
-        val chapterPrefix = if (comicData.format == 2) "episode" else "chapter"
-        val chapterNamePrefix = chapterPrefix.replaceFirstChar { it.titlecase() }
-        val chapterData = json.decodeFromString<ComikeyChapterListResponse>(
+        val defaultChapterPrefix = if (mangaData.format == 2) "episode" else "chapter"
+
+        val mangaSlug = response.request.url.pathSegments[1]
+        val mangaId = response.request.url.pathSegments[2]
+        val data = json.decodeFromString<ComikeyChapterListResponse>(
             client.newCall(
-                GET(
-                    "https://relay-us.epub.rocks/consumer/COMIKEY/series/$e4pid/content?clientid=dylMNK5a32of",
-                    headers,
-                ),
+                GET("$gundamUrl/comic.public/$mangaId/episodes?language=${lang.lowercase()}", headers),
             )
                 .execute()
                 .body
                 .string(),
         )
-        val currentTime = System.currentTimeMillis()
 
-        return chapterData.data.episodes
-            .filter { it.language == lang && (it.saleAt == null || it.saleAt * 1000L <= currentTime) }
+        return data.episodes
+            .filter { !it.availability.purchaseEnabled || !hidePaidChapters }
             .map {
-                val shortId = it.id.split("-", limit = 2).last()
-
                 SChapter.create().apply {
-                    url = "/read/${comicData.uslug}/$shortId/$chapterPrefix-${it.number.replace(".", "-")}/#${comicData.id}"
+                    url = "/read/$mangaSlug/${makeEpisodeSlug(it, defaultChapterPrefix)}/"
                     name = buildString {
-                        append(chapterNamePrefix)
-                        append(" ")
-                        append(it.number)
+                        append(it.title)
 
-                        if (it.name.isNotEmpty()) {
+                        if (it.subtitle != null) {
                             append(": ")
-                            append(it.name[0].name)
+                            append(it.subtitle)
                         }
                     }
-                    date_upload = it.publishedAt * 1000L
-                    chapter_number = it.number.toFloat()
+                    chapter_number = it.number
+                    date_upload = try {
+                        dateFormat.parse(it.releasedAt)!!.time
+                    } catch (e: Exception) {
+                        0L
+                    }
                 }
-            }.reversed()
+            }
+            .reversed()
     }
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
@@ -242,11 +279,11 @@ class Comikey(override val lang: String) : ParsedHttpSource() {
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
-            throw Exception("Timed out decrypting image links")
+            throw Exception(intl["error_timed_out_decrypting_image_links"])
         }
 
         if (jsInterface.error.isNotEmpty()) {
-            throw Exception(jsInterface.error)
+            throw Exception(intl[jsInterface.error])
         }
 
         val manifestUrl = jsInterface.manifestUrl.toHttpUrl()
@@ -264,16 +301,28 @@ class Comikey(override val lang: String) : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("Please use at least 2 characters when searching by title."),
-        Filter.Separator(),
-        TypeFilter(),
-        SortFilter(),
-    )
+    override fun getFilterList() = getComikeyFilters(intl)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HIDE_PAID_CHAPTERS
+            title = intl["pref_hide_paid_chapters"]
+            summary = intl["pref_hide_paid_chapters_summary"]
+            setDefaultValue(false)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putBoolean(PREF_HIDE_PAID_CHAPTERS, newValue as Boolean).commit()
+            }
+        }.also(screen::addPreference)
+    }
+
+    private val hidePaidChapters by lazy {
+        preferences.getBoolean(PREF_HIDE_PAID_CHAPTERS, false)
+    }
 
     private val webviewScript by lazy {
         javaClass.getResource("/assets/webview-script.js")?.readText()
-            ?: throw Exception("WebView script not found.")
+            ?: throw Exception(intl["error_webview_script_not_found"])
     }
 
     private fun randomString() = buildString(15) {
@@ -319,5 +368,6 @@ class Comikey(override val lang: String) : ParsedHttpSource() {
 
     companion object {
         internal const val PREFIX_SLUG_SEARCH = "slug:"
+        internal const val PREF_HIDE_PAID_CHAPTERS = "hide_paid_chapters"
     }
 }

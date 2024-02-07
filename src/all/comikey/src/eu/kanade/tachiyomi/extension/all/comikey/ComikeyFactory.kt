@@ -5,8 +5,9 @@ import eu.kanade.tachiyomi.source.SourceFactory
 class ComikeyFactory : SourceFactory {
     override fun createSources() = listOf(
         Comikey("en"),
+        Comikey("es"),
         Comikey("id"),
         Comikey("pt-BR"),
-        Comikey("es"),
+        Comikey("pt-BR", "Comikey Brasil", "https://br.comikey.com", defaultLanguage = "pt-BR"),
     )
 }
