@@ -40,13 +40,15 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+
 open class Comikey(
     final override val lang: String,
     override val name: String = "Comikey",
     override val baseUrl: String = "https://comikey.com",
-    private val gundamUrl: String = "https://gundam.comikey.net",
     private val defaultLanguage: String = "en",
 ) : ParsedHttpSource(), ConfigurableSource {
+
+    private val gundamUrl: String = "https://gundam.comikey.net"
 
     override val supportsLatest = true
 
