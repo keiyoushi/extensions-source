@@ -26,7 +26,7 @@ class ReadM : ParsedHttpSource() {
 
     // Info
     override val name: String = "ReadM"
-    override val baseUrl: String = "https://readm.org"
+    override val baseUrl: String = "https://readm.today"
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -102,7 +102,7 @@ class ReadM : ParsedHttpSource() {
         status = parseStatus(document.select("div.series-genres .series-status").firstOrNull()?.ownText())
     }
 
-    protected fun parseStatus(element: String?): Int = when {
+    private fun parseStatus(element: String?): Int = when {
         element == null -> SManga.UNKNOWN
         listOf("ongoing").any { it.contains(element, ignoreCase = true) } -> SManga.ONGOING
         listOf("completed").any { it.contains(element, ignoreCase = true) } -> SManga.COMPLETED
