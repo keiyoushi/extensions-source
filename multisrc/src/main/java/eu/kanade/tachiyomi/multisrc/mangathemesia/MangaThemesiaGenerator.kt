@@ -82,6 +82,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Luminous Scans", "https://luminousscans.net", "en", overrideVersionCode = 1),
         SingleLang("Lunar Scans", "https://lunarscan.org", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Magus Manga", "https://magusmanga.com", "en", overrideVersionCode = 1),
+        SingleLang("Makimaaaaa", "https://makimaaaaa.com", "th", isNsfw = true),
         SingleLang("Manga Flame", "https://mangaflame.org", "ar", overrideVersionCode = 1),
         SingleLang("Manga Kings", "https://mangakings.com.tr", "tr"),
         SingleLang("Manga Pro", "https://mangapro.pro", "ar"),
