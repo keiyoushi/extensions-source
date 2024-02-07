@@ -88,7 +88,7 @@ open class Comikey(
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comics/", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comics/?page=$page", headers)
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
