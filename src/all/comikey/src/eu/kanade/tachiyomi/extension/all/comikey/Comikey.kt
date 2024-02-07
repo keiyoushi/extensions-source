@@ -163,7 +163,7 @@ open class Comikey(
         }
     }
 
-    protected open fun makeEpisodeSlug(episode: ComikeyEpisode, defaultChapterPrefix: String): String {
+    private fun makeEpisodeSlug(episode: ComikeyEpisode, defaultChapterPrefix: String): String {
         val e4pid = episode.id.split("-", limit = 2).last()
         val chapterPrefix = if (defaultChapterPrefix == "chapter" && lang != defaultLanguage) {
             when (lang) {
