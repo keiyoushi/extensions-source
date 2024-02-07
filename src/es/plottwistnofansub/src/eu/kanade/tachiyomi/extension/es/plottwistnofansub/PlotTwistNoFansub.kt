@@ -182,7 +182,7 @@ class PlotTwistNoFansub : ParsedHttpSource() {
 
     override fun getFilterList(): FilterList {
         return FilterList(
-            Filter.Header("Haga click en \"Filtrar\" para ver los mangas."),
+            Filter.Header("Haga click en \"Filtrar\" para ver todos los mangas."),
         )
     }
 
