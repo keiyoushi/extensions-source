@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", (e) => {
     if (document.querySelector("#unlock-full")) {
-        window.__interface__.passError("Locked chapter, unlock in WebView.");
+        window.__interface__.passError("error_locked_chapter_unlock_in_webview");
     }
 });
 
@@ -25,13 +25,13 @@ document.addEventListener(
                     db.close();
 
                     if (entries.length < 1) {
-                        window.__interface__.passError("Open chapter in WebView, then try again (no tokens).");
+                        window.__interface__.passError("error_open_in_webview_then_try_again");
                     }
 
                     const value = entries[0].value;
 
                     if (value.expireTimeMillis < Date.now()) {
-                        window.__interface__.passError("Open chapter in WebView, then try again (token expired).");
+                        window.__interface__.passError("error_open_in_webview_then_try_again");
                     }
 
                     resolve(value.token)
