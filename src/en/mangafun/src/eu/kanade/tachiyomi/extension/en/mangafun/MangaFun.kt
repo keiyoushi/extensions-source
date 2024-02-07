@@ -26,6 +26,7 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import kotlin.math.min
 
 class MangaFun : HttpSource() {
 
@@ -278,7 +279,7 @@ class MangaFun : HttpSource() {
     )
 
     private fun parseDirectory(page: Int): MangasPage {
-        val endRange = (page * 24).let { if (it < directory.size) it else directory.size }
+        val endRange = min((page * 24), directory.size)
         val manga = directory.subList(((page - 1) * 24), endRange).map { it.toSManga() }
         val hasNextPage = endRange < directory.lastIndex
 
