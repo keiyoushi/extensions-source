@@ -245,7 +245,6 @@ open class AsmHentai(override val lang: String, private val tlTag: String) : Par
                 .build()
 
             val xhrHeaders = headers.newBuilder()
-                .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
                 .add("X-Requested-With", "XMLHttpRequest")
                 .build()
 
