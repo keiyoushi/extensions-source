@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".en.apairof2.APairOf2UrlActivity"
+            android:name="eu.kanade.tachiyomi.multisrc.po2scans.PO2ScansUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -14,9 +14,9 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="po2scans.com"
+                    android:host="${SOURCEHOST}"
                     android:pathPattern="/series/..*"
-                    android:scheme="https" />
+                    android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
     </application>
