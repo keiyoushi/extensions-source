@@ -15,6 +15,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
 
     override val sources = listOf(
         MultiLang("Miau Scan", "https://miaucomics.org", listOf("es", "pt-BR"), overrideVersionCode = 2),
+        MultiLang("Thunder Scans", "https://thunderscans.com", listOf("ar", "en")),
         SingleLang("Ainz Scans ID", "https://ainzscans.net", "id", overrideVersionCode = 1),
         SingleLang("Alceascan", "https://alceascan.my.id", "id"),
         SingleLang("Animated Glitched Comics", "https://agscomics.com", "en"),
@@ -156,7 +157,6 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Tempest Fansub", "https://tempestfansub.com", "tr", isNsfw = true),
         SingleLang("Tenshi.id", "https://tenshi.id", "id", className = "TenshiId", pkgName = "masterkomik", overrideVersionCode = 4),
         SingleLang("The Apollo Team", "https://theapollo.team", "en"),
-        SingleLang("Thunder Scans", "https://thunderscans.com", "ar"),
         SingleLang("Tres Daos Scan", "https://tresdaos.com", "es"),
         SingleLang("Tsundoku Traduções", "https://tsundoku.com.br", "pt-BR", className = "TsundokuTraducoes", overrideVersionCode = 9),
         SingleLang("TukangKomik", "https://tukangkomik.id", "id", overrideVersionCode = 1),
