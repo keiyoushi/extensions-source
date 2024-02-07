@@ -59,6 +59,7 @@ data class Chapter(
     val id: Int,
     val manga_id: Int,
     val slug: String,
+    val on_disk: Int,
     val images: List<String>,
 )
 

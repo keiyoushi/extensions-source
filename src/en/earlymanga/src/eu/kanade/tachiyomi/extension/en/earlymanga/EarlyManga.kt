@@ -25,13 +25,9 @@ class EarlyManga : HttpSource() {
 
     override val name = "EarlyManga"
 
-    private val domain = "earlym.org"
-
-    override val baseUrl = "https://$domain"
+    override val baseUrl = "https://earlym.org"
 
     private val apiUrl = "$baseUrl/api"
-
-    private val cdnUrl = "https://images.$domain"
 
     override val lang = "en"
 
@@ -221,11 +217,15 @@ class EarlyManga : HttpSource() {
         val result = response.parseAs<PageListResponse>().chapter
         val chapterUrl = response.request.url.toString()
             .replace("/api", "")
-
+        val preSlug = if (result.on_disk != 0) {
+            "storage/uploads/manga"
+        } else {
+            "e-storage/uploads/manga"
+        }
         return result.images
             .filterNot { it.endsWith(".ico") }
             .mapIndexed { index, img ->
-                Page(index = index, url = chapterUrl, imageUrl = "$cdnUrl/manga/manga_${result.manga_id}/chapter_${result.slug}/$img")
+                Page(index = index, url = chapterUrl, imageUrl = "$baseUrl/$preSlug/manga_${result.manga_id}/chapter_${result.slug}/$img")
             }
     }
 
