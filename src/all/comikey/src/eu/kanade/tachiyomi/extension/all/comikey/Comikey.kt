@@ -114,6 +114,10 @@ open class Comikey(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/comics/".toHttpUrl().newBuilder().apply {
+            if (page > 1) {
+                addQueryParameter("page", page.toString())
+            }
+
             if (query.length >= 2) {
                 addQueryParameter("q", query)
             }
