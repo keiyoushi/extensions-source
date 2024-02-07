@@ -16,11 +16,10 @@ import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Entities
@@ -75,25 +74,21 @@ class PlotTwistNoFansub : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/wp-admin/admin-ajax.php"
 
-        val ajaxHeaders = this.headersBuilder()
-            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
         val body = FormBody.Builder()
             .add("action", "td_ajax_search")
             .add("td_string", query)
             .add("limit", MAX_MANGA_RESULTS.toString())
             .build()
 
-        return POST(url, ajaxHeaders, body)
+        return POST(url, headers, body)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<SearchResultDto>(response.body.string())
         val unescapedHtml = result.data.unescape()
-        val newResponse = response.newBuilder().body(unescapedHtml.toResponseBody(HTML_MEDIA_TYPE)).build()
-        return super.searchMangaParse(newResponse)
+        val mangas = Jsoup.parse(unescapedHtml).select(searchMangaSelector())
+            .map { searchMangaFromElement(it) }
+        return MangasPage(mangas, false)
     }
 
     override fun searchMangaSelector(): String = "div.td-cpt-manga"
@@ -127,11 +122,6 @@ class PlotTwistNoFansub : ParsedHttpSource() {
         val formBody = FormBody.Builder()
             .add("action", "lcap")
             .add("manga_id", mangaId)
-
-        val headers = headersBuilder()
-            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
 
         var page = 1
         val chapterList = mutableListOf<SChapter>()
@@ -205,6 +195,5 @@ class PlotTwistNoFansub : ParsedHttpSource() {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         private val CHAPTER_PAGES_REGEX = """obj\s*=\s*(.*)\s*;""".toRegex()
         private const val MAX_MANGA_RESULTS = 1000
-        private val HTML_MEDIA_TYPE = "text/html".toMediaType()
     }
 }
