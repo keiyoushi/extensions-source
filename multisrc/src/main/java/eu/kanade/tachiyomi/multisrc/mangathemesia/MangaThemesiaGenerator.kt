@@ -30,6 +30,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("BirdManga", "https://birdmanga.com", "en"),
         SingleLang("Boosei", "https://boosei.net", "id", overrideVersionCode = 2),
         SingleLang("Cartel de Manhwas", "https://carteldemanhwas.com", "es", overrideVersionCode = 6),
+        SingleLang("Comicaso", "https://comicaso.com", "id"),
         SingleLang("Constellar Scans", "https://constellarcomic.com", "en", isNsfw = true, overrideVersionCode = 16),
         SingleLang("Cosmic Scans", "https://cosmic-scans.com", "en", overrideVersionCode = 2),
         SingleLang("CosmicScans.id", "https://cosmicscans.id", "id", overrideVersionCode = 3, className = "CosmicScansID"),
