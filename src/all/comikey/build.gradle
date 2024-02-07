@@ -1,0 +1,7 @@
+ext {
+    extName = "Comikey"
+    extClass = ".ComikeyFactory"
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
