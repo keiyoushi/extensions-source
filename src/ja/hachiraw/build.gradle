@@ -1,0 +1,8 @@
+ext {
+    extName = "Hachiraw"
+    extClass = ".Hachiraw"
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
