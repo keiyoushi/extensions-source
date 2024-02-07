@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.micmicidol
+package eu.kanade.tachiyomi.multisrc.gravureblogger
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

@@ -1,5 +1,6 @@
-package eu.kanade.tachiyomi.extension.ja.micmicidol
+package eu.kanade.tachiyomi.multisrc.gravureblogger
 
+import android.annotation.SuppressLint
 import android.os.Build
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -22,13 +23,12 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MicMicIdol : HttpSource() {
-
-    override val name = "MIC MIC IDOL"
-
-    override val baseUrl = "https://www.micmicidol.club"
-
-    override val lang = "ja"
+@SuppressLint("ObsoleteSdkInt")
+abstract class GravureBlogger(
+    override val name: String,
+    override val baseUrl: String,
+    override val lang: String,
+) : HttpSource() {
 
     override val supportsLatest = false
 
@@ -139,26 +139,29 @@ class MicMicIdol : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
+    // filter name and list of values
+    protected open val labelFilters = mapOf<String, List<String>>()
+
+    class LabelFilter(name: String, labels: List<Label>) : Filter.Group<Label>(name, labels)
+
+    class Label(name: String) : Filter.CheckBox(name)
+
     override fun getFilterList(): FilterList {
-        val types = getTypes()
-        val japanMagazines = getJapanMagazines()
-        val japanFashion = getJapanFashion()
+        val filters = mutableListOf<Filter<*>>()
 
-        val filters = mutableListOf<Filter<*>>(
-            LabelFilter("Type", types.map { Label(it) }),
-            LabelFilter("Japan Magazine", japanMagazines.map { Label(it) }),
-            LabelFilter("Japan Fashion", japanFashion.map { Label(it) }),
-        ).apply {
-            if (categories.isEmpty()) {
-                add(0, Filter.Header("Press 'Reset' to show extra filters"))
-                add(1, Filter.Separator())
-                return@apply
-            }
+        labelFilters.forEach { (name, filter) ->
+            filters.add(LabelFilter(name, filter.map(::Label)))
+        }
 
+        if (categories.isEmpty()) {
+            filters.add(0, Filter.Header("Press 'Reset' to show extra filters"))
+            filters.add(1, Filter.Separator())
+        } else {
+            val existing = labelFilters.values.flatten()
             val others = categories
-                .filterNot { types.contains(it) || japanMagazines.contains(it) || japanFashion.contains(it) }
+                .filterNot { existing.contains(it) }
 
-            add(LabelFilter("Other", others.map { Label(it) }))
+            filters.add(LabelFilter("Other", others.map(::Label)))
         }
 
         return FilterList(filters)
