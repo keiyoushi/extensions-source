@@ -104,7 +104,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         searchMangaRequest(
             page,
             "",
-            FilterList(SeriesSort(Filter.Sort.Selection(2, false))),
+            FilterList(SeriesSort(Filter.Sort.Selection(3, false))),
         )
 
     override fun latestUpdatesParse(response: Response): MangasPage =
