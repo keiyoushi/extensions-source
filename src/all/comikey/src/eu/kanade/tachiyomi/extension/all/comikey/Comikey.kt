@@ -132,16 +132,6 @@ open class Comikey(
             title = it.text()
         }
 
-        element
-            .selectFirst("div.series-data span.subtitle")
-            ?.text()
-            ?.removePrefix("${intl["by"]} ")
-            ?.split(" | ", limit = 2)
-            ?.let {
-                author = it.getOrNull(0)
-                artist = it.getOrNull(1)
-            }
-
         description = element.select("div.excerpt p").text() +
             "\n\n" +
             element.select("div.desc p").text()
