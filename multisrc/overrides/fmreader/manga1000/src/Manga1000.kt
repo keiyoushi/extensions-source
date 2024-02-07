@@ -25,7 +25,7 @@ class Manga1000 : FMReader("Manga1000", "https://manga1000.top", "ja") {
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val slug = manga.url.substringAfter("manga-").substringBefore(".html")
 
-        return client.newCall(GET("$baseUrl/app/manga/controllers/cont.Listchapterapi.php?slug=$slug", headers))
+        return client.newCall(GET("$baseUrl/app/manga/controllers/cont.Listchapter.php?slug=$slug", headers))
             .asObservableSuccess()
             .map { res ->
                 res.asJsoup().select(".at-series a").map {
