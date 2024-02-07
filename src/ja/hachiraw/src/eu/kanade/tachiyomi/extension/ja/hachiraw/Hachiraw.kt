@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ja.hachiraw
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -11,6 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -58,6 +60,25 @@ class Hachiraw : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+            val manga = SManga.create().apply { url = "/manga/$slug" }
+
+            fetchMangaDetails(manga)
+                .map {
+                    it.url = "/manga/$slug"
+                    MangasPage(listOf(it), false)
+                }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.ifEmpty { getFilterList() }
@@ -158,4 +179,8 @@ class Hachiraw : ParsedHttpSource() {
         SortFilter(),
         GenreFilter(),
     )
+
+    companion object {
+        internal const val PREFIX_SLUG_SEARCH = "slug:"
+    }
 }
