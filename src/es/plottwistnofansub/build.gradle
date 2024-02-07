@@ -1,0 +1,8 @@
+ext {
+    extName = 'Plot Twist No Fansub'
+    extClass = '.PlotTwistNoFansub'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
