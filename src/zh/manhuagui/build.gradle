@@ -1,7 +1,12 @@
 ext {
     extName = 'ManHuaGui'
     extClass = '.Manhuagui'
-    extVersionCode = 19
+    extVersionCode = 20
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:lzstring"))
+    implementation(project(":lib:unpacker"))
+}
