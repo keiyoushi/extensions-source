@@ -218,7 +218,7 @@ open class Comikey(
         val currentTime = System.currentTimeMillis()
 
         return data.episodes
-            .filter { !it.availability.purchaseEnabled || !hidePaidChapters }
+            .filter { it.readable || !hideLockedChapters }
             .map {
                 SChapter.create().apply {
                     url = "/read/$mangaSlug/${makeEpisodeSlug(it, defaultChapterPrefix)}/"
@@ -332,19 +332,19 @@ open class Comikey(
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_HIDE_PAID_CHAPTERS
-            title = intl["pref_hide_paid_chapters"]
-            summary = intl["pref_hide_paid_chapters_summary"]
+            key = PREF_HIDE_LOCKED_CHAPTERS
+            title = intl["pref_hide_locked_chapters"]
+            summary = intl["pref_hide_locked_chapters_summary"]
             setDefaultValue(false)
 
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(PREF_HIDE_PAID_CHAPTERS, newValue as Boolean).commit()
+                preferences.edit().putBoolean(PREF_HIDE_LOCKED_CHAPTERS, newValue as Boolean).commit()
             }
         }.also(screen::addPreference)
     }
 
-    private val hidePaidChapters by lazy {
-        preferences.getBoolean(PREF_HIDE_PAID_CHAPTERS, false)
+    private val hideLockedChapters by lazy {
+        preferences.getBoolean(PREF_HIDE_LOCKED_CHAPTERS, false)
     }
 
     private val webviewScript by lazy {
@@ -420,6 +420,6 @@ open class Comikey(
 
     companion object {
         internal const val PREFIX_SLUG_SEARCH = "slug:"
-        internal const val PREF_HIDE_PAID_CHAPTERS = "hide_paid_chapters"
+        internal const val PREF_HIDE_LOCKED_CHAPTERS = "hide_locked_chapters"
     }
 }

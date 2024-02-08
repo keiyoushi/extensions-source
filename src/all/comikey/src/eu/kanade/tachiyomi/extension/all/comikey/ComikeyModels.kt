@@ -34,7 +34,12 @@ data class ComikeyEpisode(
     val subtitle: String? = null,
     val releasedAt: String,
     val availability: ComikeyEpisodeAvailability,
-)
+    val finalPrice: Int = 0,
+    val owned: Boolean = false,
+) {
+    val readable
+        get() = finalPrice == 0 || owned
+}
 
 @Serializable
 data class ComikeyEpisodeManifest(
