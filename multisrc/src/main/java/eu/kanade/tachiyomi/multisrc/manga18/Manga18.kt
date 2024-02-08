@@ -1,14 +1,19 @@
 package eu.kanade.tachiyomi.multisrc.manga18
 
 import android.util.Base64
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.lang.Exception
@@ -33,6 +38,17 @@ abstract class Manga18(
         return GET("$baseUrl/list-manga/$page?order_by=views", headers)
     }
 
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        getTags(document)
+
+        val entries = document.select(popularMangaSelector()).map(::popularMangaFromElement)
+        val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
+
+        return MangasPage(entries, hasNextPage)
+    }
+
     override fun popularMangaSelector() = "div.story_item"
     override fun popularMangaNextPageSelector() = ".pagination a[rel=next]"
 
@@ -46,21 +62,77 @@ abstract class Manga18(
         return GET("$baseUrl/list-manga/$page", headers)
     }
 
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/list-manga/$page".toHttpUrl().newBuilder()
-            .addQueryParameter("search", query.trim())
-            .build()
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            val tag = filters.filterIsInstance<TagFilter>().firstOrNull()
+            if (query.isNotEmpty() || tag?.selected.isNullOrEmpty()) {
+                addPathSegment("list-manga")
+                addPathSegment(page.toString())
+                addQueryParameter("search", query.trim())
+            } else {
+                addPathSegment("manga-list")
+                addPathSegment(tag!!.selected!!)
+                addPathSegment(page.toString())
+                filters.filterIsInstance<SortFilter>().firstOrNull()?.selected?.let {
+                    addQueryParameter("order_by", it)
+                }
+            }
+        }.build()
 
         return GET(url, headers)
     }
 
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+
+    protected open val getAvailableTags = true
+    protected open val tagsSelector = "div.grid_cate li > a"
+
+    private var tags = listOf<Pair<String, String>>()
+    private var getTagsAttempts = 0
+
+    protected open fun getTags(document: Document) {
+        if (getAvailableTags && tags.isEmpty() && getTagsAttempts < 3) {
+            try {
+                tags = document.select(tagsSelector).map {
+                    Pair(
+                        it.text().trim(),
+                        it.attr("href")
+                            .removeSuffix("/")
+                            .substringAfterLast("/")
+                    )
+                }.let {
+                    listOf(Pair("", "")) + it
+                }
+            } catch (e: Exception) {
+                Log.d(name, e.stackTraceToString())
+            }
+        }
+    }
+
+    override fun getFilterList(): FilterList {
+        if (!getAvailableTags) return FilterList()
+
+        return if (tags.isEmpty()) {
+            FilterList(
+                Filter.Header("Press 'reset' to attempt to load genres")
+            )
+        } else {
+            FilterList(
+                Filter.Header("Ignored with text search"),
+                Filter.Separator(),
+                SortFilter(),
+                TagFilter(tags)
+            )
+        }
+    }
 
     protected open val infoElementSelector = "div.detail_listInfo"
     protected open val titleSelector = "div.detail_name > h1"
