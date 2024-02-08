@@ -18,6 +18,7 @@ data class ComikeyComic(
     val uslug: String,
     @SerialName("full_cover") val fullCover: String,
     @SerialName("update_status") val updateStatus: Int,
+    @SerialName("update_text") val updateText: String,
 )
 
 @Serializable

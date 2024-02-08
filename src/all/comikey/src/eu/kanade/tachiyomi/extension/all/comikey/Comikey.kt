@@ -159,6 +159,12 @@ open class Comikey(
             description = "\"${data.excerpt}\"\n\n${data.description}"
             thumbnail_url = "$baseUrl${data.fullCover}"
             status = when (data.updateStatus) {
+                // HACK: Comikey Brasil
+                0 -> when {
+                    data.updateText.startsWith("toda", false) -> SManga.ONGOING
+                    listOf("em pausa", "hiato").any { data.updateText.startsWith(it, false) } -> SManga.ON_HIATUS
+                    else -> SManga.UNKNOWN
+                }
                 1 -> SManga.COMPLETED
                 3 -> SManga.ON_HIATUS
                 in (4..14) -> SManga.ONGOING // daily, weekly, bi-weekly, monthly, every day of the week
