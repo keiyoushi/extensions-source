@@ -6,7 +6,6 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.all.komga.KomgaUtils.toSManga
 import eu.kanade.tachiyomi.extension.all.komga.dto.BookDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.PageWrapperDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.ReadListDto
@@ -49,15 +48,15 @@ internal object KomgaUtils {
 
     fun Response.isFromReadList() = request.url.toString().contains("/api/v1/readlists")
 
-    fun processSeriesPage(response: Response, baseUrl: String): MangasPage {
+    fun processSeriesPage(response: Response, baseUrl: String, urlPrefix: String): MangasPage {
         return if (response.isFromReadList()) {
             val data = response.parseAs<PageWrapperDto<ReadListDto>>()
 
-            MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+            MangasPage(data.content.map { it.toSManga(baseUrl, urlPrefix) }, !data.last)
         } else {
             val data = response.parseAs<PageWrapperDto<SeriesDto>>()
 
-            MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+            MangasPage(data.content.map { it.toSManga(baseUrl, urlPrefix) }, !data.last)
         }
     }
 
@@ -83,11 +82,11 @@ internal object KomgaUtils {
         }
     }
 
-    fun SeriesDto.toSManga(baseUrl: String): SManga =
+    fun SeriesDto.toSManga(baseUrl: String, urlPrefix: String): SManga =
         SManga.create().apply {
             title = metadata.title
-            url = "$baseUrl/api/v1/series/$id"
-            thumbnail_url = "$url/thumbnail"
+            url = "$urlPrefix/api/v1/series/$id"
+            thumbnail_url = "$baseUrl/api/v1/series/$id/thumbnail"
             status = when {
                 metadata.status == "ENDED" && metadata.totalBookCount != null && booksCount < metadata.totalBookCount -> SManga.PUBLISHING_FINISHED
                 metadata.status == "ENDED" -> SManga.COMPLETED
@@ -104,12 +103,12 @@ internal object KomgaUtils {
             }
         }
 
-    fun ReadListDto.toSManga(baseUrl: String): SManga =
+    fun ReadListDto.toSManga(baseUrl: String, urlPrefix: String): SManga =
         SManga.create().apply {
             title = name
             description = summary
-            url = "$baseUrl/api/v1/readlists/$id"
-            thumbnail_url = "$url/thumbnail"
+            url = "$urlPrefix/api/v1/readlists/$id"
+            thumbnail_url = "$baseUrl/api/v1/readlists/$id/thumbnail"
             status = SManga.UNKNOWN
         }
 

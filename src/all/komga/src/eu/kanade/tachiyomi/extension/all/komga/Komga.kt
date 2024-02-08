@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.extension.all.komga.KomgaUtils.addEditTextPreference
 import eu.kanade.tachiyomi.extension.all.komga.KomgaUtils.isFromReadList
@@ -72,6 +73,13 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }
     private val username by lazy { preferences.getString(PREF_USERNAME, "")!! }
     private val password by lazy { preferences.getString(PREF_PASSWORD, "")!! }
+    private val urlPrefix by lazy {
+        if (preferences.getBoolean(PREF_PERMANENT_URL, false)) {
+            suffix.ifEmpty { "1" }
+        } else {
+            baseUrl
+        }
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
@@ -98,7 +106,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         )
 
     override fun popularMangaParse(response: Response): MangasPage =
-        KomgaUtils.processSeriesPage(response, baseUrl)
+        KomgaUtils.processSeriesPage(response, baseUrl, urlPrefix)
 
     override fun latestUpdatesRequest(page: Int): Request =
         searchMangaRequest(
@@ -108,7 +116,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         )
 
     override fun latestUpdatesParse(response: Response): MangasPage =
-        KomgaUtils.processSeriesPage(response, baseUrl)
+        KomgaUtils.processSeriesPage(response, baseUrl, urlPrefix)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         runCatching { fetchFilterOptions() }
@@ -148,17 +156,28 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     }
 
     override fun searchMangaParse(response: Response): MangasPage =
-        KomgaUtils.processSeriesPage(response, baseUrl)
+        KomgaUtils.processSeriesPage(response, baseUrl, urlPrefix)
 
-    override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1", "")
+    override fun getMangaUrl(manga: SManga) = manga.url
+        .replaceFirst(urlPrefix, baseUrl)
+        .replace("/api/v1", "")
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        if (!manga.url.startsWith(urlPrefix)) {
+            throw Exception("Migrate from $name to $name")
+        }
+
+        return GET(
+            manga.url.replaceFirst(urlPrefix, baseUrl),
+            headers,
+        )
+    }
 
     override fun mangaDetailsParse(response: Response): SManga {
         return if (response.isFromReadList()) {
-            response.parseAs<ReadListDto>().toSManga(baseUrl)
+            response.parseAs<ReadListDto>().toSManga(baseUrl, urlPrefix)
         } else {
-            response.parseAs<SeriesDto>().toSManga(baseUrl)
+            response.parseAs<SeriesDto>().toSManga(baseUrl, urlPrefix)
         }
     }
 
@@ -166,10 +185,17 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         preferences.getString(PREF_CHAPTER_NAME_TEMPLATE, PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)!!
     }
 
-    override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
+    override fun getChapterUrl(chapter: SChapter) = chapter.url
+        .replaceFirst(urlPrefix, baseUrl)
+        .replace("/api/v1/books", "/book")
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET("${manga.url}/books?unpaged=true&media_status=READY&deleted=false", headers)
+    override fun chapterListRequest(manga: SManga): Request {
+        if (!manga.url.startsWith(urlPrefix)) {
+            throw Exception("Migrate from $name to $name")
+        }
+
+        return GET("${manga.url.replaceFirst(urlPrefix, baseUrl)}/books?unpaged=true&media_status=READY&deleted=false", headers)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val page = response.parseAs<PageWrapperDto<BookDto>>().content
@@ -177,7 +203,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         val r = page.mapIndexed { index, book ->
             SChapter.create().apply {
                 chapter_number = if (!isFromReadList) book.metadata.numberSort else index + 1F
-                url = "$baseUrl/api/v1/books/${book.id}"
+                url = "$urlPrefix/api/v1/books/${book.id}"
                 name = KomgaUtils.formatChapterName(book, chapterNameTemplate, isFromReadList)
                 scanlator = book.metadata.authors.filter { it.role == "translator" }.joinToString { it.name }
                 date_upload = book.metadata.releaseDate?.let { KomgaUtils.parseDate(it) }
@@ -188,7 +214,13 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         return r.sortedByDescending { it.chapter_number }
     }
 
-    override fun pageListRequest(chapter: SChapter) = GET("${chapter.url}/pages")
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (!chapter.url.startsWith(urlPrefix)) {
+            throw Exception("Migrate from $name to $name")
+        }
+
+        return GET("${chapter.url.replaceFirst(urlPrefix, baseUrl)}/pages")
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val pages = response.parseAs<List<PageDto>>()
@@ -323,9 +355,23 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             """.trimMargin()
 
             setDefaultValue(PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
+            setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
                 true
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_PERMANENT_URL
+            title = "[BETA] Permanent URLs"
+            summary = "Turns all manga URLs into permanent ones.\nIf this is enabled, the Komga instance used by this source MUST stay the same through address changes.\nMigration MUST be done every time this option is toggled.\nBREAKS ENHANCED TRACKING!"
+
+            setDefaultValue(false)
+            setOnPreferenceChangeListener { _, newValue ->
+                val result = preferences.edit().putBoolean(PREF_PERMANENT_URL, newValue as Boolean).commit()
+
+                Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                result
             }
         }.also(screen::addPreference)
     }
@@ -398,6 +444,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         private const val PREF_PASSWORD = "Password"
         private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
         private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"
+        private const val PREF_PERMANENT_URL = "Permanent URLs"
 
         private val supportedImageTypes = listOf("image/jpeg", "image/png", "image/gif", "image/webp", "image/jxl", "image/heif", "image/avif")
 
