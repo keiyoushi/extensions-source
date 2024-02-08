@@ -217,7 +217,7 @@ class EarlyManga : HttpSource() {
         val result = response.parseAs<PageListResponse>().chapter
         val chapterUrl = response.request.url.toString()
             .replace("/api", "")
-        val preSlug = if (result.on_disk != 0) {
+        val preSlug = if (result.on_disk != 0 && result.on_disk != null) {
             "storage/uploads/manga"
         } else {
             "e-storage/uploads/manga"
