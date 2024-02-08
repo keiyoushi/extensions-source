@@ -8,5 +8,5 @@ class MangaWOW : Madara(
     "MangaWOW",
     "https://mangawow.org",
     "tr",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
+    SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 )
