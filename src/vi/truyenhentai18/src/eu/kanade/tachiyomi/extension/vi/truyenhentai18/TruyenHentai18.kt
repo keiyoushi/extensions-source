@@ -83,7 +83,7 @@ class TruyenHentai18 : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaSelector() = "div[data-id] > div.card"
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
