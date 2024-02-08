@@ -157,7 +157,6 @@ open class Comikey(
             author = data.author.joinToString { it.name }
             artist = data.artist.joinToString { it.name }
             description = "\"${data.excerpt}\"\n\n${data.description}"
-            genre = data.tags.joinToString { it.name }
             thumbnail_url = "$baseUrl${data.fullCover}"
             status = when (data.updateStatus) {
                 1 -> SManga.COMPLETED
@@ -165,6 +164,16 @@ open class Comikey(
                 in (4..14) -> SManga.ONGOING // daily, weekly, bi-weekly, monthly, every day of the week
                 else -> SManga.UNKNOWN
             }
+            genre = buildList(data.tags.size + 1) {
+                addAll(data.tags.map { it.name })
+
+                when (data.format) {
+                    0 -> add("Comic")
+                    1 -> add("Manga")
+                    2 -> add("Webtoon")
+                    else -> {}
+                }
+            }.joinToString()
         }
     }
 
