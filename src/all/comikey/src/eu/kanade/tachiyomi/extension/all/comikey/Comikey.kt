@@ -191,19 +191,23 @@ open class Comikey(
         )
         val defaultChapterPrefix = if (mangaData.format == 2) "episode" else "chapter"
 
-        val chapterUrl = "$gundamUrl/comic.public".toHttpUrl().newBuilder().apply {
+        val chapterUrl = gundamUrl.toHttpUrl().newBuilder().apply {
             val mangaId = response.request.url.pathSegments[2]
+            val gundamToken = document.selectFirst("script:containsData(GUNDAM.token)")
+                ?.data()
+                ?.substringAfter("= \"")
+                ?.substringBefore("\";")
+
+            if (gundamToken != null) {
+                addPathSegment("comic")
+            } else {
+                addPathSegment("comic.public")
+            }
 
             addPathSegment(mangaId)
             addPathSegment("episodes")
             addQueryParameter("language", lang.lowercase())
-
-            document.selectFirst("script:containsData(GUNDAM.token)")?.let {
-                addQueryParameter(
-                    "token",
-                    it.data().substringAfter("= \"").substringBefore("\";"),
-                )
-            }
+            gundamToken?.let { addQueryParameter("token", gundamToken) }
         }.build()
         val data = json.decodeFromString<ComikeyEpisodeListResponse>(
             client.newCall(GET(chapterUrl, headers))
