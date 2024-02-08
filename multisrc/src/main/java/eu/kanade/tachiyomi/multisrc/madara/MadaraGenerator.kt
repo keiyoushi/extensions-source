@@ -421,6 +421,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("SkyManga.xyz", "https://skymanga.xyz", "en", isNsfw = true, className = "SkyMangaXyz"),
         SingleLang("Sleepy Translations", "https://sleepytranslations.com", "en", overrideVersionCode = 1),
         SingleLang("Solo Leveling", "https://readsololeveling.online", "en"),
+        SingleLang("StoneScape", "https://stonescape.xyz", "en"),
         SingleLang("Sugar Babies", "https://sugarbbscan.com", "en", overrideVersionCode = 2),
         SingleLang("Summanga", "https://summanga.com", "en", isNsfw = true),
         SingleLang("Sunshine Butterfly Scans", "https://sunshinebutterflyscan.com", "en", isNsfw = true, overrideVersionCode = 1),
