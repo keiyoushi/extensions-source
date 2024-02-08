@@ -157,7 +157,7 @@ abstract class Manga18(
 
             info.selectFirst(altNameSelector)
                 ?.text()
-                ?.takeIf { it != "Updating" || it.isNotEmpty() }
+                ?.takeIf { it != "Updating" && it.isNotEmpty() }
                 ?.let {
                     append("Alternative Names:\n")
                     append(it.trim())
