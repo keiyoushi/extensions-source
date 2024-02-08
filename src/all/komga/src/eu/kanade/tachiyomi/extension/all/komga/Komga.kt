@@ -364,7 +364,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_PERMANENT_URL
             title = "[BETA] Permanent URLs"
-            summary = "Turns all manga URLs into permanent ones.\nIf this is enabled, the Komga instance used by this source MUST stay the same through address changes.\nMigration MUST be done every time this option is toggled.\nBREAKS ENHANCED TRACKING!"
+            summary = "When enabled, series are automatically migrated when the server address changes, as long as the Komga server stays the same.\nMigration MUST be done every time this option is toggled.\nBREAKS ENHANCED TRACKING!"
 
             setDefaultValue(false)
             setOnPreferenceChangeListener { _, newValue ->
