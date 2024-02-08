@@ -8,5 +8,5 @@ class NirvanaManga : MangaThemesia(
     "Nirvana Manga",
     "https://nirvanamanga.com",
     "tr",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr"))
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 )
