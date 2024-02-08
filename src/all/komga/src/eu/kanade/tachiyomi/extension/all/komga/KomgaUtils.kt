@@ -86,7 +86,7 @@ internal object KomgaUtils {
         SManga.create().apply {
             title = metadata.title
             url = "$urlPrefix/api/v1/series/$id"
-            thumbnail_url = "$baseUrl/api/v1/series/$id/thumbnail"
+            thumbnail_url = "${url.replaceFirst(urlPrefix, baseUrl)}/thumbnail"
             status = when {
                 metadata.status == "ENDED" && metadata.totalBookCount != null && booksCount < metadata.totalBookCount -> SManga.PUBLISHING_FINISHED
                 metadata.status == "ENDED" -> SManga.COMPLETED
@@ -108,7 +108,7 @@ internal object KomgaUtils {
             title = name
             description = summary
             url = "$urlPrefix/api/v1/readlists/$id"
-            thumbnail_url = "$baseUrl/api/v1/readlists/$id/thumbnail"
+            thumbnail_url = "${url.replaceFirst(urlPrefix, baseUrl)}/thumbnail"
             status = SManga.UNKNOWN
         }
 
