@@ -183,23 +183,6 @@ open class Comikey(
         }
     }
 
-    private fun makeEpisodeSlug(episode: ComikeyEpisode, defaultChapterPrefix: String): String {
-        val e4pid = episode.id.split("-", limit = 2).last()
-        val chapterPrefix = if (defaultChapterPrefix == "chapter" && lang != defaultLanguage) {
-            when (lang) {
-                "es" -> "capitulo-espanol"
-                "pt-br" -> "capitulo-portugues"
-                "fr" -> "chapitre-francais"
-                "id" -> "bab-bahasa"
-                else -> "chapter"
-            }
-        } else {
-            defaultChapterPrefix
-        }
-
-        return "$e4pid/$chapterPrefix-${episode.number.toString().replace(".", "-")}"
-    }
-
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val mangaData = json.decodeFromString<ComikeyComic>(
@@ -361,6 +344,24 @@ open class Comikey(
             append(charPool.random())
         }
     }
+
+    private fun makeEpisodeSlug(episode: ComikeyEpisode, defaultChapterPrefix: String): String {
+        val e4pid = episode.id.split("-", limit = 2).last()
+        val chapterPrefix = if (defaultChapterPrefix == "chapter" && lang != defaultLanguage) {
+            when (lang) {
+                "es" -> "capitulo-espanol"
+                "pt-br" -> "capitulo-portugues"
+                "fr" -> "chapitre-francais"
+                "id" -> "bab-bahasa"
+                else -> "chapter"
+            }
+        } else {
+            defaultChapterPrefix
+        }
+
+        return "$e4pid/$chapterPrefix-${episode.number.toString().replace(".", "-")}"
+    }
+
 
     private class JsInterface(
         private val latch: CountDownLatch,
