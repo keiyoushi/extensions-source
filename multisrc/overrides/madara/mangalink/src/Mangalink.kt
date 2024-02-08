@@ -11,11 +11,11 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangalink : Madara("مانجا لينك", "https://manga-link.net", "ar", SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))) {
+class Mangalink : Madara("مانجا لينك", "https://manga-link.com", "ar", SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))) {
 
     override val chapterUrlSuffix = ""
 
-    private val defaultBaseUrl = "https://manga-link.net"
+    private val defaultBaseUrl = "https://manga-link.com"
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val preferences: SharedPreferences by lazy {
