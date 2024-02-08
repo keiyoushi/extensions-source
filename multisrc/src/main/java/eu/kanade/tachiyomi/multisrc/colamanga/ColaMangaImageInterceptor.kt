@@ -29,7 +29,6 @@ class ColaMangaImageInterceptor : Interceptor {
         return response.newBuilder()
             .body(output.toResponseBody(mediaType))
             .build()
-
     }
 
     companion object {
