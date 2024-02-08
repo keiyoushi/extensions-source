@@ -1,4 +1,6 @@
 document.addEventListener("DOMContentLoaded", (e) => {
+    // This is intentional. Simply binding `_` to `window.__interface__.gettext` will
+    // throw an error: "Java bridge method can't be invoked on a non-injected object".
     const _ = (key) => window.__interface__.gettext(key);
 
     if (document.querySelector("#unlock-full")) {
