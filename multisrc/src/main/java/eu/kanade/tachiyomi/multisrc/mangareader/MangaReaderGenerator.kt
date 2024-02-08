@@ -33,6 +33,12 @@ class MangaReaderGenerator : ThemeSourceGenerator {
             pkgName = "comickiba",
             overrideVersionCode = 33,
         ),
+        SingleLang(
+            name = "Raw Otaku",
+            baseUrl = "https://rawotaku.com",
+            lang = "ja",
+            isNsfw = true,
+        ),
     )
 
     companion object {
