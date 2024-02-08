@@ -20,7 +20,7 @@ class SayHentai : ParsedHttpSource() {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://sayhentai.fun"
+    override val baseUrl = "https://sayhentai.club"
 
     override val supportsLatest = false
 
@@ -145,7 +145,7 @@ class SayHentai : ParsedHttpSource() {
     }
 
     // document.querySelectorAll("span.number-story").forEach((e) => e.remove())
-    // copy([...document.querySelectorAll(".page-category ul li a")].map((e) => `Genre("${e.textContent.trim()}", "${e.href.replace("https://sayhentai.fun/", "")}"),`).join("\n"))
+    // copy([...document.querySelectorAll(".page-category ul li a")].map((e) => `Genre("${e.textContent.trim()}", "${e.href.replace("https://sayhentai.club/", "")}"),`).join("\n"))
     //
     // There are 2 pseudo-genres: Tất cả (All), and Hoàn thành (Completed), mostly for convenience.
     private fun getGenreList() = arrayOf(
