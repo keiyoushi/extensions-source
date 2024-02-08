@@ -77,8 +77,6 @@ abstract class ColaManga(
         thumbnail_url = element.selectFirst("a.fed-list-pics")?.absUrl("data-original")
     }
 
-    override fun popularMangaNextPageSelector() = "a:contains(下页):not(.fed-btns-disad)"
-
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/show?orderBy=update&page=$page", headers)
 

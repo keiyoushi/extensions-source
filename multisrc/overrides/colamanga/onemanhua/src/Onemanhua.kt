@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.FilterList
 class Onemanhua : ColaManga("COLAMANGA", "https://www.colamanga.com", "zh") {
     override val id = 8252565807829914103 // name used to be "One漫画"
 
+    override fun popularMangaNextPageSelector() = "a:contains(下页):not(.fed-btns-disad)"
+
     override val statusTitle = "状态"
     override val authorTitle = "作者"
     override val genreTitle = "类别"
