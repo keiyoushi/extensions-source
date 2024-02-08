@@ -5,8 +5,11 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
@@ -214,6 +217,7 @@ open class Comikey(
                 .body
                 .string(),
         )
+        val currentTime = System.currentTimeMillis()
 
         return data.episodes
             .filter { !it.availability.purchaseEnabled || !hidePaidChapters }
@@ -236,6 +240,7 @@ open class Comikey(
                     }
                 }
             }
+            .filter { it.date_upload <= currentTime }
             .reversed()
     }
 
@@ -257,7 +262,7 @@ open class Comikey(
 
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch, json)
+        val jsInterface = JsInterface(latch, json, intl)
         var webView: WebView? = null
 
         handler.post {
@@ -269,6 +274,23 @@ open class Comikey(
             innerWv.settings.blockNetworkImage = true
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
+
+            innerWv.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                    if (consoleMessage == null) { return false }
+                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
+                    when (consoleMessage.messageLevel()) {
+                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("comikey", logContent)
+                        ConsoleMessage.MessageLevel.ERROR -> Log.e("comikey", logContent)
+                        ConsoleMessage.MessageLevel.LOG -> Log.i("comikey", logContent)
+                        ConsoleMessage.MessageLevel.TIP -> Log.i("comikey", logContent)
+                        ConsoleMessage.MessageLevel.WARNING -> Log.w("comikey", logContent)
+                        else -> Log.d("comikey", logContent)
+                    }
+
+                    return true
+                }
+            }
 
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -288,15 +310,7 @@ open class Comikey(
         }
 
         if (jsInterface.error.isNotEmpty()) {
-            val message = if (jsInterface.error.startsWith("[")) {
-                val key = jsInterface.error.substringAfter("[").substringBefore("]")
-
-                intl[key]
-            } else {
-                jsInterface.error
-            }
-
-            throw Exception(message)
+            throw Exception(jsInterface.error)
         }
 
         val manifestUrl = jsInterface.manifestUrl.toHttpUrl()
@@ -348,7 +362,11 @@ open class Comikey(
         }
     }
 
-    private class JsInterface(private val latch: CountDownLatch, private val json: Json) {
+    private class JsInterface(
+        private val latch: CountDownLatch,
+        private val json: Json,
+        private val intl: Intl,
+    ) {
         var images: List<ComikeyPage> = emptyList()
             private set
 
@@ -360,6 +378,12 @@ open class Comikey(
 
         var error: String = ""
             private set
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun gettext(key: String): String {
+            return intl[key]
+        }
 
         @JavascriptInterface
         @Suppress("UNUSED")

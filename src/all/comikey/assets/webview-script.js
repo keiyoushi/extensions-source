@@ -1,12 +1,16 @@
 document.addEventListener("DOMContentLoaded", (e) => {
+    const _ = (key) => window.__interface__.gettext(key);
+
     if (document.querySelector("#unlock-full")) {
-        window.__interface__.passError("[error_locked_chapter_unlock_in_webview]");
+        window.__interface__.passError(_("error_locked_chapter_unlock_in_webview"));
     }
 });
 
 document.addEventListener(
     "you-right-now:reeeeeee",
     async (e) => {
+        const _ = (key) => window.__interface__.gettext(key);
+
         try {
             const db = await new Promise((resolve, reject) => {
                 const request = indexedDB.open("firebase-app-check-database");
@@ -25,13 +29,13 @@ document.addEventListener(
                     db.close();
 
                     if (entries.length < 1) {
-                        window.__interface__.passError("[error_open_in_webview_then_try_again]");
+                        window.__interface__.passError(`${_("error_open_in_webview_then_try_again")} (${_("error_token_not_found")}).`);
                     }
 
                     const value = entries[0].value;
 
                     if (value.expireTimeMillis < Date.now()) {
-                        window.__interface__.passError("[error_open_in_webview_then_try_again]");
+                        window.__interface__.passError(`${_("error_open_in_webview_then_try_again")} (${_("error_token_expired")}).`);
                     }
 
                     resolve(value.token)
@@ -41,7 +45,7 @@ document.addEventListener(
             const manifest = JSON.parse(document.querySelector("#lmao-init").textContent).manifest;
             window.__interface__.passPayload(manifest, act, await e.detail);
         } catch (e) {
-            window.__interface__.passError(`WebView error: ${e}`);
+            window.__interface__.passError(`${_("error_unknown_error")}: ${e}`);
         }
     },
     { once: true },
