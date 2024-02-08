@@ -310,11 +310,16 @@ abstract class NepNep(
     override fun chapterListParse(response: Response): List<SChapter> {
         val vmChapters = response.asJsoup().select("script:containsData(MainFunction)").first()!!.data()
             .substringAfter("vm.Chapters = ").substringBefore(";")
-        return json.parseToJsonElement(vmChapters).jsonArray.map { json ->
+        val array = json.parseToJsonElement(vmChapters).jsonArray
+        val hasDistinctTypes = array.map { it.getString("Type") }.distinct().count() > 1
+        return array.map { json ->
             val indexChapter = json.getString("Chapter")!!
+            val type = json.getString("Type")
             SChapter.create().apply {
-                name = json.getString("ChapterName").let { if (it.isNullOrEmpty()) "${json.getString("Type")} ${chapterImage(indexChapter, true)}" else it }
+                name = json.getString("ChapterName").let { if (it.isNullOrEmpty()) "$type ${chapterImage(indexChapter, true)}" else it }
                 url = "/read-online/" + response.request.url.toString().substringAfter("/manga/") + chapterURLEncode(indexChapter)
+                // only add type info as scanlator if there are differing types among chapter array
+                scanlator = if (hasDistinctTypes) type else null
                 date_upload = try {
                     json.getString("Date").let { dateFormat.parse("$it +0600")?.time } ?: 0
                 } catch (_: Exception) {
