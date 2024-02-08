@@ -161,8 +161,8 @@ open class Comikey(
             status = when (data.updateStatus) {
                 // HACK: Comikey Brasil
                 0 -> when {
-                    data.updateText.startsWith("toda", false) -> SManga.ONGOING
-                    listOf("em pausa", "hiato").any { data.updateText.startsWith(it, false) } -> SManga.ON_HIATUS
+                    data.updateText.startsWith("toda", true) -> SManga.ONGOING
+                    listOf("em pausa", "hiato").any { data.updateText.startsWith(it, true) } -> SManga.ON_HIATUS
                     else -> SManga.UNKNOWN
                 }
                 1 -> SManga.COMPLETED
