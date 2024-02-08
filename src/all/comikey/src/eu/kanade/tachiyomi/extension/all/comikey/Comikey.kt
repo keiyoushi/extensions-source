@@ -5,11 +5,8 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.View
-import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
@@ -272,23 +269,6 @@ open class Comikey(
             innerWv.settings.blockNetworkImage = true
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
-
-            innerWv.webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                    if (consoleMessage == null) { return false }
-                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
-                    when (consoleMessage.messageLevel()) {
-                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("comikey", logContent)
-                        ConsoleMessage.MessageLevel.ERROR -> Log.e("comikey", logContent)
-                        ConsoleMessage.MessageLevel.LOG -> Log.i("comikey", logContent)
-                        ConsoleMessage.MessageLevel.TIP -> Log.i("comikey", logContent)
-                        ConsoleMessage.MessageLevel.WARNING -> Log.w("comikey", logContent)
-                        else -> Log.d("comikey", logContent)
-                    }
-
-                    return true
-                }
-            }
 
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
