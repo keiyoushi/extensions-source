@@ -185,17 +185,28 @@ open class Comikey(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
+        val mangaSlug = response.request.url.pathSegments[1]
         val mangaData = json.decodeFromString<ComikeyComic>(
             document.selectFirst("script#comic")!!.data(),
         )
         val defaultChapterPrefix = if (mangaData.format == 2) "episode" else "chapter"
 
-        val mangaSlug = response.request.url.pathSegments[1]
-        val mangaId = response.request.url.pathSegments[2]
+        val chapterUrl = "$gundamUrl/comic.public".toHttpUrl().newBuilder().apply {
+            val mangaId = response.request.url.pathSegments[2]
+
+            addPathSegment(mangaId)
+            addPathSegment("episodes")
+            addQueryParameter("language", lang.lowercase())
+
+            document.selectFirst("script:containsData(GUNDAM.token)")?.let {
+                addQueryParameter(
+                    "token",
+                    it.data().substringAfter("= \"").substringBefore("\";"),
+                )
+            }
+        }.build()
         val data = json.decodeFromString<ComikeyEpisodeListResponse>(
-            client.newCall(
-                GET("$gundamUrl/comic.public/$mangaId/episodes?language=${lang.lowercase()}", headers),
-            )
+            client.newCall(GET(chapterUrl, headers))
                 .execute()
                 .body
                 .string(),
@@ -361,7 +372,6 @@ open class Comikey(
 
         return "$e4pid/$chapterPrefix-${episode.number.toString().replace(".", "-")}"
     }
-
 
     private class JsInterface(
         private val latch: CountDownLatch,
