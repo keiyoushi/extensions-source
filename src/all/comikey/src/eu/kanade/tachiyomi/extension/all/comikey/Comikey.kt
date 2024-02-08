@@ -147,22 +147,22 @@ open class Comikey(
     override fun searchMangaNextPageSelector() = "ul.pagination li.next-page:not(.disabled)"
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val comicData = json.decodeFromString<ComikeyComic>(
+        val data = json.decodeFromString<ComikeyComic>(
             document.selectFirst("script#comic")!!.data(),
         )
-        val updateDateDiv = document.selectFirst("div.updates div.update-date")
 
         return SManga.create().apply {
-            url = comicData.link
-            title = comicData.name
-            author = comicData.author.joinToString { it.name }
-            artist = comicData.artist.joinToString { it.name }
-            description = "\"${comicData.excerpt}\"\n\n${comicData.description}"
-            genre = comicData.tags.joinToString { it.name }
-            thumbnail_url = "$baseUrl${comicData.fullCover}"
-            status = when {
-                updateDateDiv?.selectFirst("span.update-text") != null -> SManga.ONGOING
-                updateDateDiv?.selectFirst("strong")?.text() == "Completed" -> SManga.COMPLETED
+            url = data.link
+            title = data.name
+            author = data.author.joinToString { it.name }
+            artist = data.artist.joinToString { it.name }
+            description = "\"${data.excerpt}\"\n\n${data.description}"
+            genre = data.tags.joinToString { it.name }
+            thumbnail_url = "$baseUrl${data.fullCover}"
+            status = when (data.updateStatus) {
+                1 -> SManga.COMPLETED
+                3 -> SManga.ON_HIATUS
+                in (4..14) -> SManga.ONGOING // daily, weekly, bi-weekly, monthly, every day of the week
                 else -> SManga.UNKNOWN
             }
         }

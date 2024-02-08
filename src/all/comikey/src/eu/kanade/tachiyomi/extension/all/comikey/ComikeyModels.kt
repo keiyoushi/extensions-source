@@ -13,10 +13,11 @@ data class ComikeyComic(
     val tags: List<ComikeyNameWrapper>,
     val description: String,
     val excerpt: String,
-    @SerialName("full_cover") val fullCover: String,
     val e4pid: String,
     val format: Int,
     val uslug: String,
+    @SerialName("full_cover") val fullCover: String,
+    @SerialName("update_status") val updateStatus: Int,
 )
 
 @Serializable
