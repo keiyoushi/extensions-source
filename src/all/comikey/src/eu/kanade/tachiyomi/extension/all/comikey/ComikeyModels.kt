@@ -22,7 +22,7 @@ data class ComikeyComic(
 )
 
 @Serializable
-data class ComikeyChapterListResponse(
+data class ComikeyEpisodeListResponse(
     val episodes: List<ComikeyEpisode> = emptyList(),
 )
 
@@ -34,6 +34,28 @@ data class ComikeyEpisode(
     val subtitle: String? = null,
     val releasedAt: String,
     val availability: ComikeyEpisodeAvailability,
+)
+
+@Serializable
+data class ComikeyEpisodeManifest(
+    val readingOrder: List<ComikeyPage>,
+)
+
+@Serializable
+data class ComikeyPage(
+    val href: String,
+    val type: String,
+    val height: Int,
+    val width: Int,
+    val alternate: List<ComikeyAlternatePage>,
+)
+
+@Serializable
+data class ComikeyAlternatePage(
+    val href: String,
+    val type: String,
+    val height: Int,
+    val width: Int,
 )
 
 @Serializable

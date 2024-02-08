@@ -24,9 +24,6 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -209,7 +206,7 @@ open class Comikey(
 
         val mangaSlug = response.request.url.pathSegments[1]
         val mangaId = response.request.url.pathSegments[2]
-        val data = json.decodeFromString<ComikeyChapterListResponse>(
+        val data = json.decodeFromString<ComikeyEpisodeListResponse>(
             client.newCall(
                 GET("$gundamUrl/comic.public/$mangaId/episodes?language=${lang.lowercase()}", headers),
             )
@@ -305,9 +302,11 @@ open class Comikey(
         val manifestUrl = jsInterface.manifestUrl.toHttpUrl()
 
         return jsInterface.images.mapIndexed { i, it ->
+            val href = it.alternate.firstOrNull { it.type == "image/webp" }?.href
+                ?: it.href
             val url = manifestUrl.newBuilder().apply {
                 removePathSegment(manifestUrl.pathSegments.size - 1)
-                addPathSegments(it)
+                addPathSegments(href)
                 addQueryParameter("act", jsInterface.act)
             }.build()
 
@@ -350,7 +349,7 @@ open class Comikey(
     }
 
     private class JsInterface(private val latch: CountDownLatch, private val json: Json) {
-        var images: List<String> = emptyList()
+        var images: List<ComikeyPage> = emptyList()
             private set
 
         var manifestUrl: String = ""
@@ -374,9 +373,7 @@ open class Comikey(
         fun passPayload(manifestUrl: String, act: String, rawData: String) {
             this.manifestUrl = manifestUrl
             this.act = act
-            images = json.parseToJsonElement(rawData).jsonObject["readingOrder"]!!.jsonArray.map {
-                it.jsonObject["href"]!!.jsonPrimitive.content
-            }
+            images = json.decodeFromString<ComikeyEpisodeManifest>(rawData).readingOrder
 
             latch.countDown()
         }
