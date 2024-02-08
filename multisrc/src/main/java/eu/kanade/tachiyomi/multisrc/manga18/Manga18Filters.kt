@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.manga18
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-
 abstract class SelectFilter(
     name: String,
     private val options: List<Pair<String, String>>,
@@ -20,5 +19,5 @@ class SortFilter : SelectFilter("Sort", sortValues)
 private val sortValues = listOf(
     Pair("Latest", ""),
     Pair("Views", "views"),
-    Pair("A-Z", "name")
+    Pair("A-Z", "name"),
 )

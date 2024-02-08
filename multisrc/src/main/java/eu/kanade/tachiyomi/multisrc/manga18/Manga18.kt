@@ -24,7 +24,7 @@ import java.util.Locale
 abstract class Manga18(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String
+    override val lang: String,
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -106,7 +106,7 @@ abstract class Manga18(
                         it.text().trim(),
                         it.attr("href")
                             .removeSuffix("/")
-                            .substringAfterLast("/")
+                            .substringAfterLast("/"),
                     )
                 }.let {
                     listOf(Pair("", "")) + it
@@ -122,14 +122,14 @@ abstract class Manga18(
 
         return if (tags.isEmpty()) {
             FilterList(
-                Filter.Header("Press 'reset' to attempt to load genres")
+                Filter.Header("Press 'reset' to attempt to load genres"),
             )
         } else {
             FilterList(
                 Filter.Header("Ignored with text search"),
                 Filter.Separator(),
                 SortFilter(),
-                TagFilter(tags)
+                TagFilter(tags),
             )
         }
     }
@@ -173,7 +173,6 @@ abstract class Manga18(
         genre = info.select(genreSelector).eachText().joinToString()
         thumbnail_url = document.selectFirst(thumbnailSelector)?.absUrl("src")
     }
-
 
     override fun chapterListSelector() = "div.chapter_box .item"
 
