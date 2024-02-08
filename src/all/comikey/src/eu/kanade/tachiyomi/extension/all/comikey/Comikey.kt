@@ -24,7 +24,6 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -300,11 +299,13 @@ open class Comikey(
             throw Exception(message)
         }
 
+        val manifestUrl = jsInterface.manifestUrl.toHttpUrl()
+
         return jsInterface.images.mapIndexed { i, it ->
             val href = it.alternate.firstOrNull { it.type == "image/webp" }?.href
                 ?: it.href
-            val url = jsInterface.manifestUrl.newBuilder().apply {
-                removePathSegment(jsInterface.manifestUrl.pathSegments.size - 1)
+            val url = manifestUrl.newBuilder().apply {
+                removePathSegment(manifestUrl.pathSegments.size - 1)
                 addPathSegments(href)
                 addQueryParameter("act", jsInterface.act)
             }.build()
@@ -351,7 +352,7 @@ open class Comikey(
         var images: List<ComikeyPage> = emptyList()
             private set
 
-        var manifestUrl: HttpUrl = "https://example.com".toHttpUrl()
+        var manifestUrl: String = ""
             private set
 
         var act: String = ""
@@ -370,7 +371,7 @@ open class Comikey(
         @JavascriptInterface
         @Suppress("UNUSED")
         fun passPayload(manifestUrl: String, act: String, rawData: String) {
-            this.manifestUrl = manifestUrl.toHttpUrl()
+            this.manifestUrl = manifestUrl
             this.act = act
             images = json.decodeFromString<ComikeyEpisodeManifest>(rawData).readingOrder
 
