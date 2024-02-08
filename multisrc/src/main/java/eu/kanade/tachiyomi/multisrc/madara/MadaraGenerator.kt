@@ -423,6 +423,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Sugar Babies", "https://sugarbbscan.com", "en", overrideVersionCode = 2),
         SingleLang("Summanga", "https://summanga.com", "en", isNsfw = true),
         SingleLang("Sunshine Butterfly Scans", "https://sunshinebutterflyscan.com", "en", isNsfw = true, overrideVersionCode = 1),
+        SingleLang("Sussy Scan", "https://sussyscan.com", "pt-BR"),
         SingleLang("Sweet Time Scan", "https://sweetscan.net", "pt-BR", overrideVersionCode = 2),
         SingleLang("Tankou Hentai", "https://tankouhentai.com", "pt-BR", isNsfw = true),
         SingleLang("TappyToon.Net", "https://tappytoon.net", "en", className = "Tappytoonnet"),
