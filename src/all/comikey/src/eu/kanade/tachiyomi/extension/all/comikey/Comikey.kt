@@ -40,7 +40,6 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-
 open class Comikey(
     final override val lang: String,
     override val name: String = "Comikey",
@@ -279,7 +278,15 @@ open class Comikey(
         }
 
         if (jsInterface.error.isNotEmpty()) {
-            throw Exception(intl[jsInterface.error])
+            val message = if (jsInterface.error.startsWith("[")) {
+                val key = jsInterface.error.substringAfter("[").substringBefore("]")
+
+                intl[key]
+            } else {
+                jsInterface.error
+            }
+
+            throw Exception(message)
         }
 
         val manifestUrl = jsInterface.manifestUrl.toHttpUrl()
