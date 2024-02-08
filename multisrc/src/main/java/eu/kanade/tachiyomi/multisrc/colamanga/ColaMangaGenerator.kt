@@ -13,7 +13,7 @@ class ColaMangaGenerator : ThemeSourceGenerator {
 
     override val sources = listOf(
         SingleLang("COLAMANGA", "https://www.colamanga.com", "zh", overrideVersionCode = 15, className = "Onemanhua"),
-        SingleLang("MangaDig", "https://mangadig.com", "en"),
+        SingleLang("MangaDig", "https://mangadig.com", "en", isNsfw = true),
     )
 
     companion object {
