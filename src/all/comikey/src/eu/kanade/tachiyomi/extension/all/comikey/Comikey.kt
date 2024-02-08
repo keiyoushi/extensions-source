@@ -240,8 +240,6 @@ open class Comikey(
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url.substringBefore("#")}"
-
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return Observable.fromCallable {
             pageListParse(chapter)
