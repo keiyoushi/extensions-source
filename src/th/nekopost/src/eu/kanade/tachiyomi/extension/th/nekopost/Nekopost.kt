@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.th.nekopost
 
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawChapterInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectInfo
-import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummary
+import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSummaryList
+import eu.kanade.tachiyomi.extension.th.nekopost.model.SearchRequest
+import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -25,7 +28,7 @@ import java.util.Locale
 
 class Nekopost : HttpSource() {
     private val json: Json by injectLazy()
-    override val baseUrl: String = "https://www.nekopost.net/manga/"
+    override val baseUrl: String = "https://www.nekopost.net/project"
 
     private val latestMangaEndpoint: String = "https://api.osemocphoto.com/frontAPI/getLatestChapter/m"
     private val projectDataEndpoint: String = "https://api.osemocphoto.com/frontAPI/getProjectInfo"
@@ -172,24 +175,25 @@ class Nekopost : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val headers = Headers.headersOf("accept", "*/*", "content-type", "text/plain;charset=UTF-8", "origin", nekopostUrl)
-        val requestBody = "{\"keyword\":\"$query\"}".toRequestBody()
+        val requestBody = Json.encodeToString(SearchRequest(query, page)).toRequestBody()
         return POST("$nekopostUrl/api/explore/search", headers, requestBody)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val responseBody = response.body.string()
+        val decrypted = CryptoAES.decrypt(responseBody, "AeyTest")
 
-        val projectList: List<RawProjectSearchSummary> = json.decodeFromString(responseBody)
-        val mangaList: List<SManga> = projectList.filter { project ->
-            project.projectType == "m"
-        }.map { project ->
-            SManga.create().apply {
-                url = project.projectId.toString()
-                title = project.projectName
-                status = project.status
-                initialized = false
+        val projectList: RawProjectSearchSummaryList = json.decodeFromString(decrypted)
+        val mangaList: List<SManga> = projectList.listProject
+            .filter { it.projectType == "m" }
+            .map {
+                SManga.create().apply {
+                    url = it.projectId.toString()
+                    title = it.projectName
+                    status = it.status
+                    thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg?ver=${it.coverVersion}"
+                }
             }
-        }
 
         return MangasPage(mangaList, false)
     }
