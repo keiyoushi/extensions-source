@@ -489,7 +489,7 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Comic Arab", "https://comicarab.com", "ar", isNsfw = true, sourceName = "كوميك العرب"),
         SingleLang("3asq", "https://3asq.org", "ar", className = "Manga3asq", sourceName = "مانجا العاشق", overrideVersionCode = 2),
         SingleLang("Mangalek", "https://manga-lek.net", "ar", sourceName = "مانجا ليك", overrideVersionCode = 4),
-        SingleLang("Mangalink", "https://manga-link.net", "ar", sourceName = "ﻣﺎﻧﺠﺎ لينك"),
+        SingleLang("Mangalink", "https://manga-link.com", "ar", sourceName = "ﻣﺎﻧﺠﺎ لينك", overrideVersionCode = 1),
     )
 
     companion object {
