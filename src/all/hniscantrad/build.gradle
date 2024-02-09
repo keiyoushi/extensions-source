@@ -1,0 +1,8 @@
+ext {
+    extName = 'HNI-Scantrad'
+    extClass = '.HniScantradFactory'
+    extVersionCode = 5
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

@@ -14,7 +14,6 @@ class FoolSlideGenerator : ThemeSourceGenerator {
 
     override val sources = listOf(
         MultiLang("FoolSlide Customizable", "", listOf("other")),
-        MultiLang("HNI-Scantrad", "https://hni-scantrad.com", listOf("fr", "en"), className = "HNIScantradFactory", pkgName = "hniscantrad", overrideVersionCode = 1),
         SingleLang("Anata no Motokare", "https://motokare.xyz", "en", className = "AnataNoMotokare"),
         SingleLang("Death Toll Scans", "https://reader.deathtollscans.net", "en"),
         SingleLang("Evil Flowers", "https://reader.evilflowers.com", "en", overrideVersionCode = 1),
