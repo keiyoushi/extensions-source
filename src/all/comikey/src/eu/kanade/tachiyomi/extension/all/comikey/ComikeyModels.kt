@@ -43,7 +43,13 @@ data class ComikeyEpisode(
 
 @Serializable
 data class ComikeyEpisodeManifest(
+    val metadata: ComikeyEpisodeManifestMetadata,
     val readingOrder: List<ComikeyPage>,
+)
+
+@Serializable
+data class ComikeyEpisodeManifestMetadata(
+    val readingProgression: String,
 )
 
 @Serializable
