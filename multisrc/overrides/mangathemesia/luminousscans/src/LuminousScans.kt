@@ -20,7 +20,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 
-class LuminousScans : MangaThemesia("Luminous Scans", "https://luminousscans.gg", "en", mangaUrlDirectory = "/series") {
+class LuminousScans : MangaThemesia("Luminous Scans", "https://lumitoon.com", "en", mangaUrlDirectory = "/series") {
     override val client = super.client.newBuilder()
         .addInterceptor(::urlChangeInterceptor)
         .rateLimit(2)

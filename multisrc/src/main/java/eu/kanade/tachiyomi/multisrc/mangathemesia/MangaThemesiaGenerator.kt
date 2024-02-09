@@ -80,7 +80,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Legacy Scans", "https://legacy-scans.com", "fr", pkgName = "flamescansfr"),
         SingleLang("Lelmanga", "https://www.lelmanga.com", "fr"),
         SingleLang("LianScans", "https://www.lianscans.my.id", "id", isNsfw = true),
-        SingleLang("Luminous Scans", "https://luminousscans.gg", "en", overrideVersionCode = 2),
+        SingleLang("Luminous Scans", "https://lumitoon.com", "en", overrideVersionCode = 3),
         SingleLang("Lunar Scans", "https://lunarscan.org", "en", isNsfw = true, overrideVersionCode = 1),
         SingleLang("Magus Manga", "https://magusmanga.com", "en", overrideVersionCode = 1),
         SingleLang("Makimaaaaa", "https://makimaaaaa.com", "th", isNsfw = true),
