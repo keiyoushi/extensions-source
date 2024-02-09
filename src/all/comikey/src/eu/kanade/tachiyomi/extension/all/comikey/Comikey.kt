@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
@@ -24,6 +26,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -267,17 +270,80 @@ open class Comikey(
             innerWv.settings.domStorageEnabled = true
             innerWv.settings.javaScriptEnabled = true
             innerWv.settings.blockNetworkImage = true
+            innerWv.settings.userAgentString = headers["User-Agent"]
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
+
+            // Somewhat useful if you need to debug WebView issues. Don't delete.
+            //
+            /*innerWv.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                    if (consoleMessage == null) { return false }
+                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
+                    when (consoleMessage.messageLevel()) {
+                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("comikey", logContent)
+                        ConsoleMessage.MessageLevel.ERROR -> Log.e("comikey", logContent)
+                        ConsoleMessage.MessageLevel.LOG -> Log.i("comikey", logContent)
+                        ConsoleMessage.MessageLevel.TIP -> Log.i("comikey", logContent)
+                        ConsoleMessage.MessageLevel.WARNING -> Log.w("comikey", logContent)
+                        else -> Log.d("comikey", logContent)
+                    }
+
+                    return true
+                }
+            }*/
 
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     view?.evaluateJavascript(webviewScript.replace("__interface__", interfaceName)) {}
                 }
+
+                // If you're logged in, the manifest URL sent to the client is not a direct link;
+                // it only redirects to the real one when you call it.
+                //
+                // In order to avoid a later call and remove an avenue for sniffing out users,
+                // we intercept said request so we can grab the real manifest URL.
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    val url = request?.url
+                        ?: return super.shouldInterceptRequest(view, request)
+
+                    if (url.host != "relay-us.epub.rocks" || url.path?.endsWith("/manifest") != true) {
+                        return super.shouldInterceptRequest(view, request)
+                    }
+
+                    val requestHeaders = headers.newBuilder().apply {
+                        request.requestHeaders.entries.forEach {
+                            set(it.key, it.value)
+                        }
+
+                        removeAll("X-Requested-With")
+                    }.build()
+                    val response = client.newCall(GET(url.toString(), requestHeaders)).execute()
+
+                    jsInterface.manifestUrl = response.request.url
+
+                    return WebResourceResponse(
+                        response.headers["Content-Type"] ?: "application/divina+json+vnd.e4p.drm",
+                        null,
+                        response.code,
+                        response.message,
+                        response.headers.toMap(),
+                        response.body.byteStream(),
+                    )
+                }
             }
 
-            innerWv.loadUrl("$baseUrl${chapter.url}")
+            innerWv.loadUrl(
+                "$baseUrl${chapter.url}",
+                buildMap {
+                    putAll(headers.toMap())
+                    put("X-Requested-With", randomString())
+                },
+            )
         }
 
         latch.await(30, TimeUnit.SECONDS)
@@ -291,18 +357,30 @@ open class Comikey(
             throw Exception(jsInterface.error)
         }
 
-        val manifestUrl = jsInterface.manifestUrl.toHttpUrl()
+        val manifestUrl = jsInterface.manifestUrl!!
+        val manifest = jsInterface.manifest!!
+        val webtoon = manifest.metadata.readingProgression == "ttb"
 
-        return jsInterface.images.mapIndexed { i, it ->
-            val href = it.alternate.firstOrNull { it.type == "image/webp" }?.href
-                ?: it.href
+        return manifest.readingOrder.mapIndexed { i, it ->
             val url = manifestUrl.newBuilder().apply {
-                removePathSegment(manifestUrl.pathSegments.size - 1)
-                addPathSegments(href)
-                addQueryParameter("act", jsInterface.act)
-            }.build()
+                removePathSegment(manifestUrl.pathSize - 1)
 
-            Page(i, imageUrl = url.toString())
+                if (it.alternate.isNotEmpty() && it.height == 2048 && it.type == "image/jpeg") {
+                    addPathSegments(
+                        it.alternate.first {
+                            val dimension = if (webtoon) it.width else it.height
+
+                            dimension <= 1536 && it.type == "image/webp"
+                        }.href,
+                    )
+                } else {
+                    addPathSegments(it.href)
+                }
+
+                addQueryParameter("act", jsInterface.act)
+            }.toString()
+
+            Page(i, imageUrl = url)
         }
     }
 
@@ -332,11 +410,15 @@ open class Comikey(
             ?: throw Exception(intl["error_webview_script_not_found"])
     }
 
-    private fun randomString() = buildString(15) {
-        val charPool = ('a'..'z') + ('A'..'Z')
+    private fun randomString(): String {
+        val length = (10..20).random()
 
-        for (i in 0 until 15) {
-            append(charPool.random())
+        return buildString(length) {
+            val charPool = ('a'..'z') + ('A'..'Z')
+
+            for (i in 0 until length) {
+                append(charPool.random())
+            }
         }
     }
 
@@ -354,7 +436,7 @@ open class Comikey(
             defaultChapterPrefix
         }
 
-        return "$e4pid/$chapterPrefix-${episode.number.toString().replace(".", "-")}"
+        return "$e4pid/$chapterPrefix-${episode.number.toString().removeSuffix(".0").replace(".", "-")}"
     }
 
     private class JsInterface(
@@ -362,11 +444,10 @@ open class Comikey(
         private val json: Json,
         private val intl: Intl,
     ) {
-        var images: List<ComikeyPage> = emptyList()
+        var manifest: ComikeyEpisodeManifest? = null
             private set
 
-        var manifestUrl: String = ""
-            private set
+        var manifestUrl: HttpUrl? = null
 
         var act: String = ""
             private set
@@ -390,9 +471,12 @@ open class Comikey(
         @JavascriptInterface
         @Suppress("UNUSED")
         fun passPayload(manifestUrl: String, act: String, rawData: String) {
-            this.manifestUrl = manifestUrl
+            if (this.manifestUrl == null) {
+                this.manifestUrl = manifestUrl.toHttpUrl()
+            }
+
             this.act = act
-            images = json.decodeFromString<ComikeyEpisodeManifest>(rawData).readingOrder
+            manifest = json.decodeFromString<ComikeyEpisodeManifest>(rawData)
 
             latch.countDown()
         }
