@@ -285,19 +285,21 @@ class TruyenGiHot : ParsedHttpSource() {
         }
 
         Single.fromCallable {
-            val document = client.newCall(GET("$baseUrl/danh-sach-truyen.html", headers)).execute().asJsoup()
+            runCatching {
+                val document = client.newCall(GET("$baseUrl/danh-sach-truyen.html", headers)).execute().asJsoup()
 
-            val result = runCatching {
-                tags = TruyenGiHotUtils.parseThemes(document.selectFirst("#contentTag")!!)
-                themes = TruyenGiHotUtils.parseThemes(document.selectFirst("#contentTheme")!!)
-                scanlators = TruyenGiHotUtils.parseOptions(document.selectFirst("#contentGroup")!!)
-            }
-                .onFailure {
-                    Log.e("TruyenGiHot", "Could not fetch filtering options", it)
+                val result = runCatching {
+                    tags = TruyenGiHotUtils.parseThemes(document.selectFirst("#contentTag")!!)
+                    themes = TruyenGiHotUtils.parseThemes(document.selectFirst("#contentTheme")!!)
+                    scanlators = TruyenGiHotUtils.parseOptions(document.selectFirst("#contentGroup")!!)
                 }
+                    .onFailure {
+                        Log.e("TruyenGiHot", "Could not fetch filtering options", it)
+                    }
 
-            fetchFiltersFailed = result.isFailure
-            fetchFiltersAttempts++
+                fetchFiltersFailed = result.isFailure
+                fetchFiltersAttempts++
+            }
         }
             .subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())

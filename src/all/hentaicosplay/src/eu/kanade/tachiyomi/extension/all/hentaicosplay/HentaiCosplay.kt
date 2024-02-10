@@ -138,21 +138,23 @@ class HentaiCosplay : HttpSource() {
 
     private fun fetchTags() {
         Single.fromCallable {
-            client.newCall(GET("$baseUrl/ranking-tag/", headers))
-                .execute().asJsoup()
-                .run {
-                    tagCache = buildList {
-                        add(Pair("", ""))
-                        select("#tags a").map {
-                            Pair(
-                                it.text()
-                                    .replace(tagNumRegex, "")
-                                    .trim(),
-                                it.attr("href"),
-                            ).let(::add)
+            runCatching {
+                client.newCall(GET("$baseUrl/ranking-tag/", headers))
+                    .execute().asJsoup()
+                    .run {
+                        tagCache = buildList {
+                            add(Pair("", ""))
+                            select("#tags a").map {
+                                Pair(
+                                    it.text()
+                                        .replace(tagNumRegex, "")
+                                        .trim(),
+                                    it.attr("href"),
+                                ).let(::add)
+                            }
                         }
                     }
-                }
+            }
         }
             .subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())
