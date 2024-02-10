@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.xoxocomics
 
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -143,4 +144,12 @@ class XoxoComics : WPComics("XOXO Comics", "https://xoxocomic.com", "en", Simple
         "western-comic" to "Western",
         "zombies-comic" to "Zombies",
     )
+
+    override fun getFilterList(): FilterList {
+        return FilterList(
+            Filter.Header("Search query won't use Genre/Status filter"),
+            StatusFilter(getStatusList()),
+            GenreFilter(getGenreList()),
+        )
+    }
 }
