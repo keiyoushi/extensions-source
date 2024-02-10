@@ -7,7 +7,7 @@ import generator.ThemeSourceGenerator
 class MangaReaderGenerator : ThemeSourceGenerator {
     override val themeClass = "MangaReader"
     override val themePkg = "mangareader"
-    override val baseVersionCode = 1
+    override val baseVersionCode = 2
     override val sources = listOf(
         MultiLang(
             name = "MangaReader",
@@ -26,7 +26,7 @@ class MangaReaderGenerator : ThemeSourceGenerator {
         ),
         SingleLang(
             name = "Manhuagold",
-            baseUrl = "https://manhuagold.com",
+            baseUrl = "https://manhuagold.top",
             lang = "en",
             isNsfw = true,
             className = "Manhuagold",
