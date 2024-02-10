@@ -1,0 +1,13 @@
+ext {
+    extName = "Manga Fun"
+    extClass = ".MangaFun"
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation("net.pearx.kasechange:kasechange:1.4.1")
+    implementation(project(':lib:lzstring'))
+}

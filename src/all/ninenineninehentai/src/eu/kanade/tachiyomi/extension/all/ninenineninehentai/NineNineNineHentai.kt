@@ -44,7 +44,7 @@ open class NineNineNineHentai(
 
     override val baseUrl = "https://999hentai.net"
 
-    private val apiUrl = "https://api.999hentai.net/api"
+    private val apiUrl = "https://hapi.999hentai.net/api"
 
     override val supportsLatest = true
 

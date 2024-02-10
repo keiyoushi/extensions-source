@@ -32,14 +32,12 @@ import kotlin.math.min
 
 open class Kemono(
     override val name: String,
-    private val defaultUrl: String,
+    override val baseUrl: String,
     override val lang: String = "all",
 ) : HttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
-    private val mirrorUrls get() = arrayOf(defaultUrl, defaultUrl.removeSuffix(".party") + ".su")
-
-    override val client = network.client.newBuilder().rateLimit(2).build()
+    override val client = network.client.newBuilder().rateLimit(1).build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -49,14 +47,9 @@ open class Kemono(
     private val preferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val baseUrl = preferences.getString(BASE_URL_PREF, defaultUrl)!!
-
     private val apiPath = "api/v1"
 
-    private val imgCdnUrl = when (name) {
-        "Kemono" -> baseUrl
-        else -> defaultUrl
-    }.replace("//", "//img.")
+    private val imgCdnUrl = baseUrl.replace("//", "//img.")
 
     private fun String.formatAvatarUrl(): String = removePrefix("https://").replaceBefore('/', imgCdnUrl)
 
@@ -170,12 +163,23 @@ open class Kemono(
         val result = ArrayList<SChapter>()
         while (offset < maxPosts && hasNextPage) {
             val request = GET("$baseUrl/$apiPath${manga.url}?limit=$POST_PAGE_SIZE&o=$offset", headers)
-            val page: List<KemonoPostDto> = client.newCall(request).execute().parseAs()
+            val page: List<KemonoPostDto> = retry(request).parseAs()
             page.forEach { post -> if (post.images.isNotEmpty()) result.add(post.toSChapter()) }
             offset += POST_PAGE_SIZE
             hasNextPage = page.size == POST_PAGE_SIZE
         }
         result
+    }
+
+    private fun retry(request: Request): Response {
+        var code = 0
+        repeat(3) {
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) return response
+            response.close()
+            code = response.code
+        }
+        throw Exception("HTTP error $code")
     }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
@@ -218,15 +222,6 @@ open class Kemono(
             setDefaultValue(POST_PAGES_DEFAULT)
         }.let { screen.addPreference(it) }
 
-        ListPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = "Mirror URL"
-            summary = "%s\nRequires app restart to take effect"
-            entries = mirrorUrls
-            entryValues = mirrorUrls
-            setDefaultValue(defaultUrl)
-        }.let(screen::addPreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = USE_LOW_RES_IMG
             title = "Use low resolution images"
@@ -246,7 +241,7 @@ open class Kemono(
 
         private fun List<SManga>.filterUnsupported() = filterNot { it.author == "Discord" }
 
-        private const val BASE_URL_PREF = "BASE_URL"
+        // private const val BASE_URL_PREF = "BASE_URL"
         private const val USE_LOW_RES_IMG = "USE_LOW_RES_IMG"
     }
 }

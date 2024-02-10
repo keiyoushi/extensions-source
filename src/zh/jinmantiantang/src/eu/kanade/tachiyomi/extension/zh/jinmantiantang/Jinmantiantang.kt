@@ -2,6 +2,10 @@ package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -47,6 +51,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
             preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_PREF_DEFAULT)!!.toInt(),
             preferences.getString(MAINSITE_RATELIMIT_PERIOD, MAINSITE_RATELIMIT_PERIOD_DEFAULT)!!.toLong(),
         )
+        .setRandomUserAgent(preferences.getPrefUAType(), preferences.getPrefCustomUA())
         .apply { interceptors().add(0, updateUrlInterceptor) }
         .addInterceptor(ScrambledImageInterceptor).build()
 
@@ -75,7 +80,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         title = children[1].text()
         setUrlWithoutDomain(children[0].selectFirst("a")!!.attr("href"))
         val img = children[0].selectFirst("img")!!
-        thumbnail_url = img.attr("data-original").ifEmpty { img.attr("src") }.substringBeforeLast('?')
+        thumbnail_url = img.extractThumbnailUrl().substringBeforeLast('?')
         author = children[2].select("a").joinToString(", ") { it.text() }
         genre = children[3].select("a").joinToString(", ") { it.text() }
     }
@@ -161,7 +166,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")!!.text()
         // keep thumbnail_url same as the one in popularMangaFromElement()
-        thumbnail_url = document.selectFirst(".thumb-overlay > img")!!.attr("src").substringBeforeLast('.') + "_3x4.jpg"
+        thumbnail_url = document.selectFirst(".thumb-overlay > img")!!.extractThumbnailUrl().substringBeforeLast('.') + "_3x4.jpg"
         author = selectAuthor(document)
         genre = selectDetailsStatusAndGenre(document, 0).trim().split(" ").joinToString(", ")
 
@@ -169,6 +174,15 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         // it will definitely return a String type of 0, 1 or 2. This warning can be ignored
         status = selectDetailsStatusAndGenre(document, 1).trim().toInt()
         description = document.selectFirst("#intro-block .p-t-5.p-b-5")!!.text().substringAfter("敘述：").trim()
+    }
+
+    private fun Element.extractThumbnailUrl(): String {
+        return when {
+            hasAttr("data-original") -> attr("data-original")
+            hasAttr("src") -> attr("src")
+            hasAttr("data-cfsrc") -> attr("data-cfsrc")
+            else -> ""
+        }
     }
 
     // 查询作者信息
@@ -383,6 +397,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferenceList(screen.context, preferences, updateUrlInterceptor.isUpdated).forEach(screen::addPreference)
+        addRandomUAPreferenceToScreen(screen)
     }
     companion object {
         private const val PREFIX_ID_SEARCH_NO_COLON = "JM"

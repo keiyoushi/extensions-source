@@ -3,10 +3,12 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
 apply plugin: 'org.jmailen.kotlinter'
 
-def theme = ext.has("multisrc") ? project(":lib-multisrc:$multisrc") : null
-
 assert !ext.has("pkgNameSuffix")
 assert !ext.has("libVersion")
+
+assert extName.chars().max().asInt < 0x180 : "Extension name should be romanized"
+
+def multisrc = ext.has("multisrc") ? project(":lib-multisrc:$multisrc") : null
 
 android {
     compileSdk AndroidConfig.compileSdk
@@ -25,7 +27,7 @@ android {
         minSdk AndroidConfig.minSdk
         targetSdk AndroidConfig.targetSdk
         applicationIdSuffix project.parent.name + "." + project.name
-        versionCode extVersionCode + (theme?.baseVersionCode ?: 0)
+        versionCode extVersionCode + (multisrc?.baseVersionCode ?: 0)
         versionName "1.4.$versionCode"
         base {
             archivesName = "tachiyomi-$applicationIdSuffix-v$versionName"
@@ -36,7 +38,7 @@ android {
                 extClass: extClass,
                 nsfw: project.ext.find("isNsfw") ? 1 : 0,
         ]
-        if (theme?.requireBaseUrlHost == true) {
+        if (multisrc?.requireBaseUrlHost == true || project.ext.has("baseUrlHost")) {
             manifestPlaceholders["baseUrlHost"] = project.baseUrlHost
         }
     }
@@ -91,7 +93,7 @@ repositories {
 }
 
 dependencies {
-    if (theme != null) implementation(theme)
+    if (multisrc != null) implementation(multisrc)
     implementation(project(":core"))
     compileOnly(libs.bundles.common)
 }

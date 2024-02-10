@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
 
 class AComics : ParsedHttpSource() {
 
@@ -22,23 +22,12 @@ class AComics : ParsedHttpSource() {
 
     override val lang = "ru"
 
-    private val cookiesHeader by lazy {
-        val cookies = mutableMapOf<String, String>()
-        cookies["ageRestrict"] = "17"
-        buildCookies(cookies)
-    }
-
-    private fun buildCookies(cookies: Map<String, String>) =
-        cookies.entries.joinToString(separator = "; ", postfix = ";") {
-            "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
-        }
-
     override val client = network.client.newBuilder()
         .addNetworkInterceptor { chain ->
             val newReq = chain
                 .request()
                 .newBuilder()
-                .addHeader("Cookie", cookiesHeader)
+                .addHeader("Cookie", "ageRestrict=17;")
                 .build()
 
             chain.proceed(newReq)
@@ -46,153 +35,159 @@ class AComics : ParsedHttpSource() {
 
     override val supportsLatest = true
 
+    // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/comics?categories=&ratings[]=1&ratings[]=2&ratings[]=3&ratings[]=4&ratings[]=5ratings[]=6&&type=0&updatable=0&subscribe=0&issue_count=2&sort=subscr_count&skip=${10 * (page - 1)}", headers)
+        GET("$baseUrl/comics?$DEFAULT_COMIC_QUERIES&sort=subscr_count&skip=${10 * (page - 1)}", headers)
 
+    override fun popularMangaSelector() = "table.list-loadable > tbody > tr"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.selectFirst("a > img")?.absUrl("src")
+        element.selectFirst("div.title > a")!!.run {
+            setUrlWithoutDomain(attr("href") + "/about")
+            title = text()
+        }
+    }
+
+    override fun popularMangaNextPageSelector() = "span.button:not(:has(a)) + span.button > a"
+
+    // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/comics?categories=&ratings[]=1&ratings[]=2&ratings[]=3&ratings[]=4&ratings[]=5ratings[]=6&&type=0&updatable=0&subscribe=0&issue_count=2&sort=last_update&skip=${10 * (page - 1)}", headers)
+        GET("$baseUrl/comics?$DEFAULT_COMIC_QUERIES&sort=last_update&skip=${10 * (page - 1)}", headers)
 
+    override fun latestUpdatesSelector() = popularMangaSelector()
+
+    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+
+    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+
+    // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url: String = if (query.isNotEmpty()) {
+        val url = if (query.isNotEmpty()) {
             "$baseUrl/search?keyword=$query"
         } else {
-            val categories = mutableListOf<Int>()
-            var status = "0"
-            val rating = mutableListOf<Int>()
+            val urlBuilder = "$baseUrl/comics?type=0&subscribe=0&issue_count=2&sort=subscr_count"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("skip", "${10 * (page - 1)}")
             for (filter in if (filters.isEmpty()) getFilterList() else filters) {
                 when (filter) {
                     is GenreList -> {
-                        filter.state.forEach {
-                            if (it.state) {
-                                categories.add(it.id)
-                            }
-                        }
+                        val categories = filter.state.filter { it.state }.joinToString(",") { it.id }
+                        urlBuilder.addQueryParameter("categories", categories)
                     }
                     is Status -> {
-                        if (filter.state == 1) {
-                            status = "no"
+                        val status = when (filter.state) {
+                            1 -> "no"
+                            2 -> "yes"
+                            else -> "0"
                         }
-                        if (filter.state == 2) {
-                            status = "yes"
-                        }
+                        urlBuilder.addQueryParameter("updatable", status)
                     }
                     is RatingList -> {
                         filter.state.forEach {
                             if (it.state) {
-                                rating.add(it.id)
+                                urlBuilder.addQueryParameter("ratings[]", it.id)
                             }
                         }
                     }
                     else -> {}
                 }
             }
-            "$baseUrl/comics?categories=${categories.joinToString(",")}&${rating.joinToString { "ratings[]=$it" }}&type=0&updatable=$status&subscribe=0&issue_count=2&sort=subscr_count&skip=${10 * (page - 1)}"
+            urlBuilder.build().toString()
         }
         return GET(url, headers)
     }
 
-    override fun popularMangaSelector() = "table.list-loadable > tbody > tr"
-
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = baseUrl + element.select("a > img").first()!!.attr("src")
-        element.select("div.title > a").first()!!.let {
-            manga.setUrlWithoutDomain(it.attr("href") + "/about")
-            manga.title = it.text()
-        }
-        return manga
-    }
-
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
-    override fun popularMangaNextPageSelector() = "span.button:not(:has(a)) + span.button > a"
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select(".about-summary").first()!!
-        val manga = SManga.create()
-        manga.author = infoElement.select(".about-summary > p:contains(Автор)").text().split(":")[1]
-        manga.genre = infoElement.select("a.button").joinToString { it.text() }
-        manga.description = infoElement.ownText()
-        return manga
+    // =========================== Manga Details ============================
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val article = document.selectFirst("article.common-article")!!
+        with(article) {
+            title = selectFirst(".page-header-with-menu h1")!!.text()
+            genre = select("p.serial-about-badges a.category").joinToString { it.text() }
+            author = select("p.serial-about-authors a, p:contains(Автор оригинала)").joinToString { it.ownText() }
+            description = selectFirst("section.serial-about-text")?.text()
+        }
     }
 
+    // ============================== Chapters ==============================
     override fun chapterListParse(response: Response): List<SChapter> {
-        val res = mutableListOf<SChapter>()
-        val count = response.asJsoup()
-            .select(".about-summary > p:contains(Количество выпусков:)")
-            .text()
-            .split("Количество выпусков: ")[1].toInt()
+        val doc = response.asJsoup()
+        val count = doc
+            .selectFirst("p:has(b:contains(Количество выпусков:))")!!
+            .ownText()
+            .toInt()
 
-        for (index in count downTo 1) {
-            val chapter = SChapter.create()
-            chapter.chapter_number = index.toFloat()
-            chapter.name = index.toString()
-            val url = response.request.url.toString().split("/about")[0].split(baseUrl)[1]
-            chapter.url = "$url/$index"
-            res.add(chapter)
+        val comicPath = doc.location().substringBefore("/about")
+
+        return (count downTo 1).map {
+            SChapter.create().apply {
+                chapter_number = it.toFloat()
+                name = it.toString()
+                setUrlWithoutDomain("$comicPath/$it")
+            }
         }
-        return res
     }
 
     override fun chapterListSelector(): Nothing = throw UnsupportedOperationException()
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
+    // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        val imageElement = document.select("img#mainImage").first()!!
-        return listOf(Page(0, imageUrl = baseUrl + imageElement.attr("src")))
+        val imageElement = document.selectFirst("img.issue")!!
+        return listOf(Page(0, imageUrl = imageElement.absUrl("src")))
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Категории", genres)
-    private class Genre(name: String, val id: Int) : Filter.CheckBox(name)
-    private class Rating(name: String, val id: Int) : Filter.CheckBox(name, state = true)
+    // ============================== Filters ===============================
+    private class Genre(name: String, val id: String) : Filter.CheckBox(name)
+    private class Rating(name: String, val id: String) : Filter.CheckBox(name, state = true)
     private class Status : Filter.Select<String>("Статус", arrayOf("Все", "Завершенный", "Продолжающийся"))
+
+    private class GenreList : Filter.Group<Genre>(
+        "Категории",
+        listOf(
+            Genre("Животные", "1"),
+            Genre("Драма", "2"),
+            Genre("Фэнтези", "3"),
+            Genre("Игры", "4"),
+            Genre("Юмор", "5"),
+            Genre("Журнал", "6"),
+            Genre("Паранормальное", "7"),
+            Genre("Конец света", "8"),
+            Genre("Романтика", "9"),
+            Genre("Фантастика", "10"),
+            Genre("Бытовое", "11"),
+            Genre("Стимпанк", "12"),
+            Genre("Супергерои", "13"),
+        ),
+    )
 
     private class RatingList : Filter.Group<Rating>(
         "Возрастная категория",
         listOf(
-            Rating("???", 1),
-            Rating("0+", 2),
-            Rating("6+", 3),
-            Rating("12+", 4),
-            Rating("16+", 5),
-            Rating("18+", 6),
+            Rating("???", "1"),
+            Rating("0+", "2"),
+            Rating("6+", "3"),
+            Rating("12+", "4"),
+            Rating("16+", "5"),
+            Rating("18+", "6"),
         ),
     )
 
     override fun getFilterList() = FilterList(
         Status(),
         RatingList(),
-        GenreList(getGenreList()),
-    )
-
-    private fun getGenreList() = listOf(
-        Genre("Животные", 1),
-        Genre("Драма", 2),
-        Genre("Фэнтези", 3),
-        Genre("Игры", 4),
-        Genre("Юмор", 5),
-        Genre("Журнал", 6),
-        Genre("Паранормальное", 7),
-        Genre("Конец света", 8),
-        Genre("Романтика", 9),
-        Genre("Фантастика", 10),
-        Genre("Бытовое", 11),
-        Genre("Стимпанк", 12),
-        Genre("Супергерои", 13),
+        GenreList(),
     )
 }
+
+private const val DEFAULT_COMIC_QUERIES = "categories=&ratings[]=1&ratings[]=2&ratings[]=3&ratings[]=4&ratings[]=5&ratings[]=6&type=0&updatable=0&issue_count=2"

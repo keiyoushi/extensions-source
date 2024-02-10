@@ -28,11 +28,9 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import tachiyomi.decoder.ImageDecoder
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -202,21 +200,7 @@ abstract class PeachScan(
                     Base64.decode(b64, Base64.DEFAULT)
                 }
 
-                val decoder = ImageDecoder.newInstance(ByteArrayInputStream(imageData))
-
-                if (decoder == null || decoder.width <= 0 || decoder.height <= 0) {
-                    throw IOException("Falha ao inicializar o decodificador de imagem")
-                }
-
-                val bitmap = decoder.decode(rgb565 = isLowRamDevice)
-
-                decoder.recycle()
-
-                if (bitmap == null) {
-                    throw IOException("Não foi possível decodificar a imagem $filename#$entryName")
-                }
-
-                entryIndex to bitmap
+                entryIndex to PeachScanUtils.decodeImage(imageData, isLowRamDevice, filename, entryName)
             }
             .sortedBy { it.first }
             .toList()

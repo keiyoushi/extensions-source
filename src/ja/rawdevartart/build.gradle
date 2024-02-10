@@ -1,0 +1,8 @@
+ext {
+    extName = "Rawdevart.art"
+    extClass = ".Rawdevartart"
+    extVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
