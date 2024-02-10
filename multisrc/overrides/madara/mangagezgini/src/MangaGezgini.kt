@@ -23,7 +23,7 @@ class MangaGezgini : Madara(
             }
             chapter.date_upload = select("img:not(.thumb)").firstOrNull()?.attr("alt")?.let { parseRelativeDate(it) }
                 ?: select("span a").firstOrNull()?.attr("title")?.let { parseRelativeDate(it) }
-                    ?: parseChapterDate(select(chapterDateSelector()).firstOrNull()?.text())
+                ?: parseChapterDate(select(chapterDateSelector()).firstOrNull()?.text())
         }
         return chapter
     }
