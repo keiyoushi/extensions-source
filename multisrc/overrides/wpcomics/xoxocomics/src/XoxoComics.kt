@@ -36,7 +36,7 @@ class XoxoComics : WPComics("XOXO Comics", "https://xoxocomic.com", "en", Simple
             // Search won't work together with filter
             return GET("$baseUrl/$searchPath?keyword=$query&page=$page", headers)
         } else {
-            val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
+            val url = baseUrl.toHttpUrl().newBuilder()
 
             var genreFilter: UriPartFilter? = null
             var statusFilter: UriPartFilter? = null
