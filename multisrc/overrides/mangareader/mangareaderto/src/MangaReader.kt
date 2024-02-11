@@ -56,6 +56,9 @@ open class MangaReader(
         return container.children()
     }
 
+    override fun chapterFromElement(element: Element, isVolume: Boolean): SChapter =
+        chapterFromElement(element)
+
     // =============================== Pages ================================
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
