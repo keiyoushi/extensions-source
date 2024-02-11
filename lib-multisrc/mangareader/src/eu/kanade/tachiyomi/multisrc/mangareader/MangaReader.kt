@@ -33,6 +33,8 @@ abstract class MangaReader(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
+    private val sortPopularValue: String = "most-viewed",
+    private val sortLatestValue: String = "latest-updated",
 ) : ParsedHttpSource(), ConfigurableSource {
 
     val preferences: SharedPreferences by lazy {
@@ -63,7 +65,7 @@ abstract class MangaReader(
         return searchMangaRequest(
             page,
             "",
-            FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues, sortFilterPopular)),
+            FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues, sortPopularValue)),
         )
     }
 
@@ -84,7 +86,7 @@ abstract class MangaReader(
         return searchMangaRequest(
             page,
             "",
-            FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues, sortFilterLatest)),
+            FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues, sortLatestValue)),
         )
     }
 
@@ -239,16 +241,21 @@ abstract class MangaReader(
     }
 
     private fun Element.parseStatus(manga: SManga): SManga {
-        manga.status = when (this.selectFirst(".name")?.ownText()?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "publishing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "finished" -> SManga.COMPLETED
-            "on-hold" -> SManga.ON_HIATUS
-            "canceled" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+        manga.status = this.selectFirst(".name")?.ownText().getStatus()
         return manga
+    }
+
+    open fun String?.getStatus(): Int = when (this?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "publishing" -> SManga.ONGOING
+        "releasing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "finished" -> SManga.COMPLETED
+        "on-hold" -> SManga.ON_HIATUS
+        "on_hiatus" -> SManga.ON_HIATUS
+        "discontinued" -> SManga.CANCELLED
+        "canceled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     // ============================== Chapters ==============================
@@ -286,10 +293,15 @@ abstract class MangaReader(
             document.select(chapterListSelector())
         }
 
-        elements.map(::chapterFromElement)
-            .also {
-                if (!isVolume && it.isNotEmpty()) updateChapterList(manga, it)
-            }
+        val chapters = if (containsVolumes) {
+            elements.map { chapterFromElement(it, isVolume) }
+        } else {
+            elements.map(::chapterFromElement)
+        }
+
+        chapters.also {
+            if (!isVolume && it.isNotEmpty()) updateChapterList(manga, it)
+        }
     }
 
     override fun chapterListSelector() = "#ja-chaps > li.chapter-item, #chapters-list > li"
@@ -300,6 +312,9 @@ abstract class MangaReader(
             name = selectFirst(".name")?.text() ?: text()
         }
     }
+
+    open fun chapterFromElement(element: Element, isVolume: Boolean): SChapter =
+        throw NotImplementedError()
 
     final override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast('#')
 
@@ -400,12 +415,9 @@ abstract class MangaReader(
 
     open val sortFilterParam = "sort"
 
-    open val sortFilterPopular = "most-viewed"
-    open val sortFilterLatest = "latest-updated"
-
     open val sortFilterValues = arrayOf(
-        Pair("Most Viewed", sortFilterPopular),
-        Pair("Latest Updated", sortFilterLatest),
+        Pair("Most Viewed", sortPopularValue),
+        Pair("Latest Updated", sortLatestValue),
     )
 
     open class SortFilter(
