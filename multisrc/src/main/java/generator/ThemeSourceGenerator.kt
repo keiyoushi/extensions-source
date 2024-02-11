@@ -36,41 +36,6 @@ interface ThemeSourceGenerator {
     fun createAll() {
         val userDir = System.getProperty("user.dir")!!
         sources.forEach { createGradleProject(it, themePkg, themeClass, baseVersionCode, userDir) }
-        createMultisrcLib(userDir)
-    }
-
-    fun createMultisrcLib(userDir: String) {
-        copyThemeClasses(userDir, themePkg)
-        val defaultAndroidManifestPath = "$userDir/multisrc/overrides/$themePkg/default/AndroidManifest.xml"
-        val defaultAdditionalGradlePath = "$userDir/multisrc/overrides/$themePkg/default/additional.gradle"
-        val defaultAdditionalGradleText = File(defaultAdditionalGradlePath).readTextOrEmptyString()
-        val defaultAndroidManifest = File(defaultAndroidManifestPath)
-        if (defaultAndroidManifest.exists()) {
-            defaultAndroidManifest.copyTo(File("$userDir/lib-multisrc/$themePkg/AndroidManifest.xml"), true)
-            defaultAndroidManifest.delete()
-        }
-        File("$userDir/lib-multisrc/$themePkg/build.gradle.kts").writeText(buildString {
-            append("plugins {\n    id(\"lib-multisrc\")\n}\n\nextra[\"baseVersionCode\"] = ")
-            append(baseVersionCode)
-            append("\n")
-            if (defaultAdditionalGradleText.isNotEmpty()) {
-                append("\n")
-                append(defaultAdditionalGradleText)
-                if (!defaultAdditionalGradleText.endsWith("\n")) {
-                    append("\n")
-                }
-                File(defaultAdditionalGradlePath).delete()
-            }
-        })
-        val defaultResPath = "$userDir/multisrc/overrides/$themePkg/default/res"
-        File(defaultResPath).run {
-            if (exists()) {
-                copyRecursively(File("$userDir/lib-multisrc/$themePkg/res"), true)
-                deleteRecursively()
-            }
-        }
-        val sourcePath = "$userDir/multisrc/src/main/java/${themeSuffix(themePkg, "/")}"
-        copyReadmes(sourcePath, "$userDir/lib-multisrc/$themePkg")
     }
 
     companion object {
@@ -86,9 +51,9 @@ interface ThemeSourceGenerator {
             return listOf("eu", "kanade", "tachiyomi", "multisrc", themePkg).joinToString(separator)
         }
 
-        private fun File.readTextOrEmptyString(): String = if (exists()) readText() else ""
-
         private fun writeGradle(gradle: File, source: ThemeSourceData, themePkg: String, baseVersionCode: Int, defaultAdditionalGradlePath: String, additionalGradleOverridePath: String) {
+            fun File.readTextOrEmptyString(): String = if (exists()) readText(Charsets.UTF_8) else ""
+
             val defaultAdditionalGradleText = File(defaultAdditionalGradlePath).readTextOrEmptyString()
             val additionalGradleOverrideText = File(additionalGradleOverridePath).readTextOrEmptyString()
             val placeholders = mapOf(
@@ -101,39 +66,31 @@ interface ThemeSourceGenerator {
                 .map { "${" ".repeat(12)}${it.key}: \"${it.value}\"" }
                 .joinToString(",\n")
 
-            var text = String.format(
+            gradle.writeText(
                 """
+                |// THIS FILE IS AUTO-GENERATED; DO NOT EDIT
                 |ext {
-                |    extName = '%s'
-                |    extClass = '.%s'
-                |    themePkg = '%s'%s
-                |    overrideVersionCode = %s%s
+                |    extName = '${source.name}'
+                |    extClass = '.${source.className}'
+                |    extVersionCode = ${baseVersionCode + source.overrideVersionCode + multisrcLibraryVersion}
+                |    ${if (source.isNsfw) "isNsfw = true\n" else ""}
                 |}
                 |
                 |apply from: "${'$'}rootDir/common.gradle"
                 |
+                |$defaultAdditionalGradleText
+                |$additionalGradleOverrideText
+                |
+                |android {
+                |    defaultConfig {
+                |        manifestPlaceholders += [
+                |$placeholdersStr
+                |        ]
+                |    }
+                |}
+                |
                 """.trimMargin(),
-                source.name,
-                source.className,
-                themePkg,
-                if (source.baseUrl.isNotBlank()) "\n    baseUrl = '${source.baseUrl}'" else "",
-                source.overrideVersionCode,
-                if (source.isNsfw) "\n    isNsfw = true" else "",
             )
-
-            if (additionalGradleOverrideText.isNotEmpty()) {
-                text = buildString {
-                    append(text)
-                    append("\n")
-                    append(additionalGradleOverrideText)
-                    if (!additionalGradleOverrideText.endsWith("\n")) {
-                        append("\n")
-                    }
-                }
-                File(additionalGradleOverridePath).delete()
-            }
-
-            gradle.writeText(text)
         }
 
         private fun writeAndroidManifest(androidManifestFile: File, manifestOverridesPath: String, defaultAndroidManifestPath: String) {
@@ -141,13 +98,14 @@ interface ThemeSourceGenerator {
             val defaultAndroidManifest = File(defaultAndroidManifestPath)
             if (androidManifestOverride.exists()) {
                 androidManifestOverride.copyTo(androidManifestFile)
-                androidManifestOverride.delete()
+            } else if (defaultAndroidManifest.exists()) {
+                defaultAndroidManifest.copyTo(androidManifestFile)
             }
         }
 
         fun createGradleProject(source: ThemeSourceData, themePkg: String, themeClass: String, baseVersionCode: Int, userDir: String) {
             // userDir = tachiyomi-extensions project root path
-            val projectRootPath = "$userDir/src/${pkgNameSuffix(source, "/")}"
+            val projectRootPath = "$userDir/generated-src/${pkgNameSuffix(source, "/")}"
             val projectSrcPath = "$projectRootPath/src/eu/kanade/tachiyomi/extension/${pkgNameSuffix(source, "/")}"
             val overridesPath = "$userDir/multisrc/overrides/$themePkg/${source.pkgName}"
             val defaultResPath = "$userDir/multisrc/overrides/$themePkg/default/res"
@@ -171,19 +129,18 @@ interface ThemeSourceGenerator {
                 writeAndroidManifest(projectAndroidManifestFile, manifestOverridePath, defaultAndroidManifestPath)
 
                 writeSourceClasses(projectSrcPath, srcOverridePath, source, themePkg, themeClass)
+                copyThemeClasses(userDir, themePkg, projectRootPath)
                 copyThemeReadmes(userDir, themePkg, overridesPath, projectRootPath)
                 copyResFiles(resOverridePath, defaultResPath, source, projectRootPath)
             }
         }
 
         private fun copyThemeReadmes(userDir: String, themePkg: String, overridesPath: String, projectRootPath: String) {
-            copyReadmes(overridesPath, projectRootPath)
-        }
+            val sourcePath = "$userDir/multisrc/src/main/java/${themeSuffix(themePkg, "/")}"
 
-        private fun copyReadmes(path: String, projectRootPath: String) {
             File(projectRootPath).mkdirs()
 
-            path.also { path ->
+            listOf(sourcePath, overridesPath).forEach { path ->
                 File(path).list()
                     ?.filter { it.endsWith("README.md") || it.endsWith("CHANGELOG.md") }
                     ?.forEach {
@@ -192,20 +149,19 @@ interface ThemeSourceGenerator {
                             File("$projectRootPath/$it").toPath(),
                             StandardCopyOption.REPLACE_EXISTING,
                         )
-                        File("$path/$it").delete()
                     }
             }
         }
 
-        private fun copyThemeClasses(userDir: String, themePkg: String) {
+        private fun copyThemeClasses(userDir: String, themePkg: String, projectRootPath: String) {
             val themeSrcPath = "$userDir/multisrc/src/main/java/${themeSuffix(themePkg, "/")}"
 
-            val themeDestPath = "lib-multisrc/$themePkg/src/${themeSuffix(themePkg, "/")}"
+            val themeDestPath = "$projectRootPath/src/${themeSuffix(themePkg, "/")}"
             File(themeDestPath).mkdirs()
 
             File(themeSrcPath).list()
                 ?.filter { it.endsWith(".kt") && !it.endsWith("Generator.kt") && !it.endsWith("Gen.kt") }
-                ?.forEach { Files.copy(File("$themeSrcPath/$it").toPath(), File("$themeDestPath/$it").toPath(), StandardCopyOption.REPLACE_EXISTING); File("$themeSrcPath/$it").delete() }
+                ?.forEach { Files.copy(File("$themeSrcPath/$it").toPath(), File("$themeDestPath/$it").toPath(), StandardCopyOption.REPLACE_EXISTING) }
         }
 
         private fun copyResFiles(resOverridePath: String, defaultResPath: String, source: ThemeSourceData, projectRootPath: String): Any {
@@ -213,8 +169,10 @@ interface ThemeSourceGenerator {
             val resOverride = File(resOverridePath)
             return if (resOverride.exists()) {
                 resOverride.copyRecursively(File("$projectRootPath/res"))
-                resOverride.deleteRecursively()
             } else {
+                File(defaultResPath).let { defaultResFile ->
+                    if (defaultResFile.exists()) defaultResFile.copyRecursively(File("$projectRootPath/res"))
+                }
             }
         }
 
@@ -225,7 +183,6 @@ interface ThemeSourceGenerator {
             val srcOverrideFile = File(srcOverridePath)
             if (srcOverrideFile.exists()) {
                 srcOverrideFile.copyRecursively(projectSrcFile)
-                srcOverrideFile.deleteRecursively()
             } else {
                 writeSourceClass(projectSrcFile, source, themePkg, themeClass)
             }
@@ -237,14 +194,14 @@ interface ThemeSourceGenerator {
                     """class ${source.className} : $themeClass("${source.sourceName}", "${source.baseUrl}", "${source.lang}")"""
                 }
                 is ThemeSourceData.MultiLang -> {
-                    val sourceClasses = source.langs.joinToString(",\n        ") { lang ->
+                    val sourceClasses = source.langs.map { lang ->
                         """$themeClass("${source.sourceName}", "${source.baseUrl}", "$lang")"""
                     }
 
                     """
                     |class ${source.className} : SourceFactory {
                     |    override fun createSources() = listOf(
-                    |        $sourceClasses,
+                    |        ${sourceClasses.joinToString(",\n")}
                     |    )
                     |}
                     """.trimMargin()
@@ -253,12 +210,14 @@ interface ThemeSourceGenerator {
 
             File("$classPath/${source.className}.kt").writeText(
                 """
+                |/* ktlint-disable */
+                |// THIS FILE IS AUTO-GENERATED; DO NOT EDIT
                 |package eu.kanade.tachiyomi.extension.${pkgNameSuffix(source, ".")}
                 |
                 |import eu.kanade.tachiyomi.multisrc.$themePkg.$themeClass
-                |${if (source is ThemeSourceData.MultiLang) "import eu.kanade.tachiyomi.source.SourceFactory\n" else ""}
-                |${factoryClassText()}
+                |${if (source is ThemeSourceData.MultiLang) "import eu.kanade.tachiyomi.source.SourceFactory" else ""}
                 |
+                |${factoryClassText()}
                 """.trimMargin(),
             )
         }

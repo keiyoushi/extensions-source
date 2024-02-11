@@ -22,7 +22,7 @@ class PaprikaGenerator : ThemeSourceGenerator {
             val themeClass = if (it.className == "MangaReaderCC") "PaprikaAlt" else themeClass
             ThemeSourceGenerator.createGradleProject(it, themePkg, themeClass, baseVersionCode, userDir)
         }
-        createMultisrcLib(userDir)
+        // createMultisrcLib(userDir)
     }
 
     companion object {
