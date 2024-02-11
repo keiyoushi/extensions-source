@@ -9,7 +9,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 
-class Manhuagold : MangaReader("Manhuagold", "https://manhuagold.top", "en") {
+class Manhuagold : MangaReader(
+    "Manhuagold",
+    "https://manhuagold.top",
+    "en",
+    "views"
+) {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
@@ -41,8 +46,6 @@ class Manhuagold : MangaReader("Manhuagold", "https://manhuagold.top", "en") {
     }
 
     // =============================== Filters ==============================
-
-    override val sortFilterPopular = "views"
 
     override val sortFilterValues = arrayOf(
         Pair("Default", "default"),
