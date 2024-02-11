@@ -25,7 +25,7 @@ class Mangasail : ParsedHttpSource() {
 
     override val name = "Mangasail"
 
-    override val baseUrl = "https://www.mangasail.co"
+    override val baseUrl = "https://www.sailmg.com"
 
     override val lang = "en"
 
@@ -182,7 +182,7 @@ class Mangasail : ParsedHttpSource() {
         GenreFilter(),
     )
 
-    // From https://www.mangasail.co/tagclouds/chunk/1
+    // From https://www.sailmg.com/tagclouds/chunk/1
     private class GenreFilter : UriPartFilter(
         "Genres",
         arrayOf(
