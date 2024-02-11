@@ -161,7 +161,7 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
     companion object {
         private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
         private const val BASE_URL_PREF_TITLE = "تعديل الرابط"
-        private const val BASE_URL_PREF_DEFAULT = "https://manga.ae"
+        private const val BASE_URL_PREF_DEFAULT = "https://mangaae.com"
         private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
         private const val BASE_URL_PREF_SUMMARY = ".للاستخدام المؤقت. تحديث التطبيق سيؤدي الى حذف الإعدادات"
     }
@@ -173,6 +173,7 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
             summary = BASE_URL_PREF_SUMMARY
             setDefaultValue(BASE_URL_PREF_DEFAULT)
             dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $BASE_URL_PREF_DEFAULT"
 
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
