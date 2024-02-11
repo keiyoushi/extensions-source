@@ -1,3 +1,7 @@
+## 1.4.5
+
+- Multisrc theme refactor
+
 ## 1.3.4
 
 - Refactor and make multisrc
