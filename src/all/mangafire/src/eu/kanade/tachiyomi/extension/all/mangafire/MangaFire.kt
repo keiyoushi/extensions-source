@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.mangafire
 
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -26,10 +25,13 @@ import java.util.Locale
 open class MangaFire(
     override val lang: String,
     private val langCode: String = lang,
-) : MangaReader() {
-    override val name = "MangaFire"
-
-    override val baseUrl = "https://mangafire.to"
+) : MangaReader(
+    "MangaFire",
+    "https://mangafire.to",
+    lang,
+    "most_viewed",
+    "recently_updated",
+) {
 
     private val json: Json by injectLazy()
 
@@ -37,98 +39,71 @@ open class MangaFire(
         .addInterceptor(ImageInterceptor)
         .build()
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/filter?sort=recently_updated&language[]=$langCode&page=$page", headers)
+    override val pageQueryParameter = "page"
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/filter?sort=most_viewed&language[]=$langCode&page=$page", headers)
+    override val containsVolumes = true
+    override val chapterType = "chapter"
+    override val volumeType = "volume"
+
+    // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
-        if (query.isNotBlank()) {
-            urlBuilder.addPathSegment("filter").apply {
-                addQueryParameter("keyword", query)
-                addQueryParameter("page", page.toString())
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            val filterList = filters.ifEmpty { getFilterList() }
+
+            addPathSegment("filter")
+            addQueryParameter(searchKeyword, query)
+            addQueryParameter("language[]", langCode)
+            filterList.filterIsInstance<UriFilter>().forEach {
+                it.addToUri(this)
             }
-        } else {
-            urlBuilder.addPathSegment("filter").apply {
-                addQueryParameter("language[]", langCode)
-                addQueryParameter("page", page.toString())
-                filters.ifEmpty(::getFilterList).forEach { filter ->
-                    when (filter) {
-                        is Group -> {
-                            filter.state.forEach {
-                                if (it.state) {
-                                    addQueryParameter(filter.param, it.id)
-                                }
-                            }
-                        }
-                        is Select -> {
-                            addQueryParameter(filter.param, filter.selection)
-                        }
-                        is GenresFilter -> {
-                            filter.state.forEach {
-                                if (it.state != 0) {
-                                    addQueryParameter(filter.param, it.selection)
-                                }
-                            }
-                            if (filter.combineMode) {
-                                addQueryParameter("genre_mode", "and")
-                            }
-                        }
-                        else -> {}
-                    }
-                }
-            }
+
+            addQueryParameter(pageQueryParameter, page.toString())
+        }.build()
+
+        return GET(url, headers)
+    }
+
+    override fun searchMangaSelector() = ".original.card-lg .unit .inner"
+
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".info > a")!!.let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.ownText()
         }
-        return GET(urlBuilder.build(), headers)
+        element.selectFirst("img")!!.let {
+            thumbnail_url = it.imgAttr()
+        }
     }
 
     override fun searchMangaNextPageSelector() = ".page-item.active + .page-item .page-link"
 
-    override fun searchMangaSelector() = ".original.card-lg .unit .inner"
+    // =========================== Manga Details ============================
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst(".info > a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.ownText()
-            }
-            element.selectFirst(Evaluator.Tag("img"))!!.let {
-                thumbnail_url = it.attr("src")
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val rootSelector = ".main-inner:has(.meta)"
+
+        document.selectFirst(rootSelector)!!.run {
+            title = selectFirst("h1")!!.ownText()
+            thumbnail_url = selectFirst("img")?.imgAttr()
+            genre = select(".meta > div:has(span:contains(Genres)) a").joinToString { it.ownText() }
+            author = select(".meta > div:has(span:contains(Author)) a").joinToString { it.ownText() }
+            status = selectFirst(".info > p")?.text().getStatus()
         }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val root = document.selectFirst(".info")!!
-        val mangaTitle = root.child(1).ownText()
-        title = mangaTitle
-        description = document.run {
-            val description = selectFirst(Evaluator.Class("description"))!!.ownText()
-            when (val altTitle = root.child(2).ownText()) {
-                "", mangaTitle -> description
-                else -> "$description\n\nAlternative Title: $altTitle"
+        description = buildString {
+            document.selectFirst("#synopsis")?.text()?.let { append(it) }
+            append("\n\n")
+            document.selectFirst("$rootSelector h6")?.ownText()?.let {
+                if (it.isNotEmpty() && it != title) {
+                    append("Alternative Title: ")
+                    append(it)
+                }
             }
-        }
-        thumbnail_url = document.selectFirst(".poster")!!
-            .selectFirst("img")!!.attr("src")
-        status = when (root.child(0).ownText()) {
-            "Completed" -> SManga.COMPLETED
-            "Releasing" -> SManga.ONGOING
-            "On_hiatus" -> SManga.ON_HIATUS
-            "Discontinued" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
-        with(document.selectFirst(Evaluator.Class("meta"))!!) {
-            author = selectFirst("span:contains(Author:) + span")?.text()
-            val type = selectFirst("span:contains(Type:) + span")?.text()
-            val genres = selectFirst("span:contains(Genres:) + span")?.text()
-            genre = listOfNotNull(type, genres).joinToString()
-        }
+        }.trim()
     }
 
-    override val chapterType get() = "chapter"
-    override val volumeType get() = "volume"
+    // ============================== Chapters ==============================
 
     override fun chapterListRequest(mangaUrl: String, type: String): Request {
         val id = mangaUrl.substringAfterLast('.')
@@ -170,14 +145,18 @@ open class MangaFire(
 
         val elements = document.selectFirst(".scroll-sm")!!.children()
         val chapterCount = chapters.size
+
         if (elements.size != chapterCount) throw Exception("Chapter count doesn't match. Try updating again.")
         val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
         for (i in 0 until chapterCount) {
             val chapter = chapters[i]
             val element = elements[i]
+
             val number = element.attr("data-number").toFloatOrNull() ?: -1f
+
             if (chapter.chapter_number != number) throw Exception("Chapter number doesn't match. Try updating again.")
             val date = element.select(Evaluator.Tag("span"))[1].ownText()
+
             chapter.date_upload = try {
                 dateFormat.parse(date)!!.time
             } catch (_: Throwable) {
@@ -185,6 +164,26 @@ open class MangaFire(
             }
         }
     }
+
+    override fun chapterFromElement(element: Element, isVolume: Boolean): SChapter = SChapter.create().apply {
+        val number = element.attr("data-number")
+        chapter_number = number.toFloatOrNull() ?: -1f
+
+        val link = element.selectFirst("a")!!
+        val abbrPrefix = if (isVolume) "Vol" else "Chap"
+        val fullPrefix = if (isVolume) "Volume" else "Chapter"
+        val type = if (isVolume) volumeType else chapterType
+        name = run {
+            val name = link.selectFirst("span")?.text() ?: link.text()
+            val prefix = "$abbrPrefix $number: "
+            if (!name.startsWith(prefix)) return@run name
+            val realName = name.removePrefix(prefix)
+            if (realName.contains(number)) realName else "$fullPrefix $number: $realName"
+        }
+        setUrlWithoutDomain(link.attr("href") + '#' + type + '/' + element.attr("data-id"))
+    }
+
+    // =============================== Pages ================================
 
     override fun pageListRequest(chapter: SChapter): Request {
         val typeAndId = chapter.url.substringAfterLast('#')
@@ -217,15 +216,30 @@ open class MangaFire(
         val status: Int,
     )
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            TypeFilter(),
-            GenresFilter(),
-            StatusFilter(),
-            YearFilter(),
-            ChapterCountFilter(),
-            SortFilter(),
-        )
+    // =============================== Filters ==============================
+
+    override fun getSortFilter() = SortFilter(sortFilterName, sortFilterParam, sortFilterValues)
+
+    override val sortFilterValues = arrayOf(
+        Pair("Most relevance", "most_relevance"),
+        Pair("Trending", "trending"),
+        Pair("Recently updated", "recently_updated"),
+        Pair("Recently added", "recently_added"),
+        Pair("Release date", "release_date"),
+        Pair("Name A-Z", "title_az"),
+        Pair("Score", "scores"),
+        Pair("MAL score", "mal_scores"),
+        Pair("Most viewed", "most_viewed"),
+        Pair("Most favourited", "most_favourited"),
+    )
+
+    override fun getFilterList() = FilterList(
+        TypeFilter(),
+        GenreFilter(),
+        GenreModeFilter(),
+        StatusFilter(),
+        YearFilter(),
+        ChapterCountFilter(),
+        getSortFilter(),
+    )
 }
