@@ -32,10 +32,10 @@ import uy.kohesive.injekt.api.get
 abstract class MangaReader(
     override val name: String,
     override val baseUrl: String,
-    final override val lang: String,
+    override val lang: String,
 ) : ParsedHttpSource(), ConfigurableSource {
 
-    private val preferences: SharedPreferences by lazy {
+    val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
@@ -215,20 +215,24 @@ abstract class MangaReader(
     private fun Element.parseAuthorsTo(manga: SManga): SManga {
         val authors = select("a")
         val text = authors.map { it.ownText().replace(",", "") }
-        when (authors.size) {
+
+        val count = authors.size
+        when (count) {
             0 -> return manga
             1 -> {
                 manga.author = text.first()
                 return manga
             }
         }
-        val authorList = ArrayList<String>()
-        val artistList = ArrayList<String>()
+
+        val authorList = ArrayList<String>(count)
+        val artistList = ArrayList<String>(count)
         for ((index, author) in authors.withIndex()) {
             val textNode = author.nextSibling() as? TextNode
-            val list = if (textNode != null && "(Art)" in textNode.wholeText) artistList else authorList
+            val list = if (textNode?.wholeText?.contains("(Art)") == true) artistList else authorList
             list.add(text[index])
         }
+
         if (authorList.isNotEmpty()) manga.author = authorList.joinToString()
         if (artistList.isNotEmpty()) manga.artist = artistList.joinToString()
         return manga
@@ -237,7 +241,9 @@ abstract class MangaReader(
     private fun Element.parseStatus(manga: SManga): SManga {
         manga.status = when (this.selectFirst(".name")?.ownText()?.lowercase()) {
             "ongoing" -> SManga.ONGOING
+            "publishing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
+            "finished" -> SManga.COMPLETED
             "on-hold" -> SManga.ON_HIATUS
             "canceled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
