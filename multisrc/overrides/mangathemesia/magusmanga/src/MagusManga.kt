@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 
 class MagusManga : MangaThemesia(
     "Magus Manga",
-    "https://magusmanga.com",
+    "https://vofeg.com",
     "en",
     dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("en")),
 ) {
