@@ -37,7 +37,6 @@ class MadaraGenerator : ThemeSourceGenerator {
         SingleLang("Astral-Manga", "https://astral-manga.fr", "fr", className = "AstralManga"),
         SingleLang("Astrum Scans", "https://astrumscans.xyz", "pt-BR", isNsfw = true),
         SingleLang("Asura Scans.us (unoriginal)", "https://asurascans.us", "en", className = "AsuraScansUs"),
-        SingleLang("Atlantis Scan", "https://scansatlanticos.com", "es", isNsfw = true),
         SingleLang("Azora", "https://azoramoon.com", "ar", overrideVersionCode = 7),
         SingleLang("Babel Wuxia", "https://babelwuxia.com", "en", overrideVersionCode = 1),
         SingleLang("Baka Manhua", "https://bakamh.com", "zh", isNsfw = true, className = "Bakamh", sourceName = "巴卡漫画"),

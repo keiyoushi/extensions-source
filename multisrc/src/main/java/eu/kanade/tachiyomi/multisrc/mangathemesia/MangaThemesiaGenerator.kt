@@ -25,6 +25,7 @@ class MangaThemesiaGenerator : ThemeSourceGenerator {
         SingleLang("Arven Scans", "https://arvenscans.com", "en"),
         SingleLang("AscalonScans", "https://ascalonscans.com", "en", overrideVersionCode = 1),
         SingleLang("Asura Scans", "https://asuratoon.com", "en", overrideVersionCode = 1),
+        SingleLang("Atlantis Scan", "https://scansatlanticos.com", "es", isNsfw = true, overrideVersionCode = 6),
         SingleLang("Banana-Scan", "https://banana-scan.com", "fr", className = "BananaScan", isNsfw = true),
         SingleLang("Beast Scans", "https://beastscans.net", "ar", overrideVersionCode = 1),
         SingleLang("Berserker Scan", "https://ragnascan.com", "es"),
