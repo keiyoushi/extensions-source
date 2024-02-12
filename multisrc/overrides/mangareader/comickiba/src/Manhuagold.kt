@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -17,6 +18,21 @@ class Manhuagold : MangaReader(
     "https://manhuagold.top",
     "en",
     sortPopularValue = "views",
+    pageListParseSelector = "div",
+    sortFilterValues = arrayOf(
+        Pair("Default", "default"),
+        Pair("Latest Updated", "latest-updated"),
+        Pair("Most Viewed", "views"),
+        Pair("Most Viewed Month", "views_month"),
+        Pair("Most Viewed Week", "views_week"),
+        Pair("Most Viewed Day", "views_day"),
+        Pair("Score", "score"),
+        Pair("Name A-Z", "az"),
+        Pair("Name Z-A", "za"),
+        Pair("The highest chapter count", "chapters"),
+        Pair("Newest", "new"),
+        Pair("Oldest", "old"),
+    ),
 ) {
 
     override val client = network.cloudflareClient.newBuilder()
@@ -25,6 +41,12 @@ class Manhuagold : MangaReader(
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    override fun addPage(page: Int, builder: HttpUrl.Builder) {
+        builder.addPathSegments(page.toString())
+    }
+
+    // ============================== Chapters ==============================
 
     override fun chapterListRequest(mangaUrl: String, type: String): Request =
         throw UnsupportedOperationException()
@@ -36,8 +58,6 @@ class Manhuagold : MangaReader(
         throw UnsupportedOperationException()
 
     // =============================== Pages ================================
-
-    override val pageListParseSelector = "div"
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -58,21 +78,6 @@ class Manhuagold : MangaReader(
     }
 
     // =============================== Filters ==============================
-
-    override val sortFilterValues = arrayOf(
-        Pair("Default", "default"),
-        Pair("Latest Updated", "latest-updated"),
-        Pair("Most Viewed", "views"),
-        Pair("Most Viewed Month", "views_month"),
-        Pair("Most Viewed Week", "views_week"),
-        Pair("Most Viewed Day", "views_day"),
-        Pair("Score", "score"),
-        Pair("Name A-Z", "az"),
-        Pair("Name Z-A", "za"),
-        Pair("The highest chapter count", "chapters"),
-        Pair("Newest", "new"),
-        Pair("Oldest", "old"),
-    )
 
     override fun getFilterList() = FilterList(
         Note,

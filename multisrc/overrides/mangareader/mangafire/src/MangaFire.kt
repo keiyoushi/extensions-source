@@ -29,8 +29,23 @@ open class MangaFire(
     "MangaFire",
     "https://mangafire.to",
     lang,
+    searchMangaSelector = ".original.card-lg .unit .inner",
+    searchMangaNextPageSelector = ".page-item.active + .page-item .page-link",
+    containsVolumes = true,
     sortPopularValue = "most_viewed",
     sortLatestValue = "recently_updated",
+    sortFilterValues = arrayOf(
+        Pair("Most relevance", "most_relevance"),
+        Pair("Trending", "trending"),
+        Pair("Recently updated", "recently_updated"),
+        Pair("Recently added", "recently_added"),
+        Pair("Release date", "release_date"),
+        Pair("Name A-Z", "title_az"),
+        Pair("Score", "scores"),
+        Pair("MAL score", "mal_scores"),
+        Pair("Most viewed", "most_viewed"),
+        Pair("Most favourited", "most_favourited"),
+    ),
 ) {
 
     private val json: Json by injectLazy()
@@ -38,12 +53,6 @@ open class MangaFire(
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor)
         .build()
-
-    override val pageQueryParameter = "page"
-
-    override val containsVolumes = true
-    override val chapterType = "chapter"
-    override val volumeType = "volume"
 
     // =============================== Search ===============================
 
@@ -58,25 +67,19 @@ open class MangaFire(
                 it.addToUri(this)
             }
 
-            addQueryParameter(pageQueryParameter, page.toString())
+            addPage(page, this)
         }.build()
 
         return GET(url, headers)
     }
-
-    override fun searchMangaSelector() = ".original.card-lg .unit .inner"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         element.selectFirst(".info > a")!!.let {
             setUrlWithoutDomain(it.attr("abs:href"))
             title = it.ownText()
         }
-        element.selectFirst("img")!!.let {
-            thumbnail_url = it.imgAttr()
-        }
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
     }
-
-    override fun searchMangaNextPageSelector() = ".page-item.active + .page-item .page-link"
 
     // =========================== Manga Details ============================
 
@@ -219,19 +222,6 @@ open class MangaFire(
     // =============================== Filters ==============================
 
     override fun getSortFilter() = SortFilter(sortFilterName, sortFilterParam, sortFilterValues)
-
-    override val sortFilterValues = arrayOf(
-        Pair("Most relevance", "most_relevance"),
-        Pair("Trending", "trending"),
-        Pair("Recently updated", "recently_updated"),
-        Pair("Recently added", "recently_added"),
-        Pair("Release date", "release_date"),
-        Pair("Name A-Z", "title_az"),
-        Pair("Score", "scores"),
-        Pair("MAL score", "mal_scores"),
-        Pair("Most viewed", "most_viewed"),
-        Pair("Most favourited", "most_favourited"),
-    )
 
     override fun getFilterList() = FilterList(
         TypeFilter(),

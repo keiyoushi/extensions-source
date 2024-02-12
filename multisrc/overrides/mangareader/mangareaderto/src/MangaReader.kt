@@ -14,17 +14,26 @@ import rx.Observable
 
 open class MangaReader(
     override val lang: String,
-) : MangaReader("MangaReader", "https://mangareader.to", lang) {
+) : MangaReader(
+    "MangaReader",
+    "https://mangareader.to",
+    lang,
+    containsVolumes = true,
+    chapterType = "chap",
+    volumeType = "vol",
+    sortFilterValues = arrayOf(
+        Pair("Default", "default"),
+        Pair("Latest Updated", "latest-updated"),
+        Pair("Score", "score"),
+        Pair("Name A-Z", "name-az"),
+        Pair("Release Date", "release-date"),
+        Pair("Most Viewed", "most-viewed"),
+    ),
+) {
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor)
         .build()
-
-    override val pageQueryParameter = "page"
-
-    override val containsVolumes = true
-    override val chapterType = "chap"
-    override val volumeType = "vol"
 
     // =============================== Search ===============================
 
@@ -89,15 +98,6 @@ open class MangaReader(
     }
 
     // =============================== Filters ==============================
-
-    override val sortFilterValues = arrayOf(
-        Pair("Default", "default"),
-        Pair("Latest Updated", "latest-updated"),
-        Pair("Score", "score"),
-        Pair("Name A-Z", "name-az"),
-        Pair("Release Date", "release-date"),
-        Pair("Most Viewed", "most-viewed"),
-    )
 
     override fun getFilterList() = FilterList(
         Note,

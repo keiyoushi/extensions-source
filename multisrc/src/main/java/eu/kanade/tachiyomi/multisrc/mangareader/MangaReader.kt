@@ -12,7 +12,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -29,13 +29,50 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-abstract class MangaReader(
+/**
+ * @param sortPopularValue Query parameter value for sorting by popular
+ * @param sortLatestValue Query parameter value for sorting by latest
+ * @param searchPathSegment Path segment used when searching with a query.
+ * @param searchKeyword Query parameter used when searching
+ * @param searchMangaSelector Selector for each manga entry
+ * @param searchMangaNextPageSelector Selector fo whether a next page exists
+ * @param containsVolumes Whether the site supports volumes
+ * @param chapterType Value the source uses to denote chapters
+ * @param volumeType Value the source uses to denote volumes
+ * @param pageListParseSelector Selector for each page
+ * @param sortFilterName Name used for the sort filter
+ * @param sortFilterParam Query parameter for the sort value
+ * @param sortFilterValues Values for each sort
+ */
+abstract class MangaReader
+@Suppress("UNUSED")
+constructor(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
+
+    vararg useNamedArgumentsBelow: Forbidden,
+
     private val sortPopularValue: String = "most-viewed",
     private val sortLatestValue: String = "latest-updated",
-) : ParsedHttpSource(), ConfigurableSource {
+    private val searchPathSegment: String = "search",
+    protected val searchKeyword: String = "keyword",
+    private val searchMangaSelector: String = ".manga_list-sbs .manga-poster",
+    private val searchMangaNextPageSelector: String = "ul.pagination > li.active + li",
+    private val containsVolumes: Boolean = false,
+    protected val chapterType: String = "chapter",
+    protected val volumeType: String = "volume",
+    private val pageListParseSelector: String = ".container-reader-chapter > div > img",
+    protected val sortFilterName: String = when (lang) {
+        "ja" -> "選別"
+        else -> "Sort"
+    },
+    protected val sortFilterParam: String = "sort",
+    protected val sortFilterValues: Array<Pair<String, String>> = arrayOf(
+        Pair("Most Viewed", sortPopularValue),
+        Pair("Latest Updated", sortLatestValue),
+    ),
+) : HttpSource(), ConfigurableSource {
 
     val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -43,21 +80,9 @@ abstract class MangaReader(
 
     override val supportsLatest = true
 
-    /**
-     * Enable if site supports volumes. Must set chapterType and volumeType to a value
-     * if enabled.
-     */
-    protected open val containsVolumes = false
-
-    open val chapterType: String? = null
-
-    open val volumeType: String? = null
-
-    /**
-     * When null, a page path segment will be added. Otherwise, it will use
-     * the `pageQueryParameter` as a query parameter with page as the value.
-     */
-    protected open val pageQueryParameter: String? = null
+    open fun addPage(page: Int, builder: HttpUrl.Builder) {
+        builder.addQueryParameter("page", page.toString())
+    }
 
     // ============================== Popular ===============================
 
@@ -68,15 +93,6 @@ abstract class MangaReader(
             FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues, sortPopularValue)),
         )
     }
-
-    override fun popularMangaSelector() =
-        throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element) =
-        throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector(): String =
-        throw UnsupportedOperationException()
 
     final override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
@@ -90,28 +106,9 @@ abstract class MangaReader(
         )
     }
 
-    override fun latestUpdatesSelector() =
-        throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element) =
-        throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector(): String =
-        throw UnsupportedOperationException()
-
     final override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // =============================== Search ===============================
-
-    /**
-     * Path segment used when searching with a query.
-     */
-    open val searchPathSegment = "search"
-
-    /**
-     * Query parameter used when searching
-     */
-    open val searchKeyword = "keyword"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -126,19 +123,13 @@ abstract class MangaReader(
                 }
             }
 
-            if (pageQueryParameter != null) {
-                addQueryParameter(pageQueryParameter!!, page.toString())
-            } else {
-                addPathSegment(page.toString())
-            }
+            addPage(page, this)
         }.build()
 
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = ".manga_list-sbs .manga-poster"
-
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+    open fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         element.selectFirst("img")!!.let {
             title = it.attr("alt")
@@ -146,11 +137,9 @@ abstract class MangaReader(
         }
     }
 
-    override fun searchMangaNextPageSelector() = "ul.pagination > li.active + li"
-
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        var entries = document.select(searchMangaSelector()).map(::searchMangaFromElement)
+        var entries = document.select(searchMangaSelector).map(::searchMangaFromElement)
         if (containsVolumes && preferences.getBoolean(SHOW_VOLUME_PREF, false)) {
             entries = entries.flatMapTo(ArrayList(entries.size * 2)) { manga ->
                 val volume = SManga.create().apply {
@@ -161,7 +150,7 @@ abstract class MangaReader(
                 listOf(manga, volume)
             }
         }
-        val hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null
+        val hasNextPage = document.selectFirst(searchMangaNextPageSelector) != null
         return MangasPage(entries, hasNextPage)
     }
 
@@ -178,17 +167,17 @@ abstract class MangaReader(
         return manga
     }
 
-    protected open val authorText: String = when (lang) {
+    private val authorText: String = when (lang) {
         "ja" -> "著者"
         else -> "Authors"
     }
 
-    protected open val statusText: String = when (lang) {
+    private val statusText: String = when (lang) {
         "ja" -> "地位"
         else -> "Status"
     }
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         document.selectFirst("#ani_detail")!!.run {
             title = selectFirst(".manga-name")!!.ownText()
             thumbnail_url = selectFirst("img")?.imgAttr()
@@ -246,15 +235,10 @@ abstract class MangaReader(
     }
 
     open fun String?.getStatus(): Int = when (this?.lowercase()) {
-        "ongoing" -> SManga.ONGOING
-        "publishing" -> SManga.ONGOING
-        "releasing" -> SManga.ONGOING
-        "completed" -> SManga.COMPLETED
-        "finished" -> SManga.COMPLETED
-        "on-hold" -> SManga.ON_HIATUS
-        "on_hiatus" -> SManga.ON_HIATUS
-        "discontinued" -> SManga.CANCELLED
-        "canceled" -> SManga.CANCELLED
+        "ongoing", "publishing", "releasing" -> SManga.ONGOING
+        "completed", "finished" -> SManga.COMPLETED
+        "on-hold", "on_hiatus" -> SManga.ON_HIATUS
+        "canceled", "discontinued" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 
@@ -278,33 +262,37 @@ abstract class MangaReader(
         val type = if (isVolume) volumeType else chapterType
 
         val request = if (containsVolumes) {
-            chapterListRequest(path.removeSuffix(VOLUME_URL_SUFFIX), type!!)
+            chapterListRequest(path.removeSuffix(VOLUME_URL_SUFFIX), type)
         } else {
             chapterListRequest(manga)
         }
 
         val response = client.newCall(request).execute()
-        val elements = if (containsVolumes) {
-            parseChapterElements(response, isVolume)
-        } else {
-            val document = response.asJsoup()
-            document.select(chapterListSelector())
-        }
-
-        val chapters = if (containsVolumes) {
-            elements.map { chapterFromElement(it, isVolume) }
-        } else {
-            elements.map(::chapterFromElement)
-        }
+        val chapters = chapterListParse(response, isVolume)
 
         chapters.also {
             if (!isVolume && it.isNotEmpty()) updateChapterList(manga, it)
         }
     }
 
-    override fun chapterListSelector() = "#ja-chaps > li.chapter-item, #chapters-list > li"
+    private fun chapterListParse(response: Response, isVolume: Boolean): List<SChapter> {
+        return if (containsVolumes) {
+            parseChapterElements(response, isVolume).map {
+                chapterFromElement(it, isVolume)
+            }
+        } else {
+            chapterListParse(response)
+        }
+    }
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select(chapterListSelector).map(::chapterFromElement)
+    }
+
+    private val chapterListSelector = "#ja-chaps > li.chapter-item, #chapters-list > li"
+
+    open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         element.selectFirst("a")!!.run {
             setUrlWithoutDomain(attr("href"))
             name = selectFirst(".name")?.text() ?: text()
@@ -317,16 +305,12 @@ abstract class MangaReader(
 
     // =============================== Pages ================================
 
-    open val pageListParseSelector = ".container-reader-chapter > div > img"
-
-    open val pageListImgSelector = "img"
-
     override fun pageListParse(response: Response): List<Page> {
         val document = response.parseHtmlProperty()
 
         val pageList = document.select(pageListParseSelector).mapIndexed { index, element ->
             val imgUrl = element.imgAttr().ifEmpty {
-                element.selectFirst(pageListImgSelector)!!.imgAttr()
+                element.selectFirst("img")!!.imgAttr()
             }
 
             Page(index, imageUrl = imgUrl)
@@ -335,10 +319,7 @@ abstract class MangaReader(
         return pageList
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        throw UnsupportedOperationException()
-
-    override fun imageUrlParse(document: Document) =
+    override fun imageUrlParse(response: Response): String =
         throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
@@ -404,18 +385,6 @@ abstract class MangaReader(
             }
         }
     }
-
-    open val sortFilterName: String = when (lang) {
-        "ja" -> "選別"
-        else -> "Sort"
-    }
-
-    open val sortFilterParam = "sort"
-
-    open val sortFilterValues = arrayOf(
-        Pair("Most Viewed", sortPopularValue),
-        Pair("Latest Updated", sortLatestValue),
-    )
 
     open class SortFilter(
         title: String,
