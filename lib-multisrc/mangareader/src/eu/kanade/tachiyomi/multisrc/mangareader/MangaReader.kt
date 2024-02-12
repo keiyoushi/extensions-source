@@ -263,14 +263,12 @@ abstract class MangaReader(
     /**
      * Method to create request for either chapters or volumes
      */
-    open fun chapterListRequest(mangaUrl: String, type: String): Request =
-        throw NotImplementedError()
+    abstract fun chapterListRequest(mangaUrl: String, type: String): Request
 
     /**
      * Method to parse elements depending on type
      */
-    open fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> =
-        throw NotImplementedError()
+    abstract fun parseChapterElements(response: Response, isVolume: Boolean): List<Element>
 
     open fun updateChapterList(manga: SManga, chapters: List<SChapter>) = Unit
 
@@ -313,8 +311,7 @@ abstract class MangaReader(
         }
     }
 
-    open fun chapterFromElement(element: Element, isVolume: Boolean): SChapter =
-        throw NotImplementedError()
+    abstract fun chapterFromElement(element: Element, isVolume: Boolean): SChapter
 
     final override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast('#')
 

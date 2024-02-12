@@ -6,14 +6,17 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 
 class Manhuagold : MangaReader(
     "Manhuagold",
     "https://manhuagold.top",
     "en",
-    "views",
+    sortPopularValue = "views",
 ) {
 
     override val client = network.cloudflareClient.newBuilder()
@@ -22,6 +25,15 @@ class Manhuagold : MangaReader(
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    override fun chapterListRequest(mangaUrl: String, type: String): Request =
+        throw UnsupportedOperationException()
+
+    override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> =
+        throw UnsupportedOperationException()
+
+    override fun chapterFromElement(element: Element, isVolume: Boolean): SChapter =
+        throw UnsupportedOperationException()
 
     // =============================== Pages ================================
 
