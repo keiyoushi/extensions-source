@@ -50,8 +50,10 @@ abstract class LectorTmo(
 
     override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder()
+    // Needed to ignore the referer header in WebView
+    private val tmoHeaders = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+        .build()
 
     protected open val imageCDNUrls = arrayOf(
         "https://img1.followmanga.com",
@@ -99,6 +101,7 @@ abstract class LectorTmo(
             .build()
     }
 
+    private var lastCFDomain: String = ""
     override val client: OkHttpClient by lazy {
         network.client.newBuilder()
             .addInterceptor { chain ->
@@ -108,6 +111,15 @@ abstract class LectorTmo(
                     return@addInterceptor ignoreSslClient.newCall(request).execute()
                 }
                 chain.proceed(request)
+            }
+            .addInterceptor() { chain ->
+                if (!getSaveLastCFUrlPref()) return@addInterceptor chain.proceed(chain.request())
+                val request = chain.request()
+                val response = chain.proceed(request)
+                if (response.code in CF_ERROR_CODES && response.header("Server") in CF_SERVER_CHECK) {
+                    lastCFDomain = response.request.url.toString()
+                }
+                response
             }
             .rateLimitHost(
                 baseUrl.toHttpUrl(),
@@ -125,7 +137,7 @@ abstract class LectorTmo(
     // Marks erotic content as false and excludes: Ecchi(6), GirlsLove(17), BoysLove(18), Harem(19), Trap(94) genders
     private fun getSFWUrlPart(): String = if (getSFWModePref()) "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false" else ""
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/library?order_item=likes_count&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/library?order_item=likes_count&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
 
     override fun popularMangaNextPageSelector() = "a[rel='next']"
 
@@ -139,7 +151,7 @@ abstract class LectorTmo(
         }
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/library?order_item=creation&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/library?order_item=creation&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -167,7 +179,7 @@ abstract class LectorTmo(
         }
     }
 
-    private fun searchMangaBySlugRequest(slug: String) = GET("$baseUrl/$PREFIX_LIBRARY/$slug", headers)
+    private fun searchMangaBySlugRequest(slug: String) = GET("$baseUrl/$PREFIX_LIBRARY/$slug", tmoHeaders)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/library".toHttpUrl().newBuilder()
@@ -219,13 +231,18 @@ abstract class LectorTmo(
                 else -> {}
             }
         }
-        return GET(url.build(), headers)
+        return GET(url.build(), tmoHeaders)
     }
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    override fun getMangaUrl(manga: SManga): String {
+        if (lastCFDomain.isNotEmpty()) return lastCFDomain.also { lastCFDomain = "" }
+        return super.getMangaUrl(manga)
+    }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.select("h2.element-subtitle").text()
@@ -248,6 +265,11 @@ abstract class LectorTmo(
     }
 
     protected open val oneShotChapterName = "One Shot"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (lastCFDomain.isNotEmpty()) return lastCFDomain.also { lastCFDomain = "" }
+        return super.getChapterUrl(chapter)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -294,7 +316,7 @@ abstract class LectorTmo(
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
+        return GET(chapter.url, tmoHeaders)
     }
 
     override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
@@ -404,6 +426,10 @@ abstract class LectorTmo(
         } else {
             this
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        return GET(page.imageUrl!!, tmoHeaders)
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -528,6 +554,8 @@ abstract class LectorTmo(
 
     protected fun getSFWModePref(): Boolean = preferences.getBoolean(SFW_MODE_PREF, SFW_MODE_PREF_DEFAULT_VALUE)
 
+    protected fun getSaveLastCFUrlPref(): Boolean = preferences.getBoolean(SAVE_LAST_CF_URL_PREF, SAVE_LAST_CF_URL_PREF_DEFAULT_VALUE)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val sfwModePref = CheckBoxPreference(screen.context).apply {
             key = SFW_MODE_PREF
@@ -562,10 +590,18 @@ abstract class LectorTmo(
             setDefaultValue(IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)
         }
 
+        val saveLastCFUrlPreference = CheckBoxPreference(screen.context).apply {
+            key = SAVE_LAST_CF_URL_PREF
+            title = SAVE_LAST_CF_URL_PREF_TITLE
+            summary = SAVE_LAST_CF_URL_PREF_SUMMARY
+            setDefaultValue(SAVE_LAST_CF_URL_PREF_DEFAULT_VALUE)
+        }
+
         screen.addPreference(sfwModePref)
         screen.addPreference(scanlatorPref)
         screen.addPreference(apiRateLimitPreference)
         screen.addPreference(imgCDNRateLimitPreference)
+        screen.addPreference(saveLastCFUrlPreference)
     }
 
     companion object {
@@ -581,22 +617,19 @@ abstract class LectorTmo(
         private val SFW_MODE_PREF_EXCLUDE_GENDERS = listOf("6", "17", "18", "19")
 
         private const val WEB_RATELIMIT_PREF = "webRatelimitPreference"
-
-        // Ratelimit permits per second for main website
         private const val WEB_RATELIMIT_PREF_TITLE = "Ratelimit por minuto para el sitio web"
-
-        // This value affects network request amount to TMO url. Lower this value may reduce the chance to get HTTP 429 error, but loading speed will be slower too. App restart required. \nCurrent value: %s
         private const val WEB_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red a la URL de TMO. Reducir este valor puede disminuir la posibilidad de obtener un error HTTP 429, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. \nValor actual: %s"
         private const val WEB_RATELIMIT_PREF_DEFAULT_VALUE = "8"
 
         private const val IMAGE_CDN_RATELIMIT_PREF = "imgCDNRatelimitPreference"
-
-        // Ratelimit permits per second for image CDN
         private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "Ratelimit por minuto para descarga de imágenes"
-
-        // This value affects network request amount for loading image. Lower this value may reduce the chance to get error when loading image, but loading speed will be slower too. App restart required. \nCurrent value: %s
         private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red para descargar imágenes. Reducir este valor puede disminuir errores al cargar imagenes, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. \nValor actual: %s"
         private const val IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE = "50"
+
+        private const val SAVE_LAST_CF_URL_PREF = "saveLastCFUrlPreference"
+        private const val SAVE_LAST_CF_URL_PREF_TITLE = "Guardar la última URL con error de Cloudflare"
+        private const val SAVE_LAST_CF_URL_PREF_SUMMARY = "Guarda la última URL con error de Cloudflare para que se pueda acceder a ella al abrir la serie en WebView."
+        private const val SAVE_LAST_CF_URL_PREF_DEFAULT_VALUE = true
 
         private val ENTRIES_ARRAY = listOf(1, 2, 3, 5, 6, 7, 8, 9, 10, 15, 20, 30, 40, 50, 100).map { i -> i.toString() }.toTypedArray()
 
@@ -611,5 +644,8 @@ abstract class LectorTmo(
             Pair("Fecha estreno", "release_date"),
             Pair("Núm. Capítulos", "num_chapters"),
         )
+
+        private val CF_ERROR_CODES = listOf(403, 503)
+        private val CF_SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
     }
 }
