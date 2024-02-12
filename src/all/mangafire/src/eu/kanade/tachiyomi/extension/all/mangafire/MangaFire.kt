@@ -29,8 +29,8 @@ open class MangaFire(
     "MangaFire",
     "https://mangafire.to",
     lang,
-    "most_viewed",
-    "recently_updated",
+    sortPopularValue = "most_viewed",
+    sortLatestValue = "recently_updated",
 ) {
 
     private val json: Json by injectLazy()
