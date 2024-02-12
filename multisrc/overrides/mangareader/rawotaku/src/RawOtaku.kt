@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
@@ -28,6 +29,15 @@ class RawOtaku : MangaReader("Raw Otaku", "https://rawotaku.com", "ja") {
         val id = element.attr("data-id")
         url = "$url#$id"
     }
+
+    override fun chapterListRequest(mangaUrl: String, type: String): Request =
+        throw UnsupportedOperationException()
+
+    override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> =
+        throw UnsupportedOperationException()
+
+    override fun chapterFromElement(element: Element, isVolume: Boolean): SChapter =
+        throw UnsupportedOperationException()
 
     // =============================== Pages ================================
 
