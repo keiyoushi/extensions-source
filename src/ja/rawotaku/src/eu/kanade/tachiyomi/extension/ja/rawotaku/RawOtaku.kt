@@ -6,12 +6,26 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
+import okhttp3.HttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
-class RawOtaku : MangaReader("Raw Otaku", "https://rawotaku.com", "ja") {
+class RawOtaku : MangaReader(
+    "Raw Otaku",
+    "https://rawotaku.com",
+    "ja",
+    searchPathSegment = "",
+    searchKeyword = "q",
+    sortFilterValues = arrayOf(
+        Pair("デフォルト", "default"),
+        Pair("最新の更新", "latest-updated"),
+        Pair("最も見られました", "most-viewed"),
+        Pair("Title [A-Z]", "title-az"),
+        Pair("Title [Z-A]", "title-za"),
+    ),
+) {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
@@ -20,8 +34,9 @@ class RawOtaku : MangaReader("Raw Otaku", "https://rawotaku.com", "ja") {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val pageQueryParameter = "p"
-    override val searchKeyword = "q"
+    override fun addPage(page: Int, builder: HttpUrl.Builder) {
+        builder.addQueryParameter("p", page.toString())
+    }
 
     // ============================== Chapters ==============================
 
@@ -56,14 +71,6 @@ class RawOtaku : MangaReader("Raw Otaku", "https://rawotaku.com", "ja") {
     }
 
     // =============================== Filters ==============================
-
-    override val sortFilterValues = arrayOf(
-        Pair("デフォルト", "default"),
-        Pair("最新の更新", "latest-updated"),
-        Pair("最も見られました", "most-viewed"),
-        Pair("Title [A-Z]", "title-az"),
-        Pair("Title [Z-A]", "title-za"),
-    )
 
     override fun getFilterList() = FilterList(
         Note,
