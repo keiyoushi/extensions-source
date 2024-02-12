@@ -252,7 +252,6 @@ class Anchira : HttpSource(), ConfigurableSource {
             entryValues = arrayOf("a", "b")
             setDefaultValue("b")
             summary = "%s"
-            setEnabled(false)
         }
 
         val openSourcePref = SwitchPreferenceCompat(screen.context).apply {
