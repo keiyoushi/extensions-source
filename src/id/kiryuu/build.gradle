@@ -1,0 +1,9 @@
+ext {
+    extName = 'Kiryuu'
+    extClass = '.Kiryuu'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://kiryuu.id'
+    overrideVersionCode = 6
+}
+
+apply from: "$rootDir/common.gradle"

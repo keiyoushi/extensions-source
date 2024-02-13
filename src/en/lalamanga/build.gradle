@@ -1,0 +1,10 @@
+ext {
+    extName = 'Lala Manga'
+    extClass = '.LalaManga'
+    themePkg = 'madara'
+    baseUrl = 'https://lalamanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

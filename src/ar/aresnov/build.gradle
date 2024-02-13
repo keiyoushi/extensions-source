@@ -1,0 +1,9 @@
+ext {
+    extName = 'ARESNOV'
+    extClass = '.ARESNOV'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://aresnov.org'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

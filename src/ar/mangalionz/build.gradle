@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaLionz'
+    extClass = '.MangaLionz'
+    themePkg = 'madara'
+    baseUrl = 'https://mangalionz.org'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

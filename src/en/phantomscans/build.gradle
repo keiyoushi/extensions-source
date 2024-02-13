@@ -1,0 +1,9 @@
+ext {
+    extName = 'Phantom Scans'
+    extClass = '.PhantomScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://phantomscans.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

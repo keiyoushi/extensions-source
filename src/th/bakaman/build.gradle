@@ -1,0 +1,10 @@
+ext {
+    extName = 'Bakaman'
+    extClass = '.Bakaman'
+    themePkg = 'madara'
+    baseUrl = 'https://bakaman.net'
+    overrideVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

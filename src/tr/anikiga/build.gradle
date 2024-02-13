@@ -1,0 +1,9 @@
+ext {
+    extName = 'Anikiga'
+    extClass = '.Anikiga'
+    themePkg = 'madara'
+    baseUrl = 'https://anikiga.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

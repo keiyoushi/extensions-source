@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manhua Fenix'
+    extClass = '.ManhuaFenix'
+    themePkg = 'madara'
+    baseUrl = 'https://visorfenix.com'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Ozul Scans'
+    extClass = '.OzulScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://kingofmanga.com'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

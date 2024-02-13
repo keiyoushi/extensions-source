@@ -1,0 +1,10 @@
+ext {
+    extName = 'Evil production'
+    extClass = '.Evilproduction'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://evil-manga.eu'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

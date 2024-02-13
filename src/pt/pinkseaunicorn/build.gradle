@@ -1,0 +1,10 @@
+ext {
+    extName = 'Pink Sea Unicorn'
+    extClass = '.PinkSeaUnicorn'
+    themePkg = 'madara'
+    baseUrl = 'https://psunicorn.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

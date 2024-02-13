@@ -1,0 +1,15 @@
+ext {
+    extName = 'Mangas.in'
+    extClass = '.MangasIn'
+    themePkg = 'mmrcms'
+    baseUrl = 'https://mangas.in'
+    overrideVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:synchrony"))
+    implementation(project(":lib:cryptoaes"))
+}

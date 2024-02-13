@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaSco'
+    extClass = '.MangaSco'
+    themePkg = 'madara'
+    baseUrl = 'https://manhwasco.net'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

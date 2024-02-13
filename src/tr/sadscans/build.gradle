@@ -1,0 +1,9 @@
+ext {
+    extName = 'Sadscans'
+    extClass = '.Sadscans'
+    themePkg = 'po2scans'
+    baseUrl = 'https://sadscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

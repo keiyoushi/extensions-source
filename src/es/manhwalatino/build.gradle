@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhwa-Latino'
+    extClass = '.ManhwaLatino'
+    themePkg = 'madara'
+    baseUrl = 'https://manhwa-latino.com'
+    overrideVersionCode = 7
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Arcanescans'
+    extClass = '.Arcanescans'
+    themePkg = 'madara'
+    baseUrl = 'https://arcanescans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

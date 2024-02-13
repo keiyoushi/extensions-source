@@ -1,0 +1,9 @@
+ext {
+    extName = 'ManhuaBox'
+    extClass = '.ManhuaBox'
+    themePkg = 'madara'
+    baseUrl = 'https://manhuabox.net'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

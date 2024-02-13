@@ -1,0 +1,9 @@
+ext {
+    extName = 'TeenManhua'
+    extClass = '.TeenManhua'
+    themePkg = 'madara'
+    baseUrl = 'https://teenmanhua.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'CulturedWorks'
+    extClass = '.CulturedWorks'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://culturedworks.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

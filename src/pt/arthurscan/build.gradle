@@ -1,0 +1,9 @@
+ext {
+    extName = 'Arthur Scan'
+    extClass = '.ArthurScan'
+    themePkg = 'madara'
+    baseUrl = 'https://arthurscan.xyz'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

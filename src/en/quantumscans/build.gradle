@@ -1,0 +1,9 @@
+ext {
+    extName = 'Quantum Scans'
+    extClass = '.QuantumScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://readers-point.space'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

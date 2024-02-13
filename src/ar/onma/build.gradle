@@ -1,0 +1,9 @@
+ext {
+    extName = 'Onma'
+    extClass = '.Onma'
+    themePkg = 'mmrcms'
+    baseUrl = 'https://onma.top'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

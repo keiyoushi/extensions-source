@@ -1,0 +1,9 @@
+ext {
+    extName = 'Alceascan'
+    extClass = '.Alceascan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://alceascan.my.id'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

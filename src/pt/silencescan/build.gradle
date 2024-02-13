@@ -1,0 +1,10 @@
+ext {
+    extName = 'Silence Scan'
+    extClass = '.SilenceScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://silencescan.com.br'
+    overrideVersionCode = 5
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'TonizuToon'
+    extClass = '.TonizuToon'
+    themePkg = 'madara'
+    baseUrl = 'https://tonizu.com'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

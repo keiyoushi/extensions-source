@@ -1,0 +1,10 @@
+ext {
+    extName = 'Ver Manhwas'
+    extClass = '.VerManhwas'
+    themePkg = 'madara'
+    baseUrl = 'https://vermanhwa.es'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

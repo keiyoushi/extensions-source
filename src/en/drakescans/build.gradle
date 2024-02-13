@@ -1,0 +1,9 @@
+ext {
+    extName = 'Drake Scans'
+    extClass = '.DrakeScans'
+    themePkg = 'madara'
+    baseUrl = 'https://drakescans.com'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

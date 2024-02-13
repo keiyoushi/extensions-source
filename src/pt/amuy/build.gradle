@@ -1,0 +1,10 @@
+ext {
+    extName = 'Amuy'
+    extClass = '.Amuy'
+    themePkg = 'madara'
+    baseUrl = 'https://apenasmaisumyaoi.com'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

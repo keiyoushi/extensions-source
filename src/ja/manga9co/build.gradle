@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaRaw'
+    extClass = '.MangaRaw'
+    themePkg = 'mangaraw'
+    baseUrl = 'https://manga1001.in'
+    overrideVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

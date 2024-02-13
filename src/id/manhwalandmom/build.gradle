@@ -1,0 +1,10 @@
+ext {
+    extName = 'ManhwaLand.mom'
+    extClass = '.ManhwaLandMom'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://manhwaland.lat'
+    overrideVersionCode = 5
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

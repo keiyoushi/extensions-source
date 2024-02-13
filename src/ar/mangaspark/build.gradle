@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaSpark'
+    extClass = '.MangaSpark'
+    themePkg = 'madara'
+    baseUrl = 'https://mangaspark.org'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

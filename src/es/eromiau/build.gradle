@@ -1,0 +1,10 @@
+ext {
+    extName = 'Eromiau'
+    extClass = '.Eromiau'
+    themePkg = 'madara'
+    baseUrl = 'https://www.eromiau.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

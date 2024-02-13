@@ -1,0 +1,10 @@
+ext {
+    extName = 'WebtoonsTOP'
+    extClass = '.WebtoonsTOP'
+    themePkg = 'madara'
+    baseUrl = 'https://webtoons.top'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
