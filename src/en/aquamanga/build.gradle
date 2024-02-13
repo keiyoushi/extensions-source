@@ -1,0 +1,9 @@
+ext {
+    extName = 'Aqua Manga'
+    extClass = '.AquaManga'
+    themePkg = 'madara'
+    baseUrl = 'https://aquamanga.org'
+    overrideVersionCode = 8
+}
+
+apply from: "$rootDir/common.gradle"

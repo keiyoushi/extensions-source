@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaFire'
+    extClass = '.MangaFireFactory'
+    themePkg = 'mangareader'
+    baseUrl = 'https://mangafire.to'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

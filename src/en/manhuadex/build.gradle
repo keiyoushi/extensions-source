@@ -1,0 +1,9 @@
+ext {
+    extName = 'ManhuaDex'
+    extClass = '.ManhuaDex'
+    themePkg = 'madara'
+    baseUrl = 'https://manhuadex.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

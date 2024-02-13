@@ -1,0 +1,9 @@
+ext {
+    extName = 'Berserker Scan'
+    extClass = '.BerserkerScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://ragnascan.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

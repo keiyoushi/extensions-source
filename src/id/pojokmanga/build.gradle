@@ -1,0 +1,9 @@
+ext {
+    extName = 'Pojok Manga'
+    extClass = '.PojokManga'
+    themePkg = 'madara'
+    baseUrl = 'https://pojokmanga.net'
+    overrideVersionCode = 5
+}
+
+apply from: "$rootDir/common.gradle"

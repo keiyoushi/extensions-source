@@ -1,0 +1,10 @@
+ext {
+    extName = 'Celestial Moon'
+    extClass = '.CelestialMoon'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.celestialmoonscan.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

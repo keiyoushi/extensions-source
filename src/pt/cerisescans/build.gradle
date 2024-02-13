@@ -1,0 +1,10 @@
+ext {
+    extName = 'Cerise Scan'
+    extClass = '.CeriseScan'
+    themePkg = 'madara'
+    baseUrl = 'https://cerisescan.net'
+    overrideVersionCode = 8
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

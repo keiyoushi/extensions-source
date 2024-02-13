@@ -1,0 +1,9 @@
+ext {
+    extName = 'RuMIX'
+    extClass = '.RuMIX'
+    themePkg = 'grouple'
+    baseUrl = 'https://rumix.me'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

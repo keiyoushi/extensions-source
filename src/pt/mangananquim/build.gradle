@@ -1,0 +1,9 @@
+ext {
+    extName = 'Mangá Nanquim'
+    extClass = '.MangaNanquim'
+    themePkg = 'madara'
+    baseUrl = 'https://mangananquim.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

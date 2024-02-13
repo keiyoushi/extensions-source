@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaNoon'
+    extClass = '.MangaNoon'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://manjanoon.net'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

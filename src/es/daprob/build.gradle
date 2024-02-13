@@ -1,0 +1,9 @@
+ext {
+    extName = 'DapRob'
+    extClass = '.DapRob'
+    themePkg = 'madara'
+    baseUrl = 'https://daprob.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

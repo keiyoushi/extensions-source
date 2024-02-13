@@ -1,0 +1,9 @@
+ext {
+    extName = 'Sawamics'
+    extClass = '.Sawamics'
+    themePkg = 'madara'
+    baseUrl = 'https://sawamics.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

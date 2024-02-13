@@ -1,0 +1,9 @@
+ext {
+    extName = 'Taurus Fansub'
+    extClass = '.TaurusFansub'
+    themePkg = 'madara'
+    baseUrl = 'https://taurusmanga.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Drope Scan'
+    extClass = '.DropeScan'
+    themePkg = 'madara'
+    baseUrl = 'https://dropescan.com'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Tsundoku Traduções'
+    extClass = '.TsundokuTraducoes'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://tsundoku.com.br'
+    overrideVersionCode = 9
+}
+
+apply from: "$rootDir/common.gradle"

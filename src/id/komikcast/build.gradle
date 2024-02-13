@@ -1,0 +1,9 @@
+ext {
+    extName = 'Komik Cast'
+    extClass = '.KomikCast'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://komikcast.lol'
+    overrideVersionCode = 26
+}
+
+apply from: "$rootDir/common.gradle"

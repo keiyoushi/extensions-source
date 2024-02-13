@@ -1,0 +1,9 @@
+ext {
+    extName = 'Kai Scans'
+    extClass = '.KaiScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://kaiscans.org'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

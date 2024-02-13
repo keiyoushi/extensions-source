@@ -1,0 +1,10 @@
+ext {
+    extName = 'Scan Hentai Menu'
+    extClass = '.ScanHentaiMenu'
+    themePkg = 'madara'
+    baseUrl = 'https://scan.hentai.menu'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

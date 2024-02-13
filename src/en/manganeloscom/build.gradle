@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaNelos.com'
+    extClass = '.MangaNelosCom'
+    themePkg = 'paprika'
+    baseUrl = 'http://manganelos.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

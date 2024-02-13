@@ -1,0 +1,10 @@
+ext {
+    extName = 'Franxx Mangás'
+    extClass = '.FranxxMangas'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://franxxmangas.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

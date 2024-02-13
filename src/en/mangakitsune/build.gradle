@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaKitsune'
+    extClass = '.MangaKitsune'
+    themePkg = 'madara'
+    baseUrl = 'https://mangakitsune.com'
+    overrideVersionCode = 4
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

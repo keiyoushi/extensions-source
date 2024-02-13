@@ -1,0 +1,10 @@
+ext {
+    extName = 'MintManga'
+    extClass = '.MintManga'
+    themePkg = 'grouple'
+    baseUrl = 'https://mintmanga.com'
+    overrideVersionCode = 46
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

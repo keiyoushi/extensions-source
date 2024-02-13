@@ -1,0 +1,9 @@
+ext {
+    extName = 'HNI-Scantrad'
+    extClass = '.HNIScantradFactory'
+    themePkg = 'foolslide'
+    baseUrl = 'https://hni-scantrad.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

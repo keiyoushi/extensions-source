@@ -1,0 +1,9 @@
+ext {
+    extName = 'SISI GELAP'
+    extClass = '.SISIGELAP'
+    themePkg = 'madara'
+    baseUrl = 'https://sigel.asia'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

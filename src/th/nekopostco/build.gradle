@@ -1,0 +1,9 @@
+ext {
+    extName = 'NekoPost.co (unoriginal)'
+    extClass = '.NekoPostCo'
+    themePkg = 'madara'
+    baseUrl = 'https://www.nekopost.co'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

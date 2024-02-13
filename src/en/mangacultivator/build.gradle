@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaCultivator'
+    extClass = '.MangaCultivator'
+    themePkg = 'madara'
+    baseUrl = 'https://mangacultivator.com'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

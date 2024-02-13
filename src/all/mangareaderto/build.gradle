@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaReader'
+    extClass = '.MangaReaderFactory'
+    themePkg = 'mangareader'
+    baseUrl = 'https://mangareader.to'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

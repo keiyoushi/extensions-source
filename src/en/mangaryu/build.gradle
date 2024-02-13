@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mangaryu'
+    extClass = '.Mangaryu'
+    themePkg = 'madara'
+    baseUrl = 'https://mangaryu.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

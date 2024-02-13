@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhwa18.cc'
+    extClass = '.Manhwa18CcFactory'
+    themePkg = 'madara'
+    baseUrl = 'https://manhwa18.cc'
+    overrideVersionCode = 4
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

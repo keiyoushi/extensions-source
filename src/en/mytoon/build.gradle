@@ -1,0 +1,10 @@
+ext {
+    extName = 'My Toon'
+    extClass = '.MyToon'
+    themePkg = 'zbulu'
+    baseUrl = 'https://mytoon.net'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

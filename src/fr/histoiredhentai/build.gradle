@@ -1,0 +1,10 @@
+ext {
+    extName = 'HistoireDHentai'
+    extClass = '.HistoireDHentai'
+    themePkg = 'madara'
+    baseUrl = 'https://hhentai.fr'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

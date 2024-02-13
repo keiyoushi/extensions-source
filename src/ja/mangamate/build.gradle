@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manga-Mate'
+    extClass = '.MangaMate'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://manga-mate.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

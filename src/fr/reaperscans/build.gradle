@@ -1,0 +1,9 @@
+ext {
+    extName = 'Reaper Scans'
+    extClass = '.ReaperScans'
+    themePkg = 'madara'
+    baseUrl = 'https://reaperscans.fr'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

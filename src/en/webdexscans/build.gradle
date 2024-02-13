@@ -1,0 +1,9 @@
+ext {
+    extName = 'Webdex Scans'
+    extClass = '.WebdexScans'
+    themePkg = 'madara'
+    baseUrl = 'https://webdexscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
