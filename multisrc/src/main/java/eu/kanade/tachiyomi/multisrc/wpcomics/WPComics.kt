@@ -73,6 +73,8 @@ abstract class WPComics(
 
     protected open val searchPath = "tim-truyen"
 
+    protected open fun String.replaceSearchPath() = this
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
         return if (filterList.isEmpty()) {
@@ -94,7 +96,7 @@ abstract class WPComics(
                 addQueryParameter("sort", "0")
             }
 
-            GET(url.toString().replace("/tim-truyen?status=2&", "/truyen-full?"), headers)
+            GET(url.toString().replaceSearchPath(), headers)
         }
     }
 
@@ -287,6 +289,13 @@ abstract class WPComics(
         "webtoon" to "Webtoon",
         "xuyen-khong" to "Xuyên Không",
     )
+
+    override fun getFilterList(): FilterList {
+        return FilterList(
+            StatusFilter(getStatusList()),
+            GenreFilter(getGenreList()),
+        )
+    }
 
     protected open class UriPartFilter(displayName: String, val vals: Array<Pair<String?, String>>) :
         Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
