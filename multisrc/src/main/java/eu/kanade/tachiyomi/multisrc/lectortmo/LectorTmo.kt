@@ -112,7 +112,7 @@ abstract class LectorTmo(
                 }
                 chain.proceed(request)
             }
-            .addInterceptor() { chain ->
+            .addInterceptor { chain ->
                 if (!getSaveLastCFUrlPref()) return@addInterceptor chain.proceed(chain.request())
                 val request = chain.request()
                 val response = chain.proceed(request)
