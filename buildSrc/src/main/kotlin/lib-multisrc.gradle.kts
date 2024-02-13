@@ -56,7 +56,9 @@ tasks {
         dependsOn(lintKotlin)
     }
 
-    lintKotlin {
-        dependsOn(formatKotlin)
+    if (System.getenv("CI") != "true") {
+        lintKotlin {
+            dependsOn(formatKotlin)
+        }
     }
 }

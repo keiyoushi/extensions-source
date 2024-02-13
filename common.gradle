@@ -121,4 +121,6 @@ tasks.register("writeManifestFile") {
 }
 
 preBuild.dependsOn(writeManifestFile, lintKotlin)
-lintKotlin.dependsOn(formatKotlin)
+if (System.getenv("CI") != "true") {
+    lintKotlin.dependsOn(formatKotlin)
+}
