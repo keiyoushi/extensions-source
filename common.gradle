@@ -8,6 +8,8 @@ assert !ext.has("libVersion")
 
 assert extName.chars().max().asInt < 0x180 : "Extension name should be romanized"
 
+Project theme = ext.has("themePkg") ? project(":lib-multisrc:$themePkg") : null
+
 android {
     compileSdk AndroidConfig.compileSdk
 
@@ -25,7 +27,7 @@ android {
         minSdk AndroidConfig.minSdk
         targetSdk AndroidConfig.targetSdk
         applicationIdSuffix project.parent.name + "." + project.name
-        versionCode extVersionCode
+        versionCode theme == null ? extVersionCode : theme.baseVersionCode + overrideVersionCode
         versionName "1.4.$versionCode"
         base {
             archivesName = "tachiyomi-$applicationIdSuffix-v$versionName"
@@ -34,8 +36,18 @@ android {
         manifestPlaceholders = [
                 appName : "Tachiyomi: $extName",
                 extClass: extClass,
-                nsfw: project.ext.find("isNsfw") ? 1 : 0,
+                nsfw    : project.ext.find("isNsfw") ? 1 : 0,
         ]
+        String baseUrl = project.ext.find("baseUrl") ?: ""
+        if (theme != null && !baseUrl.isEmpty()) {
+            def split = baseUrl.split("://")
+            assert split.length == 2
+            def path = split[1].split("/")
+            manifestPlaceholders += [
+                    SOURCEHOST  : path[0],
+                    SOURCESCHEME: split[0],
+            ]
+        }
     }
 
     signingConfigs {
@@ -88,6 +100,7 @@ repositories {
 }
 
 dependencies {
+    if (theme != null) implementation(theme) // Overrides core launcher icons
     implementation(project(":core"))
     compileOnly(libs.bundles.common)
 }
