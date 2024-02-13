@@ -1,16 +1,67 @@
 package eu.kanade.tachiyomi.extension.vi.nhattruyen
 
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.Page
-import okhttp3.Headers
-import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class NhatTruyen : WPComics("NhatTruyen", "https://nhattruyento.com", "vi", SimpleDateFormat("dd/MM/yy", Locale.getDefault()), null) {
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/the-loai?keyword=$query&page=$page", headers)
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().add("Referer", baseUrl).build())
+    override val searchPath = "the-loai"
+
+    override fun getGenreList(): Array<Pair<String?, String>> = arrayOf(
+        null to "Tất cả",
+        "action" to "Action",
+        "adult" to "Adult",
+        "adventure" to "Adventure",
+        "anime" to "Anime",
+        "chuyen-sinh" to "Chuyển Sinh",
+        "comedy" to "Comedy",
+        "comic" to "Comic",
+        "cooking" to "Cooking",
+        "co-dai" to "Cổ Đại",
+        "doujinshi" to "Doujinshi",
+        "drama" to "Drama",
+        "dam-my" to "Đam Mỹ",
+        "ecchi" to "Ecchi",
+        "fantasy" to "Fantasy",
+        "gender-bender" to "Gender Bender",
+        "harem" to "Harem",
+        "historical" to "Historical",
+        "horror" to "Horror",
+        "josei" to "Josei",
+        "live-action" to "Live action",
+        "manga-241" to "Manga",
+        "manhua" to "Manhua",
+        "manhwa-2431" to "Manhwa",
+        "martial-arts" to "Martial Arts",
+        "mature" to "Mature",
+        "mecha" to "Mecha",
+        "mystery" to "Mystery",
+        "ngon-tinh" to "Ngôn Tình",
+        "one-shot" to "One shot",
+        "psychological" to "Psychological",
+        "romance" to "Romance",
+        "school-life" to "School Life",
+        "sci-fi" to "Sci-fi",
+        "seinen" to "Seinen",
+        "shoujo" to "Shoujo",
+        "shoujo-ai" to "Shoujo Ai",
+        "shounen" to "Shounen",
+        "shounen-ai" to "Shounen Ai",
+        "slice-of-life" to "Slice of Life",
+        "smut" to "Smut",
+        "soft-yaoi" to "Soft Yaoi",
+        "soft-yuri" to "Soft Yuri",
+        "sports" to "Sports",
+        "supernatural" to "Supernatural",
+        "tap-chi-truyen-tranh" to "Tạp chí truyện tranh",
+        "thieu-nhi" to "Thiếu Nhi",
+        "tragedy" to "Tragedy",
+        "trinh-tham" to "Trinh Thám",
+        "truyen-scan" to "Truyện scan",
+        "truyen-mau" to "Truyện Màu",
+        "viet-nam" to "Việt Nam",
+        "webtoon" to "Webtoon",
+        "xuyen-khong" to "Xuyên Không",
+        "16" to "16+",
+    )
 }
