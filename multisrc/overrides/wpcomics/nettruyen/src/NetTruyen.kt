@@ -5,8 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class NetTruyen : WPComics("NetTruyen", "https://www.nettruyenss.com", "vi", SimpleDateFormat("dd/MM/yy", Locale.getDefault()), null) {
-    override val replaceSearchPathOld = "/tim-truyen?status=2&"
-    override val replaceSearchPathNew = "/truyen-full?"
+    override fun String.replaceSearchPath() = replace("/$searchPath?status=2&", "/truyen-full?")
 
     override fun getGenreList(): Array<Pair<String?, String>> = arrayOf(
         null to "Tất cả",

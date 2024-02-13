@@ -73,8 +73,7 @@ abstract class WPComics(
 
     protected open val searchPath = "tim-truyen"
 
-    protected open val replaceSearchPathOld = ""
-    protected open val replaceSearchPathNew = ""
+    protected open fun String.replaceSearchPath() = this
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
@@ -97,7 +96,7 @@ abstract class WPComics(
                 addQueryParameter("sort", "0")
             }
 
-            GET(url.toString().replace(replaceSearchPathOld, replaceSearchPathNew), headers)
+            GET(url.toString().replaceSearchPath(), headers)
         }
     }
 
