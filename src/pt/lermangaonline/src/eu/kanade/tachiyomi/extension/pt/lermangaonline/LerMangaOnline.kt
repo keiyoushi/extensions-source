@@ -116,7 +116,6 @@ class LerMangaOnline : ParsedHttpSource() {
     private fun searchMangaBySlugParse(response: Response): MangasPage =
         MangasPage(listOf(mangaDetailsParse(response.asJsoup())), false)
 
-
     override fun getFilterList(): FilterList = FilterList(GenresFilter)
 
     override fun searchMangaSelector() = latestUpdatesSelector()

@@ -16,7 +16,6 @@ import org.jsoup.select.Elements
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.Locale
 
