@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga Starz'
+    extClass = '.MangaStarz'
+    themePkg = 'madara'
+    baseUrl = 'https://mangastarz.org'
+    overrideVersionCode = 5
+}
+
+apply from: "$rootDir/common.gradle"

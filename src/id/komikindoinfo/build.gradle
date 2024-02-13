@@ -1,0 +1,10 @@
+ext {
+    extName = 'KomikIndo.info'
+    extClass = '.KomikIndoInfo'
+    themePkg = 'zmanga'
+    baseUrl = 'http://komikindo.info'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

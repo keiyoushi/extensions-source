@@ -1,0 +1,10 @@
+ext {
+    extName = 'Komiktap'
+    extClass = '.Komiktap'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://komiktap.me'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'WeLoveMangaOne'
+    extClass = '.WeLoveMangaOne'
+    themePkg = 'fmreader'
+    baseUrl = 'https://welovemanga.one'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

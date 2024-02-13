@@ -1,0 +1,10 @@
+ext {
+    extName = 'Erofus'
+    extClass = '.Erofus'
+    themePkg = 'eromuse'
+    baseUrl = 'https://www.erofus.com'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

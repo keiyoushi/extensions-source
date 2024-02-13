@@ -1,0 +1,9 @@
+ext {
+    extName = 'Shadowtrad'
+    extClass = '.Shadowtrad'
+    themePkg = 'madara'
+    baseUrl = 'https://shadowtrad.net'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

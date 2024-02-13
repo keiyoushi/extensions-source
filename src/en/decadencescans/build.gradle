@@ -1,0 +1,10 @@
+ext {
+    extName = 'Decadence Scans'
+    extClass = '.DecadenceScans'
+    themePkg = 'madara'
+    baseUrl = 'https://reader.decadencescans.com'
+    overrideVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

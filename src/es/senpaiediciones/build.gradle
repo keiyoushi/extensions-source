@@ -1,0 +1,9 @@
+ext {
+    extName = 'Senpai Ediciones'
+    extClass = '.SenpaiEdiciones'
+    themePkg = 'mangathemesia'
+    baseUrl = 'http://senpaiediciones.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

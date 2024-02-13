@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaStic'
+    extClass = '.MangaStic'
+    themePkg = 'madara'
+    baseUrl = 'https://mangastic9.com'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

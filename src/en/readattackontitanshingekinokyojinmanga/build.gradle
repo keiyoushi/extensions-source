@@ -1,0 +1,9 @@
+ext {
+    extName = 'Read Attack on Titan Shingeki no Kyojin Manga'
+    extClass = '.ReadAttackOnTitanShingekiNoKyojinManga'
+    themePkg = 'mangacatalog'
+    baseUrl = 'https://ww8.readsnk.com'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

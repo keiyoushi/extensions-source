@@ -1,0 +1,9 @@
+ext {
+    extName = 'Anisa Manga'
+    extClass = '.AnisaManga'
+    themePkg = 'madara'
+    baseUrl = 'https://anisamanga.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

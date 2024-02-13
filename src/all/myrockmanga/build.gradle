@@ -1,0 +1,10 @@
+ext {
+    extName = 'MyRockManga'
+    extClass = '.MyRockMangaFactory'
+    themePkg = 'otakusanctuary'
+    baseUrl = 'https://myrockmanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

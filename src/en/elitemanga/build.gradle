@@ -1,0 +1,9 @@
+ext {
+    extName = 'Elite Manga'
+    extClass = '.EliteManga'
+    themePkg = 'madara'
+    baseUrl = 'https://www.elitemanga.org'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

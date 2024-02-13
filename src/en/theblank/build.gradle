@@ -1,0 +1,10 @@
+ext {
+    extName = 'The Blank Scanlation'
+    extClass = '.TheBlank'
+    themePkg = 'madara'
+    baseUrl = 'https://theblank.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

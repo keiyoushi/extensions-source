@@ -1,0 +1,9 @@
+ext {
+    extName = 'Dango Scan'
+    extClass = '.DangoScan'
+    themePkg = 'peachscan'
+    baseUrl = 'https://dangoscan.com.br'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

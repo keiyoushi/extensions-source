@@ -1,0 +1,10 @@
+ext {
+    extName = 'TenkaiScan'
+    extClass = '.TenkaiScan'
+    themePkg = 'madara'
+    baseUrl = 'https://tenkaiscan.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

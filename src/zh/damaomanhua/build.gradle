@@ -1,0 +1,10 @@
+ext {
+    extName = 'Damao Manhua'
+    extClass = '.DamaoManhua'
+    themePkg = 'mccms'
+    baseUrl = 'https://www.hanman.cyou/index.php'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

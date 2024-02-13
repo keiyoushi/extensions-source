@@ -1,0 +1,9 @@
+ext {
+    extName = 'Time Naight'
+    extClass = '.TimeNaight'
+    themePkg = 'madara'
+    baseUrl = 'https://timenaight.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

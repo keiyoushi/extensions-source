@@ -1,0 +1,9 @@
+ext {
+    extName = 'SamuraiScan'
+    extClass = '.SamuraiScan'
+    themePkg = 'madara'
+    baseUrl = 'https://samuraiscan.org'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

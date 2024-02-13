@@ -1,0 +1,10 @@
+ext {
+    extName = 'Toonizy'
+    extClass = '.Toonizy'
+    themePkg = 'madara'
+    baseUrl = 'https://toonizy.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

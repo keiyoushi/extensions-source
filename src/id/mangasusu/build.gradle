@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mangasusu'
+    extClass = '.Mangasusu'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangasusuku.xyz'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

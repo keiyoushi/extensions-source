@@ -1,0 +1,10 @@
+ext {
+    extName = 'Summanga'
+    extClass = '.Summanga'
+    themePkg = 'madara'
+    baseUrl = 'https://summanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Lector Online'
+    extClass = '.Ikifeng'
+    themePkg = 'madara'
+    baseUrl = 'https://lectorunm.life'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

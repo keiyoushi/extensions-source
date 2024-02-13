@@ -1,0 +1,9 @@
+ext {
+    extName = 'CreepyScans'
+    extClass = '.CreepyScans'
+    themePkg = 'madara'
+    baseUrl = 'https://creepyscans.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

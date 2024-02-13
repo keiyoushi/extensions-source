@@ -1,0 +1,9 @@
+ext {
+    extName = 'Raiki Scan'
+    extClass = '.RaikiScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://raikiscan.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'InariManga'
+    extClass = '.InariManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://inarimanga.net'
+    overrideVersionCode = 8
+}
+
+apply from: "$rootDir/common.gradle"

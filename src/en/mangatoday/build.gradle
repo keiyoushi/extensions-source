@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaToday'
+    extClass = '.MangaToday'
+    themePkg = 'mangahub'
+    baseUrl = 'https://mangatoday.fun'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

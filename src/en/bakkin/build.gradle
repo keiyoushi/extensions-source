@@ -1,0 +1,9 @@
+ext {
+    extName = 'Bakkin'
+    extClass = '.Bakkin'
+    themePkg = 'bakkin'
+    baseUrl = 'https://bakkin.moe/reader/'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'BoysLove'
+    extClass = '.BoysLove'
+    themePkg = 'madara'
+    baseUrl = 'https://boyslove.me'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

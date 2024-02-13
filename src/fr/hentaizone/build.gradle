@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiZone'
+    extClass = '.HentaiZone'
+    themePkg = 'madara'
+    baseUrl = 'https://hentaizone.xyz'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

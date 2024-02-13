@@ -1,0 +1,8 @@
+ext {
+    extName = 'Monochrome Custom'
+    extClass = '.MonochromeCustom'
+    themePkg = 'monochrome'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

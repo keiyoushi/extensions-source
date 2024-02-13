@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hentai Manga'
+    extClass = '.HentaiManga'
+    themePkg = 'madara'
+    baseUrl = 'https://hentaimanga.me'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

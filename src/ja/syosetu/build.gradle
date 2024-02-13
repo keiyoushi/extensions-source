@@ -1,0 +1,9 @@
+ext {
+    extName = 'SyoSetu'
+    extClass = '.SyoSetu'
+    themePkg = 'mangaraw'
+    baseUrl = 'https://syosetu.top'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

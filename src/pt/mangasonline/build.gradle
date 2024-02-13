@@ -1,0 +1,9 @@
+ext {
+    extName = 'Mangás Online'
+    extClass = '.MangasOnline'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangasonline.cc'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

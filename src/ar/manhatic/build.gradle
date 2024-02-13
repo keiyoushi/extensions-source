@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhatic'
+    extClass = '.Manhatic'
+    themePkg = 'madara'
+    baseUrl = 'https://manhatic.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

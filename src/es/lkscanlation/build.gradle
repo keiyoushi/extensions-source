@@ -1,0 +1,10 @@
+ext {
+    extName = 'Last Knight Translation'
+    extClass = '.LKScanlation'
+    themePkg = 'madara'
+    baseUrl = 'https://lkscanlation.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

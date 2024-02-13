@@ -1,0 +1,10 @@
+ext {
+    extName = 'DoujinHentai'
+    extClass = '.DoujinHentai'
+    themePkg = 'madara'
+    baseUrl = 'https://doujinhentai.net'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

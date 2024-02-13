@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga1000'
+    extClass = '.Manga1000'
+    themePkg = 'fmreader'
+    baseUrl = 'https://manga1000.top'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaForest'
+    extClass = '.MangaForest'
+    themePkg = 'madtheme'
+    baseUrl = 'https://mangaforest.me'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

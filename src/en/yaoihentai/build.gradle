@@ -1,0 +1,10 @@
+ext {
+    extName = 'Yaoi Hentai'
+    extClass = '.YaoiHentai'
+    themePkg = 'madara'
+    baseUrl = 'https://yaoihentai.me'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

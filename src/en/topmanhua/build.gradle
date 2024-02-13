@@ -1,0 +1,9 @@
+ext {
+    extName = 'Top Manhua'
+    extClass = '.TopManhua'
+    themePkg = 'madara'
+    baseUrl = 'https://topmanhua.com'
+    overrideVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

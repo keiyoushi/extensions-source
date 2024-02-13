@@ -1,0 +1,10 @@
+ext {
+    extName = 'BeeHentai'
+    extClass = '.BeeHentai'
+    themePkg = 'madtheme'
+    baseUrl = 'https://beehentai.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

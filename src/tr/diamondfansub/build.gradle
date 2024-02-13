@@ -1,0 +1,9 @@
+ext {
+    extName = 'DiamondFansub'
+    extClass = '.DiamondFansub'
+    themePkg = 'madara'
+    baseUrl = 'https://diamondfansub.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

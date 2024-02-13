@@ -1,0 +1,9 @@
+ext {
+    extName = 'Solo Leveling'
+    extClass = '.SoloLeveling'
+    themePkg = 'madara'
+    baseUrl = 'https://readsololeveling.online'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

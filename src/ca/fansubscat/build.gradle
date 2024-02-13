@@ -1,0 +1,9 @@
+ext {
+    extName = 'Fansubs.cat'
+    extClass = '.FansubsCatMain'
+    themePkg = 'fansubscat'
+    baseUrl = 'https://manga.fansubs.cat'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

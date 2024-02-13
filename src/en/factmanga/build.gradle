@@ -1,0 +1,9 @@
+ext {
+    extName = 'FactManga'
+    extClass = '.FactManga'
+    themePkg = 'madara'
+    baseUrl = 'https://factmanga.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

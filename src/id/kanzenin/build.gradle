@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kanzenin'
+    extClass = '.Kanzenin'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://kanzenin.info'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

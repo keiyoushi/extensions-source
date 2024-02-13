@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mangaland'
+    extClass = '.Mangaland'
+    themePkg = 'madara'
+    baseUrl = 'https://mangaland.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

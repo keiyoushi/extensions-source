@@ -1,0 +1,10 @@
+ext {
+    extName = 'Tumangaonline.site'
+    extClass = '.TumangaonlineSite'
+    themePkg = 'madara'
+    baseUrl = 'https://tumangaonline.site'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiWebtoon'
+    extClass = '.HentaiWebtoon'
+    themePkg = 'madara'
+    baseUrl = 'https://hentaiwebtoon.com'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

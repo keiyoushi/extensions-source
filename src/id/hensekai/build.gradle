@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hensekai'
+    extClass = '.Hensekai'
+    themePkg = 'zmanga'
+    baseUrl = 'https://hensekai.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

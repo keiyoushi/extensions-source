@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaRosie'
+    extClass = '.MangaRosie'
+    themePkg = 'madara'
+    baseUrl = 'https://mangarosie.in'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

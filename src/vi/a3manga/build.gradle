@@ -1,0 +1,9 @@
+ext {
+    extName = 'A3 Manga'
+    extClass = '.A3Manga'
+    themePkg = 'a3manga'
+    baseUrl = 'https://www.a3manga.store'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

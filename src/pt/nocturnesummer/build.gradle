@@ -1,0 +1,10 @@
+ext {
+    extName = 'Nocturne Summer'
+    extClass = '.NocturneSummer'
+    themePkg = 'madara'
+    baseUrl = 'https://nocsummer.com.br'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

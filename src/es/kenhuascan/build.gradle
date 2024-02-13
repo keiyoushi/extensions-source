@@ -1,0 +1,9 @@
+ext {
+    extName = 'KenhuaScan'
+    extClass = '.KenhuaScan'
+    themePkg = 'madara'
+    baseUrl = 'https://kenhuav2scan.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

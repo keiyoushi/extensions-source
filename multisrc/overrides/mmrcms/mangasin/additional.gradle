@@ -1,4 +1,0 @@
-dependencies {
-    implementation(project(":lib:synchrony"))
-    implementation(project(":lib:cryptoaes"))
-}

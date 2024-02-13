@@ -1,0 +1,10 @@
+ext {
+    extName = 'NIGHT SCANS'
+    extClass = '.NightScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://nightscans.net'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

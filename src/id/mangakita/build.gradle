@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaKita'
+    extClass = '.MangaKita'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangakita.id'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

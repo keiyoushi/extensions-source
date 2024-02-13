@@ -1,0 +1,10 @@
+ext {
+    extName = 'Gri Melek'
+    extClass = '.Siyahmelek'
+    themePkg = 'madara'
+    baseUrl = 'https://grimelek.net'
+    overrideVersionCode = 4
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

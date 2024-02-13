@@ -1,0 +1,9 @@
+ext {
+    extName = 'KSGroupScans'
+    extClass = '.KSGroupScans'
+    themePkg = 'madara'
+    baseUrl = 'https://ksgroupscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

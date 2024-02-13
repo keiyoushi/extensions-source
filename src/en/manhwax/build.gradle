@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhwax'
+    extClass = '.Manhwax'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://manhwax.org'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

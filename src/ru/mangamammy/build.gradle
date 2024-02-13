@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manga Mammy'
+    extClass = '.MangaMammy'
+    themePkg = 'madara'
+    baseUrl = 'https://mangamammy.ru'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

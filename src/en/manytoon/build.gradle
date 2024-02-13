@@ -1,0 +1,10 @@
+ext {
+    extName = 'ManyToon'
+    extClass = '.ManyToon'
+    themePkg = 'madara'
+    baseUrl = 'https://manytoon.com'
+    overrideVersionCode = 5
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'ManhwaClub'
+    extClass = '.ManhwaClub'
+    themePkg = 'hentaihand'
+    baseUrl = 'https://manhwa.club'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

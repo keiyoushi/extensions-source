@@ -1,0 +1,9 @@
+ext {
+    extName = 'TurkToon'
+    extClass = '.TurkToon'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://turktoon.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

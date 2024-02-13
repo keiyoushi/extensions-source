@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mangairo'
+    extClass = '.Mangairo'
+    themePkg = 'mangabox'
+    baseUrl = 'https://h.mangairo.com'
+    overrideVersionCode = 4
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Demon Sect'
+    extClass = '.DemonSect'
+    themePkg = 'madara'
+    baseUrl = 'https://demonsect.com.br'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

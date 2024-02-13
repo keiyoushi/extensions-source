@@ -1,0 +1,9 @@
+ext {
+    extName = 'NIFTeam'
+    extClass = '.NIFTeam'
+    themePkg = 'foolslide'
+    baseUrl = 'http://read-nifteam.info'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga Crab'
+    extClass = '.MangaCrab'
+    themePkg = 'madara'
+    baseUrl = 'https://mangacrab3.com'
+    overrideVersionCode = 7
+}
+
+apply from: "$rootDir/common.gradle"

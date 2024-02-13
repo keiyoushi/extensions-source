@@ -1,0 +1,9 @@
+ext {
+    extName = 'xCaliBR Scans'
+    extClass = '.xCaliBRScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://xcalibrscans.com'
+    overrideVersionCode = 5
+}
+
+apply from: "$rootDir/common.gradle"

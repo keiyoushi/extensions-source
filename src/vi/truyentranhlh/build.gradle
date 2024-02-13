@@ -1,0 +1,10 @@
+ext {
+    extName = 'TruyenTranhLH'
+    extClass = '.TruyenTranhLH'
+    themePkg = 'mymangacms'
+    baseUrl = 'https://truyenlh.com'
+    overrideVersionCode = 10
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaManiacs'
+    extClass = '.MangaManiacs'
+    themePkg = 'madara'
+    baseUrl = 'https://mangamaniacs.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

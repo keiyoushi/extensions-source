@@ -1,0 +1,9 @@
+ext {
+    extName = 'KomikRealm'
+    extClass = '.KomikRealm'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.komikrealm.my.id'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

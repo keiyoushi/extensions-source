@@ -1,0 +1,9 @@
+ext {
+    extName = 'KomikMama'
+    extClass = '.KomikMama'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://komik-mama.com'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

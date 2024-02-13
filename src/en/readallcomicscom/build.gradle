@@ -1,0 +1,9 @@
+ext {
+    extName = 'ReadAllComics'
+    extClass = '.ReadAllComicsCom'
+    themePkg = 'readallcomics'
+    baseUrl = 'https://readallcomics.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

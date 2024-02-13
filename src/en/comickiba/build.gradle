@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhuagold'
+    extClass = '.Manhuagold'
+    themePkg = 'mangareader'
+    baseUrl = 'https://manhuagold.com'
+    overrideVersionCode = 33
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

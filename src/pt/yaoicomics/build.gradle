@@ -1,0 +1,10 @@
+ext {
+    extName = 'Yaoi Comics'
+    extClass = '.YaoiComics'
+    themePkg = 'madara'
+    baseUrl = 'https://ycscan.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

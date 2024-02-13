@@ -1,0 +1,9 @@
+ext {
+    extName = 'ReadManga'
+    extClass = '.ReadManga'
+    themePkg = 'grouple'
+    baseUrl = 'https://readmanga.live'
+    overrideVersionCode = 46
+}
+
+apply from: "$rootDir/common.gradle"

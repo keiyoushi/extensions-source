@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mangadoor'
+    extClass = '.Mangadoor'
+    themePkg = 'mmrcms'
+    baseUrl = 'https://mangadoor.com'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

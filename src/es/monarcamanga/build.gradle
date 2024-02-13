@@ -1,0 +1,9 @@
+ext {
+    extName = 'MonarcaManga'
+    extClass = '.MonarcaManga'
+    themePkg = 'madara'
+    baseUrl = 'https://monarcamanga.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Bentoscan'
+    extClass = '.Bentoscan'
+    themePkg = 'mmrcms'
+    baseUrl = 'https://bentoscan.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Webtoons.com Translations'
+    extClass = '.WebtoonsTranslateFactory'
+    themePkg = 'webtoons'
+    baseUrl = 'https://translate.webtoons.com'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

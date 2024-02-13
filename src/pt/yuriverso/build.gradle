@@ -1,0 +1,9 @@
+ext {
+    extName = 'Yuri Verso'
+    extClass = '.YuriVerso'
+    themePkg = 'madara'
+    baseUrl = 'https://yuri.live'
+    overrideVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

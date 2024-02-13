@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiRead'
+    extClass = '.Hentairead'
+    themePkg = 'madara'
+    baseUrl = 'https://hentairead.com'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

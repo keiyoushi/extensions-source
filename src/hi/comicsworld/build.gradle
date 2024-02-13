@@ -1,0 +1,9 @@
+ext {
+    extName = 'ComicsWorld'
+    extClass = '.ComicsWorld'
+    themePkg = 'madara'
+    baseUrl = 'https://comicsworld.in'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manga-Raw.info (unoriginal)'
+    extClass = '.MangaRawInfo'
+    themePkg = 'madara'
+    baseUrl = 'https://manga-raw.info'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

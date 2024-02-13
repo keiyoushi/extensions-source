@@ -1,0 +1,9 @@
+ext {
+    extName = 'Winter Scan'
+    extClass = '.WinterScan'
+    themePkg = 'madara'
+    baseUrl = 'https://winterscan.com'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

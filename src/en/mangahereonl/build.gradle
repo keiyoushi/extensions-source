@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaHere.onl'
+    extClass = '.MangaHereOnl'
+    themePkg = 'mangahub'
+    baseUrl = 'https://mangahere.onl'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

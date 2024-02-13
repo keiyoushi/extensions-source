@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaRead.org'
+    extClass = '.MangaReadOrg'
+    themePkg = 'madara'
+    baseUrl = 'https://www.mangaread.org'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

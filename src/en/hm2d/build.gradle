@@ -1,0 +1,10 @@
+ext {
+    extName = 'HM2D'
+    extClass = '.HM2D'
+    themePkg = 'madara'
+    baseUrl = 'https://mangadistrict.com/hdoujin'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

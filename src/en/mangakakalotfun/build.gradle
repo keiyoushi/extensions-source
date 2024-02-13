@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mangakakalot.fun'
+    extClass = '.MangakakalotFun'
+    themePkg = 'mangahub'
+    baseUrl = 'https://mangakakalot.fun'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

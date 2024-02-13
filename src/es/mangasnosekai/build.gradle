@@ -1,0 +1,9 @@
+ext {
+    extName = 'Mangas No Sekai'
+    extClass = '.MangasNoSekai'
+    themePkg = 'madara'
+    baseUrl = 'https://mangasnosekai.com'
+    overrideVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

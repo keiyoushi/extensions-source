@@ -1,0 +1,9 @@
+ext {
+    extName = '6Manhua'
+    extClass = '.SixMH'
+    themePkg = 'mccms'
+    baseUrl = 'https://www.liumanhua.com'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

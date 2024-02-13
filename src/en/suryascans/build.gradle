@@ -1,0 +1,9 @@
+ext {
+    extName = 'Surya Scans'
+    extClass = '.SuryaScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://suryatoon.com'
+    overrideVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

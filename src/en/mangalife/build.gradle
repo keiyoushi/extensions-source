@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaLife'
+    extClass = '.MangaLife'
+    themePkg = 'nepnep'
+    baseUrl = 'https://manga4life.com'
+    overrideVersionCode = 16
+}
+
+apply from: "$rootDir/common.gradle"

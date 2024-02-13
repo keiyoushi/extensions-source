@@ -1,0 +1,9 @@
+ext {
+    extName = 'Read Berserk Manga'
+    extClass = '.ReadBerserkManga'
+    themePkg = 'mangacatalog'
+    baseUrl = 'https://readberserk.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

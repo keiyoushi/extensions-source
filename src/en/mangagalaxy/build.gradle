@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga Galaxy'
+    extClass = '.MangaGalaxy'
+    themePkg = 'madara'
+    baseUrl = 'https://mangagalaxy.me'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

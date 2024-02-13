@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manga District'
+    extClass = '.MangaDistrict'
+    themePkg = 'madara'
+    baseUrl = 'https://mangadistrict.com'
+    overrideVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

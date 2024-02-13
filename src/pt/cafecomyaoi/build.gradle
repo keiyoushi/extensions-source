@@ -1,0 +1,10 @@
+ext {
+    extName = 'Café com Yaoi'
+    extClass = '.CafeComYaoi'
+    themePkg = 'madara'
+    baseUrl = 'http://cafecomyaoi.com.br'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

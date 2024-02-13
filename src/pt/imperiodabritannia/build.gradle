@@ -1,0 +1,9 @@
+ext {
+    extName = 'Sagrado Império da Britannia'
+    extClass = '.ImperioDaBritannia'
+    themePkg = 'madara'
+    baseUrl = 'https://imperiodabritannia.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

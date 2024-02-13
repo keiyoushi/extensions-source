@@ -1,0 +1,10 @@
+ext {
+    extName = 'No Index Scan'
+    extClass = '.NoIndexScan'
+    themePkg = 'madara'
+    baseUrl = 'https://noindexscan.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
