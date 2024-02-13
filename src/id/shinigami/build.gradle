@@ -10,4 +10,5 @@ apply from: "$rootDir/common.gradle"
 
 dependencies {
     implementation(project(":lib:synchrony"))
+    implementation(project(":lib:cryptoaes"))
 }
