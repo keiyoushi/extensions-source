@@ -2,4 +2,4 @@ plugins {
     id("lib-multisrc")
 }
 
-extra["baseVersionCode"] = 20
+baseVersionCode = 20
