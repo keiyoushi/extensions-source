@@ -273,6 +273,9 @@ class MangaHot : HttpSource() {
         return GET(page.imageUrl!!, pageHeaders)
     }
 
+    override fun getChapterUrl(chapter: SChapter): String =
+        baseUrl + chapter.url.substringBeforeLast("#")
+
     // ============================= Utilities ==============================
 
     private fun Request.bodyString(): String {
