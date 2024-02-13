@@ -52,7 +52,6 @@ jobs:
   build_individual:
     name: Build individual modules
     needs: prepare
-    if: ${{ needs.prepare.outputs.isIndividualChanged == '1' }}
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJSON(needs.prepare.outputs.individualMatrix) }}
