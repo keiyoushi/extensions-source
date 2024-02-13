@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hikari Scan'
+    extClass = '.HikariScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://hikariscan.org'
+    overrideVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

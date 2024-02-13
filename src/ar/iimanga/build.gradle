@@ -1,0 +1,9 @@
+ext {
+    extName = 'ARESManga'
+    extClass = '.ARESManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://en-aresmanga.com'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

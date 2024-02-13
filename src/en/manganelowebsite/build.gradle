@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manganelo.website (unoriginal)'
+    extClass = '.ManganeloWebsite'
+    themePkg = 'madara'
+    baseUrl = 'https://manganelo.website'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaOwl.one (unoriginal)'
+    extClass = '.MangaOwlOne'
+    themePkg = 'madara'
+    baseUrl = 'https://mangaowl.one'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

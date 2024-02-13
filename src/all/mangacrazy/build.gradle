@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaCrazy'
+    extClass = '.MangaCrazy'
+    themePkg = 'madara'
+    baseUrl = 'https://mangacrazy.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

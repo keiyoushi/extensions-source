@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hentai4Free'
+    extClass = '.Hentai4Free'
+    themePkg = 'madara'
+    baseUrl = 'https://hentai4free.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Flame Comics'
+    extClass = '.FlameComics'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://flamecomics.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

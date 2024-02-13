@@ -1,0 +1,10 @@
+ext {
+    extName = 'Midnight Mess Scans'
+    extClass = '.MidnightMessScans'
+    themePkg = 'madara'
+    baseUrl = 'https://midnightmess.org'
+    overrideVersionCode = 6
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

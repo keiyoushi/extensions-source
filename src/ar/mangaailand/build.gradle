@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga Ai Land'
+    extClass = '.MangaAiLand'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://manga-ai-land.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

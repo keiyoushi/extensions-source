@@ -1,0 +1,10 @@
+ext {
+    extName = 'Epsilon Scan'
+    extClass = '.EpsilonScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://epsilonscan.fr'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

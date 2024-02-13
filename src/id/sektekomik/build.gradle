@@ -1,0 +1,9 @@
+ext {
+    extName = 'Sekte Komik'
+    extClass = '.SekteKomik'
+    themePkg = 'colorlibanime'
+    baseUrl = 'https://sektekomik.xyz'
+    overrideVersionCode = 26
+}
+
+apply from: "$rootDir/common.gradle"

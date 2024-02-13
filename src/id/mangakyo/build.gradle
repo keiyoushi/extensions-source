@@ -1,0 +1,9 @@
+ext {
+    extName = 'Mangakyo'
+    extClass = '.Mangakyo'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangakyo.vip'
+    overrideVersionCode = 4
+}
+
+apply from: "$rootDir/common.gradle"

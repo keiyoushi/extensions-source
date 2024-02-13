@@ -1,0 +1,9 @@
+ext {
+    extName = 'SkyMangas'
+    extClass = '.SkyMangas'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://skymangas.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

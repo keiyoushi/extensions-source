@@ -1,0 +1,10 @@
+ext {
+    extName = 'ManhuaManhwa'
+    extClass = '.ManhuaManhwa'
+    themePkg = 'madara'
+    baseUrl = 'https://manhuamanhwa.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

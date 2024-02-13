@@ -1,0 +1,9 @@
+ext {
+    extName = 'Elarc Toon'
+    extClass = '.ElarcPage'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://elarctoon.com'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

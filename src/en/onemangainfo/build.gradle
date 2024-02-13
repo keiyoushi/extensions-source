@@ -1,0 +1,10 @@
+ext {
+    extName = 'OneManga.info'
+    extClass = '.OneMangaInfo'
+    themePkg = 'mangahub'
+    baseUrl = 'https://onemanga.info'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

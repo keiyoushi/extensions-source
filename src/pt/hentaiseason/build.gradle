@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hentai Season'
+    extClass = '.HentaiSeason'
+    themePkg = 'gattsu'
+    baseUrl = 'https://hentaiseason.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

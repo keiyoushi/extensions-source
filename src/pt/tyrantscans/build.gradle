@@ -1,0 +1,9 @@
+ext {
+    extName = 'Tyrant Scans'
+    extClass = '.TyrantScans'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.tyrantscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

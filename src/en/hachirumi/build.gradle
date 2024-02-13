@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hachirumi'
+    extClass = '.Hachirumi'
+    themePkg = 'guya'
+    baseUrl = 'https://hachirumi.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

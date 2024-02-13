@@ -1,0 +1,9 @@
+ext {
+    extName = 'Beast Scans'
+    extClass = '.BeastScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://beastscans.net'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

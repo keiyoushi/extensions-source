@@ -1,0 +1,9 @@
+ext {
+    extName = 'Magazine Pocket'
+    extClass = '.MagazinePocket'
+    themePkg = 'gigaviewer'
+    baseUrl = 'https://pocket.shonenmagazine.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

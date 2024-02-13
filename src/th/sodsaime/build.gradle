@@ -1,0 +1,10 @@
+ext {
+    extName = 'Sodsaime'
+    extClass = '.Sodsaime'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://www.xn--l3c0azab5a2gta.com'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

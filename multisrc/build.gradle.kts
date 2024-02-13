@@ -59,7 +59,7 @@ tasks {
             standardOutput = org.gradle.internal.io.NullOutputStream.INSTANCE
         }
 
-        dependsOn("ktLint", "assembleDebug")
+        dependsOn("assembleDebug")
     }
 
     register<org.jmailen.gradle.kotlinter.tasks.LintTask>("ktLint") {

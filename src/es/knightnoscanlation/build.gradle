@@ -1,0 +1,10 @@
+ext {
+    extName = 'Knight No Scanlation'
+    extClass = '.KnightNoScanlation'
+    themePkg = 'madara'
+    baseUrl = 'https://knightnoscanlation.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

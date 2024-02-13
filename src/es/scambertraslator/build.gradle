@@ -1,0 +1,9 @@
+ext {
+    extName = 'ScamberTraslator'
+    extClass = '.ScamberTraslator'
+    themePkg = 'madara'
+    baseUrl = 'https://scambertraslator.com'
+    overrideVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"

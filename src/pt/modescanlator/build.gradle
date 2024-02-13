@@ -1,0 +1,9 @@
+ext {
+    extName = 'Mode Scanlator'
+    extClass = '.ModeScanlator'
+    themePkg = 'peachscan'
+    baseUrl = 'https://modescanlator.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

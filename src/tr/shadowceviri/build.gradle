@@ -1,0 +1,9 @@
+ext {
+    extName = 'Shadow Çeviri'
+    extClass = '.ShadowCeviri'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://shadowceviri.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

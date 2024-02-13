@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mikrokosmos Fansub'
+    extClass = '.MikrokosmosFansub'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://mikrokosmosfb.blogspot.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

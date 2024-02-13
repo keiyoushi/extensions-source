@@ -1,0 +1,9 @@
+ext {
+    extName = 'Unitoon Oficial'
+    extClass = '.UnitoonOficial'
+    themePkg = 'madara'
+    baseUrl = 'https://unitoonoficial.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

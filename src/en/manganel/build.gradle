@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaNel'
+    extClass = '.MangaNel'
+    themePkg = 'mangahub'
+    baseUrl = 'https://manganel.me'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

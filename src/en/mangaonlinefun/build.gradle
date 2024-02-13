@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaOnline.fun'
+    extClass = '.MangaOnlineFun'
+    themePkg = 'mangahub'
+    baseUrl = 'https://mangaonline.fun'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

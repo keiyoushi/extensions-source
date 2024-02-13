@@ -1,0 +1,8 @@
+ext {
+    extName = 'Bakkin Self-hosted'
+    extClass = '.BakkinSelfHosted'
+    themePkg = 'bakkin'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Shooting Star Scans'
+    extClass = '.ShootingStarScans'
+    themePkg = 'madara'
+    baseUrl = 'https://shootingstarscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
