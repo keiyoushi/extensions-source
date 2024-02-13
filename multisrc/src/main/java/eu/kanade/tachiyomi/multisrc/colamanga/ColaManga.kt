@@ -126,7 +126,7 @@ abstract class ColaManga(
         }
     }
 
-    override fun searchMangaSelector() = "dl.fed-data-info, ${popularMangaSelector()}"
+    override fun searchMangaSelector() = "dl.fed-deta-info, ${popularMangaSelector()}"
 
     override fun searchMangaFromElement(element: Element): SManga {
         if (element.tagName() == "li") {

@@ -9,7 +9,7 @@ class ColaMangaGenerator : ThemeSourceGenerator {
 
     override val themeClass = "ColaManga"
 
-    override val baseVersionCode = 1
+    override val baseVersionCode = 2
 
     override val sources = listOf(
         SingleLang("COLAMANGA", "https://www.colamanga.com", "zh", overrideVersionCode = 15, className = "Onemanhua"),
