@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.keyoapp
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -28,10 +29,14 @@ abstract class Keyoapp(
 ) : ParsedHttpSource() {
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    private val json: Json by injectLazy()
 
     // Popular
 
