@@ -1,8 +1,8 @@
 ext {
     extName = 'Rudra Scans'
     extClass = '.RudraScans'
-	themePkg = 'keyoapp'
-	baseUrl = 'https://rudrascans.com'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://rudrascans.com'
     overrideVersionCode = 1
 }
 
