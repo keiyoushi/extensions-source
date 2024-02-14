@@ -17,7 +17,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -93,6 +92,13 @@ abstract class Madara(
      */
     protected open val mangaSubString = "manga"
 
+    /**
+     * enable if the site use "madara_load_more"
+     * to load manga on the site
+     * Typically has "load More" instead of next/previous page
+     */
+    protected open val useLoadMoreRequest = false
+
     // Popular Manga
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -122,15 +128,19 @@ abstract class Madara(
         return manga
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
-    }
+    override fun popularMangaRequest(page: Int): Request =
+        if (useLoadMoreRequest) {
+            loadMoreRequest(page - 1, "_wp_manga_views")
+        } else {
+            GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views", headers)
+        }
 
-    override fun popularMangaNextPageSelector(): String? = searchMangaNextPageSelector()
+    override fun popularMangaNextPageSelector(): String? =
+        if (useLoadMoreRequest) {
+            "body:not(:has(.no-posts))"
+        } else {
+            searchMangaNextPageSelector()
+        }
 
     // Latest Updates
 
@@ -141,13 +151,12 @@ abstract class Madara(
         return popularMangaFromElement(element)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
-    }
+    override fun latestUpdatesRequest(page: Int): Request =
+        if (useLoadMoreRequest) {
+            loadMoreRequest(page - 1, "_latest_update")
+        } else {
+            GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
+        }
 
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
@@ -155,6 +164,37 @@ abstract class Madara(
         val mp = super.latestUpdatesParse(response)
         val mangas = mp.mangas.distinctBy { it.url }
         return MangasPage(mangas, mp.hasNextPage)
+    }
+
+    // load more
+    protected fun loadMoreRequest(page: Int, metaKey: String): Request {
+        val formBody = FormBody.Builder().apply {
+            add("action", "madara_load_more")
+            add("page", page.toString())
+            add("template", "madara-core/content/content-archive")
+            add("vars[paged]", "1")
+            add("vars[orderby]", "meta_value_num")
+            add("vars[template]", "archive")
+            add("vars[sidebar]", "right")
+            add("vars[post_type]", "wp-manga")
+            add("vars[post_status]", "publish")
+            add("vars[meta_key]", metaKey)
+            add("vars[meta_query][0][paged]", "1")
+            add("vars[meta_query][0][orderby]", "meta_value_num")
+            add("vars[meta_query][0][template]", "archive")
+            add("vars[meta_query][0][sidebar]", "right")
+            add("vars[meta_query][0][post_type]", "wp-manga")
+            add("vars[meta_query][0][post_status]", "publish")
+            add("vars[meta_query][0][meta_key]", metaKey)
+            add("vars[meta_query][relation]", "AND")
+            add("vars[manga_archives_item_layout]", "default")
+        }.build()
+
+        val xhrHeaders = headersBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, formBody)
     }
 
     // Search Manga

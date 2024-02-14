@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.en.theblank
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.MangasPage
-import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -19,21 +17,5 @@ class TheBlank : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
-
-    override fun popularMangaParse(response: Response) =
-        super.popularMangaParse(response).fixNextPage()
-
-    override fun latestUpdatesParse(response: Response) =
-        super.latestUpdatesParse(response).fixNextPage()
-
-    override fun searchMangaParse(response: Response) =
-        super.searchMangaParse(response).fixNextPage()
-
-    private fun MangasPage.fixNextPage(): MangasPage {
-        return if (mangas.size < 12) {
-            MangasPage(mangas, false)
-        } else {
-            this
-        }
-    }
+    override val useLoadMoreRequest = true
 }

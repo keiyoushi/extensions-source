@@ -1,29 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.babelwuxia
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.MangasPage
-import okhttp3.Response
 
 class BabelWuxia : Madara("Babel Wuxia", "https://babelwuxia.com", "en") {
 
     // moved from MangaThemesia
     override val versionId = 2
     override val useNewChapterEndpoint = true
-
-    override fun popularMangaParse(response: Response) =
-        super.popularMangaParse(response).fixNextPage()
-
-    override fun latestUpdatesParse(response: Response) =
-        super.latestUpdatesParse(response).fixNextPage()
-
-    override fun searchMangaParse(response: Response) =
-        super.searchMangaParse(response).fixNextPage()
-
-    private fun MangasPage.fixNextPage(): MangasPage {
-        return if (mangas.size < 12) {
-            MangasPage(mangas, false)
-        } else {
-            this
-        }
-    }
+    override val useLoadMoreRequest = true
 }
