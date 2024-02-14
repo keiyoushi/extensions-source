@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.keyoapp
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,12 +9,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -23,6 +27,8 @@ abstract class Keyoapp(
     final override val lang: String,
 ) : ParsedHttpSource() {
     override val supportsLatest = true
+
+    private val json: Json by injectLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -37,11 +43,16 @@ abstract class Keyoapp(
         thumbnail_url = element.getImageUrl("*[style*=background-image]")
         element.selectFirst("a[href]")!!.run {
             title = attr("title")
-            setUrlWithoutDomain(attr("href"))
+            setUrlWithoutDomain(attr("abs:href"))
         }
     }
 
     override fun popularMangaNextPageSelector(): String? = null
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        runCatching { fetchGenres() }
+        return super.popularMangaParse(response)
+    }
 
     // Latest
 
@@ -53,37 +64,119 @@ abstract class Keyoapp(
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        runCatching { fetchGenres() }
+        return super.latestUpdatesParse(response)
+    }
+
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("series")
             addPathSegment("")
-            addQueryParameter("q", query)
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query)
+            }
+            filters.firstOrNull { it is GenreList }?.also {
+                val filter = it as GenreList
+                filter.state
+                    .filter { it.state }
+                    .forEach { genre ->
+                        addQueryParameter("genre", genre.id)
+                    }
+            }
         }.build()
 
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = "#searched_series_page > a"
+    override fun searchMangaSelector() = "#searched_series_page > button"
 
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.getImageUrl("*[style*=background-image]")
-        title = element.attr("title")
-        setUrlWithoutDomain(element.attr("href"))
-    }
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector(): String? = null
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.use { it.asJsoup() }
-        val query = response.request.url.queryParameter("q")!!
+        runCatching { fetchGenres() }
+        val document = response.asJsoup()
+
+        val query = response.request.url.queryParameter("q") ?: ""
+        val genres = response.request.url.queryParameterValues("genre")
 
         val mangaList = document.select(searchMangaSelector())
+            .toTypedArray()
+            .filter { it.attr("title").contains(query, true) }
+            .filter { entry ->
+                val entryGenres = json.decodeFromString<List<String>>(entry.attr("tags"))
+                genres.all { genre -> entryGenres.any { it.equals(genre, true) } }
+            }
             .map(::searchMangaFromElement)
-            .filter { it.title.contains(query, true) }
 
         return MangasPage(mangaList, false)
+    }
+
+    // Filters
+
+    /**
+     * Automatically fetched genres from the source to be used in the filters.
+     */
+    private var genresList: List<Genre> = emptyList()
+
+    /**
+     * Inner variable to control the genre fetching failed state.
+     */
+    private var fetchGenresFailed: Boolean = false
+
+    /**
+     * Inner variable to control how much tries the genres request was called.
+     */
+    private var fetchGenresAttempts: Int = 0
+
+    class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
+
+    protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
+
+    override fun getFilterList(): FilterList {
+        return if (genresList.isNotEmpty()) {
+            FilterList(
+                GenreList("Genres", genresList),
+            )
+        } else {
+            FilterList(
+                Filter.Header("Press 'Reset' to attempt to show the genres"),
+            )
+        }
+    }
+
+    /**
+     * Fetch the genres from the source to be used in the filters.
+     */
+    protected open fun fetchGenres() {
+        if (fetchGenresAttempts <= 3 && (genresList.isEmpty() || fetchGenresFailed)) {
+            val genres = runCatching {
+                client.newCall(genresRequest()).execute()
+                    .use { parseGenres(it.asJsoup()) }
+            }
+
+            fetchGenresFailed = genres.isFailure
+            genresList = genres.getOrNull().orEmpty()
+            fetchGenresAttempts++
+        }
+    }
+
+    private fun genresRequest(): Request = GET("$baseUrl/series/", headers)
+
+    /**
+     * Get the genres from the search page document.
+     *
+     * @param document The search page document
+     */
+    protected open fun parseGenres(document: Document): List<Genre> {
+        return document.select("#series_tags_page > button")
+            .map { btn ->
+                Genre(btn.text(), btn.attr("tag"))
+            }
     }
 
     // Details
@@ -93,9 +186,7 @@ abstract class Keyoapp(
         thumbnail_url = document.getImageUrl("div[class*=photoURL]")
         description = document.selectFirst("div.grid > div.overflow-hidden > p")?.text()
         status = document.selectFirst("div[alt=Status]").parseStatus()
-        genre = document.select("div.grid:has(>h1) > div.flex > div.leading-none:not([alt])").joinToString(", ") {
-            it.text().trim()
-        }
+        genre = document.select("div.grid:has(>h1) > div > a").joinToString { it.text() }
     }
 
     private fun Element?.parseStatus(): Int = when (this?.text()?.trim()) {
