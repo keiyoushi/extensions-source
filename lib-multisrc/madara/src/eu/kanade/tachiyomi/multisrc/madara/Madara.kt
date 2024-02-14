@@ -1,18 +1,10 @@
 package eu.kanade.tachiyomi.multisrc.madara
 
-import android.app.Application
-import android.content.SharedPreferences
 import android.util.Base64
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -28,14 +20,11 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -48,24 +37,14 @@ abstract class Madara(
     override val baseUrl: String,
     final override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-) : ParsedHttpSource(), ConfigurableSource {
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
-            .setRandomUserAgent(
-                preferences.getPrefUAType(),
-                preferences.getPrefCustomUA(),
-            )
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
-    }
+    override val client = network.cloudflareClient.newBuilder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -956,10 +935,6 @@ abstract class Madara(
         return chunked(2)
             .map { it.toInt(16).toByte() }
             .toByteArray()
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
     }
 
     companion object {

@@ -6,13 +6,20 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class Hiperdex : Madara("Hiperdex", "https://hiperdex.com", "en") {
+class Hiperdex :
+    Madara(
+        "Hiperdex",
+        "https://hiperdex.com",
+        "en",
+    ),
+    ConfigurableSource {
     override val useNewChapterEndpoint: Boolean = true
 
     override fun searchPage(page: Int): String {
@@ -103,8 +110,6 @@ class Hiperdex : Madara("Hiperdex", "https://hiperdex.com", "en") {
             }
         }
         screen.addPreference(baseUrlPref)
-
-        super.setupPreferenceScreen(screen)
     }
 
     private var SharedPreferences.baseUrlHost

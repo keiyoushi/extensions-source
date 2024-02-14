@@ -6,17 +6,20 @@ import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class EmpireWebtoon : Madara(
-    "Empire Webtoon",
-    "https://webtoonsempireron.com",
-    "ar",
-    SimpleDateFormat("d MMMM، yyyy", Locale("ar")),
-) {
+class EmpireWebtoon :
+    Madara(
+        "Empire Webtoon",
+        "https://webtoonsempireron.com",
+        "ar",
+        SimpleDateFormat("d MMMM، yyyy", Locale("ar")),
+    ),
+    ConfigurableSource {
 
     private val defaultBaseUrl = "https://webtoonsempireron.com"
 
@@ -53,8 +56,6 @@ class EmpireWebtoon : Madara(
             }
         }
         screen.addPreference(baseUrlPref)
-
-        super.setupPreferenceScreen(screen)
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!

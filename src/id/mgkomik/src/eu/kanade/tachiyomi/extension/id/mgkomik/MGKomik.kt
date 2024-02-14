@@ -8,6 +8,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.Headers
@@ -21,7 +22,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MGKomik : Madara("MG Komik", "https://mgkomik.id", "id", SimpleDateFormat("dd MMM yy", Locale.US)) {
+class MGKomik :
+    Madara(
+        "MG Komik",
+        "https://mgkomik.id",
+        "id",
+        SimpleDateFormat("dd MMM yy", Locale.US),
+    ),
+    ConfigurableSource {
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -47,12 +55,12 @@ class MGKomik : Madara("MG Komik", "https://mgkomik.id", "id", SimpleDateFormat(
 
                         var listUserAgentString = parseTachiUa.desktop + parseTachiUa.mobile
 
-                        listUserAgentString = listUserAgentString!!.filter {
+                        listUserAgentString = listUserAgentString.filter {
                             listOf("windows", "android").any { filter ->
                                 it.contains(filter, ignoreCase = true)
                             }
                         }
-                        userAgent = listUserAgentString!!.random()
+                        userAgent = listUserAgentString.random()
                         checkedUa = true
                     }
                     uaResponse.close()
@@ -87,7 +95,6 @@ class MGKomik : Madara("MG Komik", "https://mgkomik.id", "id", SimpleDateFormat(
         val mobile: List<String> = emptyList(),
     )
 
-    // disable random ua in ext setting from multisrc (.setRandomUserAgent)
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(uaIntercept)
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -115,16 +122,15 @@ class MGKomik : Madara("MG Komik", "https://mgkomik.id", "id", SimpleDateFormat(
 
     override val chapterUrlSuffix = ""
 
-    // remove random ua in setting ext from multisrc and use custom one
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val prefCustomUserAgent = EditTextPreference(screen.context).apply {
+        EditTextPreference(screen.context).apply {
             key = PREF_KEY_CUSTOM_UA
             title = TITLE_CUSTOM_UA
             summary = (preferences.getString(PREF_KEY_CUSTOM_UA, "")!!.trim() + SUMMARY_STRING_CUSTOM_UA).trim()
             setOnPreferenceChangeListener { _, newValue ->
                 val customUa = newValue as String
                 preferences.edit().putString(PREF_KEY_CUSTOM_UA, customUa).apply()
-                if (customUa.isNullOrBlank()) {
+                if (customUa.isBlank()) {
                     Toast.makeText(screen.context, RESTART_APP_STRING, Toast.LENGTH_LONG).show()
                 } else {
                     userAgent = null
@@ -133,8 +139,7 @@ class MGKomik : Madara("MG Komik", "https://mgkomik.id", "id", SimpleDateFormat(
 
                 true
             }
-        }
-        screen.addPreference(prefCustomUserAgent)
+        }.also(screen::addPreference)
     }
 
     companion object {
