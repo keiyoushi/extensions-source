@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.vi.dualeotruyen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -54,8 +55,15 @@ class DuaLeoTruyen : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("tim-kiem")
-            addQueryParameter("search", query)
+            if (query.isNotEmpty()) {
+                addPathSegment("tim-kiem")
+                addQueryParameter("search", query)
+            } else {
+                val genreFilter = filters.ifEmpty { getFilterList() }
+                    .filterIsInstance<GenreFilter>()
+                    .firstOrNull() ?: return popularMangaRequest(page)
+                addPathSegments(genreFilter.genre[genreFilter.state].path)
+            }
 
             if (page > 1) {
                 addQueryParameter("page", page.toString())
@@ -85,7 +93,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
         thumbnail_url = document.selectFirst("img.img-fluid")?.absUrl("src")
     }
 
-    override fun chapterListSelector() = ".list-chapters > div"
+    override fun chapterListSelector() = ".list-chapters > .item"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         element.selectFirst(".episode-title a")!!.let {
@@ -104,6 +112,11 @@ class DuaLeoTruyen : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    override fun getFilterList() = FilterList(
+        Filter.Header("Không dùng được khi tìm kiếm bằng tên truyện"),
+        GenreFilter(getGenreList()),
+    )
 
     private fun countView(document: Document) {
         val chapterId = document.selectFirst("input#chapter_id")!!.`val`()
@@ -140,4 +153,42 @@ class DuaLeoTruyen : ParsedHttpSource() {
 
         return calendar.timeInMillis
     }
+
+    private class Genre(val name: String, val path: String)
+
+    private class GenreFilter(val genre: List<Genre>) : Filter.Select<String>("Thể loại", genre.map { it.name }.toTypedArray())
+
+    // copy([...document.querySelectorAll(".dropdown-menu .dropdown-item")].map((e) => `Genre("${e.textContent.trim()}", "${new URL(e).pathname.replace("/", "")}"),`).join("\n"))
+    // "Tất cả" and "Truyện full" are custom genres that are lumped in to make my life easier.
+    private fun getGenreList() = listOf(
+        Genre("Tất cả", "truyen-tranh-moi.html"),
+        Genre("Truyện full", "truyen-hoan-thanh.html"),
+        Genre("18+", "the-loai/18-.html"),
+        Genre("ABO", "the-loai/abo.html"),
+        Genre("Bách Hợp", "the-loai/bach-hop.html"),
+        Genre("BoyLove", "the-loai/boylove.html"),
+        Genre("Chuyển Sinh", "the-loai/chuyen-sinh.html"),
+        Genre("Cổ Đại", "the-loai/co-dai.html"),
+        Genre("Doujinshi", "the-loai/doujinshi.html"),
+        Genre("Drama", "the-loai/drama.html"),
+        Genre("Đam Mỹ", "the-loai/dam-my.html"),
+        Genre("Echi", "the-loai/echi.html"),
+        Genre("GirlLove", "the-loai/girllove.html"),
+        Genre("Hài Hước", "the-loai/hai-huoc.html"),
+        Genre("Hành Động", "the-loai/hanh-dong.html"),
+        Genre("Harem", "the-loai/harem.html"),
+        Genre("Hentai", "the-loai/hentai.html"),
+        Genre("Kịch Tính", "the-loai/kich-tinh.html"),
+        Genre("Lãng Mạn", "the-loai/lang-man.html"),
+        Genre("Manga", "the-loai/manga.html"),
+        Genre("Manhua", "the-loai/manhua.html"),
+        Genre("Manhwa", "the-loai/manhwa.html"),
+        Genre("Người Thú", "the-loai/nguoi-thu.html"),
+        Genre("Oneshot", "the-loai/oneshot.html"),
+        Genre("Phiêu Lưu", "the-loai/phieu-luu.html"),
+        Genre("Tình Cảm", "the-loai/tinh-cam.html"),
+        Genre("Truyện Màu", "the-loai/truyen-mau.html"),
+        Genre("Yaoi", "the-loai/yaoi.html"),
+        Genre("Yuri", "the-loai/yuri.html"),
+    )
 }
