@@ -60,14 +60,6 @@ class GoodGirlsScan : Madara("Good Girls Scan", "https://goodgirls.moe", "en") {
         return madaraLoadMoreRequest(page - 1, "_latest_update")
     }
 
-    override fun searchPage(page: Int): String {
-        return if (page > 1) {
-            "page/$page/"
-        } else {
-            ""
-        }
-    }
-
     // heavily modified madara theme, throws 5xx errors on any search filter
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder().apply {

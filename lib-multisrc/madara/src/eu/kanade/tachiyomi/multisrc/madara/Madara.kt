@@ -185,7 +185,13 @@ abstract class Madara(
             }
     }
 
-    protected open fun searchPage(page: Int): String = "page/$page/"
+    protected open fun searchPage(page: Int): String {
+        return if (page == 1) {
+            ""
+        } else {
+            "page/$page/"
+        }
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()

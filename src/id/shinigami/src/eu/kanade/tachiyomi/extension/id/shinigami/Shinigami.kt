@@ -20,8 +20,6 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
 
     override val useNewChapterEndpoint = false
 
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
-
     override fun headersBuilder() = super.headersBuilder().apply {
         add("Sec-Fetch-Dest", "document")
         add("Sec-Fetch-Mode", "navigate")

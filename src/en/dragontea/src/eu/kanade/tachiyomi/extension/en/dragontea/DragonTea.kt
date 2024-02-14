@@ -27,14 +27,6 @@ class DragonTea : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override fun searchPage(page: Int): String {
-        return if (page > 1) {
-            "page/$page/"
-        } else {
-            ""
-        }
-    }
-
     private val pageIndexRegex = Regex("""image-(\d+)[a-z]+""", RegexOption.IGNORE_CASE)
 
     override fun pageListParse(document: Document): List<Page> {

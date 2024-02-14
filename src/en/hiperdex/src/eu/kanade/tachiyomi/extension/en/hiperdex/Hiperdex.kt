@@ -22,14 +22,6 @@ class Hiperdex :
     ConfigurableSource {
     override val useNewChapterEndpoint: Boolean = true
 
-    override fun searchPage(page: Int): String {
-        return if (page > 1) {
-            "page/$page/"
-        } else {
-            ""
-        }
-    }
-
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val preferences by lazy {

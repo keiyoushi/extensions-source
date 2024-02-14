@@ -33,8 +33,6 @@ class EmpireWebtoon :
 
     override val useNewChapterEndpoint = false
 
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
-
     companion object {
         private const val RESTART_TACHIYOMI = "Restart Tachiyomi to apply new setting."
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"

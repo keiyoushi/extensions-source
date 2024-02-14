@@ -114,7 +114,6 @@ class MGKomik :
 
         return builder
     }
-    override fun searchPage(page: Int): String = if (page > 1) "page/$page/" else ""
 
     override val mangaSubString = "komik"
 

@@ -14,8 +14,6 @@ class MangaMammy : Madara(
 ) {
     override val useNewChapterEndpoint = true
 
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
-
     override fun popularMangaSelector() = searchMangaSelector()
 
     override fun popularMangaRequest(page: Int): Request =

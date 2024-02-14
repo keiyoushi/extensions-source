@@ -61,14 +61,6 @@ class SetsuScans : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override fun searchPage(page: Int): String {
-        return if (page > 1) {
-            "page/$page/"
-        } else {
-            ""
-        }
-    }
-
     override fun popularMangaParse(response: Response) =
         super.popularMangaParse(response).fixNextPage()
 
