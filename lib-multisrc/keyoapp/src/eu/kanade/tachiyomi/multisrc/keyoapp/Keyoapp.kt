@@ -191,11 +191,16 @@ abstract class Keyoapp(
         thumbnail_url = document.getImageUrl("div[class*=photoURL]")
         description = document.selectFirst("div.grid > div.overflow-hidden > p")?.text()
         status = document.selectFirst("div[alt=Status]").parseStatus()
+        author = document.selectFirst("div[alt=Author]")?.text()
+        artist = document.selectFirst("div[alt=Artist]")?.text()
         genre = document.select("div.grid:has(>h1) > div > a").joinToString { it.text() }
     }
 
-    private fun Element?.parseStatus(): Int = when (this?.text()?.trim()) {
+    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "ongoing" -> SManga.ONGOING
+        "dropped" -> SManga.CANCELLED
+        "paused" -> SManga.ON_HIATUS
+        "completed" -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
