@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.multisrc.madara
 
 import android.util.Base64
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
@@ -49,6 +50,13 @@ abstract class Madara(
         .add("Referer", "$baseUrl/")
 
     protected open val json: Json by injectLazy()
+
+    protected val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "pt-BR"),
+        classLoader = this::class.java.classLoader!!,
+    )
 
     /**
      * If enabled, will attempt to remove non-manga items in popular and latest.
@@ -285,172 +293,79 @@ abstract class Madara(
         return GET(url.build(), headers)
     }
 
-    protected open val authorFilterTitle: String = when (lang) {
-        "pt-BR" -> "Autor"
-        else -> "Author"
-    }
-
-    protected open val artistFilterTitle: String = when (lang) {
-        "pt-BR" -> "Artista"
-        else -> "Artist"
-    }
-
-    protected open val yearFilterTitle: String = when (lang) {
-        "pt-BR" -> "Ano de lançamento"
-        else -> "Year of Released"
-    }
-
-    protected open val statusFilterTitle: String = when (lang) {
-        "pt-BR" -> "Estado"
-        else -> "Status"
-    }
-
-    protected open val statusFilterOptions: Array<String> = when (lang) {
-        "pt-BR" -> arrayOf("Completo", "Em andamento", "Cancelado", "Pausado")
-        else -> arrayOf("Completed", "Ongoing", "Canceled", "On Hold")
-    }
-
-    protected open val statusFilterOptionsValues: Array<String> = arrayOf(
-        "end",
-        "on-going",
-        "canceled",
-        "on-hold",
-    )
-
-    protected open val orderByFilterTitle: String = when (lang) {
-        "pt-BR" -> "Ordenar por"
-        else -> "Order By"
-    }
-
-    protected open val orderByFilterOptions: Array<String> = when (lang) {
-        "pt-BR" -> arrayOf(
-            "Relevância",
-            "Recentes",
-            "A-Z",
-            "Avaliação",
-            "Tendência",
-            "Visualizações",
-            "Novos",
+    protected open val statusFilterOptions: Map<String, String> =
+        mapOf(
+            intl["status_filter_completed"] to "end",
+            intl["status_filter_ongoing"] to "on-going",
+            intl["status_filter_canceled"] to "canceled",
+            intl["status_filter_on_hold"] to "on-hold",
         )
-        else -> arrayOf(
-            "Relevance",
-            "Latest",
-            "A-Z",
-            "Rating",
-            "Trending",
-            "Most Views",
-            "New",
+
+    protected open val orderByFilterOptions: Map<String, String> = mapOf(
+        intl["order_by_filter_relevance"] to "",
+        intl["order_by_filter_latest"] to "latest",
+        intl["order_by_filter_az"] to "alphabet",
+        intl["order_by_filter_rating"] to "rating",
+        intl["order_by_filter_trending"] to "trending",
+        intl["order_by_filter_views"] to "views",
+        intl["order_by_filter_new"] to "new-manga",
+    )
+
+    protected open val genreConditionFilterOptions: Array<String> =
+        arrayOf(
+            intl["genre_condition_filter_or"],
+            intl["genre_condition_filter_and"],
         )
-    }
 
-    protected open val orderByFilterOptionsValues: Array<String> = arrayOf(
-        "",
-        "latest",
-        "alphabet",
-        "rating",
-        "trending",
-        "views",
-        "new-manga",
-    )
-
-    protected open val genreConditionFilterTitle: String = when (lang) {
-        "pt-BR" -> "Operador dos gêneros"
-        else -> "Genre condition"
-    }
-
-    protected open val genreConditionFilterOptions: Array<String> = when (lang) {
-        "pt-BR" -> arrayOf("OU", "E")
-        else -> arrayOf("OR", "AND")
-    }
-
-    protected open val adultContentFilterTitle: String = when (lang) {
-        "pt-BR" -> "Conteúdo adulto"
-        else -> "Adult Content"
-    }
-
-    protected open val adultContentFilterOptions: Array<String> = when (lang) {
-        "pt-BR" -> arrayOf("Indiferente", "Nenhum", "Somente")
-        else -> arrayOf("All", "None", "Only")
-    }
-
-    protected open val genreFilterHeader: String = when (lang) {
-        "pt-BR" -> "O filtro de gêneros pode não funcionar"
-        else -> "Genres filter may not work for all sources"
-    }
-
-    protected open val genreFilterTitle: String = when (lang) {
-        "pt-BR" -> "Gêneros"
-        else -> "Genres"
-    }
-
-    protected open val genresMissingWarning: String = when (lang) {
-        "pt-BR" -> "Aperte 'Redefinir' para tentar mostrar os gêneros"
-        else -> "Press 'Reset' to attempt to show the genres"
-    }
-
-    protected class AuthorFilter(title: String) : Filter.Text(title)
-    protected class ArtistFilter(title: String) : Filter.Text(title)
-    protected class YearFilter(title: String) : Filter.Text(title)
-    protected class StatusFilter(title: String, status: List<Tag>) :
-        Filter.Group<Tag>(title, status)
-
-    protected class OrderByFilter(title: String, options: List<Pair<String, String>>, state: Int = 0) :
-        UriPartFilter(title, options.toTypedArray(), state)
-
-    protected class GenreConditionFilter(title: String, options: Array<String>) : UriPartFilter(
-        title,
-        options.zip(arrayOf("", "1")).toTypedArray(),
-    )
-
-    protected class AdultContentFilter(title: String, options: Array<String>) : UriPartFilter(
-        title,
-        options.zip(arrayOf("", "0", "1")).toTypedArray(),
-    )
-
-    protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
-    class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
+    protected open val adultContentFilterOptions: Array<String> =
+        arrayOf(
+            intl["adult_content_filter_all"],
+            intl["adult_content_filter_none"],
+            intl["adult_content_filter_only"],
+        )
 
     override fun getFilterList(): FilterList {
         val filters = mutableListOf(
-            AuthorFilter(authorFilterTitle),
-            ArtistFilter(artistFilterTitle),
-            YearFilter(yearFilterTitle),
-            StatusFilter(statusFilterTitle, getStatusList()),
+            AuthorFilter(intl["author_filter_title"]),
+            ArtistFilter(intl["artist_filter_title"]),
+            YearFilter(intl["year_filter_title"]),
+            StatusFilter(
+                title = intl["status_filter_title"],
+                status = statusFilterOptions.map { Tag(it.key, it.value) },
+            ),
             OrderByFilter(
-                title = orderByFilterTitle,
-                options = orderByFilterOptions.zip(orderByFilterOptionsValues),
+                title = intl["order_by_filter_title"],
+                options = orderByFilterOptions.map { Pair(it.key, it.value) },
                 state = 0,
             ),
-            AdultContentFilter(adultContentFilterTitle, adultContentFilterOptions),
+            AdultContentFilter(
+                title = intl["adult_content_filter_title"],
+                options = adultContentFilterOptions,
+            ),
         )
 
         if (genresList.isNotEmpty()) {
             filters += listOf(
                 Filter.Separator(),
-                Filter.Header(genreFilterHeader),
-                GenreConditionFilter(genreConditionFilterTitle, genreConditionFilterOptions),
-                GenreList(genreFilterTitle, genresList),
+                Filter.Header(intl["genre_filter_header"]),
+                GenreConditionFilter(
+                    title = intl["genre_condition_filter_title"],
+                    options = genreConditionFilterOptions,
+                ),
+                GenreList(
+                    title = intl["genre_filter_title"],
+                    genres = genresList,
+                ),
             )
         } else if (fetchGenres) {
             filters += listOf(
                 Filter.Separator(),
-                Filter.Header(genresMissingWarning),
+                Filter.Header(intl["genre_missing_warning"]),
             )
         }
 
         return FilterList(filters)
     }
-
-    protected fun getStatusList() = statusFilterOptionsValues
-        .zip(statusFilterOptions)
-        .map { Tag(it.first, it.second) }
-
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
-        fun toUriPart() = vals[state].second
-    }
-
-    open class Tag(val id: String, name: String) : Filter.CheckBox(name)
 
     override fun searchMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
@@ -635,7 +550,7 @@ abstract class Madara(
         return this.contains(updatingRegex).not()
     }
 
-    fun String.containsIn(array: Array<String>): Boolean {
+    private fun String.containsIn(array: Array<String>): Boolean {
         return this.lowercase() in array.map { it.lowercase() }
     }
 
