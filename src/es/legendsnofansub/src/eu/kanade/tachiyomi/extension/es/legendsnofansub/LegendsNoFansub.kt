@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 class LegendsNoFansub : Madara(
     "Legends No Fansub",
-    "https://legends.nextnovels.com",
+    "https://legnmangas.com",
     "es",
     SimpleDateFormat("dd/MM/yyyy", Locale("es")),
 ) {
