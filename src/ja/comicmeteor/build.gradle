@@ -1,0 +1,9 @@
+ext {
+    extName = "Comic Meteor"
+    extClass = ".ComicMeteor"
+    themePkg = "speedbinb"
+    baseUrl = "https://comic-meteor.jp"
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
