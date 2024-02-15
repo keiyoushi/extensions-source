@@ -1,0 +1,10 @@
+ext {
+    extName = 'Legends No Fansub'
+    extClass = '.LegendsNoFansub'
+    themePkg = 'madara'
+    baseUrl = 'https://legends.nextnovels.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
