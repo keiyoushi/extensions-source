@@ -32,11 +32,7 @@ class MangaSaki : ParsedHttpSource() {
 
     // popular
     override fun popularMangaRequest(page: Int): Request {
-        return if (page >= 1) {
-            GET("$baseUrl/directory/hot?page=${page - 1}/", headers)
-        } else {
-            GET("$baseUrl/directory/hot?page=0", headers)
-        }
+        return GET("$baseUrl/directory/hot?page=${page - 1}", headers)
     }
 
     override fun popularMangaSelector() = ".directory_list tbody tr"
