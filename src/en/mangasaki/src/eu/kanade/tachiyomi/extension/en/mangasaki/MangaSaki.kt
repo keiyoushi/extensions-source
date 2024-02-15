@@ -28,6 +28,7 @@ class MangaSaki : ParsedHttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
+
     // popular
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/directory/hot?page=${page - 1}", headers)
@@ -167,7 +168,7 @@ class MangaSaki : ParsedHttpSource() {
 
     // pages
     override fun pageListParse(document: Document): List<Page> {
-        val jsonString = document.select("script:containsData(showmanga)")[0].data()
+        val jsonString = document.select("script:containsData(showmanga)").first()!!.data()
             .substringAfter("(Drupal.settings, ")
             .substringBeforeLast(");")
 
