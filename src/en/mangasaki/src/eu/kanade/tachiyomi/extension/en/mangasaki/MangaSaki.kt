@@ -103,7 +103,7 @@ class MangaSaki : ParsedHttpSource() {
             Manga.setUrlWithoutDomain(element.select("div.views-field-title a").attr("href"))
             Manga.thumbnail_url = element.select("div.views-field-field-image2 img").attr("src")
         } else {
-            // This part needs to be fixed
+            // The site doesn't show thumbnails when using search
             val titleElement = element.select("h3.title a")
             Manga.title = titleElement.text()
             Manga.setUrlWithoutDomain(titleElement.attr("href"))
