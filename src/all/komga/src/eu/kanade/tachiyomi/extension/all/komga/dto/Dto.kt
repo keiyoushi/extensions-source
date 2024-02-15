@@ -78,15 +78,9 @@ data class MediaDto(
     val status: String,
     val mediaType: String,
     val pagesCount: Int,
-    val mediaProfile: MediaProfile = MediaProfile.DIVINA,
+    val mediaProfile: String = "DIVINA",
     val epubDivinaCompatible: Boolean = false,
 )
-
-enum class MediaProfile {
-    DIVINA,
-    PDF,
-    EPUB,
-}
 
 @Serializable
 data class PageDto(

@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.extension.all.komga.dto.AuthorDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.BookDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.CollectionDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.LibraryDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.MediaProfile
 import eu.kanade.tachiyomi.extension.all.komga.dto.PageDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.PageWrapperDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.ReadListDto
@@ -191,7 +190,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
         return page
             .filter {
-                it.media.mediaProfile != MediaProfile.EPUB || it.media.epubDivinaCompatible
+                it.media.mediaProfile != "EPUB" || it.media.epubDivinaCompatible
             }
             .mapIndexed { index, book ->
                 SChapter.create().apply {

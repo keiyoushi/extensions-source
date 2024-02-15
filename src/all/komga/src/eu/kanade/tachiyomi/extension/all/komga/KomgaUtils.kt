@@ -98,9 +98,9 @@ internal object KomgaUtils {
             }
             genre = (metadata.genres + metadata.tags + booksMetadata.tags).distinct().joinToString(", ")
             description = metadata.summary.ifBlank { booksMetadata.summary }
-            booksMetadata.authors.groupBy { it.role }.let { map ->
-                author = map["writer"]?.map { it.name }?.distinct()?.joinToString()
-                artist = map["penciller"]?.map { it.name }?.distinct()?.joinToString()
+            booksMetadata.authors.groupBy({ it.role }, { it.name }).let { map ->
+                author = map["writer"]?.distinct()?.joinToString()
+                artist = map["penciller"]?.distinct()?.joinToString()
             }
         }
 
