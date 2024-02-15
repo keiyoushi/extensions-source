@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.extension.all.komga.KomgaUtils.addEditTextPreference
@@ -95,7 +96,10 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         searchMangaRequest(
             page,
             "",
-            FilterList(SeriesSort()),
+            FilterList(
+                SeriesSort(),
+                LibraryFilter(libraries, defaultLibraries),
+            ),
         )
 
     override fun popularMangaParse(response: Response): MangasPage =
@@ -105,7 +109,10 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         searchMangaRequest(
             page,
             "",
-            FilterList(SeriesSort(Filter.Sort.Selection(3, false))),
+            FilterList(
+                SeriesSort(Filter.Sort.Selection(3, false)),
+                LibraryFilter(libraries, defaultLibraries),
+            ),
         )
 
     override fun latestUpdatesParse(response: Response): MangasPage =
@@ -212,6 +219,10 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    private val defaultLibraries by lazy {
+        preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
+    }
+
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>(
             UnreadFilter(),
@@ -226,11 +237,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
                     }
                 },
             ),
-            UriMultiSelectFilter(
-                "Libraries",
-                "library_id",
-                libraries.map { UriMultiSelectOption(it.name, it.id) },
-            ),
+            LibraryFilter(libraries, defaultLibraries),
             UriMultiSelectFilter(
                 "Status",
                 "status",
@@ -311,6 +318,21 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
             key = PREF_PASSWORD,
         )
+
+        MultiSelectListPreference(screen.context).apply {
+            key = PREF_DEFAULT_LIBRARIES
+            title = "Default libraries"
+            summary = buildString {
+                append("Show content from selected libraries by default.")
+
+                if (libraries.isEmpty()) {
+                    append(" Browse the source to load available options.")
+                }
+            }
+            entries = libraries.map { it.name }.toTypedArray()
+            entryValues = libraries.map { it.id }.toTypedArray()
+            setDefaultValue(emptySet<String>())
+        }.also(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
             key = PREF_CHAPTER_NAME_TEMPLATE
@@ -401,6 +423,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         private const val PREF_ADDRESS = "Address"
         private const val PREF_USERNAME = "Username"
         private const val PREF_PASSWORD = "Password"
+        private const val PREF_DEFAULT_LIBRARIES = "Default libraries"
         private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
         private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"
 

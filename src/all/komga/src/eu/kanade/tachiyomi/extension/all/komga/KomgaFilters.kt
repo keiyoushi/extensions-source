@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.komga
 
 import eu.kanade.tachiyomi.extension.all.komga.dto.AuthorDto
+import eu.kanade.tachiyomi.extension.all.komga.dto.LibraryDto
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
@@ -53,9 +54,22 @@ internal class ReadFilter : Filter.CheckBox("Read", false), UriFilter {
     }
 }
 
+internal class LibraryFilter(
+    libraries: List<LibraryDto>,
+    defaultLibraries: Set<String>,
+) : UriMultiSelectFilter(
+    "Libraries",
+    "library_id",
+    libraries.map {
+        UriMultiSelectOption(it.name, it.id).apply {
+            state = defaultLibraries.contains(it.id)
+        }
+    },
+)
+
 internal class UriMultiSelectOption(name: String, val id: String = name) : Filter.CheckBox(name, false)
 
-internal class UriMultiSelectFilter(
+internal open class UriMultiSelectFilter(
     name: String,
     private val param: String,
     genres: List<UriMultiSelectOption>,
