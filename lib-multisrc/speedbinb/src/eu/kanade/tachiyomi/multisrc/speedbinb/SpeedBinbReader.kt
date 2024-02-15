@@ -82,8 +82,7 @@ abstract class SpeedBinbReader(
         val sbcUrl = when (contentInfoItem.serverType) {
             ServerType.DIRECT -> "${contentInfoItem.contentServer.removeSuffix("/")}/content.js"
             ServerType.REST -> "${contentInfoItem.contentServer.removeSuffix("/")}/content"
-            ServerType.SBC -> baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegments(contentInfoItem.contentServer)
+            ServerType.SBC -> contentInfoItem.contentServer.toHttpUrl().newBuilder().apply {
                 addPathSegment("sbcGetCntnt.php")
                 addQueryParameter("cid", cid)
 
@@ -187,7 +186,7 @@ private fun HttpUrl.Builder.buildImageUrl(
 
             addPathSegments(src)
             addPathSegment(filename)
-            contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
+            contentInfoItem.contentDate?.let { setQueryParameter("dmytime", it) }
             fragment(fragment)
         }
         ServerType.REST -> {
@@ -195,23 +194,23 @@ private fun HttpUrl.Builder.buildImageUrl(
             addPathSegments(src)
 
             if (!singleQuality && !highQualityMode) {
-                addQueryParameter("q", "1")
+                setQueryParameter("q", "1")
             }
 
-            contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
+            contentInfoItem.contentDate?.let { setQueryParameter("dmytime", it) }
             copyKeyParametersFrom(chapterUrl)
             fragment(fragment)
         }
         ServerType.SBC -> {
             addQueryParameter("src", src)
-            contentInfoItem.requestToken?.let { addQueryParameter("p", it) }
+            contentInfoItem.requestToken?.let { setQueryParameter("p", it) }
 
             if (!singleQuality) {
-                addQueryParameter("q", if (highQualityMode) "0" else "1")
+                setQueryParameter("q", if (highQualityMode) "0" else "1")
             }
 
-            addQueryParameter("vm", contentInfoItem.viewMode.toString())
-            contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
+            setQueryParameter("vm", contentInfoItem.viewMode.toString())
+            contentInfoItem.contentDate?.let { setQueryParameter("dmytime", it) }
             copyKeyParametersFrom(chapterUrl)
             fragment(fragment)
         }
