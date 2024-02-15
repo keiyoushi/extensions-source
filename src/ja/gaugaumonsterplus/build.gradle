@@ -1,0 +1,9 @@
+ext {
+    extName = "Gaugau Monster Plus"
+    extClass = ".GaugauMonsterPlus"
+    themePkg = "speedbinb"
+    baseUrl = "https://gaugau.futabanet.jp"
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
