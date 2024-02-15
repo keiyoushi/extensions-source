@@ -12,7 +12,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.put
@@ -20,9 +22,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okio.Buffer
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
@@ -61,7 +63,7 @@ class MangaHot : HttpSource() {
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/list/latest?page=$page", apiHeaders)
+        GET("$baseUrl/api/list/latest?page=$page#$page", apiHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage =
         searchMangaParse(response)
@@ -89,12 +91,12 @@ class MangaHot : HttpSource() {
         return when {
             query.isNotBlank() -> {
                 url.addPathSegments("search")
-                val payload = buildJsonObject {
+                url.fragment(page.toString())
+                val body = buildJsonObject {
                     put("keyword", query)
                     put("page", page)
                     put("size", PAGE_LIMIT)
-                }
-                val body = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
+                }.toRequestBody()
                 val headers = apiHeadersBuilder.apply {
                     set("Referer", "$baseUrl/search?q=${URLEncoder.encode(query, "UTF-8")}")
                 }.build()
@@ -102,19 +104,19 @@ class MangaHot : HttpSource() {
             }
             tag?.isNotBlank() == true -> {
                 url.addPathSegments("tags")
-                val payload = buildJsonObject {
+                url.fragment(page.toString())
+                val body = buildJsonObject {
                     put("keyword", tag)
                     put("page", page)
                     put("size", PAGE_LIMIT)
-                }
-                val body = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
+                }.toRequestBody()
                 val headers = apiHeadersBuilder.apply {
                     add("Origin", baseUrl)
                     set("Referer", "$baseUrl/tags/${tag.replace(" ", "-")}")
                 }.build()
                 POST(url.build().toString(), headers, body)
             }
-            else -> throw Exception("Must select tag or search")
+            else -> popularMangaRequest(page)
         }
     }
 
@@ -126,13 +128,7 @@ class MangaHot : HttpSource() {
 
         val mangaList = data.data.listManga.map { it.toSManga(baseUrl) }
 
-        val request = response.request
-        val currentPage = if (request.method == "GET") {
-            request.url.queryParameter("page")!!.toInt()
-        } else {
-            json.decodeFromString<RequestBodyDto>(request.bodyString()).page
-        }
-
+        val currentPage = response.request.url.encodedFragment!!.toInt()
         return MangasPage(mangaList, currentPage < currentTotalNumberOfPages)
     }
 
@@ -278,12 +274,8 @@ class MangaHot : HttpSource() {
 
     // ============================= Utilities ==============================
 
-    private fun Request.bodyString(): String {
-        val requestCopy = newBuilder().build()
-        val buffer = Buffer()
-
-        return runCatching { buffer.apply { requestCopy.body!!.writeTo(this) }.readUtf8() }
-            .getOrNull() ?: ""
+    private fun JsonObject.toRequestBody(): RequestBody {
+        return json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
     }
 
     private inline fun <reified T> Response.parseAs(): T = use {
