@@ -133,10 +133,18 @@ abstract class SpeedBinb(
             }.toMutableList()
 
         // This is probably the silliest use of TextInterceptor ever.
-        // If a chapter is actually just a "preview", with the last page linking to a website
-        // to purchase said chapter, then we add an extra page to note people on where you can buy
-        // the thing.
-        if (contentInfoItem.viewMode != 1 && !contentInfoItem.shopUrl.isNullOrEmpty()) {
+        //
+        // If chapter purchases are enabled, and there's a link to purchase the current chapter,
+        // we add in the purchase URL as the last page.
+        val buyIconPosition = document.selectFirst("script:containsData(Config.LoginBuyIconPosition)")
+            ?.data()
+            ?.substringAfter("Config.LoginBuyIconPosition=")
+            ?.substringBefore(";")
+            ?.trim()
+            ?: "-1"
+        val enableBuying = buyIconPosition != "-1"
+
+        if (enableBuying && contentInfoItem.viewMode != 1 && !contentInfoItem.shopUrl.isNullOrEmpty()) {
             pages.add(
                 Page(pages.size, imageUrl = TextInterceptorHelper.createUrl(name, "購入： ${contentInfoItem.shopUrl}")),
             )
