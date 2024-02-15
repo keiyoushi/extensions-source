@@ -48,13 +48,15 @@ class MangaHot : HttpSource() {
         add("Referer", "$baseUrl/")
     }
 
-    private val apiHeaders = headersBuilder().apply {
+    private val apiHeaders by lazy { apiHeadersBuilder().build() }
+
+    private fun apiHeadersBuilder() = headersBuilder().apply {
         add("Accept", "*/*")
         set("Referer", "$baseUrl/list")
         add("Sec-Fetch-Dest", "empty")
         add("Sec-Fetch-Mode", "cors")
         add("Sec-Fetch-Site", "same-origin")
-    }.build()
+    }
 
     private val json: Json by injectLazy()
 
@@ -79,7 +81,6 @@ class MangaHot : HttpSource() {
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val apiHeadersBuilder = apiHeaders.newBuilder()
         val url = "$baseUrl/api".toHttpUrl().newBuilder()
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val tag = (filterList.find { it is TagFilter } as TagFilter).toUriPart()
@@ -97,7 +98,7 @@ class MangaHot : HttpSource() {
                     put("page", page)
                     put("size", PAGE_LIMIT)
                 }.toRequestBody()
-                val headers = apiHeadersBuilder.apply {
+                val headers = apiHeadersBuilder().apply {
                     set("Referer", "$baseUrl/search?q=${URLEncoder.encode(query, "UTF-8")}")
                 }.build()
                 POST(url.build().toString(), headers, body)
@@ -110,7 +111,7 @@ class MangaHot : HttpSource() {
                     put("page", page)
                     put("size", PAGE_LIMIT)
                 }.toRequestBody()
-                val headers = apiHeadersBuilder.apply {
+                val headers = apiHeadersBuilder().apply {
                     add("Origin", baseUrl)
                     set("Referer", "$baseUrl/tags/${tag.replace(" ", "-")}")
                 }.build()
