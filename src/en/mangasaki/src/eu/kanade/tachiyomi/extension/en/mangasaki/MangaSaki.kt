@@ -15,6 +15,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -27,9 +28,6 @@ class MangaSaki : ParsedHttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
-
-    private var searchMode: Boolean = false
-
     // popular
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/directory/hot?page=${page - 1}", headers)
@@ -38,24 +36,20 @@ class MangaSaki : ParsedHttpSource() {
     override fun popularMangaSelector() = ".directory_list tbody tr"
 
     override fun popularMangaFromElement(element: Element): SManga {
-        val Manga = SManga.create()
+        val manga = SManga.create()
         val titleElement = element.select("td a img").first()!!
-        Manga.title = titleElement.attr("title")
-        Manga.setUrlWithoutDomain(element.select("td a").first()!!.attr("href"))
-        Manga.thumbnail_url = titleElement.attr("src")
+        manga.title = titleElement.attr("title")
+        manga.setUrlWithoutDomain(element.select("td a").first()!!.attr("href"))
+        manga.thumbnail_url = titleElement.attr("src")
 
-        return Manga
+        return manga
     }
 
     override fun popularMangaNextPageSelector() = "li.pager-next a"
 
     // latest
     override fun latestUpdatesRequest(page: Int): Request {
-        return if (page >= 1) {
-            GET("$baseUrl/directory/new?page=${page - 1}/", headers)
-        } else {
-            GET("$baseUrl/directory/new?page=0", headers)
-        }
+        return GET("$baseUrl/directory/new?page=${page - 1}", headers)
     }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
@@ -65,6 +59,8 @@ class MangaSaki : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // search
+    private var searchMode: Boolean = false
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotEmpty()) {
             searchMode = true
@@ -93,40 +89,40 @@ class MangaSaki : ParsedHttpSource() {
     }
 
     override fun searchMangaFromElement(element: Element): SManga {
-        val Manga = SManga.create()
+        val manga = SManga.create()
         if (!searchMode) {
-            Manga.title = element.select("div.views-field-title a").text()
-            Manga.setUrlWithoutDomain(element.select("div.views-field-title a").attr("href"))
-            Manga.thumbnail_url = element.select("div.views-field-field-image2 img").attr("src")
+            manga.title = element.select("div.views-field-title a").text()
+            manga.setUrlWithoutDomain(element.select("div.views-field-title a").attr("href"))
+            manga.thumbnail_url = element.select("div.views-field-field-image2 img").attr("src")
         } else {
             // The site doesn't show thumbnails when using search
             val titleElement = element.select("h3.title a")
-            Manga.title = titleElement.text()
-            Manga.setUrlWithoutDomain(titleElement.attr("href"))
+            manga.title = titleElement.text()
+            manga.setUrlWithoutDomain(titleElement.attr("href"))
         }
 
-        return Manga
+        return manga
     }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // manga details
     override fun mangaDetailsParse(document: Document): SManga {
-        val Manga = SManga.create()
-        Manga.author = document.select("div.field-name-field-author div.field-item").first()?.text()
-        Manga.genre = document.select("div.field-name-field-genres ul li a").joinToString { it.text() }
-        Manga.description = document.select("div.field-name-body div.field-item p").text()
-        Manga.thumbnail_url = document.select("div.field-name-field-image2 div.field-item img").attr("src")
+        val manga = SManga.create()
+        manga.author = document.select("div.field-name-field-author div.field-item").first()?.text()
+        manga.genre = document.select("div.field-name-field-genres ul li a").joinToString { it.text() }
+        manga.description = document.select("div.field-name-body div.field-item p").text()
+        manga.thumbnail_url = document.select("div.field-name-field-image2 div.field-item img").attr("src")
 
         document.select("div.field-name-field-status div.field-item").text().also { statusText ->
-            when {
-                statusText.contains("Ongoing", true) -> Manga.status = SManga.ONGOING
-                statusText.contains("Complete", true) -> Manga.status = SManga.COMPLETED
-                else -> Manga.status = SManga.UNKNOWN
+            manga.status = when {
+                statusText.contains("Ongoing", true) -> SManga.ONGOING
+                statusText.contains("Complete", true) -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
             }
         }
 
-        return Manga
+        return manga
     }
 
     // chapters
@@ -146,7 +142,7 @@ class MangaSaki : ParsedHttpSource() {
             val cleaningIndex = dirtyPage.lastIndexOf("?")
             val cleanPage = dirtyPage.substring(0, cleaningIndex)
             document = client.newCall(chapterListRequest(cleanPage, nextPage)).execute().asJsoup()
-            chapters += document.select(chapterListSelector()).map(::chapterFromElement)
+            chapters.addAll(document.select(chapterListSelector()).map(::chapterFromElement))
             nextPage++
         }
 
@@ -157,29 +153,27 @@ class MangaSaki : ParsedHttpSource() {
 
     override fun chapterListSelector() = ".chlist tbody tr"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val Chapter = SChapter.create()
-        Chapter.setUrlWithoutDomain(element.select("a").attr("href"))
-        Chapter.name = element.select("a").text()
-        Chapter.date_upload = element.select("td").last()?.text()?.let {
-            SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).parse(it)?.time ?: 0
-        } ?: 0
+    private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
 
-        return Chapter
+    override fun chapterFromElement(element: Element): SChapter {
+        val chapter = SChapter.create()
+        chapter.setUrlWithoutDomain(element.select("a").attr("href"))
+        chapter.name = element.select("a").text()
+        chapter.date_upload = element.select("td").last()?.text()?.let {
+            dateFormat.parse(it)?.time ?: 0
+        } ?: 0
+        return chapter
     }
 
     // pages
     override fun pageListParse(document: Document): List<Page> {
-        val pageList: MutableList<Page> = mutableListOf()
-        val jsonString = document.select("script:containsData(showmanga)").html().removePrefix("<!--//--><![CDATA[//><!--\njQuery.extend(Drupal.settings, ").removeSuffix(");\n//--><!]]>")
-        val links = parseJSON(jsonString)
-        var pageNumber = 0
-        links?.forEach {
-            pageList.add(Page(pageNumber, "", it))
-            pageNumber++
-        }
+        val jsonString = document.select("script:containsData(showmanga)")[0].data()
+            .substringAfter("(Drupal.settings, ")
+            .substringBeforeLast(");")
 
-        return pageList.sortedBy { page -> page.index }
+        return parseJSON(jsonString).mapIndexed { i, it ->
+            Page(i, imageUrl = it)
+        }
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
@@ -187,10 +181,10 @@ class MangaSaki : ParsedHttpSource() {
     override fun getFilterList() = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
         Filter.Separator(),
-        MangaSaki.GenreFilter(),
+        GenreFilter(),
     )
 
-    private class GenreFilter : MangaSaki.UriPartFilter(
+    private class GenreFilter : UriPartFilter(
         "Category",
         arrayOf(
             Pair("Action", "action"),
@@ -247,8 +241,10 @@ class MangaSaki : ParsedHttpSource() {
         ),
     )
 
-    private fun parseJSON(jsonString: String): List<String>? {
-        val jsonData = Json { ignoreUnknownKeys = true }.decodeFromString<JSONData>(jsonString)
+    private val json: Json by injectLazy()
+
+    private fun parseJSON(jsonString: String): List<String> {
+        val jsonData = json.decodeFromString<JSONData>(jsonString)
         return jsonData.showmanga.paths.filter { it.contains("mangasaki") }
     }
 
