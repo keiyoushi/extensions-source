@@ -120,21 +120,28 @@ class OhtaWebComic : SpeedBinbReader(true) {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-
-        return document.select(".backnumberList a[onclick*=openBook]")
+        val chapters = document.select(".backnumberList a[onclick*=openBook]")
             .sortedByDescending {
                 it.selectFirst("dt.number")!!.ownText().toInt()
             }
             .map {
-                val chapterId = it.attr("onclick")
-                    .substringAfter("openBook('")
-                    .substringBefore("')")
                 SChapter.create().apply {
-                    url = "/contents/$chapterId"
+                    url = "/contents/${it.getChapterId()}"
                     name = it.selectFirst("div.title")!!.text()
                 }
             }
-            .distinctBy { it.url }
+
+        if (chapters.isNotEmpty()) {
+            return chapters
+        }
+
+        return document.select(".headBtnList a[onclick*=openBook]")
+            .map {
+                SChapter.create().apply {
+                    url = "/contents/${it.getChapterId()}"
+                    name = it.ownText()
+                }
+            }
     }
 
     override fun pageListRequest(chapter: SChapter) =
@@ -154,3 +161,8 @@ class OhtaWebComic : SpeedBinbReader(true) {
         return super.pageListParse(readerResponse)
     }
 }
+
+private fun Element.getChapterId(): String =
+    attr("onclick")
+        .substringAfter("openBook('")
+        .substringBefore("')")
