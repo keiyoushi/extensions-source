@@ -2,8 +2,8 @@ ext {
     extName = 'Legends No Fansub'
     extClass = '.LegendsNoFansub'
     themePkg = 'madara'
-    baseUrl = 'https://legends.nextnovels.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://legnmangas.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
