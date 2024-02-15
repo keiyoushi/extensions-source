@@ -1,0 +1,10 @@
+ext {
+    extName = "Ohta Web Comic"
+    extClass = ".OhtaWebComic"
+    themePkg = "speedbinb"
+    baseUrl = "https://webcomic.ohtabooks.com"
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
