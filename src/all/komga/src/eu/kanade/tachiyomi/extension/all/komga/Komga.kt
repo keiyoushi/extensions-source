@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.extension.all.komga.dto.AuthorDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.BookDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.CollectionDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.LibraryDto
+import eu.kanade.tachiyomi.extension.all.komga.dto.MediaProfile
 import eu.kanade.tachiyomi.extension.all.komga.dto.PageDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.PageWrapperDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.ReadListDto
@@ -174,18 +175,22 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     override fun chapterListParse(response: Response): List<SChapter> {
         val page = response.parseAs<PageWrapperDto<BookDto>>().content
         val isFromReadList = response.isFromReadList()
-        val r = page.mapIndexed { index, book ->
-            SChapter.create().apply {
-                chapter_number = if (!isFromReadList) book.metadata.numberSort else index + 1F
-                url = "$baseUrl/api/v1/books/${book.id}"
-                name = KomgaUtils.formatChapterName(book, chapterNameTemplate, isFromReadList)
-                scanlator = book.metadata.authors.filter { it.role == "translator" }.joinToString { it.name }
-                date_upload = book.metadata.releaseDate?.let { KomgaUtils.parseDate(it) }
-                    ?: KomgaUtils.parseDateTime(book.fileLastModified)
-            }
-        }
 
-        return r.sortedByDescending { it.chapter_number }
+        return page
+            .filter {
+                it.media.mediaProfile != MediaProfile.EPUB || it.media.epubDivinaCompatible
+            }
+            .mapIndexed { index, book ->
+                SChapter.create().apply {
+                    chapter_number = if (!isFromReadList) book.metadata.numberSort else index + 1F
+                    url = "$baseUrl/api/v1/books/${book.id}"
+                    name = KomgaUtils.formatChapterName(book, chapterNameTemplate, isFromReadList)
+                    scanlator = book.metadata.authors.filter { it.role == "translator" }.joinToString { it.name }
+                    date_upload = book.metadata.releaseDate?.let { KomgaUtils.parseDate(it) }
+                        ?: KomgaUtils.parseDateTime(book.lastModified)
+                }
+            }
+            .sortedByDescending { it.chapter_number }
     }
 
     override fun pageListRequest(chapter: SChapter) = GET("${chapter.url}/pages")
@@ -323,7 +328,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             """.trimMargin()
 
             setDefaultValue(PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
+            setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
                 true
             }
