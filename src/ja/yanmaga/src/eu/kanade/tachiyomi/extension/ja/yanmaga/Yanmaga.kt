@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.yanmaga
 
-import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinb
+import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,7 +20,7 @@ import java.util.Locale
 abstract class Yanmaga(
     private val searchCategoryClass: String,
     highQualityImages: Boolean = false,
-) : SpeedBinb(highQualityImages) {
+) : SpeedBinbReader(highQualityImages) {
 
     override val baseUrl = "https://yanmaga.jp"
 

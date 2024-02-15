@@ -20,7 +20,7 @@ import kotlin.math.ceil
  * SpeedBinb is a reader for various Japanese manga sites. As it is **only** a reader,
  * parsing of entries is left to the child class.
  */
-abstract class SpeedBinb(
+abstract class SpeedBinbReader(
     private val highQualityMode: Boolean = false,
 ) : HttpSource() {
 

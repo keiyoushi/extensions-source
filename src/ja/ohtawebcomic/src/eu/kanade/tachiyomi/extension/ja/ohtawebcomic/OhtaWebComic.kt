@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.ohtawebcomic
 
-import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinb
+import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,7 +13,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class OhtaWebComic : SpeedBinb(true) {
+class OhtaWebComic : SpeedBinbReader(true) {
 
     override val name = "Ohta Web Comic"
 

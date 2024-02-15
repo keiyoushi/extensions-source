@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangaplanet
 
-import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinb
+import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,7 +15,7 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaPlanet : SpeedBinb() {
+class MangaPlanet : SpeedBinbReader() {
 
     override val name = "Manga Planet"
 

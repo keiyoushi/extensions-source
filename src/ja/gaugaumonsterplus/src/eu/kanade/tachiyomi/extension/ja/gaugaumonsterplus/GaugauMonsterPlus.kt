@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.gaugaumonsterplus
 
-import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinb
+import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,7 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class GaugauMonsterPlus : SpeedBinb() {
+class GaugauMonsterPlus : SpeedBinbReader() {
 
     override val name = "がうがうモンスター＋"
 

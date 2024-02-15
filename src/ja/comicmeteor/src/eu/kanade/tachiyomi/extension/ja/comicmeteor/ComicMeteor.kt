@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.comicmeteor
 
-import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinb
+import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,7 +15,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class ComicMeteor : SpeedBinb() {
+class ComicMeteor : SpeedBinbReader() {
 
     override val name = "COMICメテオ"
 
