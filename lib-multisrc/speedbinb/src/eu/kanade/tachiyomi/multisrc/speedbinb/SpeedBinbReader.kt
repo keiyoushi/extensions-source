@@ -19,6 +19,13 @@ import kotlin.math.ceil
 /**
  * SpeedBinb is a reader for various Japanese manga sites. As it is **only** a reader,
  * parsing of entries is left to the child class.
+ *
+ * Versions (`SpeedBinb.VERSION` in DevTools console):
+ * - Minimum version tested: `1.6650.0001`
+ * - Maximum version tested: `1.6930.1101`
+ *
+ * These versions are only for reference purposes, and does not reflect the actual range
+ * of versions this class can scrape.
  */
 abstract class SpeedBinbReader(
     private val highQualityMode: Boolean = false,
@@ -73,9 +80,9 @@ abstract class SpeedBinbReader(
         val ptbl = json.decodeFromString<List<String>>(decodeScrambleTable(cid, sharedKey, contentInfoItem.ptbl))
 
         val sbcUrl = when (contentInfoItem.serverType) {
-            BibContentItem.SERVER_TYPE_DIRECT -> "${contentInfoItem.contentServer.removeSuffix("/")}/content.js"
-            BibContentItem.SERVER_TYPE_REST -> "${contentInfoItem.contentServer.removeSuffix("/")}/content"
-            BibContentItem.SERVER_TYPE_SBC -> baseUrl.toHttpUrl().newBuilder().apply {
+            ServerType.DIRECT -> "${contentInfoItem.contentServer.removeSuffix("/")}/content.js"
+            ServerType.REST -> "${contentInfoItem.contentServer.removeSuffix("/")}/content"
+            ServerType.SBC -> baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegments(contentInfoItem.contentServer)
                 addPathSegment("sbcGetCntnt.php")
                 addQueryParameter("cid", cid)
@@ -92,8 +99,8 @@ abstract class SpeedBinbReader(
             else -> throw UnsupportedOperationException("Unsupported ServerType value ${contentInfoItem.serverType}")
         }
         val sbcRawData = client.newCall(GET(sbcUrl, headers)).execute().body.string().let {
-            if (contentInfoItem.serverType == BibContentItem.SERVER_TYPE_DIRECT) {
-                it.substring(16, it.lastIndex)
+            if (contentInfoItem.serverType == ServerType.DIRECT) {
+                it.substringAfter("DataGet_Content(").substringBeforeLast(")")
             } else {
                 it
             }
@@ -104,26 +111,27 @@ abstract class SpeedBinbReader(
             throw Exception("Failed to fetch content")
         }
 
-        val ttx = Jsoup.parseBodyFragment(sbcData.ttx, responseUrl.toString())
         val singleQuality = sbcData.imageClass == "singlequality"
+        val ttx = Jsoup.parseBodyFragment(sbcData.ttx, responseUrl.toString())
         val pageBaseUrl = when (contentInfoItem.serverType) {
-            BibContentItem.SERVER_TYPE_DIRECT, BibContentItem.SERVER_TYPE_REST -> contentInfoItem.contentServer.toHttpUrl()
-            BibContentItem.SERVER_TYPE_SBC -> sbcUrl.toHttpUrl()
+            ServerType.DIRECT, ServerType.REST -> contentInfoItem.contentServer.toHttpUrl()
+            ServerType.SBC ->
+                sbcUrl
+                    .replace("/sbcGetCntnt.php", "/sbcGetImg.php")
+                    .toHttpUrl()
             else -> throw UnsupportedOperationException("Unsupported ServerType value ${contentInfoItem.serverType}")
         }
 
         val pages = ttx.select("t-case:first-of-type t-img")
             .mapIndexed { i, it ->
                 val src = it.attr("src")
-                val keyPair = determineKeyPair(src, ptbl, ctbl)
-                val fragment = "ptbinb,${keyPair.first},${keyPair.second}"
+                val keyPair = determineKeyPair(it.attr("src"), ptbl, ctbl)
                 val imageUrl = pageBaseUrl.newBuilder()
                     .buildImageUrl(
-                        pageBaseUrl,
                         responseUrl,
                         contentInfoItem,
                         src,
-                        fragment,
+                        keyPair,
                         singleQuality,
                         highQualityMode,
                     )
@@ -144,7 +152,7 @@ abstract class SpeedBinbReader(
             ?: "-1"
         val enableBuying = buyIconPosition != "-1"
 
-        if (enableBuying && contentInfoItem.viewMode != 1 && !contentInfoItem.shopUrl.isNullOrEmpty()) {
+        if (enableBuying && contentInfoItem.viewMode != ViewMode.COMMERCIAL && !contentInfoItem.shopUrl.isNullOrEmpty()) {
             pages.add(
                 Page(pages.size, imageUrl = TextInterceptorHelper.createUrl(name, "購入： ${contentInfoItem.shopUrl}")),
             )
@@ -159,58 +167,56 @@ abstract class SpeedBinbReader(
         json.decodeFromString(body.string())
 }
 
-internal const val URLSAFE_BASE64_LOOKUP = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-
 private fun HttpUrl.Builder.buildImageUrl(
-    originalUrl: HttpUrl,
     chapterUrl: HttpUrl,
     contentInfoItem: BibContentItem,
     src: String,
-    fragment: String,
+    keyPair: Pair<String, String>,
     singleQuality: Boolean,
     highQualityMode: Boolean,
-) = when (contentInfoItem.serverType) {
-    BibContentItem.SERVER_TYPE_DIRECT -> {
-        val filename = if (singleQuality) {
-            "M.jpg"
-        } else if (highQualityMode) {
-            "M_H.jpg"
-        } else {
-            "M_L.jpg"
+): HttpUrl.Builder {
+    val fragment = "ptbinb,${keyPair.first},${keyPair.second}"
+
+    return when (contentInfoItem.serverType) {
+        ServerType.DIRECT -> {
+            val filename = when {
+                singleQuality -> "M.jpg"
+                highQualityMode -> "M_H.jpg"
+                else -> "M_L.jpg"
+            }
+
+            addPathSegments(src)
+            addPathSegment(filename)
+            contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
+            fragment(fragment)
         }
+        ServerType.REST -> {
+            addPathSegment("img")
+            addPathSegments(src)
 
-        addPathSegments(src)
-        addPathSegment(filename)
-        contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
-        fragment(fragment)
-    }
-    BibContentItem.SERVER_TYPE_REST -> {
-        addPathSegment("img")
-        addPathSegments(src)
+            if (!singleQuality && !highQualityMode) {
+                addQueryParameter("q", "1")
+            }
 
-        if (!singleQuality && !highQualityMode) {
-            addQueryParameter("q", "1")
+            contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
+            copyKeyParametersFrom(chapterUrl)
+            fragment(fragment)
         }
+        ServerType.SBC -> {
+            addQueryParameter("src", src)
+            contentInfoItem.requestToken?.let { addQueryParameter("p", it) }
 
-        contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
-        copyKeyParametersFrom(chapterUrl)
-        fragment(fragment)
-    }
-    BibContentItem.SERVER_TYPE_SBC -> {
-        setPathSegment(originalUrl.pathSize - 1, "sbcGetImg.php")
-        addQueryParameter("src", src)
-        contentInfoItem.requestToken?.let { addQueryParameter("p", it) }
+            if (!singleQuality) {
+                addQueryParameter("q", if (highQualityMode) "0" else "1")
+            }
 
-        if (!singleQuality) {
-            addQueryParameter("q", if (highQualityMode) "0" else "1")
+            addQueryParameter("vm", contentInfoItem.viewMode.toString())
+            contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
+            copyKeyParametersFrom(chapterUrl)
+            fragment(fragment)
         }
-
-        addQueryParameter("vm", contentInfoItem.viewMode.toString())
-        contentInfoItem.contentDate?.let { addQueryParameter("dmytime", it) }
-        copyKeyParametersFrom(chapterUrl)
-        fragment(fragment)
+        else -> throw UnsupportedOperationException("Unsupported ServerType value ${contentInfoItem.serverType}")
     }
-    else -> throw UnsupportedOperationException("Unsupported ServerType value ${contentInfoItem.serverType}")
 }
 
 private fun determineKeyPair(src: String?, ptbl: List<String>, ctbl: List<String>): Pair<String, String> {
@@ -247,6 +253,8 @@ private fun decodeScrambleTable(cid: String, sharedKey: String, table: String): 
         }
     }
 }
+
+private const val URLSAFE_BASE64_LOOKUP = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 
 private fun generateSharedKey(cid: String): String {
     val randomChars = randomChars(16)

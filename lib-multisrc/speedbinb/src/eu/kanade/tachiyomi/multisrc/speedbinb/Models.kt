@@ -24,12 +24,18 @@ class BibContentItem(
     @SerialName("ViewMode") val viewMode: Int,
     @SerialName("ContentDate") val contentDate: String? = null,
     @SerialName("ShopURL") val shopUrl: String? = null,
-) {
-    companion object {
-        const val SERVER_TYPE_SBC = 0
-        const val SERVER_TYPE_DIRECT = 1
-        const val SERVER_TYPE_REST = 2
-    }
+)
+
+object ServerType {
+    const val SBC = 0
+    const val DIRECT = 1
+    const val REST = 2
+}
+
+object ViewMode {
+    const val COMMERCIAL = 1
+    const val NON_MEMBER_TRIAL = 2
+    const val MEMBER_TRIAL = 3
 }
 
 @Serializable
