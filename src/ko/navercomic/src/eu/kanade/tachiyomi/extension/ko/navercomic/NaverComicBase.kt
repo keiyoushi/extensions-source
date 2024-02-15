@@ -130,6 +130,13 @@ abstract class NaverComicBase(protected val mType: String) : ParsedHttpSource() 
                 .map {
                     it.attr("src")
                 }
+                .ifEmpty {
+                    // for mobile user agent
+                    document.select(".toon_view_lst img")
+                        .map {
+                            it.attr("data-src")
+                        }
+                }
                 .forEach {
                     pages.add(Page(pages.size, "", it))
                 }
