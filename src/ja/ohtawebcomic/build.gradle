@@ -1,7 +1,7 @@
 ext {
     extName = "Ohta Web Comic"
     extClass = ".OhtaWebComic"
-    themePkg = "speedbinb"
+    themePkg = "speedbinbreader"
     baseUrl = "https://webcomic.ohtabooks.com"
     overrideVersionCode = 0
     isNsfw = true

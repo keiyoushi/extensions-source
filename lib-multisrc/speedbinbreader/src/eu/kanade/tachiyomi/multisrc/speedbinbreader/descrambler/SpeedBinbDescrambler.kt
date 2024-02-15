@@ -1,6 +1,6 @@
-package eu.kanade.tachiyomi.multisrc.speedbinb.descrambler
+package eu.kanade.tachiyomi.multisrc.speedbinbreader.descrambler
 
-import eu.kanade.tachiyomi.multisrc.speedbinb.PtImgTranslation
+import eu.kanade.tachiyomi.multisrc.speedbinbreader.PtImgTranslation
 
 interface SpeedBinbDescrambler {
     fun isScrambled(): Boolean

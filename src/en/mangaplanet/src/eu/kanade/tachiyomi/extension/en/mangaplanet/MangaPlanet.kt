@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangaplanet
 
-import eu.kanade.tachiyomi.multisrc.speedbinb.SpeedBinbReader
+import eu.kanade.tachiyomi.multisrc.speedbinbreader.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage

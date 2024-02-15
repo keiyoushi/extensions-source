@@ -1,7 +1,7 @@
 ext {
     extName = "Comic Meteor"
     extClass = ".ComicMeteor"
-    themePkg = "speedbinb"
+    themePkg = "speedbinbreader"
     baseUrl = "https://comic-meteor.jp"
     overrideVersionCode = 0
 }

@@ -1,7 +1,7 @@
 ext {
     extName = "Weekly Young Magazine"
     extClass = ".YanmagaFactory"
-    themePkg = "speedbinb"
+    themePkg = "speedbinbreader"
     baseUrl = "https://yanmaga.jp"
     overrideVersionCode = 0
     isNsfw = true

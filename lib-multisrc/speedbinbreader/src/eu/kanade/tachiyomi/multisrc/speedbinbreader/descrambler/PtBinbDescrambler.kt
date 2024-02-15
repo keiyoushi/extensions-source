@@ -1,6 +1,6 @@
-package eu.kanade.tachiyomi.multisrc.speedbinb.descrambler
+package eu.kanade.tachiyomi.multisrc.speedbinbreader.descrambler
 
-import eu.kanade.tachiyomi.multisrc.speedbinb.PtImgTranslation
+import eu.kanade.tachiyomi.multisrc.speedbinbreader.PtImgTranslation
 
 private val PTBINBF_REGEX = Regex("""^=([0-9]+)-([0-9]+)([-+])([0-9]+)-([-_0-9A-Za-z]+)$""")
 private const val PTBINBF_CHAR_LOOKUP = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"

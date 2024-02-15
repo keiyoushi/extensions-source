@@ -1,13 +1,13 @@
-package eu.kanade.tachiyomi.multisrc.speedbinb
+package eu.kanade.tachiyomi.multisrc.speedbinbreader
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import eu.kanade.tachiyomi.multisrc.speedbinb.descrambler.PtBinbDescramblerA
-import eu.kanade.tachiyomi.multisrc.speedbinb.descrambler.PtBinbDescramblerF
-import eu.kanade.tachiyomi.multisrc.speedbinb.descrambler.PtImgDescrambler
-import eu.kanade.tachiyomi.multisrc.speedbinb.descrambler.SpeedBinbDescrambler
+import eu.kanade.tachiyomi.multisrc.speedbinbreader.descrambler.PtBinbDescramblerA
+import eu.kanade.tachiyomi.multisrc.speedbinbreader.descrambler.PtBinbDescramblerF
+import eu.kanade.tachiyomi.multisrc.speedbinbreader.descrambler.PtImgDescrambler
+import eu.kanade.tachiyomi.multisrc.speedbinbreader.descrambler.SpeedBinbDescrambler
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor

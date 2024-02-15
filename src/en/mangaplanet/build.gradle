@@ -1,7 +1,7 @@
 ext {
     extName = "Manga Planet"
     extClass = ".MangaPlanet"
-    themePkg = "speedbinb"
+    themePkg = "speedbinbreader"
     baseUrl = "https://mangaplanet.com"
     overrideVersionCode = 0
     isNsfw = true

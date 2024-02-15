@@ -1,7 +1,7 @@
 ext {
     extName = "Gaugau Monster Plus"
     extClass = ".GaugauMonsterPlus"
-    themePkg = "speedbinb"
+    themePkg = "speedbinbreader"
     baseUrl = "https://gaugau.futabanet.jp"
     overrideVersionCode = 0
 }

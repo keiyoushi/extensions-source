@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.speedbinb
+package eu.kanade.tachiyomi.multisrc.speedbinbreader
 
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper

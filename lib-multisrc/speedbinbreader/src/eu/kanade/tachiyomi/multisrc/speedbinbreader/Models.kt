@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.speedbinb
+package eu.kanade.tachiyomi.multisrc.speedbinbreader
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
