@@ -106,7 +106,7 @@ class GaugauMonsterPlus : SpeedBinb() {
                             append("」")
                         }
                     }
-                    chapter_number = chapterNumberRegex.matchEntire(episodeNum)?.let { m ->
+                    chapter_number = CHAPTER_NUMBER_REGEX.matchEntire(episodeNum)?.let { m ->
                         val major = m.groupValues[1].toFloat()
                         val minor = m.groupValues[2].toFloat()
 
@@ -122,7 +122,7 @@ class GaugauMonsterPlus : SpeedBinb() {
     )
 }
 
-private val chapterNumberRegex = Regex("""^第(\d+)話\((\d+)\)$""")
+private val CHAPTER_NUMBER_REGEX = Regex("""^第(\d+)話\((\d+)\)$""")
 
 // https://gaugau.futabanet.jp/list/search
 // copy([...document.querySelectorAll(".tagSearch__item")].map((e) => `"${e.textContent.trim()}",`).join("\n"))

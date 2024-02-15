@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.yanmaga
 
 import app.cash.quickjs.QuickJs
 
-private val insertAdjacentHtmlRegex = Regex(
+private val INSERT_ADJACENT_HTML_REGEX = Regex(
     """\s*\.\s*insertAdjacentHTML\s*\(\s*['"](beforebegin|afterbegin|beforeend|afterend)['"]\s*,\s*""",
 )
 
@@ -16,7 +16,7 @@ internal fun parseInsertAdjacentHtmlScript(script: String, targetName: String = 
                 it.contains("var $targetName") || it.contains("$targetName.classList")
             }
             .joinToString("\n")
-            .replace(insertAdjacentHtmlRegex, ".push(")
+            .replace(INSERT_ADJACENT_HTML_REGEX, ".push(")
         val result = qjs.evaluate(
             """
                 const $targetName = [];

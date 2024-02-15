@@ -18,8 +18,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 
-private val STARTS_WITH_NUMBER_REGEX = Regex("""^\d""")
-
 class PtBinbInterceptor(private val json: Json) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -53,7 +51,7 @@ class PtBinbInterceptor(private val json: Json) : Interceptor {
         val descrambler = PtImgDescrambler(metadata)
 
         return imageResponse.newBuilder()
-            .body(descrambleImage(image, descrambler)!!.toResponseBody(jpegMediaType))
+            .body(descrambleImage(image, descrambler)!!.toResponseBody(JPEG_MEDIA_TYPE))
             .build()
     }
 
@@ -77,7 +75,7 @@ class PtBinbInterceptor(private val json: Json) : Interceptor {
         val descrambled = descrambleImage(image, descrambler) ?: imageData
 
         return response.newBuilder()
-            .body(descrambled.toResponseBody(jpegMediaType))
+            .body(descrambled.toResponseBody(JPEG_MEDIA_TYPE))
             .build()
     }
 
@@ -103,6 +101,7 @@ class PtBinbInterceptor(private val json: Json) : Interceptor {
             }
             .toByteArray()
     }
-
-    private val jpegMediaType = "image/jpeg".toMediaType()
 }
+
+private val STARTS_WITH_NUMBER_REGEX = Regex("""^\d""")
+private val JPEG_MEDIA_TYPE = "image/jpeg".toMediaType()
