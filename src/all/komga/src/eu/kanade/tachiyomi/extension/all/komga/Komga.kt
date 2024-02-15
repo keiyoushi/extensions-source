@@ -52,6 +52,12 @@ import kotlin.concurrent.write
 
 open class Komga(private val suffix: String = "") : ConfigurableSource, UnmeteredSource, HttpSource() {
 
+    internal val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }
+
     override val name by lazy { "Komga${displayName.ifBlank { suffix }.let { if (it.isNotBlank()) " ($it)" else "" }}" }
 
     override val lang = "all"
@@ -67,13 +73,12 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
     }
 
-    internal val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
-
-    private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }
     private val username by lazy { preferences.getString(PREF_USERNAME, "")!! }
+
     private val password by lazy { preferences.getString(PREF_PASSWORD, "")!! }
+
+    private val defaultLibraries
+        get() = preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
 
     override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
@@ -96,10 +101,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         searchMangaRequest(
             page,
             "",
-            FilterList(
-                SeriesSort(),
-                LibraryFilter(libraries, defaultLibraries),
-            ),
+            FilterList(SeriesSort()),
         )
 
     override fun popularMangaParse(response: Response): MangasPage =
@@ -111,7 +113,6 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             "",
             FilterList(
                 SeriesSort(Filter.Sort.Selection(3, false)),
-                LibraryFilter(libraries, defaultLibraries),
             ),
         )
 
@@ -132,8 +133,13 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         }
 
         val url = "$baseUrl/api/v1/$type?search=$query&page=${page - 1}&deleted=false".toHttpUrl().newBuilder()
+        val filterList = filters.ifEmpty { getFilterList() }
 
-        filters.forEach { filter ->
+        if (filterList.filterIsInstance<LibraryFilter>().isEmpty()) {
+            url.addQueryParameter("library_id", defaultLibraries.joinToString(","))
+        }
+
+        filterList.forEach { filter ->
             when (filter) {
                 is UriFilter -> filter.addToUri(url)
                 is Filter.Sort -> {
@@ -170,9 +176,8 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         }
     }
 
-    private val chapterNameTemplate by lazy {
-        preferences.getString(PREF_CHAPTER_NAME_TEMPLATE, PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)!!
-    }
+    private val chapterNameTemplate
+        get() = preferences.getString(PREF_CHAPTER_NAME_TEMPLATE, PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)!!
 
     override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
 
@@ -182,6 +187,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     override fun chapterListParse(response: Response): List<SChapter> {
         val page = response.parseAs<PageWrapperDto<BookDto>>().content
         val isFromReadList = response.isFromReadList()
+        val chapterNameTemplate = chapterNameTemplate
 
         return page
             .filter {
@@ -218,10 +224,6 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private val defaultLibraries by lazy {
-        preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
-    }
 
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>(
@@ -295,6 +297,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             default = suffix,
             summary = displayName.ifBlank { "Here you can change the source displayed suffix" },
             key = PREF_DISPLAY_NAME,
+            restartRequired = true,
         )
         screen.addEditTextPreference(
             title = "Address",
@@ -304,12 +307,14 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             validate = { it.toHttpUrlOrNull() != null },
             validationMessage = "The URL is invalid or malformed",
             key = PREF_ADDRESS,
+            restartRequired = true,
         )
         screen.addEditTextPreference(
             title = "Username",
             default = "",
             summary = username.ifBlank { "The user account email" },
             key = PREF_USERNAME,
+            restartRequired = true,
         )
         screen.addEditTextPreference(
             title = "Password",
@@ -317,6 +322,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             summary = if (password.isBlank()) "The user account password" else "*".repeat(password.length),
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
             key = PREF_PASSWORD,
+            restartRequired = true,
         )
 
         MultiSelectListPreference(screen.context).apply {
@@ -350,10 +356,6 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             """.trimMargin()
 
             setDefaultValue(PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                true
-            }
         }.also(screen::addPreference)
     }
 

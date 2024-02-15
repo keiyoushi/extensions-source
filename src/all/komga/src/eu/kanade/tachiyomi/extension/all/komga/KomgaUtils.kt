@@ -121,6 +121,7 @@ internal object KomgaUtils {
         validate: ((String) -> Boolean)? = null,
         validationMessage: String? = null,
         key: String = title,
+        restartRequired: Boolean = false,
     ) {
         EditTextPreference(context).apply {
             this.key = key
@@ -159,8 +160,13 @@ internal object KomgaUtils {
 
             setOnPreferenceChangeListener { _, _ ->
                 try {
-                    Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                    text.isBlank() || validate?.invoke(text) ?: true
+                    val result = text.isBlank() || validate?.invoke(text) ?: true
+
+                    if (restartRequired && result) {
+                        Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                    }
+
+                    result
                 } catch (e: Exception) {
                     e.printStackTrace()
                     false
