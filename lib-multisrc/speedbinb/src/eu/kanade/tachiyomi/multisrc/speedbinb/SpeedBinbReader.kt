@@ -61,9 +61,9 @@ abstract class SpeedBinbReader(
         val sharedKey = generateSharedKey(cid)
         val contentInfoUrl = content.attr("abs:data-ptbinb").toHttpUrl().newBuilder().apply {
             copyKeyParametersFrom(responseUrl)
-            addQueryParameter("cid", cid)
-            addQueryParameter("k", sharedKey)
-            addQueryParameter("dmytime", System.currentTimeMillis().toString())
+            setQueryParameter("cid", cid)
+            setQueryParameter("k", sharedKey)
+            setQueryParameter("dmytime", System.currentTimeMillis().toString())
         }.build()
         val contentInfo = client.newCall(GET(contentInfoUrl, headers)).execute().parseAs<BibContentInfo>()
 
@@ -84,15 +84,15 @@ abstract class SpeedBinbReader(
             ServerType.REST -> "${contentInfoItem.contentServer.removeSuffix("/")}/content"
             ServerType.SBC -> contentInfoItem.contentServer.toHttpUrl().newBuilder().apply {
                 addPathSegment("sbcGetCntnt.php")
-                addQueryParameter("cid", cid)
+                setQueryParameter("cid", cid)
 
                 contentInfoItem.requestToken?.let {
-                    addQueryParameter("p", it)
+                    setQueryParameter("p", it)
                 }
 
-                addQueryParameter("q", "1")
-                addQueryParameter("vm", contentInfoItem.viewMode.toString())
-                addQueryParameter("dmytime", contentInfoItem.contentDate ?: System.currentTimeMillis().toString())
+                setQueryParameter("q", "1")
+                setQueryParameter("vm", contentInfoItem.viewMode.toString())
+                setQueryParameter("dmytime", contentInfoItem.contentDate ?: System.currentTimeMillis().toString())
                 copyKeyParametersFrom(responseUrl)
             }.toString()
             else -> throw UnsupportedOperationException("Unsupported ServerType value ${contentInfoItem.serverType}")
@@ -202,7 +202,7 @@ private fun HttpUrl.Builder.buildImageUrl(
             fragment(fragment)
         }
         ServerType.SBC -> {
-            addQueryParameter("src", src)
+            setQueryParameter("src", src)
             contentInfoItem.requestToken?.let { setQueryParameter("p", it) }
 
             if (!singleQuality) {
