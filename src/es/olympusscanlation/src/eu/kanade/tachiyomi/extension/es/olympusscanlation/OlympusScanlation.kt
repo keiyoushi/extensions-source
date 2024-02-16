@@ -210,7 +210,7 @@ class OlympusScanlation : HttpSource() {
     )
 
     override fun getFilterList(): FilterList {
-        thread { fetchFilters() }
+        if (shouldFetchFilters()) thread { fetchFilters() }
         val filters = mutableListOf<Filter<*>>(
             Filter.Header("Los filtros no funcionan en la búsqueda por texto"),
             Filter.Separator(),
@@ -243,19 +243,26 @@ class OlympusScanlation : HttpSource() {
     private var statusesList: List<Pair<String, Int>> = emptyList()
     private var fetchFiltersAttempts = 0
     private var fetchFiltersFailed = false
+    private var isFetchingFilters = false
+
+    private fun shouldFetchFilters(): Boolean {
+        if (isFetchingFilters) return false
+        return fetchFiltersAttempts <= 3 && (((genresList.isEmpty() && statusesList.isEmpty()) || fetchFiltersFailed))
+    }
 
     private fun fetchFilters() {
         try {
-            if (fetchFiltersAttempts <= 3 && (((genresList.isEmpty() && statusesList.isEmpty()) || fetchFiltersFailed))) {
-                val response = client.newCall(GET("$apiBaseUrl/api/genres-statuses", headers)).execute()
-                val filters = json.decodeFromString<GenresStatusesDto>(response.body.string())
+            isFetchingFilters = true
+            val response = client.newCall(GET("$apiBaseUrl/api/genres-statuses", headers)).execute()
+            val filters = json.decodeFromString<GenresStatusesDto>(response.body.string())
 
-                genresList = filters.genres?.map { it.name.trim() to it.id } ?: emptyList()
-                statusesList = filters.statuses?.map { it.name.trim() to it.id } ?: emptyList()
-                fetchFiltersAttempts++
-            }
+            genresList = filters.genres?.map { it.name.trim() to it.id } ?: emptyList()
+            statusesList = filters.statuses?.map { it.name.trim() to it.id } ?: emptyList()
+            fetchFiltersAttempts++
         } catch (e: Exception) {
             fetchFiltersFailed = true
+        } finally {
+            isFetchingFilters = false
         }
     }
 
