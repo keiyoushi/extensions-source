@@ -267,6 +267,7 @@ class RizzComic : HttpSource(), ConfigurableSource {
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+            .set("Referer", "$baseUrl/")
             .build()
 
         return GET(page.imageUrl!!, newHeaders)
