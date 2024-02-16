@@ -4,12 +4,21 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+class PayloadHomeDto(
+    val data: HomeDto,
+)
+
+@Serializable
+class HomeDto(
+    @SerialName("popular_comics") val popularComics: String,
+)
+
+@Serializable
 class PayloadSeriesDto(val data: PayloadSeriesDataDto)
 
 @Serializable
 class PayloadSeriesDataDto(
     val series: SeriesDto,
-    val recommended_series: List<MangaDto>,
 )
 
 @Serializable

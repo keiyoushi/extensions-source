@@ -43,15 +43,16 @@ class OlympusScanlation : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/series?page=1&direction=asc&type=comic".toHttpUrl().newBuilder()
+        val apiUrl = "$apiBaseUrl/api/sf/home".toHttpUrl().newBuilder()
             .build()
         return GET(apiUrl, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         runCatching { fetchFilters() }
-        val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
-        val mangaList = result.data.recommended_series.filter { it.type == "comic" }.map {
+        val result = json.decodeFromString<PayloadHomeDto>(response.body.string())
+        val popularJson = json.decodeFromString<List<MangaDto>>(result.data.popularComics)
+        val mangaList = popularJson.filter { it.type == "comic" }.map {
             SManga.create().apply {
                 url = "/series/comic-${it.slug}"
                 title = it.name
