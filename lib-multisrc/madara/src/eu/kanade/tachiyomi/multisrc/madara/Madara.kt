@@ -569,10 +569,7 @@ abstract class Madara(
 
     open val seriesTypeSelector = ".post-content_item:contains(Type) .summary-content"
     open val altNameSelector = ".post-content_item:contains(Alt) .summary-content"
-    open val altName = when (lang) {
-        "pt-BR" -> "Nomes alternativos: "
-        else -> "Alternative Names: "
-    }
+    open val altName = intl["alt_names_heading"]
     open val updatingRegex = "Updating|Atualizando".toRegex(RegexOption.IGNORE_CASE)
 
     fun String.notUpdating(): Boolean {
