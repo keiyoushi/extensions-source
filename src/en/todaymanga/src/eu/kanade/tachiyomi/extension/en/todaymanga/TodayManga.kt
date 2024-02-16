@@ -38,6 +38,8 @@ open class TodayManga : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request =
@@ -47,7 +49,7 @@ open class TodayManga : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("abs:href"))
-        thumbnail_url = element.selectFirst("img")?.imgAttr()
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
         title = element.selectFirst("h2")!!.text()
     }
 
@@ -62,11 +64,11 @@ open class TodayManga : ParsedHttpSource() {
     override fun latestUpdatesSelector(): String = "ul.series > li"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        element.selectFirst("a[title][href]")!!.run {
+        with(element.selectFirst("a[title][href]")!!) {
             setUrlWithoutDomain(attr("abs:href"))
             title = attr("title")
         }
-        thumbnail_url = element.selectFirst("img")?.imgAttr()
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
     }
 
     override fun latestUpdatesNextPageSelector(): String =
@@ -101,9 +103,9 @@ open class TodayManga : ParsedHttpSource() {
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
-        }
+        }.build()
 
-        return GET(url.build(), headers)
+        return GET(url, headers)
     }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
@@ -201,28 +203,27 @@ open class TodayManga : ParsedHttpSource() {
     // =========================== Manga Details ============================
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        document.selectFirst(".serie")!!.run {
+        with(document.selectFirst(".serie")!!) {
             title = selectFirst("h1")!!.text()
-            thumbnail_url = selectFirst("img")?.imgAttr()
+            thumbnail_url = selectFirst("img")!!.imgAttr()
             genre = select(".serie-info-head .tags > .tag-item").joinToString { it.text() }
             author = select(".authors a").joinToString { it.text() }
             status = selectFirst("li:contains(status) span").parseStatus()
         }
 
         description = buildString {
-            document.selectFirst(".serie-summary")?.also { summary ->
-                summary.childNodes().forEach { node ->
-                    if (node is TextNode) {
-                        append(node.text())
-                    }
-                    if (node.nodeName() == "br") {
-                        appendLine()
-                    }
+            val summary = document.selectFirst(".serie-summary")!!
+            summary.childNodes().forEach { node ->
+                if (node is TextNode) {
+                    append(node.text())
                 }
-                summary.selectFirst("div[style]")?.also {
-                    append("\n\n")
-                    append(it.text())
+                if (node.nodeName() == "br") {
+                    appendLine()
                 }
+            }
+            summary.selectFirst("div[style]")?.also {
+                append("\n\n")
+                append(it.text())
             }
         }.trim()
     }
@@ -246,7 +247,7 @@ open class TodayManga : ParsedHttpSource() {
     override fun chapterListSelector() = "ul.chapters-list > li"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.selectFirst("a")!!.run {
+        with(element.selectFirst("a")!!) {
             name = text()
             setUrlWithoutDomain(attr("abs:href"))
         }
@@ -262,8 +263,11 @@ open class TodayManga : ParsedHttpSource() {
     }
 
     private fun parseDate(dateStr: String): Long {
-        return runCatching { DATE_FORMATTER.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
+        return try {
+            dateFormat.parse(dateStr)!!.time
+        } catch (_: Throwable) {
+            0L
+        }
     }
 
     // From OppaiStream
@@ -332,7 +336,6 @@ open class TodayManga : ParsedHttpSource() {
             add("Accept", "image/avif,image/webp,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
         }.build()
-
         return GET(page.imageUrl!!, imgHeaders)
     }
 
@@ -350,11 +353,5 @@ open class TodayManga : ParsedHttpSource() {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
-    }
-
-    companion object {
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
-        }
     }
 }
