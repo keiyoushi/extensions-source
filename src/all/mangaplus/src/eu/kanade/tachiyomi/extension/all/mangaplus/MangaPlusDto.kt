@@ -59,6 +59,12 @@ class AllTitlesGroup(
 class WebHomeViewV4(
     val groups: List<UpdatedTitleV2Group> = emptyList(),
     val rankedTitles: List<RankedTitle> = emptyList(),
+    val featuredTitleLists: List<FeaturedTitleList> = emptyList(),
+)
+
+@Serializable
+class FeaturedTitleList(
+    val featuredTitles: List<Title> = emptyList(),
 )
 
 @Serializable

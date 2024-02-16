@@ -143,7 +143,20 @@ class MangaPlus(
             .map(UpdatedTitle::title)
             .filter { it.language == langCode }
             .distinctBy(Title::titleId)
+
         titleCache.putAll(directory.associateBy(Title::titleId))
+        titleCache.putAll(
+            result.success.webHomeViewV4.rankedTitles
+                .flatMap(RankedTitle::titles)
+                .filter { it.language == langCode }
+                .associateBy(Title::titleId),
+        )
+        titleCache.putAll(
+            result.success.webHomeViewV4.featuredTitleLists
+                .flatMap(FeaturedTitleList::featuredTitles)
+                .filter { it.language == langCode }
+                .associateBy(Title::titleId),
+        )
 
         return parseDirectory(1)
     }
@@ -379,7 +392,7 @@ class MangaPlus(
             .substringBefore("/$TITLE_THUMBNAIL_PATH")
             .substringAfterLast("/")
             .toInt()
-        val title = titleCache?.get(titleId) ?: return response
+        val title = titleCache[titleId] ?: return response
 
         response.close()
         val thumbnailRequest = GET(title.portraitImageUrl, request.headers)
