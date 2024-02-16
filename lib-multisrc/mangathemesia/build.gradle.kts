@@ -5,5 +5,5 @@ plugins {
 baseVersionCode = 28
 
 dependencies {
-    implementation(project(":lib:randomua"))
+    api(project(":lib:randomua"))
 }
