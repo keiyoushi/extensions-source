@@ -242,32 +242,39 @@ class OlympusScanlation : HttpSource() {
     private var genresList: List<Pair<String, Int>> = emptyList()
     private var statusesList: List<Pair<String, Int>> = emptyList()
     private var fetchFiltersAttempts = 0
-    private var fetchFiltersFailed = false
-    private var isFetchingFilters = false
+    private var fetchFiltersStatus = NOT_FETCHED
 
     private fun shouldFetchFilters(): Boolean {
-        if (isFetchingFilters) return false
-        return fetchFiltersAttempts <= 3 && (((genresList.isEmpty() && statusesList.isEmpty()) || fetchFiltersFailed))
+        if (fetchFiltersStatus == FETCHING) return false
+        return fetchFiltersStatus != FETCHED && fetchFiltersAttempts <= 3
     }
 
     private fun fetchFilters() {
         try {
-            isFetchingFilters = true
+            fetchFiltersStatus = FETCHING
             val response = client.newCall(GET("$apiBaseUrl/api/genres-statuses", headers)).execute()
             val filters = json.decodeFromString<GenresStatusesDto>(response.body.string())
 
-            genresList = filters.genres?.map { it.name.trim() to it.id } ?: emptyList()
-            statusesList = filters.statuses?.map { it.name.trim() to it.id } ?: emptyList()
+            genresList = filters.genres.map { it.name.trim() to it.id }
+            statusesList = filters.statuses.map { it.name.trim() to it.id }
+
+            fetchFiltersStatus = FETCHED
         } catch (e: Exception) {
-            fetchFiltersFailed = true
+            fetchFiltersStatus = FETCH_FAILED
         } finally {
             fetchFiltersAttempts++
-            isFetchingFilters = false
         }
     }
 
     open class UriPartFilter(displayName: String, val vals: Array<Pair<String, Int>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
+    }
+
+    companion object {
+        private const val NOT_FETCHED = 0
+        private const val FETCHING = 1
+        private const val FETCHED = 2
+        private const val FETCH_FAILED = 3
     }
 }
