@@ -78,6 +78,8 @@ data class MediaDto(
     val status: String,
     val mediaType: String,
     val pagesCount: Int,
+    val mediaProfile: String = "DIVINA",
+    val epubDivinaCompatible: Boolean = false,
 )
 
 @Serializable
