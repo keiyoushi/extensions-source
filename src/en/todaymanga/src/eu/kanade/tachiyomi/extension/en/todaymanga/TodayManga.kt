@@ -76,8 +76,8 @@ open class TodayManga : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val categoryFilter = filterList.find { it is CategoryFilter } as CategoryFilter
-        val genreFilter = filterList.find { it is GenreFilter } as GenreFilter
+        val categoryFilter = filterList.filterIsInstance<CategoryFilter>().first()
+        val genreFilter = filterList.filterIsInstance<GenreFilter>().first()
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             when {
