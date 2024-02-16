@@ -3,7 +3,7 @@ ext {
     extClass = '.MagusManga'
     themePkg = 'mangathemesia'
     baseUrl = 'https://vofeg.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
