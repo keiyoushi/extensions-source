@@ -48,7 +48,7 @@ class ComicMeteor : ParsedHttpSource() {
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET(
-        "https://comic-meteor.jp/wp-admin/admin-ajax.php?action=get_flex_titles_for_toppage&page=$page&get_num=16",
+        "$baseUrl/wp-admin/admin-ajax.php?action=get_flex_titles_for_toppage&page=$page&get_num=16",
         headers,
     )
 
