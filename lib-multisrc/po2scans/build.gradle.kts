@@ -5,5 +5,5 @@ plugins {
 baseVersionCode = 1
 
 dependencies {
-    implementation(project(":lib:dataimage"))
+    api(project(":lib:dataimage"))
 }
