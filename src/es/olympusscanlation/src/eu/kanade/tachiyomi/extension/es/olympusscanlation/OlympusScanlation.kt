@@ -52,13 +52,7 @@ class OlympusScanlation : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadHomeDto>(response.body.string())
         val popularJson = json.decodeFromString<List<MangaDto>>(result.data.popularComics)
-        val mangaList = popularJson.filter { it.type == "comic" }.map {
-            SManga.create().apply {
-                url = "/series/comic-${it.slug}"
-                title = it.name
-                thumbnail_url = it.cover
-            }
-        }
+        val mangaList = popularJson.filter { it.type == "comic" }.map { it.toSimpleSManga() }
         return MangasPage(mangaList, hasNextPage = false)
     }
 
@@ -70,13 +64,7 @@ class OlympusScanlation : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = json.decodeFromString<NewChaptersDto>(response.body.string())
-        val mangaList = result.data.filter { it.type == "comic" }.map {
-            SManga.create().apply {
-                url = "/series/comic-${it.slug}"
-                title = it.name
-                thumbnail_url = it.cover
-            }
-        }
+        val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
         val hasNextPage = result.current_page < result.last_page
         return MangasPage(mangaList, hasNextPage)
     }
@@ -120,24 +108,12 @@ class OlympusScanlation : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.toString().startsWith("$apiBaseUrl/api/search")) {
             val result = json.decodeFromString<PayloadMangaDto>(response.body.string())
-            val mangaList = result.data.filter { it.type == "comic" }.map {
-                SManga.create().apply {
-                    url = "/series/comic-${it.slug}"
-                    title = it.name
-                    thumbnail_url = it.cover
-                }
-            }
+            val mangaList = result.data.filter { it.type == "comic" }.map { it.toSimpleSManga() }
             return MangasPage(mangaList, hasNextPage = false)
         }
 
         val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
-        val mangaList = result.data.series.data.map {
-            SManga.create().apply {
-                url = "/series/comic-${it.slug}"
-                title = it.name
-                thumbnail_url = it.cover
-            }
-        }
+        val mangaList = result.data.series.data.map { it.toSimpleSManga() }
         val hasNextPage = result.data.series.current_page < result.data.series.last_page
         return MangasPage(mangaList, hasNextPage)
     }
@@ -151,14 +127,7 @@ class OlympusScanlation : HttpSource() {
         val newRequest = GET(url = apiUrl, headers = headers)
         val newResponse = client.newCall(newRequest).execute()
         val result = json.decodeFromString<MangaDetailDto>(newResponse.body.string())
-        return SManga.create().apply {
-            url = "/series/comic-$slug"
-            title = result.data.name
-            thumbnail_url = result.data.cover
-            description = result.data.summary
-            status = parseStatus(result.data.status?.id)
-            genre = result.data.genres?.joinToString { it.name.trim() }
-        }
+        return result.data.toSManga()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
@@ -195,17 +164,7 @@ class OlympusScanlation : HttpSource() {
             resultSize += newData.data.size
             page += 1
         }
-        return data.data.map { chap -> chapterFromObject(chap, slug) }
-    }
-
-    private fun chapterFromObject(chapter: ChapterDto, slug: String) = SChapter.create().apply {
-        url = "/capitulo/${chapter.id}/comic-$slug"
-        name = "Capitulo ${chapter.name}"
-        date_upload = try {
-            dateFormat.parse(chapter.date)!!.time
-        } catch (e: Exception) {
-            0L
-        }
+        return data.data.map { it.toSChapter(slug, dateFormat) }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -227,14 +186,6 @@ class OlympusScanlation : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private fun parseStatus(statusId: Int?) = when (statusId) {
-        1 -> SManga.ONGOING
-        3 -> SManga.ON_HIATUS
-        4 -> SManga.COMPLETED
-        5 -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
 
     private class SortFilter : Filter.Sort(
         "Ordenar",
@@ -290,18 +241,18 @@ class OlympusScanlation : HttpSource() {
 
     private var genresList: List<Pair<String, Int>> = emptyList()
     private var statusesList: List<Pair<String, Int>> = emptyList()
-    private var fetchFiltersAttemps = 0
+    private var fetchFiltersAttempts = 0
     private var fetchFiltersFailed = false
 
     private fun fetchFilters() {
         try {
-            if (fetchFiltersAttemps <= 3 && (((genresList.isEmpty() && statusesList.isEmpty()) || fetchFiltersFailed))) {
+            if (fetchFiltersAttempts <= 3 && (((genresList.isEmpty() && statusesList.isEmpty()) || fetchFiltersFailed))) {
                 val response = client.newCall(GET("$apiBaseUrl/api/genres-statuses", headers)).execute()
                 val filters = json.decodeFromString<GenresStatusesDto>(response.body.string())
 
                 genresList = filters.genres?.map { it.name.trim() to it.id } ?: emptyList()
                 statusesList = filters.statuses?.map { it.name.trim() to it.id } ?: emptyList()
-                fetchFiltersAttemps++
+                fetchFiltersAttempts++
             }
         } catch (e: Exception) {
             fetchFiltersFailed = true
