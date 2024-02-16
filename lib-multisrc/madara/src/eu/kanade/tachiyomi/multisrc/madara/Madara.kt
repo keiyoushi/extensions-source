@@ -107,11 +107,26 @@ abstract class Madara(
      */
     protected open val useLoadMoreRequest = false
 
+    /**
+     * internal variable to save if site uses load_more or not
+     */
+    private var loadMoreRequestDetected = false
+
     // Popular Manga
 
     override fun popularMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
-        return super.popularMangaParse(response)
+        val document = response.asJsoup()
+
+        val entries = document.select(popularMangaSelector())
+            .map(::popularMangaFromElement)
+        val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
+
+        if (!loadMoreRequestDetected && !useLoadMoreRequest) {
+            loadMoreRequestDetected = document.selectFirst("nav.navigation-ajax") != null
+        }
+
+        return MangasPage(entries, hasNextPage)
     }
 
     // exclude/filter bilibili manga from list
@@ -137,14 +152,14 @@ abstract class Madara(
     }
 
     override fun popularMangaRequest(page: Int): Request =
-        if (useLoadMoreRequest) {
+        if (useLoadMoreRequest || loadMoreRequestDetected) {
             loadMoreRequest(page - 1, "_wp_manga_views")
         } else {
             GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views", headers)
         }
 
     override fun popularMangaNextPageSelector(): String? =
-        if (useLoadMoreRequest) {
+        if (useLoadMoreRequest || loadMoreRequestDetected) {
             "body:not(:has(.no-posts))"
         } else {
             searchMangaNextPageSelector()
@@ -160,7 +175,7 @@ abstract class Madara(
     }
 
     override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest) {
+        if (useLoadMoreRequest || loadMoreRequestDetected) {
             loadMoreRequest(page - 1, "_latest_update")
         } else {
             GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
@@ -169,7 +184,7 @@ abstract class Madara(
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val mp = super.latestUpdatesParse(response)
+        val mp = popularMangaParse(response)
         val mangas = mp.mangas.distinctBy { it.url }
         return MangasPage(mangas, mp.hasNextPage)
     }
