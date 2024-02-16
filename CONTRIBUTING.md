@@ -423,14 +423,15 @@ will be cached.
 
       ```kotlin
       private fun parseDate(dateStr: String): Long {
-          return runCatching { DATE_FORMATTER.parse(dateStr)?.time }
-              .getOrNull() ?: 0L
+          return try {
+              dateFormat.parse(dateStr)!!.time
+          } catch (_: ParseException) {
+              0L
+          }
       }
 
-      companion object {
-          private val DATE_FORMATTER by lazy {
-              SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
-          }
+      private val dateFormat by lazy {
+          SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
       }
       ```
 
