@@ -14,6 +14,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -115,7 +118,6 @@ abstract class Madara(
     // Popular Manga
 
     override fun popularMangaParse(response: Response): MangasPage {
-        runCatching { fetchGenres() }
         val document = response.asJsoup()
 
         val entries = document.select(popularMangaSelector())
@@ -369,6 +371,8 @@ abstract class Madara(
     class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
 
     override fun getFilterList(): FilterList {
+        GlobalScope.launch(Dispatchers.IO) { fetchGenresInternal() }
+
         val filters = mutableListOf(
             AuthorFilter(intl["author_filter_title"]),
             ArtistFilter(intl["artist_filter_title"]),
@@ -409,11 +413,6 @@ abstract class Madara(
         }
 
         return FilterList(filters)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        runCatching { fetchGenres() }
-        return super.searchMangaParse(response)
     }
 
     override fun searchMangaSelector() = "div.c-tabs-item__content"
@@ -893,17 +892,20 @@ abstract class Madara(
     /**
      * Fetch the genres from the source to be used in the filters.
      */
-    protected open fun fetchGenres() {
-        if (fetchGenres && fetchGenresAttempts <= 3 && (genresList.isEmpty() || fetchGenresFailed)) {
-            val genres = runCatching {
-                client.newCall(genresRequest()).execute()
-                    .use { parseGenres(it.asJsoup()) }
+    private fun fetchGenresInternal() {
+        if (fetchGenres && fetchGenresAttempts < 3 && (genresList.isEmpty() || fetchGenresFailed)) {
+            try {
+                fetchGenres()
+            } catch (_: Exception) {
+                fetchGenresFailed = true
             }
-
-            fetchGenresFailed = genres.isFailure
-            genresList = genres.getOrNull().orEmpty()
-            fetchGenresAttempts++
         }
+    }
+
+    protected open fun fetchGenres() {
+        genresList = client.newCall(genresRequest()).execute()
+            .use { parseGenres(it.asJsoup()) }
+        fetchGenresAttempts++
     }
 
     /**
