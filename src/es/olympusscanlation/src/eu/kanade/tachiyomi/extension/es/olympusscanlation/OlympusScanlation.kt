@@ -18,6 +18,7 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.concurrent.thread
 
 class OlympusScanlation : HttpSource() {
 
@@ -49,7 +50,6 @@ class OlympusScanlation : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        runCatching { fetchFilters() }
         val result = json.decodeFromString<PayloadHomeDto>(response.body.string())
         val popularJson = json.decodeFromString<List<MangaDto>>(result.data.popularComics)
         val mangaList = popularJson.filter { it.type == "comic" }.map {
@@ -69,7 +69,6 @@ class OlympusScanlation : HttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        runCatching { fetchFilters() }
         val result = json.decodeFromString<NewChaptersDto>(response.body.string())
         val mangaList = result.data.filter { it.type == "comic" }.map {
             SManga.create().apply {
@@ -119,7 +118,6 @@ class OlympusScanlation : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        runCatching { fetchFilters() }
         if (response.request.url.toString().startsWith("$apiBaseUrl/api/search")) {
             val result = json.decodeFromString<PayloadMangaDto>(response.body.string())
             val mangaList = result.data.filter { it.type == "comic" }.map {
@@ -261,6 +259,7 @@ class OlympusScanlation : HttpSource() {
     )
 
     override fun getFilterList(): FilterList {
+        thread { fetchFilters() }
         val filters = mutableListOf<Filter<*>>(
             Filter.Header("Los filtros no funcionan en la búsqueda por texto"),
             Filter.Separator(),
@@ -295,16 +294,17 @@ class OlympusScanlation : HttpSource() {
     private var fetchFiltersFailed = false
 
     private fun fetchFilters() {
-        if (fetchFiltersAttemps <= 3 && ((genresList.isEmpty() && statusesList.isEmpty()) || fetchFiltersFailed)) {
-            val filters = runCatching {
+        try {
+            if (fetchFiltersAttemps <= 3 && (((genresList.isEmpty() && statusesList.isEmpty()) || fetchFiltersFailed))) {
                 val response = client.newCall(GET("$apiBaseUrl/api/genres-statuses", headers)).execute()
-                json.decodeFromString<GenresStatusesDto>(response.body.string())
-            }
+                val filters = json.decodeFromString<GenresStatusesDto>(response.body.string())
 
-            fetchFiltersFailed = filters.isFailure
-            genresList = filters.getOrNull()?.genres?.map { it.name.trim() to it.id } ?: emptyList()
-            statusesList = filters.getOrNull()?.statuses?.map { it.name.trim() to it.id } ?: emptyList()
-            fetchFiltersAttemps++
+                genresList = filters.genres?.map { it.name.trim() to it.id } ?: emptyList()
+                statusesList = filters.statuses?.map { it.name.trim() to it.id } ?: emptyList()
+                fetchFiltersAttemps++
+            }
+        } catch (e: Exception) {
+            fetchFiltersFailed = true
         }
     }
 

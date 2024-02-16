@@ -88,8 +88,8 @@ class MangaStatusDto(
 
 @Serializable
 class GenresStatusesDto(
-    val genres: List<FilterDto>,
-    val statuses: List<FilterDto>,
+    val genres: List<FilterDto>?,
+    val statuses: List<FilterDto>?,
 )
 
 @Serializable
