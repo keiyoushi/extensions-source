@@ -145,8 +145,8 @@ class CreepyScans : Madara(
         val filters = buildList(4) {
             add(
                 OrderByFilter(
-                    title = orderByFilterTitle,
-                    options = orderByFilterOptions.zip(orderByFilterOptionsValues),
+                    title = intl["order_by_filter_title"],
+                    options = orderByFilterOptions.map { Pair(it.key, it.value) },
                     state = 0,
                 ),
             )

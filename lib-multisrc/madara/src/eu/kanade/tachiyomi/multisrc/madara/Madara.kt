@@ -324,7 +324,6 @@ abstract class Madara(
             intl["adult_content_filter_only"],
         )
 
-
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second

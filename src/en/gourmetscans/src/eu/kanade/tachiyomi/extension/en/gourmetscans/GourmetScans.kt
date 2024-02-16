@@ -75,23 +75,23 @@ class GourmetScans : Madara(
 
     private var genresList: List<Pair<String, String>> = emptyList()
 
-    class GenreFilter(val vals: List<Pair<String, String>>) :
+    class GenreFilter(vals: List<Pair<String, String>>) :
         UriPartFilter("Genre", vals.toTypedArray())
 
     override fun getFilterList(): FilterList {
         val filters = buildList(4) {
-            add(YearFilter(yearFilterTitle))
+            add(YearFilter(intl["year_filter_title"]))
             add(
                 OrderByFilter(
-                    title = orderByFilterTitle,
-                    options = orderByFilterOptions.zip(orderByFilterOptionsValues),
+                    title = intl["order_by_filter_title"],
+                    options = orderByFilterOptions.map { Pair(it.key, it.value) },
                     state = 0,
                 ),
             )
             add(Filter.Separator())
 
             if (genresList.isEmpty()) {
-                add(Filter.Header(genresMissingWarning))
+                add(Filter.Header(intl["genre_missing_warning"]))
             } else {
                 add(GenreFilter(listOf(Pair("<select>", "")) + genresList))
             }

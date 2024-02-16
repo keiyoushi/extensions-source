@@ -135,14 +135,14 @@ class MangasNoSekai : Madara(
         return manga
     }
 
-    override val orderByFilterOptionsValues: Array<String> = arrayOf(
-        "",
-        "latest2",
-        "alphabet",
-        "rating",
-        "trending",
-        "views2",
-        "new-manga",
+    override val orderByFilterOptions: Map<String, String> = mapOf(
+        intl["order_by_filter_relevance"] to "",
+        intl["order_by_filter_latest"] to "latest2",
+        intl["order_by_filter_az"] to "alphabet",
+        intl["order_by_filter_rating"] to "rating",
+        intl["order_by_filter_trending"] to "trending",
+        intl["order_by_filter_views"] to "views2",
+        intl["order_by_filter_new"] to "new-manga",
     )
 
     private fun altChapterRequest(mangaId: String, page: Int): Request {
