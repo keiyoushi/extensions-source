@@ -52,7 +52,7 @@ class OlympusScanlation : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadHomeDto>(response.body.string())
         val popularJson = json.decodeFromString<List<MangaDto>>(result.data.popularComics)
-        val mangaList = popularJson.filter { it.type == "comic" }.map { it.toSimpleSManga() }
+        val mangaList = popularJson.filter { it.type == "comic" }.map { it.toSManga() }
         return MangasPage(mangaList, hasNextPage = false)
     }
 
@@ -108,12 +108,12 @@ class OlympusScanlation : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.toString().startsWith("$apiBaseUrl/api/search")) {
             val result = json.decodeFromString<PayloadMangaDto>(response.body.string())
-            val mangaList = result.data.filter { it.type == "comic" }.map { it.toSimpleSManga() }
+            val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
             return MangasPage(mangaList, hasNextPage = false)
         }
 
         val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
-        val mangaList = result.data.series.data.map { it.toSimpleSManga() }
+        val mangaList = result.data.series.data.map { it.toSManga() }
         val hasNextPage = result.data.series.current_page < result.data.series.last_page
         return MangasPage(mangaList, hasNextPage)
     }
@@ -127,7 +127,7 @@ class OlympusScanlation : HttpSource() {
         val newRequest = GET(url = apiUrl, headers = headers)
         val newResponse = client.newCall(newRequest).execute()
         val result = json.decodeFromString<MangaDetailDto>(newResponse.body.string())
-        return result.data.toSManga()
+        return result.data.toSMangaDetails()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
@@ -181,7 +181,7 @@ class OlympusScanlation : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         return json.decodeFromString<PayloadPagesDto>(response.body.string()).chapter.pages.mapIndexed { i, img ->
-            Page(i, "", img)
+            Page(i, imageUrl = img)
         }
     }
 
@@ -210,14 +210,14 @@ class OlympusScanlation : HttpSource() {
     )
 
     override fun getFilterList(): FilterList {
-        if (shouldFetchFilters()) thread { fetchFilters() }
+        fetchFilters()
         val filters = mutableListOf<Filter<*>>(
             Filter.Header("Los filtros no funcionan en la búsqueda por texto"),
             Filter.Separator(),
             SortFilter(),
         )
 
-        if (genresList.isNotEmpty() || statusesList.isNotEmpty()) {
+        if (filtersState == FiltersState.FETCHED) {
             filters += listOf(
                 Filter.Separator(),
                 Filter.Header("Filtrar por género"),
@@ -242,27 +242,24 @@ class OlympusScanlation : HttpSource() {
     private var genresList: List<Pair<String, Int>> = emptyList()
     private var statusesList: List<Pair<String, Int>> = emptyList()
     private var fetchFiltersAttempts = 0
-    private var fetchFiltersStatus = NOT_FETCHED
-
-    private fun shouldFetchFilters(): Boolean {
-        if (fetchFiltersStatus == FETCHING) return false
-        return fetchFiltersStatus != FETCHED && fetchFiltersAttempts <= 3
-    }
+    private var filtersState = FiltersState.NOT_FETCHED
 
     private fun fetchFilters() {
-        try {
-            fetchFiltersStatus = FETCHING
-            val response = client.newCall(GET("$apiBaseUrl/api/genres-statuses", headers)).execute()
-            val filters = json.decodeFromString<GenresStatusesDto>(response.body.string())
+        if (filtersState != FiltersState.NOT_FETCHED || fetchFiltersAttempts >= 3) return
+        filtersState = FiltersState.FETCHING
+        fetchFiltersAttempts++
+        thread {
+            try {
+                val response = client.newCall(GET("$apiBaseUrl/api/genres-statuses", headers)).execute()
+                val filters = json.decodeFromString<GenresStatusesDto>(response.body.string())
 
-            genresList = filters.genres.map { it.name.trim() to it.id }
-            statusesList = filters.statuses.map { it.name.trim() to it.id }
+                genresList = filters.genres.map { it.name.trim() to it.id }
+                statusesList = filters.statuses.map { it.name.trim() to it.id }
 
-            fetchFiltersStatus = FETCHED
-        } catch (e: Exception) {
-            fetchFiltersStatus = FETCH_FAILED
-        } finally {
-            fetchFiltersAttempts++
+                filtersState = FiltersState.FETCHED
+            } catch (e: Throwable) {
+                filtersState = FiltersState.NOT_FETCHED
+            }
         }
     }
 
@@ -271,10 +268,5 @@ class OlympusScanlation : HttpSource() {
         fun toUriPart() = vals[state].second
     }
 
-    companion object {
-        private const val NOT_FETCHED = 0
-        private const val FETCHING = 1
-        private const val FETCHED = 2
-        private const val FETCH_FAILED = 3
-    }
+    private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 }

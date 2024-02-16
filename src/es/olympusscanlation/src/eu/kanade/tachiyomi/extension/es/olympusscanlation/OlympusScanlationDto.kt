@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.ParseException
 import java.text.SimpleDateFormat
 
 @Serializable
@@ -44,27 +45,27 @@ class MangaDto(
     private val status: MangaStatusDto? = null,
     private val genres: List<FilterDto>? = null,
 ) {
-    fun toSimpleSManga() = SManga.create().apply {
-        title = name
-        url = "/series/comic-$slug"
-        thumbnail_url = cover
-    }
-
     fun toSManga() = SManga.create().apply {
         title = name
         url = "/series/comic-$slug"
         thumbnail_url = cover
+    }
+
+    fun toSMangaDetails() = toSManga().apply {
         description = summary
-        status = parseStatus(this@MangaDto.status?.id)
+        status = parseStatus()
         genre = genres?.joinToString { it.name.trim() }
     }
 
-    private fun parseStatus(statusId: Int?) = when (statusId) {
-        1 -> SManga.ONGOING
-        3 -> SManga.ON_HIATUS
-        4 -> SManga.COMPLETED
-        5 -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
+    private fun parseStatus(): Int {
+        val status = this.status ?: return SManga.UNKNOWN
+        return when (status.id) {
+            1 -> SManga.ONGOING
+            3 -> SManga.ON_HIATUS
+            4 -> SManga.COMPLETED
+            5 -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
     }
 }
 
@@ -108,7 +109,7 @@ class ChapterDto(
         url = "/capitulo/$id/comic-$mangaSlug"
         date_upload = try {
             dateFormat.parse(date)!!.time
-        } catch (e: Exception) {
+        } catch (e: ParseException) {
             0L
         }
     }
