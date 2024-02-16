@@ -76,5 +76,5 @@ class SpeedBinbInterceptor(private val json: Json) : Interceptor {
     }
 }
 
+private const val NUMERIC_CHARACTERS = "0123456789"
 private val JPEG_MEDIA_TYPE = "image/jpeg".toMediaType()
-private val NUMERIC_CHARACTERS = '0'..'9'
