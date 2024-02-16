@@ -9,6 +9,7 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.getPathFromUrl
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.prepareTags
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -27,6 +28,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
@@ -95,6 +97,25 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     // Search
 
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return if (query.startsWith(SLUG_SEARCH_PREFIX)) {
+            // url deep link
+            val idKey = query.substringAfter(SLUG_SEARCH_PREFIX)
+            val manga = SManga.create().apply { this.url = "/g/$idKey" }
+            fetchMangaDetails(manga).map {
+                MangasPage(listOf(it), false)
+            }
+        } else {
+            // regular filtering without text search
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map(::searchMangaParse)
+        }
+    }
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         var url = libraryUrl.toHttpUrl().newBuilder()
 
@@ -342,6 +363,7 @@ class Anchira : HttpSource(), ConfigurableSource {
     }
 
     companion object {
+        const val SLUG_SEARCH_PREFIX = "id:"
         private const val IMAGE_QUALITY_PREF = "image_quality"
         private const val OPEN_SOURCE_PREF = "use_manga_source"
         private const val USE_TAG_GROUPING = "use_tag_grouping"
