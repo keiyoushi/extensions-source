@@ -23,8 +23,8 @@ class OlympusScanlation : HttpSource() {
 
     override val versionId = 2
 
-    override val baseUrl: String = "https://olympusvisor.com"
-    private val apiBaseUrl: String = "https://dashboard.olympusvisor.com"
+    override val baseUrl: String = "https://visorolym.com"
+    private val apiBaseUrl: String = "https://dashboard.visorolym.com"
 
     override val lang: String = "es"
     override val name: String = "Olympus Scanlation"
@@ -37,6 +37,7 @@ class OlympusScanlation : HttpSource() {
         .build()
 
     private val json: Json by injectLazy()
+
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
@@ -50,8 +51,7 @@ class OlympusScanlation : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         runCatching { fetchFilters() }
         val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
-        val resultMangaList = json.decodeFromString<List<MangaDto>>(result.data.recommended_series)
-        val mangaList = resultMangaList.filter { it.type == "comic" }.map {
+        val mangaList = result.data.recommended_series.filter { it.type == "comic" }.map {
             SManga.create().apply {
                 url = "/series/comic-${it.slug}"
                 title = it.name
@@ -202,8 +202,11 @@ class OlympusScanlation : HttpSource() {
     private fun chapterFromObject(chapter: ChapterDto, slug: String) = SChapter.create().apply {
         url = "/capitulo/${chapter.id}/comic-$slug"
         name = "Capitulo ${chapter.name}"
-        date_upload = runCatching { dateFormat.parse(chapter.date)?.time }
-            .getOrNull() ?: 0L
+        date_upload = try {
+            dateFormat.parse(chapter.date)!!.time
+        } catch (e: Exception) {
+            0L
+        }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {

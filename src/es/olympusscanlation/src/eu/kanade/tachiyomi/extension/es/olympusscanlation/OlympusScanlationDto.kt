@@ -4,27 +4,26 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PayloadSeriesDto(val data: PayloadSeriesDataDto)
+class PayloadSeriesDto(val data: PayloadSeriesDataDto)
 
 @Serializable
-data class PayloadSeriesDataDto(
+class PayloadSeriesDataDto(
     val series: SeriesDto,
-    val recommended_series: String,
+    val recommended_series: List<MangaDto>,
 )
 
 @Serializable
-data class SeriesDto(
+class SeriesDto(
     val current_page: Int,
     val data: List<MangaDto>,
     val last_page: Int,
 )
 
 @Serializable
-data class PayloadMangaDto(val data: List<MangaDto>)
+class PayloadMangaDto(val data: List<MangaDto>)
 
 @Serializable
-data class MangaDto(
-    val id: Int,
+class MangaDto(
     val name: String,
     val slug: String,
     val cover: String? = null,
@@ -35,15 +34,14 @@ data class MangaDto(
 )
 
 @Serializable
-data class NewChaptersDto(
+class NewChaptersDto(
     val data: List<LatestMangaDto>,
     val current_page: Int,
     val last_page: Int,
 )
 
 @Serializable
-data class LatestMangaDto(
-    val id: Int,
+class LatestMangaDto(
     val name: String,
     val slug: String,
     val cover: String? = null,
@@ -51,43 +49,42 @@ data class LatestMangaDto(
 )
 
 @Serializable
-data class MangaDetailDto(
+class MangaDetailDto(
     var data: MangaDto,
 )
 
 @Serializable
-data class PayloadChapterDto(var data: List<ChapterDto>, val meta: MetaDto)
+class PayloadChapterDto(var data: List<ChapterDto>, val meta: MetaDto)
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val id: Int,
     val name: String,
     @SerialName("published_at") val date: String,
 )
 
 @Serializable
-data class MetaDto(val total: Int)
+class MetaDto(val total: Int)
 
 @Serializable
-data class PayloadPagesDto(val chapter: PageDto)
+class PayloadPagesDto(val chapter: PageDto)
 
 @Serializable
-data class PageDto(val pages: List<String>)
+class PageDto(val pages: List<String>)
 
 @Serializable
-data class MangaStatusDto(
+class MangaStatusDto(
     val id: Int,
-    val name: String,
 )
 
 @Serializable
-data class GenresStatusesDto(
+class GenresStatusesDto(
     val genres: List<FilterDto>,
     val statuses: List<FilterDto>,
 )
 
 @Serializable
-data class FilterDto(
+class FilterDto(
     val id: Int,
     val name: String,
 )
