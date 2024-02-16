@@ -258,10 +258,10 @@ class OlympusScanlation : HttpSource() {
 
             genresList = filters.genres?.map { it.name.trim() to it.id } ?: emptyList()
             statusesList = filters.statuses?.map { it.name.trim() to it.id } ?: emptyList()
-            fetchFiltersAttempts++
         } catch (e: Exception) {
             fetchFiltersFailed = true
         } finally {
+            fetchFiltersAttempts++
             isFetchingFilters = false
         }
     }
