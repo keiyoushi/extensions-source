@@ -36,6 +36,7 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+@DelicateCoroutinesApi
 abstract class Madara(
     override val name: String,
     override val baseUrl: String,
@@ -371,9 +372,8 @@ abstract class Madara(
     protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
     class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
 
-    @OptIn(DelicateCoroutinesApi::class)
     override fun getFilterList(): FilterList {
-        GlobalScope.launch(Dispatchers.IO) { fetchGenres() }
+        launchIO { fetchGenres() }
 
         val filters = mutableListOf(
             AuthorFilter(intl["author_filter_title"]),
@@ -645,6 +645,9 @@ abstract class Madara(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
+
+        launchIO { countViews(document) }
+
         val chaptersWrapper = document.select("div[id^=manga-chapters-holder]")
 
         var chapterElements = document.select(chapterListSelector())
@@ -673,8 +676,6 @@ abstract class Madara(
             chapterElements = xhrResponse.asJsoup().select(chapterListSelector())
             xhrResponse.close()
         }
-
-        countViews(document)
 
         return chapterElements.map(::chapterFromElement)
     }
@@ -798,7 +799,7 @@ abstract class Madara(
     open val chapterProtectorSelector = "#chapter-protector-data"
 
     override fun pageListParse(document: Document): List<Page> {
-        countViews(document)
+        launchIO { countViews(document) }
 
         val chapterProtector = document.selectFirst(chapterProtectorSelector)
             ?: return document.select(pageListParseSelector).mapIndexed { index, element ->
@@ -939,6 +940,9 @@ abstract class Madara(
             .map { it.toInt(16).toByte() }
             .toByteArray()
     }
+
+    protected fun launchIO(block: () -> Unit) =
+        GlobalScope.launch(Dispatchers.IO) { block() }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
