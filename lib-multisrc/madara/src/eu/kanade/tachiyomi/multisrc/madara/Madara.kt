@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -370,8 +371,9 @@ abstract class Madara(
     protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
     class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
 
+    @OptIn(DelicateCoroutinesApi::class)
     override fun getFilterList(): FilterList {
-        GlobalScope.launch(Dispatchers.IO) { fetchGenresInternal() }
+        GlobalScope.launch(Dispatchers.IO) { fetchGenres() }
 
         val filters = mutableListOf(
             AuthorFilter(intl["author_filter_title"]),
@@ -892,20 +894,17 @@ abstract class Madara(
     /**
      * Fetch the genres from the source to be used in the filters.
      */
-    private fun fetchGenresInternal() {
+    protected fun fetchGenres() {
         if (fetchGenres && fetchGenresAttempts < 3 && (genresList.isEmpty() || fetchGenresFailed)) {
             try {
-                fetchGenres()
+                genresList = client.newCall(genresRequest()).execute()
+                    .use { parseGenres(it.asJsoup()) }
             } catch (_: Exception) {
                 fetchGenresFailed = true
+            } finally {
+                fetchGenresAttempts++
             }
         }
-    }
-
-    protected open fun fetchGenres() {
-        genresList = client.newCall(genresRequest()).execute()
-            .use { parseGenres(it.asJsoup()) }
-        fetchGenresAttempts++
     }
 
     /**
