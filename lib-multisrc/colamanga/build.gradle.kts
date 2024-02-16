@@ -5,5 +5,5 @@ plugins {
 baseVersionCode = 2
 
 dependencies {
-    implementation(project(":lib:synchrony"))
+    api(project(":lib:synchrony"))
 }
