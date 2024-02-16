@@ -1,18 +1,22 @@
 package eu.kanade.tachiyomi.extension.ja.gaugaumonsterplus
 
-import eu.kanade.tachiyomi.multisrc.speedbinbreader.SpeedBinbReader
+import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbInterceptor
+import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
-class GaugauMonsterPlus : SpeedBinbReader() {
+class GaugauMonsterPlus : ParsedHttpSource() {
 
     override val name = "がうがうモンスター＋"
 
@@ -22,32 +26,38 @@ class GaugauMonsterPlus : SpeedBinbReader() {
 
     override val supportsLatest = false
 
+    private val json = Injekt.get<Json>()
+
+    override val client = network.client.newBuilder()
+        .addInterceptor(SpeedBinbInterceptor(json))
+        .build()
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/list/works?page=$page", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val manga = document.select(".works__grid .list__box").map {
-            SManga.create().apply {
-                it.selectFirst("h4 a")!!.let {
-                    setUrlWithoutDomain(it.attr("href"))
-                    title = it.text()
-                }
-                author = it.select(".list__text span a").joinToString { it.text() }
-                genre = it.select(".tag__item").joinToString { it.text() }
-                thumbnail_url = it.selectFirst(".thumbnail .img-books")?.absUrl("src")
-            }
-        }
-        val hasNextPage = document.selectFirst("ol.pagination li.next a:not([href='#'])") != null
+    override fun popularMangaSelector() = ".works__grid .list__box"
 
-        return MangasPage(manga, hasNextPage)
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("h4 a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
+        }
+        author = element.select(".list__text span a").joinToString { it.text() }
+        genre = element.select(".tag__item").joinToString { it.text() }
+        thumbnail_url = element.selectFirst(".thumbnail .img-books")?.absUrl("src")
     }
+
+    override fun popularMangaNextPageSelector() = "ol.pagination li.next a:not([href='#'])"
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val tagFilter = filters.ifEmpty { getFilterList() }.filterIsInstance<TagFilter>().first()
@@ -70,51 +80,56 @@ class GaugauMonsterPlus : SpeedBinbReader() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-        return SManga.create().apply {
-            title = document.selectFirst(".mbOff h1")!!.text()
-            author = document.select(".list__text span a").joinToString { it.text() }
-            description = document.selectFirst("p.mbOff")?.text()
-            genre = document.select(".tag__item").joinToString { it.text() }
-            thumbnail_url = document.selectFirst(".list__box .thumbnail .img-books")?.absUrl("src")
-        }
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst(".mbOff h1")!!.text()
+        author = document.select(".list__text span a").joinToString { it.text() }
+        description = document.selectFirst("p.mbOff")?.text()
+        genre = document.select(".tag__item").joinToString { it.text() }
+        thumbnail_url = document.selectFirst(".list__box .thumbnail .img-books")?.absUrl("src")
     }
 
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl${manga.url}/episodes", headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override fun chapterListSelector() =
+        "#episodes .episode__grid:not(:has(.episode__button-app, .episode__button-complete)) a"
 
-        return document.select("#episodes .episode__grid:not(:has(.episode__button-app, .episode__button-complete)) a")
-            .map {
-                val episodeNum = it.selectFirst(".episode__num")!!.text()
-                val episodeTitle = it.selectFirst(".episode__title")?.text()
-                    ?.takeIf { t -> t.isNotBlank() }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        val episodeNum = element.selectFirst(".episode__num")!!.text()
+        val episodeTitle = element.selectFirst(".episode__title")?.text()
+            ?.takeIf { t -> t.isNotBlank() }
 
-                SChapter.create().apply {
-                    setUrlWithoutDomain(it.attr("href"))
-                    name = buildString(episodeNum.length + 2 + (episodeTitle?.length ?: 0)) {
-                        append(episodeNum)
+        setUrlWithoutDomain(element.attr("href"))
+        name = buildString(episodeNum.length + 2 + (episodeTitle?.length ?: 0)) {
+            append(episodeNum)
 
-                        if (episodeTitle != null) {
-                            append("「")
-                            append(episodeTitle)
-                            append("」")
-                        }
-                    }
-                    chapter_number = CHAPTER_NUMBER_REGEX.matchEntire(episodeNum)?.let { m ->
-                        val major = m.groupValues[1].toFloat()
-                        val minor = m.groupValues[2].toFloat()
-
-                        major + minor / 10
-                    } ?: -1F
-                }
+            if (episodeTitle != null) {
+                append("「")
+                append(episodeTitle)
+                append("」")
             }
+        }
+        // There is actually a consistent chapter number format on this site, which we
+        // take advantage of because the built-in chapter number parser doesn't properly
+        // parse the fractions.
+        chapter_number = CHAPTER_NUMBER_REGEX.matchEntire(episodeNum)?.let { m ->
+            val major = m.groupValues[1].toFloat()
+            val minor = m.groupValues[2].toFloat()
+
+            major + minor / 10
+        } ?: -1F
     }
+
+    private val reader by lazy { SpeedBinbReader(client, headers, json) }
+
+    override fun pageListParse(document: Document) = reader.pageListParse(document)
+
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         Filter.Header("フリーワード検索はジャンル検索では機能しません"),

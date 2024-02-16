@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.yanmaga
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
@@ -18,23 +16,23 @@ class YanmagaGravures : Yanmaga("search-item-category--gravures", true) {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/gravures/series?page=$page", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val manga = document.select("a.banner-link").map {
-            SManga.create().apply {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.selectFirst(".text-wrapper h2")!!.text()
-                thumbnail_url = it.selectFirst(".img-bg-wrapper")?.absUrl("data-bg")
-            }
-        }
-        val hasNextPage = document.selectFirst("ul.pagination > li.page-item > a.page-next") != null
+    override fun popularMangaSelector() = "a.banner-link"
 
-        return MangasPage(manga, hasNextPage)
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.selectFirst(".text-wrapper h2")!!.text()
+        thumbnail_url = element.selectFirst(".img-bg-wrapper")?.absUrl("data-bg")
     }
+
+    override fun popularMangaNextPageSelector() = "ul.pagination > li.page-item > a.page-next"
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     // Search returns gravure books instead of series
     override fun searchMangaFromElement(element: Element) = super.searchMangaFromElement(element)
@@ -51,14 +49,10 @@ class YanmagaGravures : Yanmaga("search-item-category--gravures", true) {
         }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-
-        return SManga.create().apply {
-            title = document.selectFirst(".detail-header-title")!!.text()
-            genre = document.select(".ga-tag").joinToString { it.text() }
-            thumbnail_url = document.selectFirst(".detail-header-image img")?.absUrl("src")
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst(".detail-header-title")!!.text()
+        genre = document.select(".ga-tag").joinToString { it.text() }
+        thumbnail_url = document.selectFirst(".detail-header-image img")?.absUrl("src")
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {

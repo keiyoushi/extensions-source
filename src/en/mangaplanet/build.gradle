@@ -1,10 +1,12 @@
 ext {
     extName = "Manga Planet"
     extClass = ".MangaPlanet"
-    themePkg = "speedbinbreader"
-    baseUrl = "https://mangaplanet.com"
-    overrideVersionCode = 0
+    extVersionCode = 1
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:speedbinb"))
+}

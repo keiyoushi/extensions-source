@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
@@ -35,23 +36,27 @@ class YanmagaComics : Yanmaga("search-item-category--comics") {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        directory = document.select("a.ga-comics-book-item")
+        directory = document.select(popularMangaSelector())
         return parseDirectory(1)
     }
 
     private fun parseDirectory(page: Int): MangasPage {
         val endRange = minOf(page * 24, directory.size)
-        val manga = directory.subList((page - 1) * 24, endRange).map {
-            SManga.create().apply {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.selectFirst(".mod-book-title")!!.text()
-                thumbnail_url = it.selectFirst(".mod-book-image img")?.absUrl("data-src")
-            }
-        }
+        val manga = directory.subList((page - 1) * 24, endRange).map { popularMangaFromElement(it) }
         val hasNextPage = endRange < directory.lastIndex
 
         return MangasPage(manga, hasNextPage)
     }
+
+    override fun popularMangaSelector() = "a.ga-comics-book-item"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.selectFirst(".mod-book-title")!!.text()
+        thumbnail_url = element.selectFirst(".mod-book-image img")?.absUrl("data-src")
+    }
+
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
     private var latestUpdatesCsrfToken: String? = null
     private var latestUpdatesMoreUrl: String? = null
@@ -87,7 +92,7 @@ class YanmagaComics : Yanmaga("search-item-category--comics") {
                 latestUpdatesCount = it.attr("data-count").toInt()
             }
 
-            val manga = document.select("#comic-episodes-newer > div")
+            val manga = document.select(latestUpdatesSelector())
                 .map { latestUpdatesFromElement(it) }
             val hasNextPage = latestUpdatesCount > LATEST_UPDATES_PER_PAGE
 
@@ -102,26 +107,26 @@ class YanmagaComics : Yanmaga("search-item-category--comics") {
         }
     }
 
-    private fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+    override fun latestUpdatesSelector() = "#comic-episodes-newer > div"
+
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         title = element.selectFirst(".text-wrapper h2")!!.text()
         thumbnail_url = element.selectFirst(".img-bg-wrapper")?.absUrl("data-bg")
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-        return SManga.create().apply {
-            title = document.selectFirst(".detailv2-outline-title")!!.text()
-            author = document.select(".detailv2-outline-author-item a").joinToString { it.text() }
-            description = document.selectFirst(".detailv2-description")?.text()
-            genre = document.select(".detailv2-tag .ga-tag").joinToString { it.text() }
-            thumbnail_url = document.selectFirst(".detailv2-thumbnail-image img")?.absUrl("src")
-            status = if (document.selectFirst(".detailv2-link-note") != null) {
-                SManga.ONGOING
-            } else {
-                SManga.COMPLETED
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst(".detailv2-outline-title")!!.text()
+        author = document.select(".detailv2-outline-author-item a").joinToString { it.text() }
+        description = document.selectFirst(".detailv2-description")?.text()
+        genre = document.select(".detailv2-tag .ga-tag").joinToString { it.text() }
+        thumbnail_url = document.selectFirst(".detailv2-thumbnail-image img")?.absUrl("src")
+        status = if (document.selectFirst(".detailv2-link-note") != null) {
+            SManga.ONGOING
+        } else {
+            SManga.COMPLETED
         }
     }
 }

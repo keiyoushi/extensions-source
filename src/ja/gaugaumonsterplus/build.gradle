@@ -1,9 +1,11 @@
 ext {
     extName = "Gaugau Monster Plus"
     extClass = ".GaugauMonsterPlus"
-    themePkg = "speedbinbreader"
-    baseUrl = "https://gaugau.futabanet.jp"
-    overrideVersionCode = 0
+    extVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:speedbinb"))
+}

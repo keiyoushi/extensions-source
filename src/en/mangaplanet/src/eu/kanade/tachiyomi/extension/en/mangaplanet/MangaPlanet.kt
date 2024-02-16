@@ -1,21 +1,26 @@
 package eu.kanade.tachiyomi.extension.en.mangaplanet
 
-import eu.kanade.tachiyomi.multisrc.speedbinbreader.SpeedBinbReader
+import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbInterceptor
+import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaPlanet : SpeedBinbReader() {
+class MangaPlanet : ParsedHttpSource() {
 
     override val name = "Manga Planet"
 
@@ -25,7 +30,11 @@ class MangaPlanet : SpeedBinbReader() {
 
     override val supportsLatest = false
 
-    override val client = super.client.newBuilder()
+    // No need to be lazy if you're going to use it immediately below.
+    private val json = Injekt.get<Json>()
+
+    override val client = network.client.newBuilder()
+        .addInterceptor(SpeedBinbInterceptor(json))
         .addInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "mpaconf", "18"))
         .build()
 
@@ -34,30 +43,30 @@ class MangaPlanet : SpeedBinbReader() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/browse/title?ttlpage=$page", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val manga = document.select(".book-list").map {
-            SManga.create().apply {
-                setUrlWithoutDomain(it.selectFirst("a")!!.attr("href"))
-                title = it.selectFirst("h3")!!.text()
-                author = it.selectFirst("p:has(.fa-pen-nib)")?.text()
-                description = it.selectFirst("h3 + p")?.text()
-                thumbnail_url = it.selectFirst("img")?.absUrl("data-src")
-                status = when {
-                    it.selectFirst(".fa-flag-alt") != null -> SManga.COMPLETED
-                    it.selectFirst(".fa-arrow-right") != null -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
-            }
-        }
-        val hasNextPage = document.selectFirst("ul.pagination a.page-link[rel=next]") != null
+    override fun popularMangaSelector() = ".book-list"
 
-        return MangasPage(manga, hasNextPage)
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.selectFirst("h3")!!.text()
+        author = element.selectFirst("p:has(.fa-pen-nib)")?.text()
+        description = element.selectFirst("h3 + p")?.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+        status = when {
+            element.selectFirst(".fa-flag-alt") != null -> SManga.COMPLETED
+            element.selectFirst(".fa-arrow-right") != null -> SManga.ONGOING
+            else -> SManga.UNKNOWN
+        }
     }
+
+    override fun popularMangaNextPageSelector() = "ul.pagination a.page-link[rel=next]"
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -80,10 +89,13 @@ class MangaPlanet : SpeedBinbReader() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
+    override fun mangaDetailsParse(document: Document): SManga {
         val alternativeTitles = document.selectFirst("h3#manga_title + p")!!
             .textNodes()
             .filterNot { it.text().isBlank() }
@@ -121,35 +133,39 @@ class MangaPlanet : SpeedBinbReader() {
         }
     }
 
+    override fun chapterListSelector() = "ul.ep_ul li.list-group-item"
+
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst("h3 p")!!.let {
+            val id = it.id().substringAfter("epi_title_")
+
+            url = "/reader?cid=$id"
+            name = it.text()
+        }
+
+        date_upload = try {
+            val date = element.selectFirst("p")!!.ownText()
+
+            dateFormat.parse(date)!!.time
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        return document.select("ul.ep_ul li.list-group-item")
+        return document.select(chapterListSelector())
             .filter { e ->
                 e.selectFirst("p")?.ownText()?.contains("Arrives on") != true
             }
-            .map {
-                SChapter.create().apply {
-                    it.selectFirst("h3 p")!!.let {
-                        val id = it.id().substringAfter("epi_title_")
-
-                        url = "/reader?cid=$id"
-                        name = it.text()
-                    }
-
-                    date_upload = try {
-                        val date = it.selectFirst("p")!!.ownText()
-
-                        dateFormat.parse(date)!!.time
-                    } catch (_: Exception) {
-                        0L
-                    }
-                }
-            }
+            .map { chapterFromElement(it) }
             .reversed()
     }
 
-    override fun pageListParse(response: Response, document: Document): List<Page> {
+    private val reader by lazy { SpeedBinbReader(client, headers, json) }
+
+    override fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst("a[href\$=account/sign-up]") != null) {
             throw Exception("Sign up in WebView to read this chapter")
         }
@@ -158,8 +174,10 @@ class MangaPlanet : SpeedBinbReader() {
             throw Exception("Purchase this chapter in WebView")
         }
 
-        return super.pageListParse(response, document)
+        return reader.pageListParse(document)
     }
+
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         SortFilter(),

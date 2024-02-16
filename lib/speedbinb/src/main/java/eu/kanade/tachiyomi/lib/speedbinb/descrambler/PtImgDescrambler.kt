@@ -1,8 +1,8 @@
-package eu.kanade.tachiyomi.multisrc.speedbinbreader.descrambler
+package eu.kanade.tachiyomi.lib.speedbinb.descrambler
 
-import eu.kanade.tachiyomi.multisrc.speedbinbreader.PtImg
+import eu.kanade.tachiyomi.lib.speedbinb.PtImg
 
-class PtImgDescrambler(private val metadata: PtImg) : SpeedBinbDescrambler {
+class PtImgDescrambler(private val metadata: PtImg) : SpeedBinbDescrambler() {
     override fun isScrambled() = metadata.translations.isNotEmpty()
 
     override fun canDescramble() = metadata.translations.isNotEmpty()
