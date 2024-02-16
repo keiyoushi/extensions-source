@@ -29,10 +29,20 @@ class SpeedBinbReader(
     private val json: Json,
     private val highQualityMode: Boolean = false,
 ) {
+    private val isInterceptorAdded by lazy {
+        client.interceptors.filterIsInstance<SpeedBinbInterceptor>().isNotEmpty()
+    }
+
     fun pageListParse(response: Response): List<Page> =
         pageListParse(response.asJsoup())
 
     fun pageListParse(document: Document): List<Page> {
+        // We throw here instead of in the `init {}` block because extensions that fail
+        // to load just mysteriously disappears from the extension list, no errors no nothing.
+        if (!isInterceptorAdded) {
+            throw Exception("SpeedBinbInterceptor was not added to the client.")
+        }
+
         val readerUrl = document.location().toHttpUrl()
         val content = document.selectFirst("#content")!!
 
