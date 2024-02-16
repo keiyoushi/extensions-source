@@ -10,6 +10,7 @@ class MagusManga : MangaThemesia(
     "Magus Manga",
     "https://vofeg.com",
     "en",
+    mangaUrlDirectory = "/series",
     dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("en")),
 ) {
     override val id = 7792477462646075400
