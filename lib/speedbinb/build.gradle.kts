@@ -20,4 +20,5 @@ repositories {
 
 dependencies {
     compileOnly(libs.bundles.common)
+    implementation(project(":lib:textinterceptor"))
 }

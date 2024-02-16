@@ -89,7 +89,7 @@ class OhtaWebComic : ParsedHttpSource() {
         return if (page == 1) {
             client.newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
-                .map { searchMangaParse(it, query, filters) }
+                .map { searchMangaParse(it, query) }
         } else {
             Observable.just(parseDirectory(page, ::searchMangaFromElement))
         }
@@ -99,7 +99,7 @@ class OhtaWebComic : ParsedHttpSource() {
 
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    private fun searchMangaParse(response: Response, query: String, filters: FilterList): MangasPage {
+    private fun searchMangaParse(response: Response, query: String): MangasPage {
         val document = response.asJsoup()
 
         directory = document.select(searchMangaSelector())

@@ -4,6 +4,8 @@ import android.graphics.BitmapFactory
 import eu.kanade.tachiyomi.lib.speedbinb.descrambler.PtBinbDescramblerA
 import eu.kanade.tachiyomi.lib.speedbinb.descrambler.PtBinbDescramblerF
 import eu.kanade.tachiyomi.lib.speedbinb.descrambler.PtImgDescrambler
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
@@ -14,6 +16,9 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
 
 class SpeedBinbInterceptor(private val json: Json) : Interceptor {
+
+    private val textInterceptor by lazy { TextInterceptor() }
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val host = request.url.host
@@ -21,7 +26,7 @@ class SpeedBinbInterceptor(private val json: Json) : Interceptor {
         val fragment = request.url.fragment
 
         return when {
-            host == TextInterceptorHelper.HOST -> TextInterceptor.intercept(chain)
+            host == TextInterceptorHelper.HOST -> textInterceptor.intercept(chain)
             filename.endsWith(".ptimg.json") -> interceptPtImg(chain, request)
             fragment == null -> chain.proceed(request)
             fragment.startsWith("ptbinb,") -> interceptPtBinB(chain, request)

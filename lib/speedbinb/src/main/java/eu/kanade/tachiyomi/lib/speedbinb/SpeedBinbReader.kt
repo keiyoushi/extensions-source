@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.lib.speedbinb
 
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
@@ -129,7 +130,7 @@ class SpeedBinbReader(
 
         if (enableBuying && contentItem.viewMode != ViewMode.COMMERCIAL && !contentItem.shopUrl.isNullOrEmpty()) {
             pages.add(
-                Page(pages.size, imageUrl = TextInterceptorHelper.createUrl("購入： ${contentItem.shopUrl}")),
+                Page(pages.size, imageUrl = TextInterceptorHelper.createUrl("", "購入： ${contentItem.shopUrl}")),
             )
         }
 
