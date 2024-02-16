@@ -38,9 +38,9 @@ class MangaSaki : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        val titleElement = element.select("td a img").first()!!
+        val titleElement = element.selectFirst("td a img")!!
         manga.title = titleElement.attr("title")
-        manga.setUrlWithoutDomain(element.select("td a").first()!!.attr("href"))
+        manga.setUrlWithoutDomain(element.selectFirst("td a")!!.attr("href"))
         manga.thumbnail_url = titleElement.attr("src")
 
         return manga
@@ -110,17 +110,16 @@ class MangaSaki : ParsedHttpSource() {
     // manga details
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
-        manga.author = document.select("div.field-name-field-author div.field-item").first()?.text()
+        manga.author = document.selectFirst("div.field-name-field-author div.field-item")?.text()
         manga.genre = document.select("div.field-name-field-genres ul li a").joinToString { it.text() }
         manga.description = document.select("div.field-name-body div.field-item p").text()
         manga.thumbnail_url = document.select("div.field-name-field-image2 div.field-item img").attr("src")
 
-        document.select("div.field-name-field-status div.field-item").text().also { statusText ->
-            manga.status = when {
-                statusText.contains("Ongoing", true) -> SManga.ONGOING
-                statusText.contains("Complete", true) -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+        val statusText = document.select("div.field-name-field-status div.field-item").text()
+        manga.status = when {
+            statusText.contains("Ongoing", true) -> SManga.ONGOING
+            statusText.contains("Complete", true) -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
 
         return manga
@@ -138,7 +137,7 @@ class MangaSaki : ParsedHttpSource() {
         val chapters = document.select(chapterListSelector()).map(::chapterFromElement).toMutableList()
         var nextPage = 2
 
-        while (document.select(paginationNextPageSelector).isNotEmpty()) {
+        while (document.select(latestUpdatesNextPageSelector()).isNotEmpty()) {
             val dirtyPage = document.select("div#block-search-form form#search-block-form").attr("action")
             val cleaningIndex = dirtyPage.lastIndexOf("?")
             val cleanPage = dirtyPage.substring(0, cleaningIndex)
@@ -149,8 +148,6 @@ class MangaSaki : ParsedHttpSource() {
 
         return chapters
     }
-
-    private val paginationNextPageSelector = latestUpdatesNextPageSelector()
 
     override fun chapterListSelector() = ".chlist tbody tr"
 
@@ -255,8 +252,8 @@ class MangaSaki : ParsedHttpSource() {
     }
 
     @Serializable
-    data class JSONData(val showmanga: ShowMangaData)
+    class JSONData(val showmanga: ShowMangaData)
 
     @Serializable
-    data class ShowMangaData(val paths: List<String>, val count_p: Int)
+    class ShowMangaData(val paths: List<String>)
 }
