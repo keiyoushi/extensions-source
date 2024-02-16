@@ -348,26 +348,26 @@ abstract class Madara(
 
     open class Tag(val id: String, name: String) : Filter.CheckBox(name)
 
-    class AuthorFilter(title: String) : Filter.Text(title)
-    class ArtistFilter(title: String) : Filter.Text(title)
-    class YearFilter(title: String) : Filter.Text(title)
-    class StatusFilter(title: String, status: List<Tag>) :
+    protected class AuthorFilter(title: String) : Filter.Text(title)
+    protected class ArtistFilter(title: String) : Filter.Text(title)
+    protected class YearFilter(title: String) : Filter.Text(title)
+    protected class StatusFilter(title: String, status: List<Tag>) :
         Filter.Group<Tag>(title, status)
 
-    class OrderByFilter(title: String, options: List<Pair<String, String>>, state: Int = 0) :
+    protected class OrderByFilter(title: String, options: List<Pair<String, String>>, state: Int = 0) :
         UriPartFilter(title, options.toTypedArray(), state)
 
-    class GenreConditionFilter(title: String, options: Array<String>) : UriPartFilter(
+    protected class GenreConditionFilter(title: String, options: Array<String>) : UriPartFilter(
         title,
         options.zip(arrayOf("", "1")).toTypedArray(),
     )
 
-    class AdultContentFilter(title: String, options: Array<String>) : UriPartFilter(
+    protected class AdultContentFilter(title: String, options: Array<String>) : UriPartFilter(
         title,
         options.zip(arrayOf("", "0", "1")).toTypedArray(),
     )
 
-    class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
+    protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
     class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
 
     override fun getFilterList(): FilterList {
