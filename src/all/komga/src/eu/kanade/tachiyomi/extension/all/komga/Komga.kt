@@ -145,6 +145,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
                     val state = filter.state ?: return@forEach
 
                     val sortCriteria = when (state.index) {
+                        0 -> "relevance"
                         1 -> if (type == "series") "metadata.titleSort" else "name"
                         2 -> "createdDate"
                         3 -> "lastModifiedDate"

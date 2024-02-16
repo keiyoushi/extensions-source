@@ -19,8 +19,8 @@ internal class TypeSelect : Filter.Select<String>(
 
 internal class SeriesSort(selection: Selection? = null) : Filter.Sort(
     "Sort",
-    arrayOf("None", "Alphabetically", "Date added", "Date updated"),
-    selection ?: Selection(0, true),
+    arrayOf("Relevance", "Alphabetically", "Date added", "Date updated"),
+    selection ?: Selection(0, false),
 )
 
 internal class UnreadFilter : Filter.CheckBox("Unread", false), UriFilter {
