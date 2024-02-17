@@ -176,7 +176,7 @@ abstract class Madara(
 
     override fun popularMangaRequest(page: Int): Request =
         if (useLoadMoreRequest()) {
-            loadMoreRequest(page, "_wp_manga_views")
+            loadMoreRequest(page, popular = true)
         } else {
             GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views", headers)
         }
@@ -199,7 +199,7 @@ abstract class Madara(
 
     override fun latestUpdatesRequest(page: Int): Request =
         if (useLoadMoreRequest()) {
-            loadMoreRequest(page, "_latest_update")
+            loadMoreRequest(page, popular = false)
         } else {
             GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
         }
@@ -213,27 +213,19 @@ abstract class Madara(
     }
 
     // load more
-    protected fun loadMoreRequest(page: Int, metaKey: String): Request {
+    protected fun loadMoreRequest(page: Int, popular: Boolean): Request {
         val formBody = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", (page - 1).toString())
             add("template", "madara-core/content/content-archive")
-            add("vars[paged]", "1")
             add("vars[orderby]", "meta_value_num")
-            add("vars[template]", "archive")
-            add("vars[sidebar]", "right")
+            add("vars[paged]", "1")
             add("vars[post_type]", "wp-manga")
             add("vars[post_status]", "publish")
-            add("vars[meta_key]", metaKey)
-            add("vars[meta_query][0][paged]", "1")
-            add("vars[meta_query][0][orderby]", "meta_value_num")
-            add("vars[meta_query][0][template]", "archive")
-            add("vars[meta_query][0][sidebar]", "right")
-            add("vars[meta_query][0][post_type]", "wp-manga")
-            add("vars[meta_query][0][post_status]", "publish")
-            add("vars[meta_query][0][meta_key]", metaKey)
-            add("vars[meta_query][relation]", "AND")
-            add("vars[manga_archives_item_layout]", "default")
+            add("vars[meta_key]", if (popular) "_wp_manga_views" else "_latest_update")
+            add("vars[order]", "desc")
+            add("vars[sidebar]", "right")
+            add("vars[manga_archives_item_layout]", "big_thumbnail")
         }.build()
 
         val xhrHeaders = headersBuilder()
