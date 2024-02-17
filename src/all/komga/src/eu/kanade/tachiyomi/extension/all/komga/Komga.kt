@@ -139,8 +139,9 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
         val url = "$baseUrl/api/v1/$type?search=$query&page=${page - 1}&deleted=false".toHttpUrl().newBuilder()
         val filterList = filters.ifEmpty { getFilterList() }
+        val defaultLibraries = defaultLibraries
 
-        if (filterList.filterIsInstance<LibraryFilter>().isEmpty()) {
+        if (filterList.filterIsInstance<LibraryFilter>().isEmpty() && defaultLibraries.isNotEmpty()) {
             url.addQueryParameter("library_id", defaultLibraries.joinToString(","))
         }
 
