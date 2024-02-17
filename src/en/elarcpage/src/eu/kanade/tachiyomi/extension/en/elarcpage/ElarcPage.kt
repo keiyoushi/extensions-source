@@ -6,7 +6,7 @@ class ElarcPage : MangaThemesia(
     "Elarc Toon",
     "https://elarctoon.com",
     "en",
-    "/series",
+    "/readtoons98111",
 ) {
     override val id = 5482125641807211052
 }
