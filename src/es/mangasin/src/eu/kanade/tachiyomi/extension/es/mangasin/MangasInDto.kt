@@ -4,10 +4,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class CDT(val ct: String, val s: String)
+class CDT(val ct: String, val s: String)
 
 @Serializable
-data class Chapter(
+class Chapter(
     val slug: String,
     val name: String,
     val number: String,
@@ -15,13 +15,13 @@ data class Chapter(
 )
 
 @Serializable
-data class LatestManga(
+class LatestManga(
     @SerialName("manga_name") val name: String,
     @SerialName("manga_slug") val slug: String,
 )
 
 @Serializable
-data class LatestUpdateResponse(
+class LatestUpdateResponse(
     val data: List<LatestManga>,
     val totalPages: Int,
 )

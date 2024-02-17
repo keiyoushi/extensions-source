@@ -4,7 +4,6 @@ import android.util.Base64
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
-import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMSUtils
 import eu.kanade.tachiyomi.multisrc.mmrcms.SuggestionDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -18,6 +17,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -26,6 +26,7 @@ class MangasIn : MMRCMS(
     "https://mangas.in",
     "es",
     supportsAdvancedSearch = false,
+    dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
 ) {
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
@@ -44,7 +45,7 @@ class MangasIn : MMRCMS(
             SManga.create().apply {
                 url = "/$itemPath/${it.slug}"
                 title = it.name
-                thumbnail_url = MMRCMSUtils.guessCover(baseUrl, url, null)
+                thumbnail_url = guessCover(url, null)
             }
         }
         val hasNextPage = response.request.url.queryParameter("p")!!.toInt() < data.totalPages
@@ -124,7 +125,12 @@ class MangasIn : MMRCMS(
                     "Capítulo ${it.number}: ${it.name}"
                 }
 
-                date_upload = it.createdAt.parseDate()
+                date_upload = try {
+                    dateFormat.parse(it.createdAt)!!.time
+                } catch (_: ParseException) {
+                    0L
+                }
+
                 setUrlWithoutDomain("$mangaUrl/${it.slug}")
             }
         }
@@ -163,15 +169,9 @@ class MangasIn : MMRCMS(
             .map { it.toInt(16).toByte() }
             .toByteArray()
     }
-
-    companion object {
-        val UNESCAPE_REGEX = """\\(.)""".toRegex()
-        val RECEIVED_DATA_REGEX = """receivedData\s*=\s*["'](.*)["']\s*;""".toRegex()
-        val KEY_REGEX = """decrypt\(.*'(.*)'.*\)""".toRegex()
-        val SALTED = "Salted__".toByteArray(Charsets.UTF_8)
-
-        val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-        }
-    }
 }
+
+private val UNESCAPE_REGEX = """\\(.)""".toRegex()
+private val RECEIVED_DATA_REGEX = """receivedData\s*=\s*["'](.*)["']\s*;""".toRegex()
+private val KEY_REGEX = """decrypt\(.*'(.*)'.*\)""".toRegex()
+private val SALTED = "Salted__".toByteArray(Charsets.UTF_8)
