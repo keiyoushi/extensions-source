@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.mangasnosekai
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -29,15 +27,7 @@ class MangasNoSekai : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override val mangaSubString = "manganews"
-
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
-    }
+    override val mangaSubString = "manganewo"
 
     override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
 
@@ -61,14 +51,6 @@ class MangasNoSekai : Madara(
         }
 
         return manga
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
     }
 
     override fun searchPage(page: Int): String {
