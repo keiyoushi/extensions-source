@@ -9,12 +9,20 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.float
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.injectLazy
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -26,13 +34,14 @@ class MangaOwl(
     private val genresList: List<Genre> = listOf(),
 ) : ParsedHttpSource() {
     override val name: String = "MangaOwl$extraName"
-
     override val baseUrl = "https://mangaowl.to"
+    override val lang = "en"
+    override val supportsLatest = true
+
+    private val API = "https://api.mangaowl.to/v1"
     private val searchPath = "10-search"
 
-    override val lang = "en"
-
-    override val supportsLatest = true
+    private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(1, TimeUnit.MINUTES)
@@ -110,31 +119,40 @@ class MangaOwl(
 
     // Manga summary page
 
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url.substringAfterLast("/")
+        return GET("$API/stories/$slug", headers)
+    }
+
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("#main-container > div > div.row-responsive > div.flex-fill.column > div > div.flex-fill.column.section-container.p-3 > div.row-responsive.py-2")
+        val jsonStr = document.body().text()
+        val story = json.parseToJsonElement(jsonStr).jsonObject
 
         return SManga.create().apply {
-            title = infoElement.select("div.comic-info-container > h1.story-name").text()
-            infoElement.select("div.comic-info-container > div.comic-attrs > div").forEach { attr ->
-                when (attr.select("span").text()) {
-                    "Author" -> author = attr.select("div > a").text()
-                    "Genres" -> genre = attr.select("div > a").text()
+            title = story.jsonObject["name"]?.jsonPrimitive?.content.toString()
+            thumbnail_url = story.jsonObject["thumbnail"]?.jsonPrimitive?.content.toString()
+            author = story.jsonObject["authors"]?.jsonArray?.map {
+                it.jsonObject["name"]?.jsonPrimitive?.content
+            }?.joinToString(", ")
+            status = story.jsonObject["status"]?.jsonPrimitive?.content?.let {
+                when {
+                    it.contains("ongoing") -> SManga.ONGOING
+                    it.contains("completed") -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
                 }
-            }
+            } ?: SManga.UNKNOWN
+            genre = story.jsonObject["genres"]?.jsonArray?.map {
+                it.jsonObject["name"]?.jsonPrimitive?.content
+            }?.joinToString(", ")
 
-            description = infoElement.select("div.comic-info-container > span.story-desc").text()
-            thumbnail_url = infoElement.select("img").attr("abs:src")
-            infoElement.select("div:first-child > div.section-status").forEach { stt ->
-                if (stt.select("span:first-child").text() == "Status") {
-                    status = stt.select("span:last-child").text().let {
-                        when {
-                            it.contains("Ongoing") -> SManga.ONGOING
-                            it.contains("Completed") -> SManga.COMPLETED
-                            else -> SManga.UNKNOWN
-                        }
-                    }
-                }
-            }
+            val description = story.jsonObject["description"]?.jsonPrimitive?.contentOrNull ?: ""
+            val altName = (story.jsonObject["al_name"]?.jsonPrimitive?.contentOrNull ?: "")
+                .replace("Alternative : ", "")
+            val rating = story.jsonObject["rating"]?.jsonPrimitive?.float
+            val viewCount = story.jsonObject["view_count"]?.jsonPrimitive?.int
+            this.description = "$description\n\n" +
+                (if (altName.isNotEmpty()) "Alternative names: $altName\n\n" else "") +
+                "Rating: $rating\nViews: $viewCount"
         }
     }
 
