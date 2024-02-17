@@ -98,6 +98,8 @@ internal class AuthorGroup(
     }
 }
 
-internal class CollectionSelect(val collections: List<CollectionFilterEntry>) : Filter.Select<String>("Collection", collections.map { it.name }.toTypedArray())
+internal class CollectionSelect(
+    val collections: List<CollectionFilterEntry>,
+) : Filter.Select<String>("Collection", collections.map { it.name }.toTypedArray())
 
 internal data class CollectionFilterEntry(val name: String, val id: String? = null)
