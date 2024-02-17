@@ -9,12 +9,12 @@ class MangaLionz : Madara("MangaLionz", "https://mangalionz.org", "ar") {
         val manga = SManga.create()
 
         with(element) {
-            select(popularMangaUrlSelector).first()?.let {
+            selectFirst(popularMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.title = it.ownText()
             }
 
-            select("img").first()?.let {
+            selectFirst("img")?.let {
                 manga.thumbnail_url = imageFromElement(it)?.replace("mangalionz", "mangalek")
             }
         }

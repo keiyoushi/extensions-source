@@ -37,15 +37,15 @@ class MangasNoSekai : Madara(
         val manga = SManga.create()
 
         with(element) {
-            select(popularMangaUrlSelector).first()?.let {
+            selectFirst(popularMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
             }
 
-            select("figcaption").first()?.let {
+            selectFirst("figcaption")!!.let {
                 manga.title = it.text()
             }
 
-            select("img").first()?.let {
+            selectFirst("img")?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
         }
@@ -181,7 +181,7 @@ class MangasNoSekai : Madara(
     private fun altChapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
         name = element.select("div.text-sm").text()
-        date_upload = element.select("time").firstOrNull()?.text()?.let {
+        date_upload = element.selectFirst("time")?.text()?.let {
             parseChapterDate(it)
         } ?: 0
     }

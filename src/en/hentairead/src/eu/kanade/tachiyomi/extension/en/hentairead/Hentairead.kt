@@ -25,7 +25,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         launchIO { countViews(document) }
 
         return document.select(pageListParseSelector).mapIndexed { index, element ->
-            val pageUri: String? = element.select("img").first()?.let {
+            val pageUri: String? = element.selectFirst("img")!!.let {
                 it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
             }
             Page(

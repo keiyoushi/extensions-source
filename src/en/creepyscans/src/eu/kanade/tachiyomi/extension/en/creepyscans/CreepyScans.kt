@@ -14,7 +14,6 @@ import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -34,26 +33,6 @@ class CreepyScans : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
-
-    // Popular
-
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/?m_orderby=views",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
-    }
-
-    // Latest
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/?m_orderby=latest",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
-    }
 
     // Search
 
@@ -142,6 +121,8 @@ class CreepyScans : Madara(
         Filter.Select<String>("Genre", vals.map { it.first }.toTypedArray())
 
     override fun getFilterList(): FilterList {
+        launchIO { fetchGenres() }
+
         val filters = buildList(4) {
             add(
                 OrderByFilter(

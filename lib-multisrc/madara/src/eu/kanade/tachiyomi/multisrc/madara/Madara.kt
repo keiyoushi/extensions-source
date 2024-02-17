@@ -165,12 +165,12 @@ abstract class Madara(
         val manga = SManga.create()
 
         with(element) {
-            select(popularMangaUrlSelector).first()?.let {
+            selectFirst(popularMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.title = it.ownText()
             }
 
-            select("img").first()?.let {
+            selectFirst("img")?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
         }
@@ -446,11 +446,11 @@ abstract class Madara(
         val manga = SManga.create()
 
         with(element) {
-            select("div.post-title a").first()?.let {
+            selectFirst("div.post-title a")!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.title = it.ownText()
             }
-            select("img").first()?.let {
+            selectFirst("img")?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
         }
@@ -501,9 +501,7 @@ abstract class Madara(
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         with(document) {
-            select(mangaDetailsSelectorTitle).first()?.let {
-                manga.title = it.ownText()
-            }
+            manga.title = selectFirst(mangaDetailsSelectorTitle)!!.ownText()
             select(mangaDetailsSelectorAuthor).eachText().filter {
                 it.notUpdating()
             }.joinToString().takeIf { it.isNotBlank() }?.let {
@@ -523,7 +521,7 @@ abstract class Madara(
                     manga.description = it.text()
                 }
             }
-            select(mangaDetailsSelectorThumbnail).first()?.let {
+            selectFirst(mangaDetailsSelectorThumbnail)?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
             select(mangaDetailsSelectorStatus).last()?.let {
@@ -541,13 +539,6 @@ abstract class Madara(
                 .map { element -> element.text().lowercase(Locale.ROOT) }
                 .toMutableSet()
 
-            // add tag(s) to genre
-            val mangaTitle = try {
-                manga.title
-            } catch (_: UninitializedPropertyAccessException) {
-                "not initialized"
-            }
-
             if (mangaDetailsSelectorTag.isNotEmpty()) {
                 select(mangaDetailsSelectorTag).forEach { element ->
                     if (genres.contains(element.text()).not() &&
@@ -555,7 +546,7 @@ abstract class Madara(
                         element.text().contains("read", true).not() &&
                         element.text().contains(name, true).not() &&
                         element.text().contains(name.replace(" ", ""), true).not() &&
-                        element.text().contains(mangaTitle, true).not() &&
+                        element.text().contains(manga.title, true).not() &&
                         element.text().contains(altName, true).not()
                     ) {
                         genres.add(element.text().lowercase(Locale.ROOT))
@@ -564,13 +555,13 @@ abstract class Madara(
             }
 
             // add manga/manhwa/manhua thinggy to genre
-            document.select(seriesTypeSelector).firstOrNull()?.ownText()?.let {
+            document.selectFirst(seriesTypeSelector)?.ownText()?.let {
                 if (it.isEmpty().not() && it.notUpdating() && it != "-" && genres.contains(it).not()) {
                     genres.add(it.lowercase(Locale.ROOT))
                 }
             }
 
-            manga.genre = genres.toList().joinToString(", ") { genre ->
+            manga.genre = genres.toList().joinToString { genre ->
                 genre.replaceFirstChar {
                     if (it.isLowerCase()) {
                         it.titlecase(
@@ -583,7 +574,7 @@ abstract class Madara(
             }
 
             // add alternative name to manga description
-            document.select(altNameSelector).firstOrNull()?.ownText()?.let {
+            document.selectFirst(altNameSelector)?.ownText()?.let {
                 if (it.isBlank().not() && it.notUpdating()) {
                     manga.description = when {
                         manga.description.isNullOrBlank() -> altName + it
@@ -650,8 +641,6 @@ abstract class Madara(
             .build()
 
         val xhrHeaders = headersBuilder()
-            .add("Content-Length", form.contentLength().toString())
-            .add("Content-Type", form.contentType().toString())
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
@@ -716,7 +705,7 @@ abstract class Madara(
         val chapter = SChapter.create()
 
         with(element) {
-            select(chapterUrlSelector).first()?.let { urlElement ->
+            selectFirst(chapterUrlSelector)!!.let { urlElement ->
                 chapter.url = urlElement.attr("abs:href").let {
                     it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
                 }
@@ -724,9 +713,9 @@ abstract class Madara(
             }
             // Dates can be part of a "new" graphic or plain text
             // Added "title" alternative
-            chapter.date_upload = select("img:not(.thumb)").firstOrNull()?.attr("alt")?.let { parseRelativeDate(it) }
-                ?: select("span a").firstOrNull()?.attr("title")?.let { parseRelativeDate(it) }
-                ?: parseChapterDate(select(chapterDateSelector()).firstOrNull()?.text())
+            chapter.date_upload = selectFirst("img:not(.thumb)")?.attr("alt")?.let { parseRelativeDate(it) }
+                ?: selectFirst("span a")?.attr("title")?.let { parseRelativeDate(it) }
+                ?: parseChapterDate(selectFirst(chapterDateSelector())?.text())
         }
 
         return chapter
@@ -866,7 +855,7 @@ abstract class Madara(
     protected open val sendViewCount: Boolean = true
 
     protected open fun countViewsRequest(document: Document): Request? {
-        val wpMangaData = document.select("script#wp-manga-js-extra").firstOrNull()
+        val wpMangaData = document.selectFirst("script#wp-manga-js-extra")
             ?.data() ?: return null
 
         val wpMangaInfo = wpMangaData
@@ -888,8 +877,6 @@ abstract class Madara(
             val formBody = formBuilder.build()
 
             val newHeaders = headersBuilder()
-                .set("Content-Length", formBody.contentLength().toString())
-                .set("Content-Type", formBody.contentType().toString())
                 .set("Referer", document.location())
                 .build()
 

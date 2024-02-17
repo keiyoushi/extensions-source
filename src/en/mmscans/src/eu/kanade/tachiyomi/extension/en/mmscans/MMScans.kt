@@ -19,12 +19,12 @@ class MMScans : Madara("MMScans", "https://mm-scans.org", "en") {
         val manga = SManga.create()
 
         with(element) {
-            select(popularMangaUrlSelector).first()?.let {
+            selectFirst(popularMangaUrlSelector)?.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.title = it.selectFirst("h3")!!.ownText()
             }
 
-            select("img").first()?.let {
+            selectFirst("img")?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
         }
@@ -36,13 +36,13 @@ class MMScans : Madara("MMScans", "https://mm-scans.org", "en") {
         val chapter = SChapter.create()
 
         with(element) {
-            select(chapterUrlSelector).first()?.let { urlElement ->
+            selectFirst(chapterUrlSelector)!!.let { urlElement ->
                 chapter.url = urlElement.attr("abs:href").let {
                     it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
                 }
                 chapter.name = urlElement.selectFirst(".chapter-title-date p")!!.text()
             }
-            chapter.date_upload = parseChapterDate(select(chapterDateSelector()).firstOrNull()?.text())
+            chapter.date_upload = parseChapterDate(selectFirst(chapterDateSelector())?.text())
         }
 
         return chapter
