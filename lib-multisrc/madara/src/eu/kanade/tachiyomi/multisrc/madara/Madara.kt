@@ -121,8 +121,11 @@ abstract class Madara(
     private var loadMoreRequestDetected = false
 
     private fun useLoadMoreRequest(): Boolean {
-        return (useLoadMoreRequest != LoadMoreStrategy.Never) &&
-            (useLoadMoreRequest == LoadMoreStrategy.Always || loadMoreRequestDetected)
+        return when (useLoadMoreRequest) {
+            LoadMoreStrategy.Always -> true
+            LoadMoreStrategy.Never -> false
+            else -> loadMoreRequestDetected
+        }
     }
 
     // Popular Manga
@@ -134,7 +137,7 @@ abstract class Madara(
             .map(::popularMangaFromElement)
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
 
-        if (useLoadMoreRequest()) {
+        if (useLoadMoreRequest == LoadMoreStrategy.AutoDetect && !loadMoreRequestDetected) {
             loadMoreRequestDetected = document.selectFirst("nav.navigation-ajax") != null
         }
 
