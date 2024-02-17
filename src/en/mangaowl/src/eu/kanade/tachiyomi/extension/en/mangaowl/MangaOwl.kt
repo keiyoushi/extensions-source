@@ -166,14 +166,14 @@ class MangaOwl(
         val story = json.parseToJsonElement(jsonStr).jsonObject
         val slug = story.jsonObject["slug"]?.jsonPrimitive?.content.toString()
 
-        return story.jsonObject["chapters"]?.jsonArray!!.map {
+        return story.jsonObject["chapters"]?.jsonArray?.map {
             val id = it.jsonObject["id"]?.jsonPrimitive?.int
             SChapter.create().apply {
                 url = "$baseUrl/10-reading/$slug/$id"
                 name = it.jsonObject["name"]?.jsonPrimitive?.content.toString()
                 date_upload = dateFormat.tryParse(it.jsonObject["created_at"]?.jsonPrimitive?.content.toString())
             }
-        }.reversed()
+        }!!.reversed()
     }
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
@@ -188,20 +188,22 @@ class MangaOwl(
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.substringAfterLast("/")
-        return GET("https://api.mangaowl.to/v1/chapters/$id/images?page_size=1000", headers)
+        return GET("$API/chapters/$id/images?page_size=1000", headers)
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val imageRegex = Regex("\"image\":\"([^\"]+)\"")
-        return imageRegex.findAll(document.text()).toList().mapIndexed { i, match ->
+        val jsonStr = document.body().text()
+        val pages = json.parseToJsonElement(jsonStr).jsonObject
+
+        return pages.jsonObject["results"]?.jsonArray?.mapIndexed { idx, obj ->
             Page(
-                index = i,
-                imageUrl = match.groupValues[1],
+                index = idx,
+                imageUrl = obj.jsonObject["image"]?.jsonPrimitive?.content,
             )
-        }
+        }!!
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 
