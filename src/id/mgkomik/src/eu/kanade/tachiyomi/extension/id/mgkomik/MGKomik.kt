@@ -13,14 +13,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.Headers
 import okhttp3.Interceptor
-import okhttp3.OkHttpClient
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class MGKomik :
     Madara(
@@ -95,10 +93,8 @@ class MGKomik :
         val mobile: List<String> = emptyList(),
     )
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(uaIntercept)
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder(): Headers.Builder {

@@ -9,10 +9,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.concurrent.TimeUnit
 
 class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
     // moved from Reaper Scans (id) to Shinigami (id)
@@ -28,7 +26,7 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {
@@ -37,8 +35,6 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
 
             chain.proceed(request.newBuilder().headers(headers).build())
         }
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
         .rateLimit(3)
         .build()
 
