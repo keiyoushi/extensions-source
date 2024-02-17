@@ -1,93 +1,142 @@
 package eu.kanade.tachiyomi.extension.es.olympusscanlation
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.ParseException
+import java.text.SimpleDateFormat
 
 @Serializable
-data class PayloadSeriesDto(val data: PayloadSeriesDataDto)
-
-@Serializable
-data class PayloadSeriesDataDto(
-    val series: SeriesDto,
-    val recommended_series: String,
+class PayloadHomeDto(
+    val data: HomeDto,
 )
 
 @Serializable
-data class SeriesDto(
+class HomeDto(
+    @SerialName("popular_comics") val popularComics: String,
+)
+
+@Serializable
+class PayloadSeriesDto(val data: PayloadSeriesDataDto)
+
+@Serializable
+class PayloadSeriesDataDto(
+    val series: SeriesDto,
+)
+
+@Serializable
+class SeriesDto(
     val current_page: Int,
     val data: List<MangaDto>,
     val last_page: Int,
 )
 
 @Serializable
-data class PayloadMangaDto(val data: List<MangaDto>)
+class PayloadMangaDto(val data: List<MangaDto>)
 
 @Serializable
-data class MangaDto(
-    val id: Int,
-    val name: String,
-    val slug: String,
-    val cover: String? = null,
+class MangaDto(
+    private val name: String,
+    private val slug: String,
+    private val cover: String? = null,
     val type: String? = null,
-    val summary: String? = null,
-    val status: MangaStatusDto? = null,
-    val genres: List<FilterDto>? = null,
-)
+    private val summary: String? = null,
+    private val status: MangaStatusDto? = null,
+    private val genres: List<FilterDto>? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        title = name
+        url = "/series/comic-$slug"
+        thumbnail_url = cover
+    }
+
+    fun toSMangaDetails() = toSManga().apply {
+        description = summary
+        status = parseStatus()
+        genre = genres?.joinToString { it.name.trim() }
+    }
+
+    private fun parseStatus(): Int {
+        val status = this.status ?: return SManga.UNKNOWN
+        return when (status.id) {
+            1 -> SManga.ONGOING
+            3 -> SManga.ON_HIATUS
+            4 -> SManga.COMPLETED
+            5 -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+    }
+}
 
 @Serializable
-data class NewChaptersDto(
+class NewChaptersDto(
     val data: List<LatestMangaDto>,
     val current_page: Int,
     val last_page: Int,
 )
 
 @Serializable
-data class LatestMangaDto(
-    val id: Int,
-    val name: String,
-    val slug: String,
-    val cover: String? = null,
+class LatestMangaDto(
+    private val name: String,
+    private val slug: String,
+    private val cover: String? = null,
     val type: String? = null,
-)
+) {
+    fun toSManga() = SManga.create().apply {
+        title = name
+        url = "/series/comic-$slug"
+        thumbnail_url = cover
+    }
+}
 
 @Serializable
-data class MangaDetailDto(
+class MangaDetailDto(
     var data: MangaDto,
 )
 
 @Serializable
-data class PayloadChapterDto(var data: List<ChapterDto>, val meta: MetaDto)
+class PayloadChapterDto(var data: List<ChapterDto>, val meta: MetaDto)
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
+    private val id: Int,
+    private val name: String,
+    @SerialName("published_at") private val date: String,
+) {
+    fun toSChapter(mangaSlug: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+        name = "Capitulo ${this@ChapterDto.name}"
+        url = "/capitulo/$id/comic-$mangaSlug"
+        date_upload = try {
+            dateFormat.parse(date)!!.time
+        } catch (e: ParseException) {
+            0L
+        }
+    }
+}
+
+@Serializable
+class MetaDto(val total: Int)
+
+@Serializable
+class PayloadPagesDto(val chapter: PageDto)
+
+@Serializable
+class PageDto(val pages: List<String>)
+
+@Serializable
+class MangaStatusDto(
     val id: Int,
-    val name: String,
-    @SerialName("published_at") val date: String,
 )
 
 @Serializable
-data class MetaDto(val total: Int)
-
-@Serializable
-data class PayloadPagesDto(val chapter: PageDto)
-
-@Serializable
-data class PageDto(val pages: List<String>)
-
-@Serializable
-data class MangaStatusDto(
-    val id: Int,
-    val name: String,
-)
-
-@Serializable
-data class GenresStatusesDto(
+class GenresStatusesDto(
     val genres: List<FilterDto>,
     val statuses: List<FilterDto>,
 )
 
 @Serializable
-data class FilterDto(
+class FilterDto(
     val id: Int,
     val name: String,
 )
