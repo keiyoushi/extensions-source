@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.mangasnosekai
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -29,15 +27,7 @@ class MangasNoSekai : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override val mangaSubString = "manganews"
-
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
-    }
+    override val mangaSubString = "manganewo"
 
     override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
 
@@ -63,12 +53,8 @@ class MangasNoSekai : Madara(
         return manga
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
+    override fun searchPage(page: Int): String {
+        return if (page > 1) "page/$page/" else ""
     }
 
     override fun searchMangaNextPageSelector() = "nav.navigation a.next"
@@ -135,14 +121,14 @@ class MangasNoSekai : Madara(
         return manga
     }
 
-    override val orderByFilterOptions: Map<String, String> = mapOf(
-        intl["order_by_filter_relevance"] to "",
-        intl["order_by_filter_latest"] to "latest2",
-        intl["order_by_filter_az"] to "alphabet",
-        intl["order_by_filter_rating"] to "rating",
-        intl["order_by_filter_trending"] to "trending",
-        intl["order_by_filter_views"] to "views2",
-        intl["order_by_filter_new"] to "new-manga",
+    override val orderByFilterOptionsValues: Array<String> = arrayOf(
+        "",
+        "latest2",
+        "alphabet",
+        "rating",
+        "trending",
+        "views2",
+        "new-manga",
     )
 
     private fun altChapterRequest(mangaId: String, page: Int): Request {
