@@ -1,10 +1,10 @@
-package eu.kanade.tachiyomi.extension.en.mangaowl
+package eu.kanade.tachiyomi.extension.en.mangaowlto
 
 import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.en.mangaowl.MangaOwlFactory.Genre
+import eu.kanade.tachiyomi.extension.en.mangaowlto.MangaOwlToFactory.Genre
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -35,12 +35,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaOwl(
+class MangaOwlTo(
     private val collectionUrl: String,
     extraName: String = "",
     private val genresList: List<Genre> = listOf(),
 ) : ConfigurableSource, ParsedHttpSource() {
-    override val name: String = "MangaOwl $extraName"
+    override val name: String = "MangaOwl.To $extraName"
     override val lang = "en"
     override val supportsLatest = true
 
