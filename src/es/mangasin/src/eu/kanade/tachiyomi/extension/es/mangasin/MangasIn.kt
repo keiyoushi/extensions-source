@@ -137,25 +137,6 @@ class MangasIn : MMRCMS(
         }
     }
 
-    // Replace the default filter list with one that doesn't have Last update,
-    // since that doesn't work on this site and gives a HTTP 500.
-    override fun getFilterList(): FilterList {
-        val filters = super.getFilterList().list
-            .filter { it !is SortFilter }
-            .toMutableList()
-
-        filters.add(
-            SortFilter(
-                arrayOf(
-                    "name" to "AZ",
-                    "views" to "Visitas",
-                ),
-            ),
-        )
-
-        return FilterList(filters)
-    }
-
     private fun String.unescape(): String {
         return UNESCAPE_REGEX.replace(this, "$1")
     }

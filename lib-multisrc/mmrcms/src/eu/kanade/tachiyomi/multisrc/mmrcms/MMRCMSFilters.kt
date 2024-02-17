@@ -48,12 +48,12 @@ class UriMultiSelectFilter(
 }
 
 class SortFilter(
-    private val sortables: Array<Pair<String, String>> = DEFAULT_SORTABLES,
+    private val sortables: Array<Pair<String, String>>,
     selection: Selection = Selection(0, true),
 ) :
     Filter.Sort(
         "Sort by",
-        sortables.map { it.second }.toTypedArray(),
+        sortables.map { it.first }.toTypedArray(),
         selection,
     ),
     UriFilter {
@@ -61,14 +61,8 @@ class SortFilter(
         val state = state ?: return
 
         builder.apply {
-            addQueryParameter("sortBy", sortables[state.index].first)
+            addQueryParameter("sortBy", sortables[state.index].second)
             addQueryParameter("asc", state.ascending.toString())
         }
     }
 }
-
-private val DEFAULT_SORTABLES = arrayOf(
-    "name" to "Name",
-    "views" to "Popularity",
-    "last_release" to "Last update",
-)

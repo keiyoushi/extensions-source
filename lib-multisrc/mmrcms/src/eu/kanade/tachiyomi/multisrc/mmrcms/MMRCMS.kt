@@ -373,7 +373,9 @@ constructor(
                     )
                 }
 
-                add(SortFilter())
+                if (sortOptions.isNotEmpty()) {
+                    add(SortFilter(sortOptions))
+                }
             }
         }
 
@@ -391,6 +393,7 @@ constructor(
     private var categories = emptyList<Pair<String, String>>()
     private var statuses = emptyList<Pair<String, String>>()
     private var tags = emptyList<Pair<String, String>>()
+    private var sortOptions = emptyArray<Pair<String, String>>()
 
     private var fetchFiltersStatus = FetchFilterStatus.NOT_FETCHED
     private var fetchFiltersAttempts = 0
@@ -434,6 +437,9 @@ constructor(
                     tags = document.select("div.tag-links a").map {
                         it.text() to it.attr("href").toHttpUrl().pathSegments.last()
                     }
+                    sortOptions = document.select("#sort-types label:has(input)").map {
+                        it.ownText() to it.selectFirst("input")!!.id()
+                    }.toTypedArray()
                 }
 
                 fetchFiltersStatus = FetchFilterStatus.FETCHED
