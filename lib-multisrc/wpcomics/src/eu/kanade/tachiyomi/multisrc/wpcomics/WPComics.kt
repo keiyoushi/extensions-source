@@ -72,6 +72,7 @@ abstract class WPComics(
     // Search
 
     protected open val searchPath = "tim-truyen"
+    protected open val queryParam = "keyword"
 
     protected open fun String.replaceSearchPath() = this
 
@@ -91,7 +92,7 @@ abstract class WPComics(
             }
 
             url.apply {
-                addQueryParameter("keyword", query)
+                addQueryParameter(queryParam, query)
                 addQueryParameter("page", page.toString())
                 addQueryParameter("sort", "0")
             }

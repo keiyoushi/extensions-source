@@ -3,7 +3,7 @@ ext {
     extClass = '.NetTruyen'
     themePkg = 'wpcomics'
     baseUrl = 'https://www.nettruyenss.com'
-    overrideVersionCode = 22
+    overrideVersionCode = 23
 }
 
 apply from: "$rootDir/common.gradle"
