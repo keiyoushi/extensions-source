@@ -3,7 +3,8 @@ ext {
     extClass = '.ElarcPage'
     themePkg = 'mangathemesia'
     baseUrl = 'https://elarctoon.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
