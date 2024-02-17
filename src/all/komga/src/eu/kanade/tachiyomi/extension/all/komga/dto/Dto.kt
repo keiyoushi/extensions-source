@@ -1,15 +1,21 @@
 package eu.kanade.tachiyomi.extension.all.komga.dto
 
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import org.apache.commons.text.StringSubstitutor
+
+interface ConvertibleToSManga {
+    fun toSManga(baseUrl: String): SManga
+}
 
 @Serializable
-data class LibraryDto(
+class LibraryDto(
     val id: String,
     val name: String,
 )
 
 @Serializable
-data class SeriesDto(
+class SeriesDto(
     val id: String,
     val libraryId: String,
     val name: String,
@@ -19,10 +25,30 @@ data class SeriesDto(
     val booksCount: Int,
     val metadata: SeriesMetadataDto,
     val booksMetadata: BookMetadataAggregationDto,
-)
+) : ConvertibleToSManga {
+    override fun toSManga(baseUrl: String) = SManga.create().apply {
+        title = metadata.title
+        url = "$baseUrl/api/v1/series/$id"
+        thumbnail_url = "$url/thumbnail"
+        status = when {
+            metadata.status == "ENDED" && metadata.totalBookCount != null && booksCount < metadata.totalBookCount -> SManga.PUBLISHING_FINISHED
+            metadata.status == "ENDED" -> SManga.COMPLETED
+            metadata.status == "ONGOING" -> SManga.ONGOING
+            metadata.status == "ABANDONED" -> SManga.CANCELLED
+            metadata.status == "HIATUS" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+        genre = (metadata.genres + metadata.tags + booksMetadata.tags).distinct().joinToString(", ")
+        description = metadata.summary.ifBlank { booksMetadata.summary }
+        booksMetadata.authors.groupBy({ it.role }, { it.name }).let { map ->
+            author = map["writer"]?.distinct()?.joinToString()
+            artist = map["penciller"]?.distinct()?.joinToString()
+        }
+    }
+}
 
 @Serializable
-data class SeriesMetadataDto(
+class SeriesMetadataDto(
     val status: String,
     val created: String?,
     val lastModified: String?,
@@ -46,7 +72,7 @@ data class SeriesMetadataDto(
 )
 
 @Serializable
-data class BookMetadataAggregationDto(
+class BookMetadataAggregationDto(
     val authors: List<AuthorDto> = emptyList(),
     val tags: Set<String> = emptySet(),
     val releaseDate: String?,
@@ -58,7 +84,7 @@ data class BookMetadataAggregationDto(
 )
 
 @Serializable
-data class BookDto(
+class BookDto(
     val id: String,
     val seriesId: String,
     val seriesTitle: String,
@@ -71,10 +97,32 @@ data class BookDto(
     val size: String,
     val media: MediaDto,
     val metadata: BookMetadataDto,
-)
+) {
+    fun getChapterName(template: String, isFromReadList: Boolean): String {
+        val values = hashMapOf(
+            "title" to metadata.title,
+            "seriesTitle" to seriesTitle,
+            "number" to metadata.number,
+            "createdDate" to created,
+            "releaseDate" to metadata.releaseDate,
+            "size" to size,
+            "sizeBytes" to sizeBytes.toString(),
+        )
+        val sub = StringSubstitutor(values, "{", "}")
+
+        return buildString {
+            if (isFromReadList) {
+                append(seriesTitle)
+                append(" ")
+            }
+
+            append(sub.replace(template))
+        }
+    }
+}
 
 @Serializable
-data class MediaDto(
+class MediaDto(
     val status: String,
     val mediaType: String,
     val pagesCount: Int,
@@ -83,14 +131,14 @@ data class MediaDto(
 )
 
 @Serializable
-data class PageDto(
+class PageDto(
     val number: Int,
     val fileName: String,
     val mediaType: String,
 )
 
 @Serializable
-data class BookMetadataDto(
+class BookMetadataDto(
     val title: String,
     val titleLock: Boolean,
     val summary: String,
@@ -106,13 +154,13 @@ data class BookMetadataDto(
 )
 
 @Serializable
-data class AuthorDto(
+class AuthorDto(
     val name: String,
     val role: String,
 )
 
 @Serializable
-data class CollectionDto(
+class CollectionDto(
     val id: String,
     val name: String,
     val ordered: Boolean,
@@ -123,7 +171,7 @@ data class CollectionDto(
 )
 
 @Serializable
-data class ReadListDto(
+class ReadListDto(
     val id: String,
     val name: String,
     val summary: String,
@@ -131,4 +179,12 @@ data class ReadListDto(
     val createdDate: String,
     val lastModifiedDate: String,
     val filtered: Boolean,
-)
+) : ConvertibleToSManga {
+    override fun toSManga(baseUrl: String) = SManga.create().apply {
+        title = name
+        description = summary
+        url = "$baseUrl/api/v1/readlists/$id"
+        thumbnail_url = "$url/thumbnail"
+        status = SManga.UNKNOWN
+    }
+}
