@@ -1,0 +1,10 @@
+ext {
+    extName = "YugenMangas"
+    extClass = ".YugenMangas"
+    themePkg = "heancms"
+    baseUrl = "https://yugenmangas.net"
+    overrideVersionCode = 9
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
