@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservable
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -180,7 +180,7 @@ abstract class Madara(
 
     override fun popularMangaRequest(page: Int): Request =
         if (useLoadMoreRequest()) {
-            loadMoreRequest(page - 1, "_wp_manga_views")
+            loadMoreRequest(page, "_wp_manga_views")
         } else {
             GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views", headers)
         }
@@ -189,7 +189,7 @@ abstract class Madara(
         if (useLoadMoreRequest()) {
             "body:not(:has(.no-posts))"
         } else {
-            searchMangaNextPageSelector()
+            "div.nav-previous, nav.navigation-ajax, a.nextpostslink"
         }
 
     // Latest Updates
@@ -203,7 +203,7 @@ abstract class Madara(
 
     override fun latestUpdatesRequest(page: Int): Request =
         if (useLoadMoreRequest()) {
-            loadMoreRequest(page - 1, "_latest_update")
+            loadMoreRequest(page, "_latest_update")
         } else {
             GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
         }
@@ -220,7 +220,7 @@ abstract class Madara(
     protected fun loadMoreRequest(page: Int, metaKey: String): Request {
         val formBody = FormBody.Builder().apply {
             add("action", "madara_load_more")
-            add("page", page.toString())
+            add("page", (page - 1).toString())
             add("template", "madara-core/content/content-archive")
             add("vars[paged]", "1")
             add("vars[orderby]", "meta_value_num")
@@ -251,28 +251,18 @@ abstract class Madara(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val mangaUrl = "$baseUrl/$mangaSubString/${query.substringAfter(URL_SEARCH_PREFIX)}"
-            return client.newCall(GET(mangaUrl, headers))
-                .asObservable().map { response ->
-                    MangasPage(listOf(mangaDetailsParse(response.asJsoup()).apply { url = "/$mangaSubString/${query.substringAfter(URL_SEARCH_PREFIX)}/" }), false)
+            val mangaUrl = "/$mangaSubString/${query.substringAfter(URL_SEARCH_PREFIX)}"
+            return client.newCall(GET("$baseUrl$mangaUrl", headers))
+                .asObservableSuccess().map { response ->
+                    val manga = mangaDetailsParse(response).apply {
+                        url = mangaUrl
+                    }
+
+                    MangasPage(listOf(manga), false)
                 }
         }
 
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservable().doOnNext { response ->
-                if (!response.isSuccessful) {
-                    response.close()
-                    // Error message for exceeding last page
-                    if (response.code == 404) {
-                        error("Already on the Last Page!")
-                    } else {
-                        throw Exception("HTTP error ${response.code}")
-                    }
-                }
-            }
-            .map { response ->
-                searchMangaParse(response)
-            }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     protected open fun searchPage(page: Int): String {
@@ -284,6 +274,14 @@ abstract class Madara(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        return if (useLoadMoreRequest()) {
+            searchLoadMoreRequest(page, query, filters)
+        } else {
+            searchRequest(page, query, filters)
+        }
+    }
+
+    protected open fun searchRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
         url.addQueryParameter("s", query)
         url.addQueryParameter("post_type", "wp-manga")
@@ -333,6 +331,149 @@ abstract class Madara(
             }
         }
         return GET(url.build(), headers)
+    }
+
+    protected open fun searchLoadMoreRequest(page: Int, query: String, filters: FilterList): Request {
+        val formBodyBuilder = FormBody.Builder().apply {
+            add("action", "madara_load_more")
+            add("page", (page - 1).toString())
+            add("template", "madara-core/content/content-search")
+            add("vars[paged]", "1")
+            add("vars[template]", "archive")
+            add("vars[sidebar]", "right")
+            add("vars[post_type]", "wp-manga")
+            add("vars[post_status]", "publish")
+            add("vars[manga_archives_item_layout]", "big_thumbnail")
+
+            if (filterNonMangaItems) {
+                add("vars[meta_query][0][key]", "_wp_manga_chapter_type")
+                add("vars[meta_query][0][value]", "manga")
+            }
+
+            add("vars[s]", query)
+
+            var metaQueryIdx = if (filterNonMangaItems) 1 else 0
+            var taxQueryIdx = 0
+            val genres = filters.filterIsInstance<GenreList>().firstOrNull()?.state
+                ?.filter { it.state }
+                ?.map { it.id }
+                .orEmpty()
+
+            filters.forEach { filter ->
+                when (filter) {
+                    is AuthorFilter -> {
+                        if (filter.state.isNotBlank()) {
+                            add("vars[tax_query][$taxQueryIdx][taxonomy]", "wp-manga-author")
+                            add("vars[tax_query][$taxQueryIdx][field]", "name")
+                            add("vars[tax_query][$taxQueryIdx][terms]", filter.state)
+
+                            taxQueryIdx++
+                        }
+                    }
+                    is ArtistFilter -> {
+                        if (filter.state.isNotBlank()) {
+                            add("vars[tax_query][$taxQueryIdx][taxonomy]", "wp-manga-artist")
+                            add("vars[tax_query][$taxQueryIdx][field]", "name")
+                            add("vars[tax_query][$taxQueryIdx][terms]", filter.state)
+
+                            taxQueryIdx++
+                        }
+                    }
+                    is YearFilter -> {
+                        if (filter.state.isNotBlank()) {
+                            add("vars[tax_query][$taxQueryIdx][taxonomy]", "wp-manga-release")
+                            add("vars[tax_query][$taxQueryIdx][field]", "name")
+                            add("vars[tax_query][$taxQueryIdx][terms]", filter.state)
+
+                            taxQueryIdx++
+                        }
+                    }
+                    is StatusFilter -> {
+                        val statuses = filter.state
+                            .filter { it.state }
+                            .map { it.id }
+
+                        if (statuses.isNotEmpty()) {
+                            add("vars[meta_query][$metaQueryIdx][key]", "_wp_manga_status")
+
+                            statuses.forEachIndexed { i, slug ->
+                                add("vars[meta_query][$metaQueryIdx][value][$i]", slug)
+                            }
+
+                            metaQueryIdx++
+                        }
+                    }
+                    is OrderByFilter -> {
+                        if (filter.state != 0) {
+                            when (filter.toUriPart()) {
+                                "latest" -> {
+                                    add("vars[orderby]", "meta_value_num")
+                                    add("vars[order]", "DESC")
+                                    add("vars[meta_key]", "_latest_update")
+                                }
+                                "alphabet" -> {
+                                    add("vars[orderby]", "post_title")
+                                    add("vars[order]", "ASC")
+                                }
+                                "rating" -> {
+                                    add("vars[orderby][query_average_reviews]", "DESC")
+                                    add("vars[orderby][query_total_reviews]", "DESC")
+                                }
+                                "trending" -> {
+                                    add("vars[orderby]", "meta_value_num")
+                                    add("vars[meta_key]", "_wp_manga_week_views_value")
+                                    add("vars[order]", "DESC")
+                                }
+                                "views" -> {
+                                    add("vars[orderby]", "meta_value_num")
+                                    add("vars[meta_key]", "_wp_manga_views")
+                                    add("vars[order]", "DESC")
+                                }
+                                else -> {
+                                    add("vars[orderby]", "date")
+                                    add("vars[order]", "DESC")
+                                }
+                            }
+                        }
+                    }
+                    is AdultContentFilter -> {
+                        if (filter.state != 0) {
+                            add("vars[meta_query][$metaQueryIdx][key]", "manga_adult_content")
+                            add(
+                                "vars[meta_query][$metaQueryIdx][compare]",
+                                if (filter.state == 1) "not exists" else "exists",
+                            )
+
+                            metaQueryIdx++
+                        }
+                    }
+                    is GenreConditionFilter -> {
+                        if (filter.state == 1 && genres.isNotEmpty()) {
+                            add("vars[tax_query][$taxQueryIdx][operation]", "AND")
+                        }
+                    }
+                    is GenreList -> {
+                        if (genres.isNotEmpty()) {
+                            add("vars[tax_query][$taxQueryIdx][taxonomy]", "wp-manga-genre")
+                            add("vars[tax_query][$taxQueryIdx][field]", "slug")
+
+                            genres.forEachIndexed { i, slug ->
+                                add("vars[tax_query][$taxQueryIdx][terms][$i]", slug)
+                            }
+
+                            taxQueryIdx++
+                        }
+                    }
+                    else -> {}
+                }
+            }
+        }.build()
+
+        val searchHeaders = headersBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        return POST("$baseUrl/wp-admin/admin-ajax.php", searchHeaders, formBodyBuilder)
     }
 
     protected open val statusFilterOptions: Map<String, String> =
@@ -458,7 +599,7 @@ abstract class Madara(
         return manga
     }
 
-    override fun searchMangaNextPageSelector(): String? = "div.nav-previous, nav.navigation-ajax, a.nextpostslink"
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Manga Details Parse
 
