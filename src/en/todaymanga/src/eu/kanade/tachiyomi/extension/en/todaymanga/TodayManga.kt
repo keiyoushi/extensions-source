@@ -17,6 +17,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -265,7 +266,7 @@ open class TodayManga : ParsedHttpSource() {
     private fun parseDate(dateStr: String): Long {
         return try {
             dateFormat.parse(dateStr)!!.time
-        } catch (_: Throwable) {
+        } catch (_: ParseException) {
             0L
         }
     }
@@ -279,7 +280,6 @@ open class TodayManga : ParsedHttpSource() {
             set(Calendar.MILLISECOND, 0)
         }
 
-        var parsedDate = 0L
         val relativeDate = this.split(" ").firstOrNull()
             ?.replace("one", "1")
             ?.replace("a", "1")
@@ -287,36 +287,15 @@ open class TodayManga : ParsedHttpSource() {
             ?: return 0L
 
         when {
-            // parse: 30 seconds ago
-            "second" in this -> {
-                parsedDate = now.apply { add(Calendar.SECOND, -relativeDate) }.timeInMillis
-            }
-            // parses: "42 minutes ago"
-            "minute" in this -> {
-                parsedDate = now.apply { add(Calendar.MINUTE, -relativeDate) }.timeInMillis
-            }
-            // parses: "1 hour ago" and "2 hours ago"
-            "hour" in this -> {
-                parsedDate = now.apply { add(Calendar.HOUR, -relativeDate) }.timeInMillis
-            }
-            // parses: "2 days ago"
-            "day" in this -> {
-                parsedDate = now.apply { add(Calendar.DAY_OF_YEAR, -relativeDate) }.timeInMillis
-            }
-            // parses: "2 weeks ago"
-            "week" in this -> {
-                parsedDate = now.apply { add(Calendar.WEEK_OF_YEAR, -relativeDate) }.timeInMillis
-            }
-            // parses: "2 months ago"
-            "month" in this -> {
-                parsedDate = now.apply { add(Calendar.MONTH, -relativeDate) }.timeInMillis
-            }
-            // parse: "2 years ago"
-            "year" in this -> {
-                parsedDate = now.apply { add(Calendar.YEAR, -relativeDate) }.timeInMillis
-            }
+            "second" in this -> now.add(Calendar.SECOND, -relativeDate) // parse: 30 seconds ago
+            "minute" in this -> now.add(Calendar.MINUTE, -relativeDate) // parses: "42 minutes ago"
+            "hour" in this -> now.add(Calendar.HOUR, -relativeDate) // parses: "1 hour ago" and "2 hours ago"
+            "day" in this -> now.add(Calendar.DAY_OF_YEAR, -relativeDate) // parses: "2 days ago"
+            "week" in this -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate) // parses: "2 weeks ago"
+            "month" in this -> now.add(Calendar.MONTH, -relativeDate) // parses: "2 months ago"
+            "year" in this -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
         }
-        return parsedDate
+        return now.timeInMillis
     }
 
     // =============================== Pages ================================
