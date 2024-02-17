@@ -149,8 +149,8 @@ class MangasIn : MMRCMS(
                 arrayOf(
                     "name" to "AZ",
                     "views" to "Visitas",
-                )
-            )
+                ),
+            ),
         )
 
         return FilterList(filters)
