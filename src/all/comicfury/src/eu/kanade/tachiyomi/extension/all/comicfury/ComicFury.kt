@@ -129,9 +129,9 @@ class ComicFury(
                         response.request.url.toString(),
                         TextInterceptorHelper.createUrl(
                             jsp.selectFirst("a.is--comment-author")?.ownText()
-                                ?: "Error No Author For Comment Found",
-                            jsp.selectFirst("div.is--comment-content")?.html()
-                                ?: "Error No Comment Content Found",
+                                ?.let { "Author's Notes from $it" }
+                                .orEmpty(),
+                            jsp.selectFirst("div.is--comment-content")?.html().orEmpty(),
                         ),
                     ),
                 )

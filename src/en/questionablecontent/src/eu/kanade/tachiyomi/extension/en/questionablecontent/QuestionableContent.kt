@@ -91,7 +91,7 @@ class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
         if (showAuthorsNotesPref()) {
             val str = document.selectFirst("#newspost")?.html()
             if (!str.isNullOrEmpty()) {
-                pages.add(Page(pages.size, "", TextInterceptorHelper.createUrl(AUTHOR, str)))
+                pages.add(Page(pages.size, "", TextInterceptorHelper.createUrl("Author's Notes from $AUTHOR", str)))
             }
         }
         return pages
