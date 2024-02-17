@@ -83,11 +83,6 @@ abstract class Madara(
     private var genresList: List<Genre> = emptyList()
 
     /**
-     * Inner variable to control the genre fetching failed state.
-     */
-    private var fetchGenresFailed: Boolean = false
-
-    /**
      * Inner variable to control how much tries the genres request was called.
      */
     private var fetchGenresAttempts: Int = 0
@@ -1060,12 +1055,11 @@ abstract class Madara(
      * Fetch the genres from the source to be used in the filters.
      */
     protected fun fetchGenres() {
-        if (fetchGenres && fetchGenresAttempts < 3 && (genresList.isEmpty() || fetchGenresFailed)) {
+        if (fetchGenres && fetchGenresAttempts < 3 && genresList.isEmpty()) {
             try {
                 genresList = client.newCall(genresRequest()).execute()
                     .use { parseGenres(it.asJsoup()) }
             } catch (_: Exception) {
-                fetchGenresFailed = true
             } finally {
                 fetchGenresAttempts++
             }
