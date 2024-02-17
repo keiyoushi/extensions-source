@@ -20,7 +20,7 @@ class FireScans : Madara("Fire Scans", "https://firescans.xyz", "en") {
     override val useNewChapterEndpoint: Boolean = true
 
     override fun pageListParse(document: Document): List<Page> {
-        countViews(document)
+        launchIO { countViews(document) }
 
         val chapterProtector = document.selectFirst(chapterProtectorSelector)
             ?: return document.select(pageListParseSelector).mapIndexed { index, element ->

@@ -17,7 +17,7 @@ class Doodmanga : Madara("Doodmanga", "https://www.doodmanga.com", "th", SimpleD
 
     override val pageListParseSelector = "div.text-center > p > img, div.text-center > img, div.text-center > script"
     override fun pageListParse(document: Document): List<Page> {
-        super.countViews(document)
+        launchIO { countViews(document) }
 
         return document.select(pageListParseSelector).mapIndexedNotNull { index, element ->
             val src = when (element.tagName()) {

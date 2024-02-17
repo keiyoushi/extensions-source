@@ -22,10 +22,10 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
     override val pageListParseSelector = "li.chapter-image-item > a > div.image-wrapper"
 
     override fun pageListParse(document: Document): List<Page> {
-        super.countViews(document)
+         launchIO { countViews(document) }
 
         return document.select(pageListParseSelector).mapIndexed { index, element ->
-            var pageUri: String? = element.select("img").first()?.let {
+            val pageUri: String? = element.select("img").first()?.let {
                 it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
             }
             Page(

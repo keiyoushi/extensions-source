@@ -50,7 +50,7 @@ class IsekaiScanTop : Madara(
             xhrResponse.close()
         }
 
-        countViews(document)
+        launchIO { countViews(document) }
         return chapterElements.map(::chapterFromElement)
     }
 
@@ -65,7 +65,7 @@ class IsekaiScanTop : Madara(
         }
     }
 
-    override fun searchPage(page: Int): String = "search?page=$page"
+    override fun searchPage(page: Int) = "search?page=$page"
 
-    override fun searchMangaNextPageSelector(): String? = "ul.pagination li:last-child a"
+    override fun searchMangaNextPageSelector() = "ul.pagination li:last-child a"
 }

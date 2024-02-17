@@ -150,6 +150,7 @@ class MangasNoSekai : Madara(
     private val altChapterListSelector = "div.wp-manga-chapter"
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
+        launchIO { countViews(document) }
 
         val mangaUrl = document.location().removeSuffix("/")
 
@@ -171,11 +172,9 @@ class MangasNoSekai : Madara(
                 page++
             } while (xhrDocument.select(altChapterListSelector).isNotEmpty())
 
-            countViews(document)
             return chapterElements.map(::altChapterFromElement)
         }
 
-        countViews(document)
         return chapterElements.map(::chapterFromElement)
     }
 
