@@ -428,6 +428,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     private var fetchFilterStatus = FetchFilterStatus.NOT_FETCHED
     private var fetchFiltersAttempts = 0
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     private fun fetchFilterOptions() {
         if (baseUrl.isBlank() || fetchFilterStatus != FetchFilterStatus.NOT_FETCHED || fetchFiltersAttempts >= 3) {
@@ -435,8 +436,9 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         }
 
         fetchFilterStatus = FetchFilterStatus.FETCHING
+        fetchFiltersAttempts++
 
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
             try {
                 libraries = client.newCall(GET("$baseUrl/api/v1/libraries")).await().parseAs()
                 collections = client
@@ -456,8 +458,6 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             } catch (e: Exception) {
                 fetchFilterStatus = FetchFilterStatus.NOT_FETCHED
                 Log.e(logTag, "Failed to fetch filtering options", e)
-            } finally {
-                fetchFiltersAttempts++
             }
         }
     }
