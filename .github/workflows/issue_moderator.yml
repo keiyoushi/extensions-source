@@ -57,6 +57,12 @@ jobs:
               },
               {
                 "type": "both",
+                "regex": "yugenmangas?",
+                "ignoreCase": true,
+                "message": "YugenMangas will not be added back. See https://github.com/keiyoushi/extensions-source/issues/1163#issuecomment-1936459487 for details."
+              },
+              {
+                "type": "both",
                 "regex": ".*(?:fail(?:ed|ure|s)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?(?:get past|by ?pass|penetrate)?.*cl[oa]ud ?fl?[ai]re.*",
                 "ignoreCase": true,
                 "labels": ["Cloudflare protected"],
