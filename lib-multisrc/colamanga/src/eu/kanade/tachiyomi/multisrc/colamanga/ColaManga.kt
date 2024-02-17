@@ -143,7 +143,7 @@ abstract class ColaManga(
         }
     }
 
-    override fun searchMangaNextPageSelector() = popularMangaSelector()
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     protected abstract val statusTitle: String
     protected abstract val authorTitle: String
