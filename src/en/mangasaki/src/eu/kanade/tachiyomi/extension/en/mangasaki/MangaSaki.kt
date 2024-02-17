@@ -16,6 +16,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -157,9 +158,14 @@ class MangaSaki : ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.select("a").attr("href"))
         chapter.name = element.select("a").text()
-        chapter.date_upload = element.select("td").last()?.text()?.let {
-            dateFormat.parse(it)?.time ?: 0
-        } ?: 0
+        chapter.date_upload = try {
+            element.select("td").last()?.text()?.let {
+                dateFormat.parse(it)?.time ?: 0L
+            } ?: 0L
+        } catch (_: ParseException) {
+            0L
+        }
+
         return chapter
     }
 
@@ -174,7 +180,7 @@ class MangaSaki : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
