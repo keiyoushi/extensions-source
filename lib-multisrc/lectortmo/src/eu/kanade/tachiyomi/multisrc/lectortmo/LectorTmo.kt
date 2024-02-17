@@ -91,7 +91,7 @@ abstract class LectorTmo(
     }
 
     private val ignoreSslClient: OkHttpClient by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .ignoreAllSSLErrors()
             .followRedirects(false)
             .rateLimit(
@@ -103,7 +103,7 @@ abstract class LectorTmo(
 
     private var lastCFDomain: String = ""
     override val client: OkHttpClient by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .addInterceptor { chain ->
                 val request = chain.request()
                 val url = request.url
