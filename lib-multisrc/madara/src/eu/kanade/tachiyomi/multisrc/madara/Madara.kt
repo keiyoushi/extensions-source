@@ -118,13 +118,22 @@ abstract class Madara(
     /**
      * internal variable to save if site uses load_more or not
      */
-    private var loadMoreRequestDetected = false
+    private var loadMoreRequestDetected = LoadMoreDetection.Pending
+
+    private enum class LoadMoreDetection {
+        Pending, True, False
+    }
+
+    private fun detectLoadMore(): Boolean {
+        return useLoadMoreRequest == LoadMoreStrategy.AutoDetect &&
+            loadMoreRequestDetected == LoadMoreDetection.Pending
+    }
 
     private fun useLoadMoreRequest(): Boolean {
         return when (useLoadMoreRequest) {
             LoadMoreStrategy.Always -> true
             LoadMoreStrategy.Never -> false
-            else -> loadMoreRequestDetected
+            else -> loadMoreRequestDetected == LoadMoreDetection.True
         }
     }
 
@@ -137,8 +146,11 @@ abstract class Madara(
             .map(::popularMangaFromElement)
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
 
-        if (useLoadMoreRequest == LoadMoreStrategy.AutoDetect && !loadMoreRequestDetected) {
-            loadMoreRequestDetected = document.selectFirst("nav.navigation-ajax") != null
+        if (detectLoadMore()) {
+            loadMoreRequestDetected = when (document.selectFirst("nav.navigation-ajax") != null) {
+                true -> LoadMoreDetection.True
+                false -> LoadMoreDetection.False
+            }
         }
 
         return MangasPage(entries, hasNextPage)
