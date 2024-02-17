@@ -53,10 +53,6 @@ class MangasNoSekai : Madara(
         return manga
     }
 
-    override fun searchPage(page: Int): String {
-        return if (page > 1) "page/$page/" else ""
-    }
-
     override fun searchMangaNextPageSelector() = "nav.navigation a.next"
 
     override val mangaDetailsSelectorTitle = "div.thumble-container p.titleMangaSingle"
