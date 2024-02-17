@@ -61,20 +61,8 @@ class DragonTea : Madara(
 
         val unsaltedCiphertext = Base64.decode(cipherData["ct"]!!.jsonPrimitive.content, Base64.DEFAULT)
         val salt = cipherData["s"]!!.jsonPrimitive.content.decodeHex()
-        val saltedCiphertext = SALTED + salt + unsaltedCiphertext
+        val saltedCiphertext = salted + salt + unsaltedCiphertext
 
         return json.parseToJsonElement(CryptoAES.decrypt(Base64.encodeToString(saltedCiphertext, Base64.DEFAULT), key))
-    }
-
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
-    }
-
-    companion object {
-        private val SALTED = "Salted__".toByteArray(Charsets.UTF_8)
     }
 }

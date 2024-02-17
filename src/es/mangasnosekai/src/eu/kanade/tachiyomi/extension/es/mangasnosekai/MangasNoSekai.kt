@@ -134,12 +134,6 @@ class MangasNoSekai : Madara(
             .add("page", page.toString())
             .build()
 
-        val xhrHeaders = headersBuilder()
-            .add("Content-Length", form.contentLength().toString())
-            .add("Content-Type", form.contentType().toString())
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
 

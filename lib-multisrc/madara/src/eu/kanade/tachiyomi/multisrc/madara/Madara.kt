@@ -48,6 +48,12 @@ abstract class Madara(
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    protected val xhrHeaders by lazy {
+        headersBuilder()
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
+    }
+
     protected open val json: Json by injectLazy()
 
     protected val intl = Intl(
@@ -126,7 +132,7 @@ abstract class Madara(
         }
     }
 
-    private fun useLoadMoreRequest(): Boolean {
+    protected fun useLoadMoreRequest(): Boolean {
         return when (useLoadMoreRequest) {
             LoadMoreStrategy.Always -> true
             LoadMoreStrategy.Never -> false
@@ -224,10 +230,6 @@ abstract class Madara(
             add("vars[manga_archives_item_layout]", "big_thumbnail")
         }.build()
 
-        val xhrHeaders = headersBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, formBody)
     }
 
@@ -318,7 +320,7 @@ abstract class Madara(
     }
 
     protected open fun searchLoadMoreRequest(page: Int, query: String, filters: FilterList): Request {
-        val formBodyBuilder = FormBody.Builder().apply {
+        val formBody = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", (page - 1).toString())
             add("template", "madara-core/content/content-search")
@@ -453,11 +455,7 @@ abstract class Madara(
             }
         }.build()
 
-        val searchHeaders = headersBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        return POST("$baseUrl/wp-admin/admin-ajax.php", searchHeaders, formBodyBuilder)
+        return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, formBody)
     }
 
     protected open val statusFilterOptions: Map<String, String> =
@@ -777,18 +775,10 @@ abstract class Madara(
             .add("manga", mangaId)
             .build()
 
-        val xhrHeaders = headersBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
 
     protected open fun xhrChaptersRequest(mangaUrl: String): Request {
-        val xhrHeaders = headersBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
         return POST("$mangaUrl/ajax/chapters", xhrHeaders)
     }
 
@@ -968,7 +958,7 @@ abstract class Madara(
 
         val unsaltedCiphertext = Base64.decode(chapterData["ct"]!!.jsonPrimitive.content, Base64.DEFAULT)
         val salt = chapterData["s"]!!.jsonPrimitive.content.decodeHex()
-        val ciphertext = SALTED + salt + unsaltedCiphertext
+        val ciphertext = salted + salt + unsaltedCiphertext
 
         val rawImgArray = CryptoAES.decrypt(Base64.encodeToString(ciphertext, Base64.DEFAULT), password)
         val imgArrayString = json.parseToJsonElement(rawImgArray).jsonPrimitive.content
@@ -1079,7 +1069,7 @@ abstract class Madara(
     }
 
     // https://stackoverflow.com/a/66614516
-    private fun String.decodeHex(): ByteArray {
+    protected fun String.decodeHex(): ByteArray {
         check(length % 2 == 0) { "Must have an even length" }
 
         return chunked(2)
@@ -1087,13 +1077,14 @@ abstract class Madara(
             .toByteArray()
     }
 
+    protected val salted = "Salted__".toByteArray(Charsets.UTF_8)
+
     private val scope = CoroutineScope(Dispatchers.IO)
 
     protected fun launchIO(block: () -> Unit) = scope.launch { block() }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
-        val SALTED = "Salted__".toByteArray(Charsets.UTF_8)
     }
 }
 

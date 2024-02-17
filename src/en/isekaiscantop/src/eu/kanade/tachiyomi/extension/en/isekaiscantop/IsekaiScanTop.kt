@@ -40,9 +40,6 @@ class IsekaiScanTop : Madara(
 
         if (chapterElements.isEmpty() && !chaptersWrapper.isNullOrEmpty()) {
             val mangaId = chaptersWrapper.attr("data-id")
-            val xhrHeaders = headersBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .build()
             val xhrRequest = GET("$baseUrl/ajax-list-chapter?mangaID=$mangaId", xhrHeaders)
             val xhrResponse = client.newCall(xhrRequest).execute()
 

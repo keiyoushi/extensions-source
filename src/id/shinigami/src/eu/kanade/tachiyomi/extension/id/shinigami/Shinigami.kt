@@ -81,22 +81,13 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         val salt = chapterData.s.decodeHex()
 
         val unsaltedCiphertext = Base64.decode(chapterData.ct, Base64.DEFAULT)
-        val ciphertext = SALTED + salt + unsaltedCiphertext
+        val ciphertext = salted + salt + unsaltedCiphertext
 
         val decrypted = CryptoAES.decrypt(Base64.encodeToString(ciphertext, Base64.DEFAULT), key)
         val data = json.decodeFromString<List<String>>(decrypted)
         return data.mapIndexed { idx, it ->
             Page(idx, document.location(), it)
         }
-    }
-
-    // https://stackoverflow.com/a/66614516
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
     }
 
     private fun randomString(length: Int): String {
