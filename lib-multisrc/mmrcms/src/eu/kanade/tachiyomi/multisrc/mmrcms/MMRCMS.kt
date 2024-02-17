@@ -306,7 +306,7 @@ constructor(
 
         val filters = buildList {
             add(Filter.Header("Ignored if using text search"))
-            if (fetchFilterOptions && fetchFiltersStatus == FetchFilterStatus.NOT_FETCHED) {
+            if (fetchFilterOptions && fetchFiltersStatus != FetchFilterStatus.FETCHED) {
                 add(Filter.Header("Press 'Reset' to attempt to show filter options"))
             }
             add(Filter.Separator())
