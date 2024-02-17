@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mmrcms
 
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
@@ -48,11 +49,12 @@ class UriMultiSelectFilter(
 }
 
 class SortFilter(
+    intl: Intl,
     private val sortables: Array<Pair<String, String>>,
     selection: Selection = Selection(0, true),
 ) :
     Filter.Sort(
-        "Sort by",
+        intl["sort_by_filter_title"],
         sortables.map { it.first }.toTypedArray(),
         selection,
     ),

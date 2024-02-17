@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.multisrc.mmrcms
 
 import android.annotation.SuppressLint
 import android.util.Log
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -69,6 +70,13 @@ constructor(
         .add("Referer", "$baseUrl/")
 
     protected val json: Json by injectLazy()
+
+    protected val intl = Intl(
+        lang,
+        setOf("en"),
+        "en",
+        this::class.java.classLoader!!,
+    )
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/filterList?page=$page&sortBy=views&asc=false")
 
@@ -305,9 +313,9 @@ constructor(
         fetchFilterOptions()
 
         val filters = buildList {
-            add(Filter.Header("Ignored if using text search"))
+            add(Filter.Header(intl["filter_warning"]))
             if (fetchFilterOptions && fetchFiltersStatus != FetchFilterStatus.FETCHED) {
-                add(Filter.Header("Press 'Reset' to attempt to show filter options"))
+                add(Filter.Header(intl["filter_missing_warning"]))
             }
             add(Filter.Separator())
 
@@ -315,7 +323,7 @@ constructor(
                 if (categories.isNotEmpty()) {
                     add(
                         UriMultiSelectFilter(
-                            "Categories",
+                            intl["category_filter_title"],
                             "categories[]",
                             categories.toTypedArray(),
                         ),
@@ -325,7 +333,7 @@ constructor(
                 if (statuses.isNotEmpty()) {
                     add(
                         UriMultiSelectFilter(
-                            "Statuses",
+                            intl["status_filter_title"],
                             "status[]",
                             statuses.toTypedArray(),
                         ),
@@ -335,20 +343,20 @@ constructor(
                 if (tags.isNotEmpty()) {
                     add(
                         UriMultiSelectFilter(
-                            "Types",
+                            intl["type_filter_title"],
                             "types[]",
                             tags.toTypedArray(),
                         ),
                     )
                 }
 
-                add(TextFilter("Year of release", "release"))
-                add(TextFilter("Author", "author"))
+                add(TextFilter(intl["year_filter_title"], "release"))
+                add(TextFilter(intl["author_filter_title"], "author"))
             } else {
                 if (categories.isNotEmpty()) {
                     add(
                         UriPartFilter(
-                            "Category",
+                            intl["category_filter_title"],
                             "cat",
                             arrayOf(
                                 "Any" to "",
@@ -358,12 +366,12 @@ constructor(
                     )
                 }
 
-                add(UriPartFilter("Title begins with", "alpha", alphaOptions))
+                add(UriPartFilter(intl["title_begins_with_filter_title"], "alpha", alphaOptions))
 
                 if (tags.isNotEmpty()) {
                     add(
                         UriPartFilter(
-                            "Tag",
+                            intl["tag_filter_title"],
                             "tag",
                             arrayOf(
                                 "Any" to "",
@@ -374,7 +382,7 @@ constructor(
                 }
 
                 if (sortOptions.isNotEmpty()) {
-                    add(SortFilter(sortOptions))
+                    add(SortFilter(intl, sortOptions))
                 }
             }
         }
