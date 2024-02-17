@@ -59,7 +59,7 @@ class SetsuScans : Madara(
     }
 
     override val useNewChapterEndpoint = true
-    override val useLoadMoreRequest = true
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(status) + div.summary-content"
 }

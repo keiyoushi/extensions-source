@@ -17,5 +17,5 @@ class RichtoScan : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
-    override val useLoadMoreRequest = true
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 }

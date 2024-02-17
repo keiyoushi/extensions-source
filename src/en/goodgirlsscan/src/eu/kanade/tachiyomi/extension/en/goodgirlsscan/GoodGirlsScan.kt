@@ -10,7 +10,7 @@ import org.jsoup.nodes.Element
 
 class GoodGirlsScan : Madara("Good Girls Scan", "https://goodgirls.moe", "en") {
     override val fetchGenres = false
-    override val useLoadMoreRequest = true
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override fun searchMangaSelector() = "article.wp-manga"
     override fun searchMangaNextPageSelector() = "div.paginator .nav-next"
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"

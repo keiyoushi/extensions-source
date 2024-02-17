@@ -17,7 +17,7 @@ class TaurusFansub : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
-    override val useLoadMoreRequest = true
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val mangaDetailsSelectorDescription = "div.tab-summary > div.tab-content > div#tab-reducir > div.contenedor"
 }

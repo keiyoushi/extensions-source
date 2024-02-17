@@ -9,7 +9,7 @@ class MMScans : Madara("MMScans", "https://mm-scans.org", "en") {
 
     // The site customized the listing and does not include a .manga class.
     override val filterNonMangaItems = false
-    override val useLoadMoreRequest = true
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val popularMangaUrlSelector = "div.item-summary a"
     override fun chapterListSelector() = "li.chapter-li"

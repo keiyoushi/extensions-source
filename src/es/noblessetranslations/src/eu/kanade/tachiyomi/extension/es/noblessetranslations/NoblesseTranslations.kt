@@ -11,7 +11,7 @@ class NoblesseTranslations : Madara(
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
 ) {
     override val useNewChapterEndpoint = true
-    override val useLoadMoreRequest = true
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val mangaSubString = "manga"
 
     override val mangaDetailsSelectorDescription = "div.summary_content > div.post-content div.manga-summary"

@@ -104,16 +104,26 @@ abstract class Madara(
     protected open val mangaSubString = "manga"
 
     /**
-     * enable if the site use "madara_load_more"
-     * to load manga on the site
+     * enable if the site use "madara_load_more" to load manga on the site
      * Typically has "load More" instead of next/previous page
+     *
+     * with LoadMoreStrategy.AutoDetect it tries to detect if site uses `madara_load_more`
      */
-    protected open val useLoadMoreRequest = false
+    protected open val useLoadMoreRequest = LoadMoreStrategy.AutoDetect
+
+    enum class LoadMoreStrategy {
+        AutoDetect, Always, Never
+    }
 
     /**
      * internal variable to save if site uses load_more or not
      */
     private var loadMoreRequestDetected = false
+
+    private fun useLoadMoreRequest(): Boolean {
+        return (useLoadMoreRequest != LoadMoreStrategy.Never) &&
+            (useLoadMoreRequest == LoadMoreStrategy.Always || loadMoreRequestDetected)
+    }
 
     // Popular Manga
 
@@ -124,7 +134,7 @@ abstract class Madara(
             .map(::popularMangaFromElement)
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
 
-        if (!loadMoreRequestDetected && !useLoadMoreRequest) {
+        if (useLoadMoreRequest()) {
             loadMoreRequestDetected = document.selectFirst("nav.navigation-ajax") != null
         }
 
@@ -154,14 +164,14 @@ abstract class Madara(
     }
 
     override fun popularMangaRequest(page: Int): Request =
-        if (useLoadMoreRequest || loadMoreRequestDetected) {
+        if (useLoadMoreRequest()) {
             loadMoreRequest(page - 1, "_wp_manga_views")
         } else {
             GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views", headers)
         }
 
     override fun popularMangaNextPageSelector(): String? =
-        if (useLoadMoreRequest || loadMoreRequestDetected) {
+        if (useLoadMoreRequest()) {
             "body:not(:has(.no-posts))"
         } else {
             searchMangaNextPageSelector()
@@ -177,7 +187,7 @@ abstract class Madara(
     }
 
     override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest || loadMoreRequestDetected) {
+        if (useLoadMoreRequest()) {
             loadMoreRequest(page - 1, "_latest_update")
         } else {
             GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
