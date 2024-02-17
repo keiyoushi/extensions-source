@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.float
@@ -24,6 +23,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 import java.text.DateFormat
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -158,60 +158,32 @@ class MangaOwl(
 
     // Chapters
 
-    // Only selects chapter elements with links, since sometimes chapter lists have unlinked chapters
-    override fun chapterListSelector() = "div.chapters-container > a"
-
-    private fun DateFormat.tryParse(str: String?): Long = if (str.isNullOrEmpty()) {
-        assert(false) { "Date string is null or empty" }
-        0L
-    } else {
-        runCatching {
-            parse(str)?.time ?: 0L
-        }.onFailure {
-            assert(false) { "Cannot parse date $str: ${it.message}" }
-        }.getOrDefault(0L)
-    }
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US)
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(window.__NUXT__=)")
-        val nuxt = script?.data() ?: ""
+        val jsonStr = response.body.string()
+        val story = json.parseToJsonElement(jsonStr).jsonObject
+        val slug = story.jsonObject["slug"]?.jsonPrimitive?.content.toString()
 
-        val argumentsReg = Regex("\\(function\\((.*)\\)\\{")
-        val valueReg = Regex("\\}\\((.*)\\)\\);")
-        val arguments = argumentsReg.find(nuxt)?.groupValues?.get(1)?.split(",")
-        val values = valueReg.find(nuxt)?.groupValues?.get(1)?.split(",")
-        val mappedArguments = arguments?.mapIndexed { index, arg -> arg to (values?.get(index)) }?.toMap()
-
-        val chapterListRegex = Regex("chapters:\\[(.*)],latest_chapter")
-        val chapters = chapterListRegex.find(nuxt)?.groupValues?.get(1)?.split("},")
-
-        val slugRegex = Regex("slug:\"(.*)\"")
-        val slug = slugRegex.find(nuxt)?.groupValues?.get(1)
-            ?: response.request.url.toString().substringAfterLast("/")
-
-        return chapters!!.map {
-            val id_ = it.substringAfter("id:").substringBefore(",created_at")
-            val id = id_.toIntOrNull() ?: mappedArguments?.get(id_)?.toIntOrNull()
-            var name_ = it.substringAfter("name:").substringBefore(',')
-            if (name_[0] != '"') {
-                name_ = mappedArguments?.get(name_) ?: "\"Chapter\""
-            }
-            var date = it.substringAfter("created_at:").substringBefore(',')
-            if (date[0] != '"') {
-                date = mappedArguments?.get(date) ?: "\"0\""
-            }
-
+        return story.jsonObject["chapters"]?.jsonArray!!.map {
+            val id = it.jsonObject["id"]?.jsonPrimitive?.int
             SChapter.create().apply {
                 url = "$baseUrl/10-reading/$slug/$id"
-                name = name_.substring(1, name_.length - 1)
-                date_upload = dateFormat.tryParse(date.substring(1, date.length - 1))
+                name = it.jsonObject["name"]?.jsonPrimitive?.content.toString()
+                date_upload = dateFormat.tryParse(it.jsonObject["created_at"]?.jsonPrimitive?.content.toString())
             }
         }.reversed()
     }
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
+
+    private fun DateFormat.tryParse(str: String): Long = try {
+        parse(str)!!.time
+    } catch (_: ParseException) {
+        0L
+    }
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
