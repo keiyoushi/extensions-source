@@ -14,8 +14,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -1099,8 +1099,9 @@ abstract class Madara(
             .toByteArray()
     }
 
-    protected fun launchIO(block: () -> Unit) =
-        GlobalScope.launch(Dispatchers.IO) { block() }
+    private val scope = CoroutineScope(Dispatchers.IO)
+
+    protected fun launchIO(block: () -> Unit) = scope.launch { block() }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
