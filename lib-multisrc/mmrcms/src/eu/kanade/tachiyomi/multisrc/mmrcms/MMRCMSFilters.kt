@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mmrcms
 
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
@@ -47,27 +48,23 @@ class UriMultiSelectFilter(
     }
 }
 
-class SortFilter(selection: Selection = Selection(0, true)) :
+class SortFilter(
+    intl: Intl,
+    private val sortables: Array<Pair<String, String>>,
+    selection: Selection = Selection(0, true),
+) :
     Filter.Sort(
-        "Sort by",
-        sortables.map { it.second }.toTypedArray(),
+        intl["sort_by_filter_title"],
+        sortables.map { it.first }.toTypedArray(),
         selection,
     ),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
-        val state = state!!
+        val state = state ?: return
 
         builder.apply {
-            addQueryParameter("sortBy", sortables[state.index].first)
+            addQueryParameter("sortBy", sortables[state.index].second)
             addQueryParameter("asc", state.ascending.toString())
         }
-    }
-
-    companion object {
-        private val sortables = arrayOf(
-            "name" to "Name",
-            "views" to "Popularity",
-            "last_release" to "Last update",
-        )
     }
 }

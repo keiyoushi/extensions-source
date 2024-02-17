@@ -7,6 +7,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -45,9 +46,9 @@ class MangaPlus(
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Origin", baseUrl)
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
         .add("User-Agent", USER_AGENT)
-        .add("Session-Token", UUID.randomUUID().toString())
+        .add("SESSION-TOKEN", UUID.randomUUID().toString())
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::imageIntercept)
@@ -76,16 +77,21 @@ class MangaPlus(
      * in Tachiyomi database is expired. It's also used during the chapter deeplink
      * handling to avoid an additional request if possible.
      */
-    private var titleCache: Map<Int, Title>? = null
+    private val titleCache = mutableMapOf<Int, Title>()
+    private lateinit var directory: List<Title>
 
-    override fun popularMangaRequest(page: Int): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", "$baseUrl/manga_list/hot")
-            .set("X-Page", page.toString())
-            .build()
-
-        return GET("$API_URL/title_list/ranking?format=json", newHeaders)
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return if (page == 1) {
+            client.newCall(popularMangaRequest(page))
+                .asObservableSuccess()
+                .map { popularMangaParse(it) }
+        } else {
+            Observable.just(parseDirectory(page))
+        }
     }
+
+    override fun popularMangaRequest(page: Int) =
+        GET("$API_URL/title_list/rankingV2?lang=$internalLang&type=hottest&clang=$internalLang&format=json", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.asMangaPlusResponse()
@@ -94,27 +100,35 @@ class MangaPlus(
             result.error!!.langPopup(langCode)?.body ?: intl["unknown_error"]
         }
 
-        val titleList = result.success.titleRankingView!!.titles
+        directory = result.success.titleRankingViewV2!!.rankedTitles
+            .flatMap(RankedTitle::titles)
             .filter { it.language == langCode }
+        titleCache.putAll(directory.associateBy(Title::titleId))
 
-        titleCache = titleList.associateBy(Title::titleId)
+        return parseDirectory(1)
+    }
 
-        val page = response.request.headers["X-Page"]!!.toInt()
-        val pageList = titleList
+    private fun parseDirectory(page: Int): MangasPage {
+        val pageList = directory
             .drop((page - 1) * LISTING_ITEMS_PER_PAGE)
             .take(LISTING_ITEMS_PER_PAGE)
-        val hasNextPage = (page + 1) * LISTING_ITEMS_PER_PAGE <= titleList.size
+        val hasNextPage = (page + 1) * LISTING_ITEMS_PER_PAGE <= directory.size
 
         return MangasPage(pageList.map(Title::toSManga), hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", "$baseUrl/updates")
-            .build()
-
-        return GET("$API_URL/web/web_homeV3?lang=$internalLang&format=json", newHeaders)
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        return if (page == 1) {
+            client.newCall(latestUpdatesRequest(page))
+                .asObservableSuccess()
+                .map { latestUpdatesParse(it) }
+        } else {
+            Observable.just(parseDirectory(page))
+        }
     }
+
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$API_URL/web/web_homeV4?lang=$internalLang&clang=$internalLang&format=json", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.asMangaPlusResponse()
@@ -123,25 +137,42 @@ class MangaPlus(
             result.error!!.langPopup(langCode)?.body ?: intl["unknown_error"]
         }
 
-        // Fetch all titles to get newer thumbnail URLs in the interceptor.
-        val popularResponse = client.newCall(popularMangaRequest(1)).execute()
-            .asMangaPlusResponse()
-
-        if (popularResponse.success != null) {
-            titleCache = popularResponse.success.titleRankingView!!.titles
-                .filter { it.language == langCode }
-                .associateBy(Title::titleId)
-        }
-
-        val mangas = result.success.webHomeViewV3!!.groups
+        directory = result.success.webHomeViewV4!!.groups
             .flatMap(UpdatedTitleV2Group::titleGroups)
             .flatMap(OriginalTitleGroup::titles)
             .map(UpdatedTitle::title)
             .filter { it.language == langCode }
-            .map(Title::toSManga)
-            .distinctBy(SManga::title)
+            .distinctBy(Title::titleId)
 
-        return MangasPage(mangas, hasNextPage = false)
+        titleCache.putAll(directory.associateBy(Title::titleId))
+        titleCache.putAll(
+            result.success.webHomeViewV4.rankedTitles
+                .flatMap(RankedTitle::titles)
+                .filter { it.language == langCode }
+                .associateBy(Title::titleId),
+        )
+        titleCache.putAll(
+            result.success.webHomeViewV4.featuredTitleLists
+                .flatMap(FeaturedTitleList::featuredTitles)
+                .filter { it.language == langCode }
+                .associateBy(Title::titleId),
+        )
+
+        return parseDirectory(1)
+    }
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return if (page == 1) {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { searchMangaParse(it, query) }
+        } else {
+            Observable.just(parseDirectory(page))
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -151,19 +182,12 @@ class MangaPlus(
             return pageListRequest(query.removePrefix(PREFIX_CHAPTER_ID_SEARCH))
         }
 
-        val newHeaders = headersBuilder()
-            .set("Referer", "$baseUrl/manga_list/all")
-            .set("X-Page", page.toString())
-            .build()
-
-        val apiUrl = "$API_URL/title_list/allV2".toHttpUrl().newBuilder()
-            .addQueryParameter("filter", query.trim())
-            .addQueryParameter("format", "json")
-
-        return GET(apiUrl.toString(), newHeaders)
+        return GET("$API_URL/title_list/allV2?format=json", headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+
+    private fun searchMangaParse(response: Response, query: String): MangasPage {
         val result = response.asMangaPlusResponse()
 
         checkNotNull(result.success) {
@@ -182,7 +206,7 @@ class MangaPlus(
             checkNotNull(result.success.mangaViewer.titleId) { intl["chapter_expired"] }
 
             val titleId = result.success.mangaViewer.titleId
-            val cachedTitle = titleCache?.get(titleId)
+            val cachedTitle = titleCache[titleId]
 
             val title = cachedTitle?.toSManga() ?: run {
                 val titleRequest = mangaDetailsRequest(titleId.toString())
@@ -200,26 +224,17 @@ class MangaPlus(
             return MangasPage(listOfNotNull(title), hasNextPage = false)
         }
 
-        val filter = response.request.url.queryParameter("filter").orEmpty()
-
         val allTitlesList = result.success.allTitlesViewV2!!.allTitlesGroup
             .flatMap(AllTitlesGroup::titles)
             .filter { it.language == langCode }
 
-        titleCache = allTitlesList.associateBy(Title::titleId)
-
-        val searchResults = allTitlesList.filter { title ->
-            title.name.contains(filter, ignoreCase = true) ||
-                title.author.orEmpty().contains(filter, ignoreCase = true)
+        titleCache.putAll(allTitlesList.associateBy(Title::titleId))
+        directory = allTitlesList.filter { title ->
+            title.name.contains(query, ignoreCase = true) ||
+                title.author.orEmpty().contains(query, ignoreCase = true)
         }
 
-        val page = response.request.headers["X-Page"]!!.toInt()
-        val pageList = searchResults
-            .drop((page - 1) * LISTING_ITEMS_PER_PAGE)
-            .take(LISTING_ITEMS_PER_PAGE)
-        val hasNextPage = (page + 1) * LISTING_ITEMS_PER_PAGE <= searchResults.size
-
-        return MangasPage(pageList.map(Title::toSManga), hasNextPage)
+        return parseDirectory(1)
     }
 
     // Remove the '#' and map to the new url format used in website.
@@ -230,11 +245,7 @@ class MangaPlus(
     private fun mangaDetailsRequest(mangaUrl: String): Request {
         val titleId = mangaUrl.substringAfterLast("/")
 
-        val newHeaders = headersBuilder()
-            .set("Referer", "$baseUrl/titles/$titleId")
-            .build()
-
-        return GET("$API_URL/title_detailV3?title_id=$titleId&format=json", newHeaders)
+        return GET("$API_URL/title_detailV3?title_id=$titleId&format=json", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -290,10 +301,6 @@ class MangaPlus(
     }
 
     private fun pageListRequest(chapterId: String): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", "$baseUrl/viewer/$chapterId")
-            .build()
-
         val url = "$API_URL/manga_viewer".toHttpUrl().newBuilder()
             .addQueryParameter("chapter_id", chapterId)
             .addQueryParameter("split", if (preferences.splitImages) "yes" else "no")
@@ -301,7 +308,7 @@ class MangaPlus(
             .addQueryParameter("format", "json")
             .toString()
 
-        return GET(url, newHeaders)
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -317,28 +324,15 @@ class MangaPlus(
             }
         }
 
-        val referer = response.request.header("Referer")!!
-
         return result.success.mangaViewer!!.pages
             .mapNotNull(MangaPlusPage::mangaPage)
             .mapIndexed { i, page ->
                 val encryptionKey = if (page.encryptionKey == null) "" else "#${page.encryptionKey}"
-                Page(i, referer, page.imageUrl + encryptionKey)
+                Page(i, imageUrl = page.imageUrl + encryptionKey)
             }
     }
 
-    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
-
-    override fun imageUrlParse(response: Response): String = ""
-
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .removeAll("Origin")
-            .set("Referer", page.url)
-            .build()
-
-        return GET(page.imageUrl!!, newHeaders)
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val qualityPref = ListPreference(screen.context).apply {
@@ -398,7 +392,7 @@ class MangaPlus(
             .substringBefore("/$TITLE_THUMBNAIL_PATH")
             .substringAfterLast("/")
             .toInt()
-        val title = titleCache?.get(titleId) ?: return response
+        val title = titleCache[titleId] ?: return response
 
         response.close()
         val thumbnailRequest = GET(title.portraitImageUrl, request.headers)
@@ -425,26 +419,27 @@ class MangaPlus(
         get() = getBoolean("${SPLIT_PREF_KEY}_$lang", SPLIT_PREF_DEFAULT_VALUE)
 
     companion object {
-        private const val API_URL = "https://jumpg-webapi.tokyo-cdn.com/api"
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
-
-        private const val LISTING_ITEMS_PER_PAGE = 20
-
-        private const val QUALITY_PREF_KEY = "imageResolution"
-        private val QUALITY_PREF_ENTRY_VALUES = arrayOf("low", "high", "super_high")
-        private val QUALITY_PREF_DEFAULT_VALUE = QUALITY_PREF_ENTRY_VALUES[2]
-
-        private const val SPLIT_PREF_KEY = "splitImage"
-        private const val SPLIT_PREF_DEFAULT_VALUE = true
-
-        private const val NOT_FOUND_SUBJECT = "Not Found"
-
-        private const val TITLE_THUMBNAIL_PATH = "title_thumbnail_portrait_list"
-
         const val PREFIX_ID_SEARCH = "id:"
-        private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
         const val PREFIX_CHAPTER_ID_SEARCH = "chapter-id:"
-        private val CHAPTER_ID_SEARCH_PATTERN = "^chapter-id:(\\d+)$".toRegex()
     }
 }
+
+private const val API_URL = "https://jumpg-webapi.tokyo-cdn.com/api"
+private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+
+private const val LISTING_ITEMS_PER_PAGE = 20
+
+private const val QUALITY_PREF_KEY = "imageResolution"
+private val QUALITY_PREF_ENTRY_VALUES = arrayOf("low", "high", "super_high")
+private val QUALITY_PREF_DEFAULT_VALUE = QUALITY_PREF_ENTRY_VALUES[2]
+
+private const val SPLIT_PREF_KEY = "splitImage"
+private const val SPLIT_PREF_DEFAULT_VALUE = true
+
+private const val NOT_FOUND_SUBJECT = "Not Found"
+
+private const val TITLE_THUMBNAIL_PATH = "title_thumbnail_portrait_list"
+
+private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
+private val CHAPTER_ID_SEARCH_PATTERN = "^chapter-id:(\\d+)$".toRegex()
