@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.mangaowl
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.en.mangaowl.MangaOwlFactory.Genre
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,6 +26,8 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.DateFormat
 import java.text.ParseException
@@ -32,14 +39,40 @@ class MangaOwl(
     private val collectionUrl: String,
     extraName: String = "",
     private val genresList: List<Genre> = listOf(),
-) : ParsedHttpSource() {
-    override val name: String = "MangaOwl$extraName"
-    override val baseUrl = "https://mangaowl.to"
+) : ConfigurableSource, ParsedHttpSource() {
+    override val name: String = "MangaOwl $extraName"
     override val lang = "en"
     override val supportsLatest = true
 
-    private val API = "https://api.mangaowl.to/v1"
-    private val searchPath = "10-search"
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private val defaultDomain: String = getMirrorPref()!!
+    override val baseUrl = "https://$defaultDomain"
+    private val API = "https://api.$defaultDomain/v1"
+    private val searchPath = "search"
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val mirrorPref = ListPreference(screen.context).apply {
+            key = MIRROR_PREF_KEY
+            title = MIRROR_PREF_TITLE
+            entries = MIRROR_PREF_ENTRIES
+            entryValues = MIRROR_PREF_ENTRY_VALUES
+            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
+            summary = "Current: %s\n(Restart app to apply new setting.)"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = findIndexOfValue(selected)
+                val entry = entryValues[index] as String
+                preferences.edit().putString(MIRROR_PREF_KEY, entry).commit()
+            }
+        }
+        screen.addPreference(mirrorPref)
+    }
+
+    private fun getMirrorPref(): String? = preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)
 
     private val json: Json by injectLazy()
 
@@ -239,5 +272,20 @@ class MangaOwl(
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String?>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
+    }
+
+    companion object {
+        private const val MIRROR_PREF_KEY = "MIRROR"
+        private const val MIRROR_PREF_TITLE = "Mirror"
+        private val MIRROR_PREF_ENTRIES = arrayOf(
+            "mangaowl.to",
+            "mangabuddy.to",
+            "mangafreak.to",
+            "toonily.to",
+            "manganato.so",
+            // "mangakakalot.so", This one doesn't have its own API
+        )
+        private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES
+        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
     }
 }

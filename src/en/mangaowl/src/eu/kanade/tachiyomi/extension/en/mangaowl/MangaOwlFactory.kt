@@ -9,8 +9,8 @@ class MangaOwlFactory : SourceFactory {
 
     override fun createSources(): List<Source> = listOf(
         MangaOwl(
-            collectionUrl = "10-comics",
-            extraName = " Manga",
+            collectionUrl = "comics",
+            extraName = "Manga",
             genresList = listOf(
                 Genre("Action", "13"),
                 Genre("Adult", "29"),
@@ -56,7 +56,7 @@ class MangaOwlFactory : SourceFactory {
         ),
         MangaOwl(
             collectionUrl = "comics-new",
-            extraName = " Comic",
+            extraName = "Comic",
             genresList = listOf(
                 Genre("215 Ink", "189"),
                 Genre("Ablaze", "98"),
