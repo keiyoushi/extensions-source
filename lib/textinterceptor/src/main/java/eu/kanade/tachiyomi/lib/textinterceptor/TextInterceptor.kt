@@ -40,7 +40,7 @@ class TextInterceptor : Interceptor {
         if (url.host != HOST) return chain.proceed(request)
 
         val heading = url.pathSegments[0].takeIf { it.isNotEmpty() }?.let {
-            val creator = textFixer("Author's Notes from ${url.pathSegments[0]}")
+            val title = textFixer(url.pathSegments[0])
 
             // Heading
             val paintHeading = TextPaint().apply {
@@ -52,7 +52,7 @@ class TextInterceptor : Interceptor {
 
             @Suppress("DEPRECATION")
             StaticLayout(
-                creator, paintHeading, (WIDTH - 2 * X_PADDING).toInt(),
+                title, paintHeading, (WIDTH - 2 * X_PADDING).toInt(),
                 Layout.Alignment.ALIGN_NORMAL, SPACING_MULT, SPACING_ADD, true
             )
         }
@@ -123,7 +123,7 @@ object TextInterceptorHelper {
 
     const val HOST = "tachiyomi-lib-textinterceptor"
 
-    fun createUrl(creator: String, text: String): String {
-        return "http://$HOST/" + Uri.encode(creator) + "/" + Uri.encode(text)
+    fun createUrl(title: String, text: String): String {
+        return "http://$HOST/" + Uri.encode(title) + "/" + Uri.encode(text)
     }
 }

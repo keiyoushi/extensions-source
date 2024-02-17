@@ -363,7 +363,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
                 pages = pages + Page(
                     pages.size,
                     "",
-                    TextInterceptorHelper.createUrl(creator, episodeStory),
+                    TextInterceptorHelper.createUrl("Author's Notes from $creator", episodeStory),
                 )
             }
         }

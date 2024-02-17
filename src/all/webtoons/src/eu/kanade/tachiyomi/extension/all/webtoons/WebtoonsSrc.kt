@@ -65,7 +65,7 @@ open class WebtoonsSrc(
                 pages = pages + Page(
                     pages.size,
                     "",
-                    TextInterceptorHelper.createUrl(creator, note),
+                    TextInterceptorHelper.createUrl("Author's Notes from $creator", note),
                 )
             }
         }
