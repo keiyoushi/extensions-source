@@ -49,7 +49,7 @@ class UriMultiSelectFilter(
 
 class SortFilter(
     private val sortables: Array<Pair<String, String>> = DEFAULT_SORTABLES,
-    selection: Selection = Selection(0, true)
+    selection: Selection = Selection(0, true),
 ) :
     Filter.Sort(
         "Sort by",
