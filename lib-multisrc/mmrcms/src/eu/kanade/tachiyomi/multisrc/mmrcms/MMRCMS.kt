@@ -32,6 +32,7 @@ import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.min
 
 /**
  * @param dateFormat The date format used for parsing chapter dates.
@@ -73,7 +74,7 @@ constructor(
 
     protected val intl = Intl(
         lang,
-        setOf("en"),
+        setOf("en", "es"),
         "en",
         this::class.java.classLoader!!,
     )
@@ -208,7 +209,7 @@ constructor(
     override fun searchMangaNextPageSelector(): String? = ".pagination a[rel=next]"
 
     protected fun parseSearchDirectory(page: Int): MangasPage {
-        val manga = searchDirectory.subList((page - 1) * 24, page * 24)
+        val manga = searchDirectory.subList((page - 1) * 24, min(page * 24, searchDirectory.size))
             .map {
                 SManga.create().apply {
                     url = "/$itemPath/${it.data}"
