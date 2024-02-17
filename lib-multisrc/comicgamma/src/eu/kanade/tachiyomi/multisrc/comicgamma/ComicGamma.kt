@@ -1,16 +1,20 @@
 package eu.kanade.tachiyomi.multisrc.comicgamma
 
+import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbInterceptor
+import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import kotlinx.serialization.json.Json
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -22,7 +26,11 @@ open class ComicGamma(
 ) : ParsedHttpSource() {
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder().addInterceptor(PtImgInterceptor).build()
+    private val json = Injekt.get<Json>()
+
+    override val client = network.client.newBuilder()
+        .addInterceptor(SpeedBinbInterceptor(json))
+        .build()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga/", headers)
     override fun popularMangaNextPageSelector(): String? = null
@@ -54,10 +62,9 @@ open class ComicGamma(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
         throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document) =
-        document.select("#content > div[data-ptimg]").mapIndexed { i, e ->
-            Page(i, imageUrl = e.attr("abs:data-ptimg"))
-        }
+    private val reader by lazy { SpeedBinbReader(client, headers, json) }
+
+    override fun pageListParse(document: Document) = reader.pageListParse(document)
 
     override fun mangaDetailsParse(document: Document): SManga {
         val titleElement = document.selectFirst(Evaluator.Class("manga__title"))!!
