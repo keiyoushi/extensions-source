@@ -5,5 +5,5 @@ plugins {
 baseVersionCode = 7
 
 dependencies {
-    implementation(project(":lib:speedbinb"))
+    api(project(":lib:speedbinb"))
 }
