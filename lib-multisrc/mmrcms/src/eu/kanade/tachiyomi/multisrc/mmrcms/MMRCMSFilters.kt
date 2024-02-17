@@ -47,7 +47,10 @@ class UriMultiSelectFilter(
     }
 }
 
-class SortFilter(selection: Selection = Selection(0, true)) :
+class SortFilter(
+    private val sortables: Array<Pair<String, String>> = DEFAULT_SORTABLES,
+    selection: Selection = Selection(0, true)
+) :
     Filter.Sort(
         "Sort by",
         sortables.map { it.second }.toTypedArray(),
@@ -55,19 +58,17 @@ class SortFilter(selection: Selection = Selection(0, true)) :
     ),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
-        val state = state!!
+        val state = state ?: return
 
         builder.apply {
             addQueryParameter("sortBy", sortables[state.index].first)
             addQueryParameter("asc", state.ascending.toString())
         }
     }
-
-    companion object {
-        private val sortables = arrayOf(
-            "name" to "Name",
-            "views" to "Popularity",
-            "last_release" to "Last update",
-        )
-    }
 }
+
+private val DEFAULT_SORTABLES = arrayOf(
+    "name" to "Name",
+    "views" to "Popularity",
+    "last_release" to "Last update",
+)

@@ -2,11 +2,10 @@ package eu.kanade.tachiyomi.multisrc.mmrcms
 
 import android.annotation.SuppressLint
 import android.util.Log
-import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMSUtils.imgAttr
-import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMSUtils.textWithNewlines
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,6 +14,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -23,14 +25,12 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import rx.Observable
-import rx.Single
-import rx.Subscription
-import rx.schedulers.Schedulers
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.locks.ReentrantLock
 
 /**
  * @param dateFormat The date format used for parsing chapter dates.
@@ -50,7 +50,7 @@ constructor(
 
     vararg useNamedArgumentsBelow: Forbidden,
 
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US),
+    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US),
     protected val itemPath: String = "manga",
     private val fetchFilterOptions: Boolean = true,
     private val supportsAdvancedSearch: Boolean = true,
@@ -117,16 +117,13 @@ constructor(
 
     protected var searchDirectory = emptyList<SuggestionDto>()
 
-    private var searchQuery = ""
-
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
         return if (query.isNotEmpty()) {
-            if (page == 1 && query != searchQuery) {
-                searchQuery = query
+            if (page == 1) {
                 client.newCall(searchMangaRequest(page, query, filters))
                     .asObservableSuccess()
                     .map { searchMangaParse(it) }
@@ -197,26 +194,23 @@ constructor(
 
         setUrlWithoutDomain(anchor.attr("href"))
         title = anchor.text()
-        thumbnail_url = MMRCMSUtils.guessCover(baseUrl, url, element.selectFirst("img")?.imgAttr())
+        thumbnail_url = guessCover(url, element.selectFirst("img")?.imgAttr())
     }
 
     override fun searchMangaNextPageSelector(): String? = ".pagination a[rel=next]"
 
     protected fun parseSearchDirectory(page: Int): MangasPage {
-        val manga = mutableListOf<SManga>()
-        val endRange = ((page * 24) - 1).let { if (it <= searchDirectory.lastIndex) it else searchDirectory.lastIndex }
-
-        for (i in (((page - 1) * 24)..endRange)) {
-            manga.add(
+        val manga = searchDirectory.subList((page - 1) * 24, page * 24)
+            .map {
                 SManga.create().apply {
-                    url = "/$itemPath/${searchDirectory[i].data}"
-                    title = searchDirectory[i].value
-                    thumbnail_url = MMRCMSUtils.guessCover(baseUrl, url, null)
-                },
-            )
-        }
+                    url = "/$itemPath/${it.data}"
+                    title = it.value
+                    thumbnail_url = guessCover(url, null)
+                }
+            }
+        val hasNextPage = (page + 1) * 24 <= searchDirectory.size
 
-        return MangasPage(manga, endRange < searchDirectory.lastIndex)
+        return MangasPage(manga, hasNextPage)
     }
 
     protected val detailAuthor = hashSetOf("author(s)", "autor(es)", "auteur(s)", "著作", "yazar(lar)", "mangaka(lar)", "pengarang/penulis", "pengarang", "penulis", "autor", "المؤلف", "перевод", "autor/autorzy")
@@ -230,8 +224,7 @@ constructor(
     @SuppressLint("DefaultLocale")
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(detailsTitleSelector)!!.text()
-        thumbnail_url = MMRCMSUtils.guessCover(
-            baseUrl,
+        thumbnail_url = guessCover(
             document.location(),
             document.selectFirst(".row img.img-responsive")?.imgAttr(),
         )
@@ -274,16 +267,16 @@ constructor(
 
         setUrlWithoutDomain(anchor.attr("href"))
         name = cleanChapterName(mangaTitle, titleWrapper.text())
-        date_upload = runCatching {
+        date_upload = try {
             val date = element.selectFirst(".date-chapter-title-rtl")!!.text()
 
             dateFormat.parse(date)!!.time
-        }.getOrDefault(0L)
+        } catch (_: ParseException) {
+            0L
+        } catch (_: NullPointerException) {
+            0L
+        }
     }
-
-    /**
-     * The word for "Chapter" in your language.
-     */
 
     /**
      * Function to clean up chapter names. Mostly useful for sites that
@@ -309,18 +302,16 @@ constructor(
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList {
-        runCatching { fetchFilterOptions() }
+        fetchFilterOptions()
 
-        val filters = buildList<Filter<*>> {
-            add(Filter.Header("Note: Ignored if using text search!"))
+        val filters = buildList {
+            add(Filter.Header("Ignored if using text search"))
+            if (fetchFilterOptions && fetchFiltersStatus == FetchFilterStatus.NOT_FETCHED) {
+                add(Filter.Header("Press 'Reset' to attempt to show filter options"))
+            }
+            add(Filter.Separator())
 
             if (supportsAdvancedSearch) {
-                if (fetchFilterOptions && (categories.isEmpty() || statuses.isEmpty())) {
-                    add(Filter.Header("Press 'Reset' to attempt to show filter options"))
-                }
-
-                add(Filter.Separator())
-
                 if (categories.isNotEmpty()) {
                     add(
                         UriMultiSelectFilter(
@@ -354,12 +345,6 @@ constructor(
                 add(TextFilter("Year of release", "release"))
                 add(TextFilter("Author", "author"))
             } else {
-                if (fetchFilterOptions && categories.isEmpty()) {
-                    add(Filter.Header("Press 'Reset' to attempt to show filter options"))
-                }
-
-                add(Filter.Separator())
-
                 if (categories.isNotEmpty()) {
                     add(
                         UriPartFilter(
@@ -373,18 +358,7 @@ constructor(
                     )
                 }
 
-                add(
-                    UriPartFilter(
-                        "Title begins with",
-                        "alpha",
-                        arrayOf(
-                            "Any" to "",
-                            *"#ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray().map {
-                                Pair(it.toString(), it.toString())
-                            }.toTypedArray(),
-                        ),
-                    ),
-                )
+                add(UriPartFilter("Title begins with", "alpha", alphaOptions))
 
                 if (tags.isNotEmpty()) {
                     add(
@@ -406,64 +380,94 @@ constructor(
         return FilterList(filters)
     }
 
+    private val alphaOptions by lazy {
+        arrayOf(
+            "Any" to "",
+            *"#ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray().map {
+                Pair(it.toString(), it.toString())
+            }.toTypedArray(),
+        )
+    }
     private var categories = emptyList<Pair<String, String>>()
-
     private var statuses = emptyList<Pair<String, String>>()
-
     private var tags = emptyList<Pair<String, String>>()
 
-    private var fetchFiltersFailed = false
-
+    private var fetchFiltersStatus = FetchFilterStatus.NOT_FETCHED
     private var fetchFiltersAttempts = 0
+    private val scope = CoroutineScope(Dispatchers.IO)
 
-    private val fetchFiltersLock = ReentrantLock()
-
-    protected open fun fetchFilterOptions(): Subscription = Single.fromCallable {
+    protected open fun fetchFilterOptions() {
         if (!fetchFilterOptions) {
-            return@fromCallable
+            return
         }
 
-        fetchFiltersLock.lock()
-
-        if (fetchFiltersAttempts > 3 || (fetchFiltersAttempts > 0 && !fetchFiltersFailed)) {
-            fetchFiltersLock.unlock()
-            return@fromCallable
+        if (fetchFiltersStatus != FetchFilterStatus.NOT_FETCHED || fetchFiltersAttempts >= 3) {
+            return
         }
 
-        fetchFiltersFailed = try {
-            if (supportsAdvancedSearch) {
-                val document = client.newCall(GET("$baseUrl/advanced-search", headers)).execute().asJsoup()
-
-                categories = document.select("select[name='categories[]'] option").map {
-                    it.text() to it.attr("value")
-                }
-                statuses = document.select("select[name='status[]'] option").map {
-                    it.text() to it.attr("value")
-                }
-                tags = document.select("select[name='types[]'] option").map {
-                    it.text() to it.attr("value")
-                }
-            } else {
-                val document = client.newCall(GET("$baseUrl/$itemPath-list", headers)).execute().asJsoup()
-
-                categories = document.select("a.category").map {
-                    it.text() to it.attr("href").toHttpUrl().queryParameter("cat")!!
-                }
-                tags = document.select("div.tag-links a").map {
-                    it.text() to it.attr("href").toHttpUrl().pathSegments.last()
-                }
-            }
-
-            false
-        } catch (e: Throwable) {
-            Log.e(name, "Could not fetch filtering options", e)
-            true
-        }
-
+        fetchFiltersStatus = FetchFilterStatus.FETCHING
         fetchFiltersAttempts++
-        fetchFiltersLock.unlock()
+        scope.launch {
+            try {
+                if (supportsAdvancedSearch) {
+                    val document = client.newCall(GET("$baseUrl/advanced-search", headers))
+                        .await()
+                        .asJsoup()
+
+                    categories = document.select("select[name='categories[]'] option").map {
+                        it.text() to it.attr("value")
+                    }
+                    statuses = document.select("select[name='status[]'] option").map {
+                        it.text() to it.attr("value")
+                    }
+                    tags = document.select("select[name='types[]'] option").map {
+                        it.text() to it.attr("value")
+                    }
+                } else {
+                    val document = client.newCall(GET("$baseUrl/$itemPath-list", headers))
+                        .await()
+                        .asJsoup()
+
+                    categories = document.select("a.category").map {
+                        it.text() to it.attr("href").toHttpUrl().queryParameter("cat")!!
+                    }
+                    tags = document.select("div.tag-links a").map {
+                        it.text() to it.attr("href").toHttpUrl().pathSegments.last()
+                    }
+                }
+
+                fetchFiltersStatus = FetchFilterStatus.FETCHED
+            } catch (e: Exception) {
+                fetchFiltersStatus = FetchFilterStatus.NOT_FETCHED
+                Log.e("MMRCMS/$name", "Could not fetch filters", e)
+            }
+        }
     }
-        .subscribeOn(Schedulers.io())
-        .observeOn(Schedulers.io())
-        .subscribe()
+
+    protected fun guessCover(mangaUrl: String, url: String?): String {
+        return if (url == null || url.endsWith("no-image.png")) {
+            "$baseUrl/uploads/manga/${mangaUrl.substringAfterLast('/')}/cover/cover_250x350.jpg"
+        } else {
+            url
+        }
+    }
+
+    protected fun Element.imgAttr(): String = when {
+        hasAttr("data-background-image") -> absUrl("data-background-image")
+        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
+        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
+        hasAttr("data-src") -> absUrl("data-src")
+        else -> absUrl("src")
+    }
+
+    protected fun Elements.textWithNewlines() = run {
+        select("p, br").prepend("\\n")
+        text().replace("\\n", "\n").replace("\n ", "\n")
+    }
+}
+
+private enum class FetchFilterStatus {
+    NOT_FETCHED,
+    FETCHED,
+    FETCHING,
 }
