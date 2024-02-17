@@ -581,6 +581,23 @@ abstract class Madara(
         return FilterList(filters)
     }
 
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val entries = document.select(searchMangaSelector())
+            .map(::searchMangaFromElement)
+        val hasNextPage = searchMangaNextPageSelector()?.let { document.selectFirst(it) } != null
+
+        if (detectLoadMore()) {
+            loadMoreRequestDetected = when (document.selectFirst("nav.navigation-ajax") != null) {
+                true -> LoadMoreDetection.True
+                false -> LoadMoreDetection.False
+            }
+        }
+
+        return MangasPage(entries, hasNextPage)
+    }
+
     override fun searchMangaSelector() = "div.c-tabs-item__content"
 
     override fun searchMangaFromElement(element: Element): SManga {
