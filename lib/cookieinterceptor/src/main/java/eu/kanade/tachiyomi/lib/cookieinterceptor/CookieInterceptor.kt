@@ -1,6 +1,5 @@
-package eu.kanade.tachiyomi.extension.all.mangapark
+package eu.kanade.tachiyomi.lib.cookieinterceptor
 
-import android.util.Log
 import android.webkit.CookieManager
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -38,9 +37,6 @@ class CookieInterceptor(
     private fun setCookie(url: String, value: String) {
         try {
             CookieManager.getInstance().setCookie(url, value)
-        } catch (e: Exception) {
-            // Probably running on Tachidesk
-            Log.e("MangaPark", "failed to set cookie", e)
-        }
+        } catch (_: Exception) { }
     }
 }

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.mangabz
 
 import android.app.Application
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.unpacker.SubstringExtractor
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
