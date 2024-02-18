@@ -3,7 +3,8 @@ ext {
     extClass = '.Manhastro'
     themePkg = 'madara'
     baseUrl = 'https://manhastro.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
