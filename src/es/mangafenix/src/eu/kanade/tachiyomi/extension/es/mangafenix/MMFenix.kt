@@ -15,11 +15,9 @@ class MMFenix : Madara(
 
     override val id: Long = 19158964284779393
 
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)
         .build()
-
-    override fun popularMangaSelector() = "div.main-col-inner div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector"
-
-    override fun searchMangaSelector() = "div.main-col-inner div.c-tabs-item__content"
 }
