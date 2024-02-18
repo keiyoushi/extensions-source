@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
 
 import eu.kanade.tachiyomi.source.model.SManga
-import okhttp3.Interceptor
-import okhttp3.Response
 import org.jsoup.parser.Parser
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -48,25 +46,6 @@ internal fun parseCover(thumbnailUrl: String?, mdCovers: List<MDcovers>): String
     val vol = mdCovers.firstOrNull()?.vol.orEmpty()
 
     return thumbnailUrl?.replaceAfterLast("/", "$b2key#$vol")
-}
-
-internal fun thumbnailIntercept(chain: Interceptor.Chain): Response {
-    val request = chain.request()
-    val frag = request.url.fragment
-    if (frag.isNullOrEmpty()) return chain.proceed(request)
-    val response = chain.proceed(request)
-    if (!response.isSuccessful && response.code == 404) {
-        response.close()
-        val url = request.url.toString()
-            .replaceAfterLast("/", frag)
-
-        return chain.proceed(
-            request.newBuilder()
-                .url(url)
-                .build(),
-        )
-    }
-    return response
 }
 
 internal fun beautifyChapterName(vol: String, chap: String, title: String): String {
