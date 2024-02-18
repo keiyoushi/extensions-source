@@ -19,8 +19,6 @@ class SectScans : Madara("SectScans", "https://sectscans.com", "en") {
 
     override val useNewChapterEndpoint = true
 
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
-
     // =========================== Manga Details ============================
 
     override val mangaDetailsSelectorTitle = ".post-title"

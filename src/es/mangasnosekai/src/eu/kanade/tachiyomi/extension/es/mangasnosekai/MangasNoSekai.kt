@@ -37,24 +37,20 @@ class MangasNoSekai : Madara(
         val manga = SManga.create()
 
         with(element) {
-            select(popularMangaUrlSelector).first()?.let {
+            selectFirst(popularMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
             }
 
-            select("figcaption").first()?.let {
+            selectFirst("figcaption")!!.let {
                 manga.title = it.text()
             }
 
-            select("img").first()?.let {
+            selectFirst("img")?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
         }
 
         return manga
-    }
-
-    override fun searchPage(page: Int): String {
-        return if (page > 1) "page/$page/" else ""
     }
 
     override fun searchMangaNextPageSelector() = "nav.navigation a.next"
@@ -121,14 +117,14 @@ class MangasNoSekai : Madara(
         return manga
     }
 
-    override val orderByFilterOptionsValues: Array<String> = arrayOf(
-        "",
-        "latest2",
-        "alphabet",
-        "rating",
-        "trending",
-        "views2",
-        "new-manga",
+    override val orderByFilterOptions: Map<String, String> = mapOf(
+        intl["order_by_filter_relevance"] to "",
+        intl["order_by_filter_latest"] to "latest2",
+        intl["order_by_filter_az"] to "alphabet",
+        intl["order_by_filter_rating"] to "rating",
+        intl["order_by_filter_trending"] to "trending",
+        intl["order_by_filter_views"] to "views2",
+        intl["order_by_filter_new"] to "new-manga",
     )
 
     private fun altChapterRequest(mangaId: String, page: Int): Request {
@@ -138,18 +134,13 @@ class MangasNoSekai : Madara(
             .add("page", page.toString())
             .build()
 
-        val xhrHeaders = headersBuilder()
-            .add("Content-Length", form.contentLength().toString())
-            .add("Content-Type", form.contentType().toString())
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
 
     private val altChapterListSelector = "div.wp-manga-chapter"
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
+        launchIO { countViews(document) }
 
         val mangaUrl = document.location().removeSuffix("/")
 
@@ -171,18 +162,16 @@ class MangasNoSekai : Madara(
                 page++
             } while (xhrDocument.select(altChapterListSelector).isNotEmpty())
 
-            countViews(document)
             return chapterElements.map(::altChapterFromElement)
         }
 
-        countViews(document)
         return chapterElements.map(::chapterFromElement)
     }
 
     private fun altChapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
         name = element.select("div.text-sm").text()
-        date_upload = element.select("time").firstOrNull()?.text()?.let {
+        date_upload = element.selectFirst("time")?.text()?.let {
             parseChapterDate(it)
         } ?: 0
     }

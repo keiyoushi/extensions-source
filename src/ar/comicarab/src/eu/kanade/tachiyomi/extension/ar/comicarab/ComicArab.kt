@@ -9,12 +9,4 @@ class ComicArab : Madara(
     "https://comicarab.com",
     "ar",
     dateFormat = SimpleDateFormat("dd MMMM، yyyy", Locale("ar")),
-) {
-    override fun searchPage(page: Int): String {
-        return if (page > 1) {
-            "page/$page/"
-        } else {
-            ""
-        }
-    }
-}
+)

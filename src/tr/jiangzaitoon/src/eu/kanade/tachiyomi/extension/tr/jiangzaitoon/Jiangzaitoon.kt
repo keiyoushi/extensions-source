@@ -20,6 +20,4 @@ class Jiangzaitoon : Madara(
             .readTimeout(3, TimeUnit.MINUTES) // aka shit source
             .build()
     }
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

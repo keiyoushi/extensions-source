@@ -40,9 +40,6 @@ class IsekaiScanTop : Madara(
 
         if (chapterElements.isEmpty() && !chaptersWrapper.isNullOrEmpty()) {
             val mangaId = chaptersWrapper.attr("data-id")
-            val xhrHeaders = headersBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .build()
             val xhrRequest = GET("$baseUrl/ajax-list-chapter?mangaID=$mangaId", xhrHeaders)
             val xhrResponse = client.newCall(xhrRequest).execute()
 
@@ -50,7 +47,7 @@ class IsekaiScanTop : Madara(
             xhrResponse.close()
         }
 
-        countViews(document)
+        launchIO { countViews(document) }
         return chapterElements.map(::chapterFromElement)
     }
 
@@ -65,7 +62,7 @@ class IsekaiScanTop : Madara(
         }
     }
 
-    override fun searchPage(page: Int): String = "search?page=$page"
+    override fun searchPage(page: Int) = "search?page=$page"
 
-    override fun searchMangaNextPageSelector(): String? = "ul.pagination li:last-child a"
+    override fun searchMangaNextPageSelector() = "ul.pagination li:last-child a"
 }

@@ -15,8 +15,6 @@ class Siyahmelek : Madara("Gri Melek", "https://grimelek.net", "tr", SimpleDateF
 
     override val useNewChapterEndpoint = true
 
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
-
     // Skip fake image
     // OK: <div class="page-break no-gaps">
     // NG: <div style="display:none" class="page-break no-gaps">

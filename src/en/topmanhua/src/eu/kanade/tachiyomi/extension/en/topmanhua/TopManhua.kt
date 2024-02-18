@@ -14,6 +14,4 @@ class TopManhua : Madara("Top Manhua", "https://topmanhua.com", "en", SimpleDate
     override val filterNonMangaItems = false
 
     override val mangaSubString = "manhua"
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }
