@@ -8,6 +8,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.BuildConfig
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
@@ -62,8 +63,9 @@ class HentaiVN : ParsedHttpSource(), ConfigurableSource {
 
         val domain = baseUrl.toHttpUrl().host
         baseClient.newBuilder()
-            .addNetworkInterceptor(CookieInterceptor(domain, "view1", "1"))
-            .addNetworkInterceptor(CookieInterceptor(domain, "view4", "1"))
+            .addNetworkInterceptor(
+                CookieInterceptor(domain, listOf("view1" to "1", "view4" to "1")),
+            )
             .setRandomUserAgent(
                 preferences.getPrefUAType(),
                 preferences.getPrefCustomUA(),
