@@ -162,7 +162,7 @@ class Name(
 
 @Serializable
 class ChapterList(
-    val chapters: MutableList<Chapter>,
+    val chapters: List<Chapter>,
 )
 
 @Serializable
