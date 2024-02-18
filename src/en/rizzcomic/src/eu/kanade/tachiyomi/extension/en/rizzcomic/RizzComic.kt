@@ -1,64 +1,36 @@
 package eu.kanade.tachiyomi.extension.en.rizzcomic
 
-import android.app.Application
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RizzComic : HttpSource(), ConfigurableSource {
+class RizzComic : MangaThemesia(
+    "Rizz Comic",
+    "https://rizzcomic.com",
+    "en",
+    mangaUrlDirectory = "/series",
+    dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
+) {
 
-    override val name = "Rizz Comic"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://rizzcomic.com"
-
-    override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
-
-    override val client by lazy {
-        network.cloudflareClient.newBuilder()
-            .setRandomUserAgent(
-                preferences.getPrefUAType(),
-                preferences.getPrefCustomUA(),
-            )
-            .rateLimit(1, 3)
-            .build()
-    }
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override val client = super.client.newBuilder()
+        .rateLimit(1, 3)
+        .build()
 
     private val apiHeaders by lazy {
         headersBuilder()
@@ -73,12 +45,12 @@ class RizzComic : HttpSource(), ConfigurableSource {
     private fun updateCache() {
         if ((urlPrefix.isNullOrEmpty() || genreCache.isEmpty()) && attempts < 3) {
             runCatching {
-                val document = client.newCall(GET("$baseUrl/series", headers))
+                val document = client.newCall(GET("$baseUrl$mangaUrlDirectory", headers))
                     .execute().use { it.asJsoup() }
 
                 urlPrefix = document.selectFirst(".listupd a")
                     ?.attr("href")
-                    ?.substringAfter("/series/")
+                    ?.substringAfter("$mangaUrlDirectory/")
                     ?.substringBefore("-")
 
                 genreCache = document.selectFirst(".filter .genrez")
@@ -180,7 +152,7 @@ class RizzComic : HttpSource(), ConfigurableSource {
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return client.newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
-            .map { mangaDetailsParse(it, manga) }
+            .map { mangaDetailsParse(it).apply { description = manga.description } }
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -198,54 +170,14 @@ class RizzComic : HttpSource(), ConfigurableSource {
         return "$baseUrl/series/$urlPart$slug"
     }
 
-    private fun mangaDetailsParse(response: Response, manga: SManga) = manga.apply {
-        val document = response.use { it.asJsoup() }
-
-        title = document.selectFirst("h1.entry-title")?.text().orEmpty()
-        artist = document.selectFirst(".tsinfo .imptdt:contains(artist) i")?.ownText()
-        author = listOfNotNull(
-            document.selectFirst(".tsinfo .imptdt:contains(author) i")?.ownText(),
-            document.selectFirst(".tsinfo .imptdt:contains(serialization) i")?.ownText(),
-        ).joinToString()
-        genre = buildList {
-            add(
-                document.selectFirst(".tsinfo .imptdt:contains(type) a")
-                    ?.ownText()
-                    ?.capitalize(),
-            )
-            document.select(".mgen a").eachText().onEach { add(it) }
-        }.filterNotNull().joinToString()
-        status = document.selectFirst(".tsinfo .imptdt:contains(status) i")?.text().parseStatus()
-        thumbnail_url = document.selectFirst(".infomanga > div[itemprop=image] img, .thumb img")?.absUrl("src")
-    }
-
-    private fun String?.parseStatus(): Int = when {
-        this == null -> SManga.UNKNOWN
-        listOf("ongoing", "publishing").any { contains(it, ignoreCase = true) } -> SManga.ONGOING
-        contains("hiatus", ignoreCase = true) -> SManga.ON_HIATUS
-        contains("completed", ignoreCase = true) -> SManga.COMPLETED
-        listOf("dropped", "cancelled").any { contains(it, ignoreCase = true) } -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.substringAfter("#")
-        val slug = manga.url.substringBefore("#")
-
-        return GET("$baseUrl/index/search_chapters/$id#$slug", apiHeaders)
-    }
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<List<Chapter>>()
-        val slug = response.request.url.fragment!!
-
-        return result.map {
-            SChapter.create().apply {
-                url = "$slug-chapter-${it.name}"
-                name = "Chapter ${it.name}"
-                date_upload = runCatching {
-                    dateFormat.parse(it.time!!)!!.time
-                }.getOrDefault(0L)
+        return super.chapterListParse(response).map { chapter ->
+            chapter.apply {
+                url = url.removeSuffix("/")
+                    .substringAfter("/")
+                    .substringAfter("-")
             }
         }
     }
@@ -254,50 +186,23 @@ class RizzComic : HttpSource(), ConfigurableSource {
         return GET("$baseUrl/chapter/${getUrlPrefix()}-${chapter.url}", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.use { it.asJsoup() }
-        val chapterUrl = response.request.url.toString()
-
-        return document.select("div#readerarea img")
-            .mapIndexed { i, img ->
-                Page(i, chapterUrl, img.absUrl("src"))
-            }
-    }
-
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+            .set("Referer", "$baseUrl/")
             .build()
 
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
-
     private inline fun <reified T> Response.parseAs(): T =
         use { it.body.string() }.let(json::decodeFromString)
 
-    companion object {
-        private fun String.capitalize() = replaceFirstChar {
-            if (it.isLowerCase()) {
-                it.titlecase(Locale.ROOT)
-            } else {
-                it.toString()
-            }
-        }
-
-        private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+    private fun String.capitalize() = replaceFirstChar {
+        if (it.isLowerCase()) {
+            it.titlecase(Locale.ROOT)
+        } else {
+            it.toString()
         }
     }
 }
