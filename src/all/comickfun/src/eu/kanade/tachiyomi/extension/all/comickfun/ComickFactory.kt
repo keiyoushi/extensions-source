@@ -10,7 +10,7 @@ val legacyLanguageMappings = mapOf(
     "zh" to "zh-Hans", // Simplified Chinese
 ).withDefault { it } // country code matches language code
 
-class ComickFunFactory : SourceFactory {
+class ComickFactory : SourceFactory {
     private val idMap = listOf(
         "all" to 982606170401027267,
         "en" to 2971557565147974499,
@@ -55,7 +55,7 @@ class ComickFunFactory : SourceFactory {
         "da" to 7137437402245830147,
     ).toMap()
     override fun createSources(): List<Source> = idMap.keys.map {
-        object : ComickFun(legacyLanguageMappings.getValue(it), it) {
+        object : Comick(legacyLanguageMappings.getValue(it), it) {
             override val id: Long = idMap[it]!!
         }
     }
