@@ -36,7 +36,7 @@ class MangaPlanet : ParsedHttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(json))
-        .addInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "mpaconf", "18"))
+        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "mpaconf" to "18"))
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

@@ -39,7 +39,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
         _baseUrl = "https://" + mirror.domain
         urlSuffix = mirror.urlSuffix
 
-        val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie, preferences.lang)
+        val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
         client = network.client.newBuilder()
             .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)

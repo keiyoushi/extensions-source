@@ -63,8 +63,9 @@ class HentaiVN : ParsedHttpSource(), ConfigurableSource {
 
         val domain = baseUrl.toHttpUrl().host
         baseClient.newBuilder()
-            .addNetworkInterceptor(CookieInterceptor(domain, "view1", "1"))
-            .addNetworkInterceptor(CookieInterceptor(domain, "view4", "1"))
+            .addNetworkInterceptor(
+                CookieInterceptor(domain, listOf("view1" to "1", "view4" to "1")),
+            )
             .setRandomUserAgent(
                 preferences.getPrefUAType(),
                 preferences.getPrefCustomUA(),

@@ -53,7 +53,7 @@ class MangaPark(
     private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(CookieInterceptor(domain, "nsfw", "2"))
+        .addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
         .rateLimitHost(apiUrl.toHttpUrl(), 1)
         .build()
 
