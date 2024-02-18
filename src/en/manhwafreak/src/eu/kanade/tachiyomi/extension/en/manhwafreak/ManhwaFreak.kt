@@ -3,9 +3,11 @@ package eu.kanade.tachiyomi.extension.en.manhwafreak
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
@@ -55,6 +57,13 @@ class ManhwaFreak : MangaThemesia("Manhwa Freak", "https://manhwa-freak.com", "e
         val chapterElements = element.select(".chapter-info")
         name = chapterElements.select("p:nth-child(1)").text().ifBlank { urlElements.first()!!.text() }
         date_upload = getChapterDate(chapterElements.first())
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        // Example: /wp-content/plugins/page-views-count/ajax-loader-2x.gif
+        return super.pageListParse(document).filterNot {
+            it.imageUrl?.startsWith("$baseUrl/wp-content/plugins/") == true
+        }
     }
 
     override fun getFilterList() = FilterList()
