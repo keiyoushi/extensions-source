@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangaplanet
 
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbInterceptor
 import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
@@ -35,7 +36,7 @@ class MangaPlanet : ParsedHttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(json))
-        .addInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "mpaconf", "18"))
+        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "mpaconf" to "18"))
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

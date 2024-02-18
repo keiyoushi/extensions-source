@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.mangabz
 
 import android.app.Application
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.unpacker.SubstringExtractor
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
@@ -38,7 +39,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
         _baseUrl = "https://" + mirror.domain
         urlSuffix = mirror.urlSuffix
 
-        val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie, preferences.lang)
+        val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
         client = network.client.newBuilder()
             .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)

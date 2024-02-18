@@ -7,5 +7,6 @@ ext {
 apply from: "$rootDir/common.gradle"
 
 dependencies {
-    implementation project(':lib:unpacker')
+    implementation(project(":lib:cookieinterceptor"))
+    implementation(project(":lib:unpacker"))
 }

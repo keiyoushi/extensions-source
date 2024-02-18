@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.toonily
 
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,9 +18,8 @@ class Toonily : Madara(
     SimpleDateFormat("MMM d, yy", Locale.US),
 ) {
 
-    private val cookieInterceptor = CookieInterceptor(domain, "toonily-mature", "1")
     override val client: OkHttpClient = super.client.newBuilder()
-        .addNetworkInterceptor(cookieInterceptor)
+        .addNetworkInterceptor(CookieInterceptor(domain, "toonily-mature" to "1"))
         .build()
 
     override val mangaSubString = "webtoon"
