@@ -8,9 +8,9 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 @Serializable
-data class SearchManga(
-    val hid: String,
-    val title: String,
+class SearchManga(
+    private val hid: String,
+    private val title: String,
     @SerialName("md_covers") val mdCovers: List<MDcovers> = emptyList(),
     @SerialName("cover_url") val cover: String? = null,
 ) {
@@ -23,12 +23,12 @@ data class SearchManga(
 }
 
 @Serializable
-data class Manga(
+class Manga(
     val comic: Comic,
-    val artists: List<Name> = emptyList(),
-    val authors: List<Name> = emptyList(),
-    val genres: List<Name> = emptyList(),
-    val demographic: String? = null,
+    private val artists: List<Name> = emptyList(),
+    private val authors: List<Name> = emptyList(),
+    private val genres: List<Name> = emptyList(),
+    private val demographic: String? = null,
 ) {
     fun toSManga(
         includeMuTags: Boolean = false,
@@ -90,10 +90,10 @@ data class Manga(
 }
 
 @Serializable
-data class Comic(
+class Comic(
     val hid: String,
     val title: String,
-    val country: String? = null,
+    private val country: String? = null,
     val slug: String? = null,
     @SerialName("md_titles") val altTitles: List<Title> = emptyList(),
     val desc: String? = null,
@@ -125,55 +125,54 @@ data class Comic(
 }
 
 @Serializable
-data class MdGenres(
+class MdGenres(
     @SerialName("md_genres") val name: Name? = null,
 )
 
 @Serializable
-data class MuComicCategories(
+class MuComicCategories(
     @SerialName("mu_comic_categories") val categories: List<MuCategories?> = emptyList(),
 )
 
 @Serializable
-data class MuCategories(
+class MuCategories(
     @SerialName("mu_categories") val category: Title? = null,
 )
 
 @Serializable
-data class Covers(
-    val md_covers: List<MDcovers> = emptyList(),
+class Covers(
+    @SerialName("md_covers") val mdCovers: List<MDcovers> = emptyList(),
 )
 
 @Serializable
-data class MDcovers(
+class MDcovers(
     val b2key: String?,
     val vol: String? = null,
 )
 
 @Serializable
-data class Title(
+class Title(
     val title: String?,
 )
 
 @Serializable
-data class Name(
+class Name(
     val name: String,
 )
 
 @Serializable
-data class ChapterList(
-    val chapters: MutableList<Chapter>,
-    val total: Int,
+class ChapterList(
+    val chapters: List<Chapter>,
 )
 
 @Serializable
-data class Chapter(
-    val hid: String,
-    val lang: String = "",
-    val title: String = "",
+class Chapter(
+    private val hid: String,
+    private val lang: String = "",
+    private val title: String = "",
     @SerialName("created_at") val createdAt: String = "",
-    val chap: String = "",
-    val vol: String = "",
+    private val chap: String = "",
+    private val vol: String = "",
     @SerialName("group_name") val groups: List<String> = emptyList(),
 ) {
     fun toSChapter(mangaUrl: String) = SChapter.create().apply {
@@ -185,16 +184,16 @@ data class Chapter(
 }
 
 @Serializable
-data class PageList(
+class PageList(
     val chapter: ChapterPageData,
 )
 
 @Serializable
-data class ChapterPageData(
+class ChapterPageData(
     val images: List<Page>,
 )
 
 @Serializable
-data class Page(
+class Page(
     val url: String? = null,
 )

@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".all.comickfun.ComickFunUrlActivity"
+            android:name=".all.comickfun.ComickUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -14,6 +14,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:scheme="https" />
+                <data android:host="comick.io" />
                 <data android:host="comick.cc" />
                 <data android:host="comick.ink" />
                 <data android:host="comick.app" />
