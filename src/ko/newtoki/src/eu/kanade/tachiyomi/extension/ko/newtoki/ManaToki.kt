@@ -18,6 +18,9 @@ object ManaToki : NewToki("ManaToki", "comic", manaTokiPreferences) {
 
     override val baseUrl get() = "https://$MANATOKI_PREFIX$domainNumber.net"
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     private val chapterRegex by lazy { Regex(""" [ \d,~.-]+화$""") }
 
     fun latestUpdatesElementParse(element: Element): SManga {
