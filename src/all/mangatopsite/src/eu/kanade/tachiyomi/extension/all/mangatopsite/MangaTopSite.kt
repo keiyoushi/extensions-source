@@ -12,6 +12,4 @@ class MangaTopSite : Madara(
 ) {
     override val useNewChapterEndpoint = false
     override val chapterUrlSuffix = ""
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

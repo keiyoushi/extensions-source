@@ -16,8 +16,6 @@ class EvaScans : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
-
     override fun pageListParse(document: Document): List<Page> {
         val pageList = super.pageListParse(document)
 

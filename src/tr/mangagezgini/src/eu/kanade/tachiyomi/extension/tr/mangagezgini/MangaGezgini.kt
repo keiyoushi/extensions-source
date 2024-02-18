@@ -15,15 +15,15 @@ class MangaGezgini : Madara(
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         with(element) {
-            select(chapterUrlSelector).first()?.let { urlElement ->
+            selectFirst(chapterUrlSelector)!!.let { urlElement ->
                 chapter.url = urlElement.attr("abs:href").let {
                     it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
                 }
                 chapter.name = element.select("li.wp-manga-chapter.has-thumb a").text()
             }
-            chapter.date_upload = select("img:not(.thumb)").firstOrNull()?.attr("alt")?.let { parseRelativeDate(it) }
-                ?: select("span a").firstOrNull()?.attr("title")?.let { parseRelativeDate(it) }
-                ?: parseChapterDate(select(chapterDateSelector()).firstOrNull()?.text())
+            chapter.date_upload = selectFirst("img:not(.thumb)")?.attr("alt")?.let { parseRelativeDate(it) }
+                ?: selectFirst("span a")?.attr("title")?.let { parseRelativeDate(it) }
+                ?: parseChapterDate(selectFirst(chapterDateSelector())?.text())
         }
         return chapter
     }

@@ -11,6 +11,4 @@ class WebtoonTR : Madara(
     SimpleDateFormat("dd/MM/yyy", Locale("tr")),
 ) {
     override val useNewChapterEndpoint = false
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

@@ -6,14 +6,13 @@ import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
-import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
@@ -22,7 +21,16 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangalek : Madara("مانجا ليك", "https://manga-lek.net", "ar", SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))) {
+class Mangalek :
+    Madara(
+        "مانجا ليك",
+        "https://manga-lek.net",
+        "ar",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
+    ),
+    ConfigurableSource {
+
+    override val fetchGenres = false
 
     override val chapterUrlSuffix = ""
 
@@ -55,21 +63,9 @@ class Mangalek : Madara("مانجا ليك", "https://manga-lek.net", "ar", Simp
             }
         }
         screen.addPreference(baseUrlPref)
-
-        super.setupPreferenceScreen(screen)
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(
-            url = "$baseUrl/$mangaSubString/${searchPage(page)}",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         POST(
