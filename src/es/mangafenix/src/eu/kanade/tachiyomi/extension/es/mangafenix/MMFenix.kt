@@ -6,16 +6,20 @@ import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhuaFenix : Madara(
-    "Manhua Fenix",
-    "https://visorfenix.com",
+class MMFenix : Madara(
+    "MMFenix",
+    "https://mmfenix.com",
     "es",
-    SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
+    SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
 
     override val id: Long = 19158964284779393
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1)
+        .rateLimit(2)
         .build()
+
+    override fun popularMangaSelector() = "div.main-col-inner div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector"
+
+    override fun searchMangaSelector() = "div.main-col-inner div.c-tabs-item__content"
 }
