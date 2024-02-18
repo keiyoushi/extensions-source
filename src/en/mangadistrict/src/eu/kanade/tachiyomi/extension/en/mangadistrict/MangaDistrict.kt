@@ -28,7 +28,7 @@ class MangaDistrict : Madara(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun searchMangaNextPageSelector() = "div[role=navigation] a.last"
+    override fun searchMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
 
     private val titleComment = Regex("\\(.*\\)")
 
