@@ -6,6 +6,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
@@ -18,11 +19,13 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class MangaDistrict : Madara(
-    "Manga District",
-    "https://mangadistrict.com",
-    "en",
-) {
+class MangaDistrict :
+    Madara(
+        "Manga District",
+        "https://mangadistrict.com",
+        "en",
+    ),
+    ConfigurableSource {
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -102,8 +105,6 @@ class MangaDistrict : Madara(
                 preferences.edit().putString(IMG_RES_PREF_KEY, entry).commit()
             }
         }.let(screen::addPreference)
-
-        super.setupPreferenceScreen(screen)
     }
 
     companion object {
