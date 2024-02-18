@@ -17,6 +17,4 @@ class TonizuToon : Madara(
     override val mangaDetailsSelectorAuthor = ".summary-heading:contains(Yazar) ~ .summary-content"
 
     override val mangaDetailsSelectorStatus = ".summary-heading:contains(Durumu) ~ .summary-content"
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

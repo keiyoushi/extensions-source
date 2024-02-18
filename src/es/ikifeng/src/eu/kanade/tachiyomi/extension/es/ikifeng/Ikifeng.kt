@@ -12,8 +12,6 @@ class Ikifeng : Madara("Lector Online", "https://lectorunm.life", "es", SimpleDa
 
     override val useNewChapterEndpoint = true
 
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
-
     override fun chapterListParse(response: Response): List<SChapter> {
         return super.chapterListParse(response).reversed()
     }

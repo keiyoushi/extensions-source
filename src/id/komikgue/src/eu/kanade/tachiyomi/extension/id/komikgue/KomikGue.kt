@@ -11,6 +11,4 @@ class KomikGue : Madara(
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
 ) {
     override val useNewChapterEndpoint = true
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

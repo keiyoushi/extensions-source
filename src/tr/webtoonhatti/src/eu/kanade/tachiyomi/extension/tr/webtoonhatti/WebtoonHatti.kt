@@ -12,8 +12,6 @@ class WebtoonHatti : Madara(
 ) {
     override val useNewChapterEndpoint = false
 
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
-
     // Skip fake image
     // OK: <div class="page-break no-gaps">
     // NG: <div style="display:none" class="page-break no-gaps">

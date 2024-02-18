@@ -20,7 +20,7 @@ class FireScans : Madara("Fire Scans", "https://firescans.xyz", "en") {
     override val useNewChapterEndpoint: Boolean = true
 
     override fun pageListParse(document: Document): List<Page> {
-        countViews(document)
+        launchIO { countViews(document) }
 
         val chapterProtector = document.selectFirst(chapterProtectorSelector)
             ?: return document.select(pageListParseSelector).mapIndexed { index, element ->
@@ -46,7 +46,7 @@ class FireScans : Madara("Fire Scans", "https://firescans.xyz", "en") {
 
         val unsaltedCiphertext = Base64.decode(chapterData["ct"]!!.jsonPrimitive.content, Base64.DEFAULT)
         val salt = chapterData["s"]!!.jsonPrimitive.content.decodeHex()
-        val ciphertext = SALTED + salt + unsaltedCiphertext
+        val ciphertext = salted + salt + unsaltedCiphertext
 
         val rawImgArray = CryptoAES.decrypt(Base64.encodeToString(ciphertext, Base64.DEFAULT), password)
         val imgArrayString = json.parseToJsonElement(rawImgArray).jsonPrimitive.content
@@ -55,13 +55,5 @@ class FireScans : Madara("Fire Scans", "https://firescans.xyz", "en") {
         return imgArray.mapIndexed { idx, it ->
             Page(idx, document.location(), it.jsonPrimitive.content)
         }
-    }
-
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
     }
 }

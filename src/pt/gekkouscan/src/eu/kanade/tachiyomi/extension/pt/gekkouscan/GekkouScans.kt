@@ -29,6 +29,4 @@ class GekkouScans : Madara(
     override val mangaDetailsSelectorTitle = "#manga-title"
 
     override val mangaDetailsSelectorStatus = ".summary-heading:contains(Status) ~ .summary-content"
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }
