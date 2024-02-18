@@ -396,6 +396,7 @@ abstract class Comick(
 
         val mangaUrl = response.request.url.toString()
             .substringBefore("/chapters")
+            .substringAfter(apiUrl)
 
         return chapterListResponse.chapters
             .filter {
