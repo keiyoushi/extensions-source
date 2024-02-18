@@ -27,9 +27,3 @@ data class Comic(
         private val slugRegex = Regex("""[^a-z0-9]+""")
     }
 }
-
-@Serializable
-data class Chapter(
-    @SerialName("chapter_time") val time: String? = null,
-    @SerialName("chapter_title") val name: String,
-)
