@@ -40,8 +40,6 @@ class MangaDistrict : Madara(
         }
     }
 
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-
     override fun searchMangaFromElement(element: Element): SManga {
         return super.searchMangaFromElement(element).apply {
             if (preferences.getBoolean(REMOVE_TITLE_COMMENT_PREF, true)) {
