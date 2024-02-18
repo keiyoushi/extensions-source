@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class ComickFunUrlActivity : Activity() {
+class ComickUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
@@ -15,7 +15,7 @@ class ComickFunUrlActivity : Activity() {
             val slug = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${ComickFun.SLUG_SEARCH_PREFIX}$slug")
+                putExtra("query", "${Comick.SLUG_SEARCH_PREFIX}$slug")
                 putExtra("filter", packageName)
             }
 

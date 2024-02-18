@@ -26,19 +26,16 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import kotlin.math.min
 
-abstract class ComickFun(
+abstract class Comick(
     override val lang: String,
-    private val comickFunLang: String,
+    private val comickLang: String,
 ) : ConfigurableSource, HttpSource() {
 
     override val name = "Comick"
 
-    override val baseUrl = "https://comick.cc"
+    override val baseUrl = "https://comick.io"
 
     private val apiUrl = "https://api.comick.fun"
 
@@ -62,8 +59,9 @@ abstract class ComickFun(
         )
     }
 
-    private val preferences: SharedPreferences by lazy {
+    private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+            .newLineIgnoredGroups()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -151,23 +149,18 @@ abstract class ComickFun(
     private val SharedPreferences.scorePosition: String
         get() = getString(SCORE_POSITION_PREF, SCORE_POSITION_DEFAULT) ?: SCORE_POSITION_DEFAULT
 
-    init {
-        preferences.newLineIgnoredGroups()
-    }
-
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")
         add("User-Agent", "Tachiyomi ${System.getProperty("http.agent")}")
     }
 
     override val client = network.client.newBuilder()
-        .addInterceptor(::thumbnailIntercept)
         .rateLimit(3, 1)
         .build()
 
     /** Popular Manga **/
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/v1.0/search?sort=follow&limit=$limit&page=$page&tachiyomi=true"
+        val url = "$apiUrl/v1.0/search?sort=follow&limit=$LIMIT&page=$page&tachiyomi=true"
         return GET(url, headers)
     }
 
@@ -175,13 +168,13 @@ abstract class ComickFun(
         val result = response.parseAs<List<SearchManga>>()
         return MangasPage(
             result.map(SearchManga::toSManga),
-            hasNextPage = result.size >= limit,
+            hasNextPage = result.size >= LIMIT,
         )
     }
 
     /** Latest Manga **/
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/v1.0/search?sort=uploaded&limit=$limit&page=$page&tachiyomi=true"
+        val url = "$apiUrl/v1.0/search?sort=uploaded&limit=$LIMIT&page=$page&tachiyomi=true"
         return GET(url, headers)
     }
 
@@ -233,8 +226,8 @@ abstract class ComickFun(
     }
 
     private fun paginatedSearchPage(page: Int): MangasPage {
-        val end = min(page * limit, searchResponse.size)
-        val entries = searchResponse.subList((page - 1) * limit, end)
+        val end = min(page * LIMIT, searchResponse.size)
+        val entries = searchResponse.subList((page - 1) * LIMIT, end)
             .map(SearchManga::toSManga)
         return MangasPage(entries, end < searchResponse.size)
     }
@@ -317,7 +310,7 @@ abstract class ComickFun(
                 }
             }
             addQueryParameter("tachiyomi", "true")
-            addQueryParameter("limit", "$limit")
+            addQueryParameter("limit", "$LIMIT")
             addQueryParameter("page", "$page")
         }.build()
 
@@ -367,7 +360,7 @@ abstract class ComickFun(
             val coversUrl =
                 "$apiUrl/comic/${mangaData.comic.slug ?: mangaData.comic.hid}/covers?tachiyomi=true"
             val covers = client.newCall(GET(coversUrl)).execute()
-                .parseAs<Covers>().md_covers.reversed()
+                .parseAs<Covers>().mdCovers.reversed()
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
                 covers = if (covers.any { it.vol == "1" }) covers.filter { it.vol == "1" } else covers,
@@ -387,19 +380,15 @@ abstract class ComickFun(
             throw Exception("Migrate from Comick to Comick")
         }
 
-        return paginatedChapterListRequest(manga.url.removeSuffix("#"), 1)
-    }
+        val mangaUrl = manga.url.removeSuffix("#")
+        val url = "$apiUrl$mangaUrl".toHttpUrl().newBuilder().apply {
+            addPathSegment("chapters")
+            if (comickLang != "all") addQueryParameter("lang", comickLang)
+            addQueryParameter("tachiyomi", "true")
+            addQueryParameter("limit", "$CHAPTERS_LIMIT")
+        }.build()
 
-    private fun paginatedChapterListRequest(mangaUrl: String, page: Int): Request {
-        return GET(
-            "$apiUrl$mangaUrl".toHttpUrl().newBuilder().apply {
-                addPathSegment("chapters")
-                if (comickFunLang != "all") addQueryParameter("lang", comickFunLang)
-                addQueryParameter("tachiyomi", "true")
-                addQueryParameter("page", "$page")
-            }.build(),
-            headers,
-        )
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -408,20 +397,6 @@ abstract class ComickFun(
         val mangaUrl = response.request.url.toString()
             .substringBefore("/chapters")
             .substringAfter(apiUrl)
-
-        var resultSize = chapterListResponse.chapters.size
-        var page = 2
-
-        while (chapterListResponse.total > resultSize) {
-            val newRequest = paginatedChapterListRequest(mangaUrl, page)
-            val newResponse = client.newCall(newRequest).execute()
-            val newChapterListResponse = newResponse.parseAs<ChapterList>()
-
-            chapterListResponse.chapters += newChapterListResponse.chapters
-
-            resultSize += newChapterListResponse.chapters.size
-            page += 1
-        }
 
         return chapterListResponse.chapters
             .filter {
@@ -457,8 +432,8 @@ abstract class ComickFun(
 
     override fun getFilterList() = getFilters()
 
-    private fun SharedPreferences.newLineIgnoredGroups() {
-        if (getBoolean(MIGRATED_IGNORED_GROUPS, false)) return
+    private fun SharedPreferences.newLineIgnoredGroups(): SharedPreferences {
+        if (getBoolean(MIGRATED_IGNORED_GROUPS, false)) return this
         val ignoredGroups = getString(IGNORED_GROUPS_PREF, "").orEmpty()
 
         edit()
@@ -472,6 +447,8 @@ abstract class ComickFun(
             )
             .putBoolean(MIGRATED_IGNORED_GROUPS, true)
             .apply()
+
+        return this
     }
 
     companion object {
@@ -484,14 +461,7 @@ abstract class ComickFun(
         private const val FIRST_COVER_DEFAULT = true
         private const val SCORE_POSITION_PREF = "ScorePosition"
         private const val SCORE_POSITION_DEFAULT = "top"
-        private const val limit = 20
-        val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-        }
-        val markdownLinksRegex = "\\[([^]]+)]\\(([^)]+)\\)".toRegex()
-        val markdownItalicBoldRegex = "\\*+\\s*([^*]*)\\s*\\*+".toRegex()
-        val markdownItalicRegex = "_+\\s*([^_]*)\\s*_+".toRegex()
+        private const val LIMIT = 20
+        private const val CHAPTERS_LIMIT = 99999
     }
 }
