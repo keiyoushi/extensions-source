@@ -30,7 +30,7 @@ class Manhastro : Madara(
             ?.let { json.decodeFromString<List<String>>(it) }
             ?.mapIndexed { i, imageUrlEncoded ->
                 val imageUrl = String(Base64.decode(imageUrlEncoded, Base64.DEFAULT))
-                Page(i, imageUrl = imageUrl)
+                Page(i, document.location(), imageUrl)
             } ?: emptyList()
     }
 
