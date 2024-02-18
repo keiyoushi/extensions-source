@@ -8,7 +8,7 @@ import java.util.Locale
 
 class ManhuaFenix : Madara(
     "Manhua Fenix",
-    "https://visorfenix.com",
+    "https://mmfenix.com",
     "es",
     SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
 ) {
