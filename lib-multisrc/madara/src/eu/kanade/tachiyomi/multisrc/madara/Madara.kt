@@ -712,8 +712,8 @@ abstract class Madara(
             document.selectFirst(altNameSelector)?.ownText()?.let {
                 if (it.isBlank().not() && it.notUpdating()) {
                     manga.description = when {
-                        manga.description.isNullOrBlank() -> altName + it
-                        else -> manga.description + "\n\n$altName" + it
+                        manga.description.isNullOrBlank() -> "$altName " + it
+                        else -> manga.description + "\n\n$altName " + it
                     }
                 }
             }
