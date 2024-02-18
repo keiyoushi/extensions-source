@@ -1,13 +1,21 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
 
-import eu.kanade.tachiyomi.extension.all.comickfun.ComickFun.Companion.dateFormat
-import eu.kanade.tachiyomi.extension.all.comickfun.ComickFun.Companion.markdownItalicBoldRegex
-import eu.kanade.tachiyomi.extension.all.comickfun.ComickFun.Companion.markdownItalicRegex
-import eu.kanade.tachiyomi.extension.all.comickfun.ComickFun.Companion.markdownLinksRegex
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.parser.Parser
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
+private val dateFormat by lazy {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+}
+private val markdownLinksRegex = "\\[([^]]+)]\\(([^)]+)\\)".toRegex()
+private val markdownItalicBoldRegex = "\\*+\\s*([^*]*)\\s*\\*+".toRegex()
+private val markdownItalicRegex = "_+\\s*([^_]*)\\s*_+".toRegex()
 
 internal fun String.beautifyDescription(): String {
     return Parser.unescapeEntities(this, false)

@@ -9,8 +9,8 @@ import java.math.RoundingMode
 
 @Serializable
 class SearchManga(
-    val hid: String,
-    val title: String,
+    private val hid: String,
+    private val title: String,
     @SerialName("md_covers") val mdCovers: List<MDcovers> = emptyList(),
     @SerialName("cover_url") val cover: String? = null,
 ) {
@@ -25,10 +25,10 @@ class SearchManga(
 @Serializable
 class Manga(
     val comic: Comic,
-    val artists: List<Name> = emptyList(),
-    val authors: List<Name> = emptyList(),
-    val genres: List<Name> = emptyList(),
-    val demographic: String? = null,
+    private val artists: List<Name> = emptyList(),
+    private val authors: List<Name> = emptyList(),
+    private val genres: List<Name> = emptyList(),
+    private val demographic: String? = null,
 ) {
     fun toSManga(
         includeMuTags: Boolean = false,
@@ -93,7 +93,7 @@ class Manga(
 class Comic(
     val hid: String,
     val title: String,
-    val country: String? = null,
+    private val country: String? = null,
     val slug: String? = null,
     @SerialName("md_titles") val altTitles: List<Title> = emptyList(),
     val desc: String? = null,
@@ -141,7 +141,7 @@ class MuCategories(
 
 @Serializable
 class Covers(
-    val md_covers: List<MDcovers> = emptyList(),
+    @SerialName("md_covers") val mdCovers: List<MDcovers> = emptyList(),
 )
 
 @Serializable
@@ -163,17 +163,16 @@ class Name(
 @Serializable
 class ChapterList(
     val chapters: MutableList<Chapter>,
-    val total: Int,
 )
 
 @Serializable
 class Chapter(
-    val hid: String,
-    val lang: String = "",
-    val title: String = "",
+    private val hid: String,
+    private val lang: String = "",
+    private val title: String = "",
     @SerialName("created_at") val createdAt: String = "",
-    val chap: String = "",
-    val vol: String = "",
+    private val chap: String = "",
+    private val vol: String = "",
     @SerialName("group_name") val groups: List<String> = emptyList(),
 ) {
     fun toSChapter(mangaUrl: String) = SChapter.create().apply {
