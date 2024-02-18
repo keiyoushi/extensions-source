@@ -8,7 +8,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 @Serializable
-data class SearchManga(
+class SearchManga(
     val hid: String,
     val title: String,
     @SerialName("md_covers") val mdCovers: List<MDcovers> = emptyList(),
@@ -23,7 +23,7 @@ data class SearchManga(
 }
 
 @Serializable
-data class Manga(
+class Manga(
     val comic: Comic,
     val artists: List<Name> = emptyList(),
     val authors: List<Name> = emptyList(),
@@ -90,7 +90,7 @@ data class Manga(
 }
 
 @Serializable
-data class Comic(
+class Comic(
     val hid: String,
     val title: String,
     val country: String? = null,
@@ -125,49 +125,49 @@ data class Comic(
 }
 
 @Serializable
-data class MdGenres(
+class MdGenres(
     @SerialName("md_genres") val name: Name? = null,
 )
 
 @Serializable
-data class MuComicCategories(
+class MuComicCategories(
     @SerialName("mu_comic_categories") val categories: List<MuCategories?> = emptyList(),
 )
 
 @Serializable
-data class MuCategories(
+class MuCategories(
     @SerialName("mu_categories") val category: Title? = null,
 )
 
 @Serializable
-data class Covers(
+class Covers(
     val md_covers: List<MDcovers> = emptyList(),
 )
 
 @Serializable
-data class MDcovers(
+class MDcovers(
     val b2key: String?,
     val vol: String? = null,
 )
 
 @Serializable
-data class Title(
+class Title(
     val title: String?,
 )
 
 @Serializable
-data class Name(
+class Name(
     val name: String,
 )
 
 @Serializable
-data class ChapterList(
+class ChapterList(
     val chapters: MutableList<Chapter>,
     val total: Int,
 )
 
 @Serializable
-data class Chapter(
+class Chapter(
     val hid: String,
     val lang: String = "",
     val title: String = "",
@@ -185,16 +185,16 @@ data class Chapter(
 }
 
 @Serializable
-data class PageList(
+class PageList(
     val chapter: ChapterPageData,
 )
 
 @Serializable
-data class ChapterPageData(
+class ChapterPageData(
     val images: List<Page>,
 )
 
 @Serializable
-data class Page(
+class Page(
     val url: String? = null,
 )
