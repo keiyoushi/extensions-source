@@ -13,13 +13,13 @@ class CatTranslator : Madara(
         val manga = SManga.create()
 
         with(element) {
-            select(if (isSearch) "div.post-title a" else popularMangaUrlSelector).first()?.let {
+            selectFirst(if (isSearch) "div.post-title a" else popularMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.url = manga.url.removePrefix("/manga")
                 manga.title = it.ownText()
             }
 
-            select("img").first()?.let {
+            selectFirst("img")?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
         }

@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.nodes.Document
-import java.lang.IllegalArgumentException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit

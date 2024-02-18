@@ -12,19 +12,19 @@ class MidnightMessScans : Madara("Midnight Mess Scans", "https://midnightmess.or
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         with(document) {
-            select("div.post-title h3").first()?.let {
+            selectFirst("div.post-title h3")!!.let {
                 manga.title = it.ownText()
             }
-            select("div.author-content").first()?.let {
+            selectFirst("div.author-content")?.let {
                 if (it.text().notUpdating()) manga.author = it.text()
             }
-            select("div.artist-content").first()?.let {
+            selectFirst("div.artist-content")?.let {
                 if (it.text().notUpdating()) manga.artist = it.text()
             }
             select("div.summary_content div.post-content").let {
                 manga.description = it.select("div.manga-excerpt").text()
             }
-            select("div.summary_image img").first()?.let {
+            selectFirst("div.summary_image img")?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
             select("div.summary-content").last()?.let {
@@ -48,7 +48,7 @@ class MidnightMessScans : Madara("Midnight Mess Scans", "https://midnightmess.or
             }
 
             // add manga/manhwa/manhua thinggy to genre
-            document.select(seriesTypeSelector).firstOrNull()?.ownText()?.let {
+            document.selectFirst(seriesTypeSelector)?.ownText()?.let {
                 if (it.isEmpty().not() && it.notUpdating() && it != "-" && genres.contains(it).not()) {
                     genres.add(it.lowercase(Locale.ROOT))
                 }

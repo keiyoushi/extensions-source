@@ -108,9 +108,7 @@ class ManhwaZ : Madara(
         val mangaList = document.select(".page-search > .container > .row > div")
             .map(::searchMangaFromElement)
 
-        val hasNextPage = searchMangaNextPageSelector().let { selector ->
-            document.select(selector).first()
-        } != null
+        val hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null
 
         return MangasPage(mangaList, hasNextPage)
     }

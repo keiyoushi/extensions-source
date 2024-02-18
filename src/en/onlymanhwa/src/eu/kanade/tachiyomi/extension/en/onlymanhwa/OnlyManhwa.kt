@@ -13,6 +13,4 @@ class OnlyManhwa : Madara(
     override val useNewChapterEndpoint = true
     override val mangaSubString = "manhwa"
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

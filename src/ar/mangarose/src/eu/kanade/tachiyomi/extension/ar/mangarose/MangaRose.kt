@@ -9,12 +9,4 @@ class MangaRose : Madara(
     "https://mangarose.net",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-) {
-    override fun searchPage(page: Int): String {
-        return if (page > 1) {
-            "page/$page/"
-        } else {
-            ""
-        }
-    }
-}
+)

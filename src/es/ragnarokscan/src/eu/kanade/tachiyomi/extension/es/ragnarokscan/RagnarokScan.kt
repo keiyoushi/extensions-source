@@ -30,12 +30,12 @@ class RagnarokScan : Madara(
         val manga = SManga.create()
 
         with(element) {
-            select(popularMangaUrlSelector).first()?.let {
+            selectFirst(popularMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.title = it.attr("title")
             }
 
-            select("img").first()?.let {
+            selectFirst("img")?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
         }
@@ -47,7 +47,7 @@ class RagnarokScan : Madara(
         val chapter = SChapter.create()
 
         with(element) {
-            select(chapterUrlSelector).first()?.let { urlElement ->
+            selectFirst(chapterUrlSelector)!!.let { urlElement ->
                 chapter.url = urlElement.attr("abs:href").let {
                     it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
                 }

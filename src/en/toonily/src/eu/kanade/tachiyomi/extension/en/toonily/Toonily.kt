@@ -24,14 +24,6 @@ class Toonily : Madara(
 
     override val mangaSubString = "webtoon"
 
-    override fun searchPage(page: Int): String {
-        return if (page > 1) {
-            "page/$page/"
-        } else {
-            ""
-        }
-    }
-
     private fun searchPage(page: Int, query: String): String {
         val urlQuery = query.trim()
             .lowercase(Locale.US)

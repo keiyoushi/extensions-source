@@ -13,7 +13,7 @@ class MangaHubFr : Madara("MangaHub.fr", "https://mangahub.fr", "fr", dateFormat
     override val chapterUrlSuffix = ""
 
     override fun pageListParse(document: Document): List<Page> {
-        countViews(document)
+        launchIO { countViews(document) }
 
         return document.select(pageListParseSelector)
             .mapIndexed { index, element ->

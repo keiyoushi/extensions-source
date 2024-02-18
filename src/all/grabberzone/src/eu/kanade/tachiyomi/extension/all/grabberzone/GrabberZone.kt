@@ -14,14 +14,6 @@ class GrabberZone : Madara(
 ) {
     override val mangaSubString = "comics"
 
-    override fun searchPage(page: Int): String {
-        return if (page > 1) {
-            "page/$page/"
-        } else {
-            ""
-        }
-    }
-
     override fun chapterFromElement(element: Element): SChapter {
         return super.chapterFromElement(element).apply {
             name = element.selectFirst("a + a")!!.text()

@@ -9,18 +9,14 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.concurrent.TimeUnit
 
 class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
     override val useNewChapterEndpoint = false
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 
     override fun headersBuilder() = super.headersBuilder().apply {
         add("Sec-Fetch-Dest", "document")
@@ -30,7 +26,7 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {
@@ -39,8 +35,6 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
 
             chain.proceed(request.newBuilder().headers(headers).build())
         }
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
         .rateLimit(3)
         .build()
 
@@ -87,22 +81,13 @@ class Shinigami : Madara("Shinigami", "https://shinigamitoon.com", "id") {
         val salt = chapterData.s.decodeHex()
 
         val unsaltedCiphertext = Base64.decode(chapterData.ct, Base64.DEFAULT)
-        val ciphertext = SALTED + salt + unsaltedCiphertext
+        val ciphertext = salted + salt + unsaltedCiphertext
 
         val decrypted = CryptoAES.decrypt(Base64.encodeToString(ciphertext, Base64.DEFAULT), key)
         val data = json.decodeFromString<List<String>>(decrypted)
         return data.mapIndexed { idx, it ->
             Page(idx, document.location(), it)
         }
-    }
-
-    // https://stackoverflow.com/a/66614516
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
     }
 
     private fun randomString(length: Int): String {

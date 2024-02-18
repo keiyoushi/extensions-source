@@ -51,7 +51,7 @@ class MangaPure : Madara(
             xhrResponse.close()
         }
 
-        countViews(document)
+        launchIO { countViews(document) }
         return chapterElements.map(::chapterFromElement)
     }
 

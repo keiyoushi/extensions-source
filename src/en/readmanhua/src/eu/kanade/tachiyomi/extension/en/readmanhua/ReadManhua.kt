@@ -19,7 +19,7 @@ class ReadManhua : Madara(
         val year = Calendar.getInstance().get(Calendar.YEAR).toLong()
 
         with(element) {
-            select(chapterUrlSelector).first()?.let { urlElement ->
+            selectFirst(chapterUrlSelector)?.let { urlElement ->
                 chapter.url = urlElement.attr("abs:href").let {
                     it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
                 }
@@ -27,8 +27,8 @@ class ReadManhua : Madara(
             }
 
             // Dates can be part of a "new" graphic or plain text
-            chapter.date_upload = select("img").firstOrNull()?.attr("alt")?.let { parseRelativeDate(it) }
-                ?: parseChapterDate(select("span.chapter-release-date i").firstOrNull()?.text() + " " + year)
+            chapter.date_upload = selectFirst("img")?.attr("alt")?.let { parseRelativeDate(it) }
+                ?: parseChapterDate(selectFirst("span.chapter-release-date i")?.text() + " " + year)
         }
 
         return chapter

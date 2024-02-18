@@ -13,7 +13,7 @@ class HattoriManga : Madara(
     SimpleDateFormat("d MMM yyy", Locale("tr")),
 ) {
     override fun pageListParse(document: Document): List<Page> {
-        val blocked = document.select(".content-blocked").first()
+        val blocked = document.selectFirst(".content-blocked")
         if (blocked != null) {
             throw Exception(blocked.text()) // Bu bölümü okumak için Üye olmanız gerekiyor.
         }

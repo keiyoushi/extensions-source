@@ -6,12 +6,20 @@ import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangalink : Madara("مانجا لينك", "https://manga-link.com", "ar", SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))) {
+class Mangalink :
+    Madara(
+        "مانجا لينك",
+        "https://manga-link.com",
+        "ar",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
+    ),
+    ConfigurableSource {
 
     override val chapterUrlSuffix = ""
 
@@ -44,8 +52,6 @@ class Mangalink : Madara("مانجا لينك", "https://manga-link.com", "ar", 
             }
         }
         screen.addPreference(baseUrlPref)
-
-        super.setupPreferenceScreen(screen)
     }
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 }

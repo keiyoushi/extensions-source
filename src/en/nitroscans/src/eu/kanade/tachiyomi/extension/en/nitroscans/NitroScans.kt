@@ -10,6 +10,4 @@ class NitroScans : Madara("Nitro Manga", "https://nitromanga.com", "en") {
     override val filterNonMangaItems = false
 
     override val useNewChapterEndpoint = true
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

@@ -13,6 +13,4 @@ class MangaSpark : Madara(
     override val chapterUrlSuffix = ""
 
     override val useNewChapterEndpoint = false
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }

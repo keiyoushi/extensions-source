@@ -16,6 +16,4 @@ class NinjaScan : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
-
-    override fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 }
