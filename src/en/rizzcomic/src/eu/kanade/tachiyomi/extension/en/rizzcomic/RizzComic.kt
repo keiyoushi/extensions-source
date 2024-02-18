@@ -229,29 +229,33 @@ class RizzComic : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.substringAfter("#")
         val slug = manga.url.substringBefore("#")
 
-        return GET("$baseUrl/index/search_chapters/$id#$slug", apiHeaders)
+        val urlPart = urlPrefix?.let { "$it-" } ?: ""
+
+        return GET("$baseUrl/series/$urlPart$slug", apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<List<Chapter>>()
-        val slug = response.request.url.fragment!!
-
-        return result.map {
-            SChapter.create().apply {
-                url = "$slug-chapter-${it.name}"
-                name = "Chapter ${it.name}"
-                date_upload = runCatching {
-                    dateFormat.parse(it.time!!)!!.time
-                }.getOrDefault(0L)
+        val document = response.asJsoup().selectFirst("#chapterlist")?.select("li")
+        val chapters = mutableListOf<SChapter>()
+        if (document != null) {
+            for (chapter in document) {
+                chapters.add(
+                    SChapter.create().apply {
+                        url = chapter.selectFirst("a")!!.attr("href")
+                        name = chapter.selectFirst(".chapternum")!!.ownText()
+                        date_upload = dateFormat.parse(chapter.selectFirst(".chapterdate")!!.ownText())!!.time
+                        chapter_number = chapter.attr("data-num").toFloat()
+                    },
+                )
             }
         }
+        return chapters
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl/chapter/${getUrlPrefix()}-${chapter.url}", headers)
+        return GET(chapter.url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -298,7 +302,7 @@ class RizzComic : HttpSource(), ConfigurableSource {
         }
 
         private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+            SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
         }
     }
 }
