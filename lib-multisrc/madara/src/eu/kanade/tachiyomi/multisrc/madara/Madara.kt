@@ -59,7 +59,7 @@ abstract class Madara(
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en", "pt-BR"),
+        availableLanguages = setOf("en", "pt-BR", "es"),
         classLoader = this::class.java.classLoader!!,
     )
 
