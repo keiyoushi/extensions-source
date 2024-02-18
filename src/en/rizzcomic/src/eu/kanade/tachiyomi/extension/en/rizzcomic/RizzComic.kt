@@ -27,7 +27,7 @@ class RizzComic : MangaThemesia(
     "https://rizzcomic.com",
     "en",
     mangaUrlDirectory = "/series",
-    dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
+    dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
 ) {
 
     override val client = super.client.newBuilder()
