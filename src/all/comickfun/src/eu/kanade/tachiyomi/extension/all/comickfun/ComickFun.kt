@@ -387,19 +387,15 @@ abstract class ComickFun(
             throw Exception("Migrate from Comick to Comick")
         }
 
-        return paginatedChapterListRequest(manga.url.removeSuffix("#"), 1)
-    }
+        val mangaUrl = manga.url.removeSuffix("#")
+        val url = "$apiUrl$mangaUrl".toHttpUrl().newBuilder().apply {
+            addPathSegment("chapters")
+            if (comickFunLang != "all") addQueryParameter("lang", comickFunLang)
+            addQueryParameter("tachiyomi", "true")
+            addQueryParameter("limit", "$ChaptersLimit")
+        }.build()
 
-    private fun paginatedChapterListRequest(mangaUrl: String, page: Int): Request {
-        return GET(
-            "$apiUrl$mangaUrl".toHttpUrl().newBuilder().apply {
-                addPathSegment("chapters")
-                if (comickFunLang != "all") addQueryParameter("lang", comickFunLang)
-                addQueryParameter("tachiyomi", "true")
-                addQueryParameter("page", "$page")
-            }.build(),
-            headers,
-        )
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -407,21 +403,6 @@ abstract class ComickFun(
 
         val mangaUrl = response.request.url.toString()
             .substringBefore("/chapters")
-            .substringAfter(apiUrl)
-
-        var resultSize = chapterListResponse.chapters.size
-        var page = 2
-
-        while (chapterListResponse.total > resultSize) {
-            val newRequest = paginatedChapterListRequest(mangaUrl, page)
-            val newResponse = client.newCall(newRequest).execute()
-            val newChapterListResponse = newResponse.parseAs<ChapterList>()
-
-            chapterListResponse.chapters += newChapterListResponse.chapters
-
-            resultSize += newChapterListResponse.chapters.size
-            page += 1
-        }
 
         return chapterListResponse.chapters
             .filter {
@@ -485,6 +466,7 @@ abstract class ComickFun(
         private const val SCORE_POSITION_PREF = "ScorePosition"
         private const val SCORE_POSITION_DEFAULT = "top"
         private const val limit = 20
+        private const val ChaptersLimit = 99999
         val dateFormat by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
