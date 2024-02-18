@@ -9,17 +9,11 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -29,10 +23,6 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.text.DateFormat
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class MangaOwlTo(
@@ -60,7 +50,7 @@ class MangaOwlTo(
             entries = MIRROR_PREF_ENTRIES
             entryValues = MIRROR_PREF_ENTRY_VALUES
             setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
-            summary = "Current: %s\n(Restart app to apply new setting.)"
+            summary = "%s"
 
             setOnPreferenceChangeListener { _, newValue ->
                 val selected = newValue as String
@@ -157,66 +147,18 @@ class MangaOwlTo(
         return GET("$API/stories/$slug", headers)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val jsonStr = document.body().text()
-        val story = json.parseToJsonElement(jsonStr).jsonObject
-
-        return SManga.create().apply {
-            title = story.jsonObject["name"]?.jsonPrimitive?.content.toString()
-            thumbnail_url = story.jsonObject["thumbnail"]?.jsonPrimitive?.content.toString()
-            author = story.jsonObject["authors"]?.jsonArray?.map {
-                it.jsonObject["name"]?.jsonPrimitive?.content
-            }?.joinToString(", ")
-            status = story.jsonObject["status"]?.jsonPrimitive?.content?.let {
-                when {
-                    it.contains("ongoing") -> SManga.ONGOING
-                    it.contains("completed") -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            } ?: SManga.UNKNOWN
-            genre = story.jsonObject["genres"]?.jsonArray?.map {
-                it.jsonObject["name"]?.jsonPrimitive?.content
-            }?.joinToString(", ")
-
-            val description = story.jsonObject["description"]?.jsonPrimitive?.contentOrNull ?: ""
-            val altName = (story.jsonObject["al_name"]?.jsonPrimitive?.contentOrNull ?: "")
-                .replace("Alternative : ", "")
-            val rating = story.jsonObject["rating"]?.jsonPrimitive?.float
-            val viewCount = story.jsonObject["view_count"]?.jsonPrimitive?.int
-            this.description = "$description\n\n" +
-                (if (altName.isNotEmpty()) "Alternative names: $altName\n\n" else "") +
-                "Rating: $rating\nViews: $viewCount"
-        }
-    }
+    override fun mangaDetailsParse(document: Document) =
+        json.decodeFromString<MangaOwlTitle>(document.body().text()).toSManga()
 
     // Chapters
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US)
-        val jsonStr = response.body.string()
-        val story = json.parseToJsonElement(jsonStr).jsonObject
-        val slug = story.jsonObject["slug"]?.jsonPrimitive?.content.toString()
-
-        return story.jsonObject["chapters"]?.jsonArray?.map {
-            val id = it.jsonObject["id"]?.jsonPrimitive?.int
-            SChapter.create().apply {
-                url = "$baseUrl/10-reading/$slug/$id"
-                name = it.jsonObject["name"]?.jsonPrimitive?.content.toString()
-                date_upload = dateFormat.tryParse(it.jsonObject["created_at"]?.jsonPrimitive?.content.toString())
-            }
-        }!!.reversed()
-    }
+    override fun chapterListParse(response: Response) =
+        json.decodeFromString<MangaOwlTitle>(response.body.string()).chaptersList
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
-
-    private fun DateFormat.tryParse(str: String): Long = try {
-        parse(str)!!.time
-    } catch (_: ParseException) {
-        0L
-    }
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
@@ -224,17 +166,8 @@ class MangaOwlTo(
         return GET("$API/chapters/$id/images?page_size=1000", headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val jsonStr = document.body().text()
-        val pages = json.parseToJsonElement(jsonStr).jsonObject
-
-        return pages.jsonObject["results"]?.jsonArray?.mapIndexed { idx, obj ->
-            Page(
-                index = idx,
-                imageUrl = obj.jsonObject["image"]?.jsonPrimitive?.content,
-            )
-        }!!
-    }
+    override fun pageListParse(document: Document) =
+        json.decodeFromString<MangaOwlChapterPages>(document.body().text()).toPages()
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -262,8 +195,8 @@ class MangaOwlTo(
         "Status",
         arrayOf(
             Pair("Any", null),
-            Pair("Completed", "completed"),
-            Pair("Ongoing", "ongoing"),
+            Pair("Completed", COMPLETED),
+            Pair("Ongoing", ONGOING),
         ),
     )
 
@@ -276,7 +209,7 @@ class MangaOwlTo(
 
     companion object {
         private const val MIRROR_PREF_KEY = "MIRROR"
-        private const val MIRROR_PREF_TITLE = "Mirror"
+        private const val MIRROR_PREF_TITLE = "Mirror (Requires Restart)"
         private val MIRROR_PREF_ENTRIES = arrayOf(
             "mangaowl.to",
             "mangabuddy.to",
@@ -287,5 +220,8 @@ class MangaOwlTo(
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
+
+        const val ONGOING = "ongoing"
+        const val COMPLETED = "completed"
     }
 }
