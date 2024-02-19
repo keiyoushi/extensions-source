@@ -53,7 +53,7 @@ jobs:
                 "type": "body",
                 "regex": "- \\[[xX]\\] I have admitted that I am a clown by having checked this box, as I have not read these acknowledgements\\.",
                 "labels": [":clown_face:"],
-                "message": "You have not carefully read the acknowledgements."
+                "message": "You have not carefully read the acknowledgements. Read them again and edit the checkboxes before reopening the issue."
               },
               {
                 "type": "both",
