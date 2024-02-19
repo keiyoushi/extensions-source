@@ -989,8 +989,7 @@ abstract class Madara(
             .substringAfter("var manga = ")
             .substringBeforeLast(";")
 
-        val wpManga = runCatching { json.parseToJsonElement(wpMangaInfo).jsonObject }
-            .getOrNull() ?: return null
+        val wpManga = json.parseToJsonElement(wpMangaInfo).jsonObject
 
         if (wpManga["enable_manga_view"]?.jsonPrimitive?.content == "1") {
             val formBuilder = FormBody.Builder()
@@ -1007,9 +1006,7 @@ abstract class Madara(
                 .set("Referer", document.location())
                 .build()
 
-            val ajaxUrl = wpManga["ajax_url"]!!.jsonPrimitive.content
-
-            return POST(ajaxUrl, newHeaders, formBody)
+            return POST("$baseUrl/wp-admin/admin-ajax.php", newHeaders, formBody)
         }
 
         return null
@@ -1020,13 +1017,15 @@ abstract class Madara(
      *
      * @param document The response document with the wp-manga data
      */
-    protected open fun countViews(document: Document) {
+    protected fun countViews(document: Document) {
         if (!sendViewCount) {
             return
         }
 
-        val request = countViewsRequest(document) ?: return
-        runCatching { client.newCall(request).execute().close() }
+        try {
+            val request = countViewsRequest(document) ?: return
+            client.newCall(request).execute().close()
+        } catch (_: Exception) { }
     }
 
     /**
