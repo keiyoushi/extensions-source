@@ -31,7 +31,7 @@ class Mangalek :
     ConfigurableSource {
 
     override val fetchGenres = false
-
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val chapterUrlSuffix = ""
 
     private val defaultBaseUrl = "https://manga-lek.net"
