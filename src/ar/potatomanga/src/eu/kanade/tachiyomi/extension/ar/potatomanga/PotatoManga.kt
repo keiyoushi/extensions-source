@@ -8,9 +8,9 @@ import java.util.Locale
 
 class PotatoManga : MangaThemesia(
     "PotatoManga",
-    "https://potatomanga.xyz",
+    "https://ar.potatomanga.xyz",
     "ar",
-    mangaUrlDirectory = "/series",
+    mangaUrlDirectory = "/manga",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
     override val seriesArtistSelector =
