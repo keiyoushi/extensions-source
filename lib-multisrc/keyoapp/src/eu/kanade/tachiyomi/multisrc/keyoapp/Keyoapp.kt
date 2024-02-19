@@ -19,7 +19,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 abstract class Keyoapp(
@@ -37,6 +39,8 @@ abstract class Keyoapp(
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
+
+    private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
 
     // Popular
 
@@ -206,7 +210,7 @@ abstract class Keyoapp(
 
     // Chapter list
 
-    override fun chapterListSelector(): String = "#chapters > a"
+    override fun chapterListSelector(): String = "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("href"))
@@ -259,13 +263,40 @@ abstract class Keyoapp(
     }
 
     private fun String.parseDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
+        return if (this.contains("ago")) {
+            this.parseRelativeDate()
+        } else {
+            try {
+                dateFormat.parse(this)!!.time
+            } catch (_: ParseException) {
+                0L
+            }
+        }
     }
 
-    companion object {
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
+    private fun String.parseRelativeDate(): Long {
+        val now = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }
+
+        val relativeDate = this.split(" ").firstOrNull()
+            ?.replace("one", "1")
+            ?.replace("a", "1")
+            ?.toIntOrNull()
+            ?: return 0L
+
+        when {
+            "second" in this -> now.add(Calendar.SECOND, -relativeDate) // parse: 30 seconds ago
+            "minute" in this -> now.add(Calendar.MINUTE, -relativeDate) // parses: "42 minutes ago"
+            "hour" in this -> now.add(Calendar.HOUR, -relativeDate) // parses: "1 hour ago" and "2 hours ago"
+            "day" in this -> now.add(Calendar.DAY_OF_YEAR, -relativeDate) // parses: "2 days ago"
+            "week" in this -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate) // parses: "2 weeks ago"
+            "month" in this -> now.add(Calendar.MONTH, -relativeDate) // parses: "2 months ago"
+            "year" in this -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
+        }
+        return now.timeInMillis
     }
 }
