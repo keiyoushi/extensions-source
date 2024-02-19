@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.gravureblogger
 
-import android.annotation.SuppressLint
 import android.os.Build
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -23,7 +22,6 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-@SuppressLint("ObsoleteSdkInt")
 abstract class GravureBlogger(
     override val name: String,
     override val baseUrl: String,
@@ -61,7 +59,8 @@ abstract class GravureBlogger(
                 setUrlWithoutDomain(entry.link.first { it.rel == "alternate" }.href + "#${entry.published.t}")
                 title = entry.title.t
                 thumbnail_url = content.selectFirst("img")?.absUrl("src")
-                genre = entry.category.joinToString { it.term }
+                genre = entry.category?.joinToString { it.term }
+                author = entry.author?.joinToString { it.name.t }
                 status = SManga.COMPLETED
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
                 initialized = true
