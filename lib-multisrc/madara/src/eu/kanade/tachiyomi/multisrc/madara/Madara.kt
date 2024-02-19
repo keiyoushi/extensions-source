@@ -59,7 +59,7 @@ abstract class Madara(
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en", "pt-BR"),
+        availableLanguages = setOf("en", "pt-BR", "es"),
         classLoader = this::class.java.classLoader!!,
     )
 
@@ -712,8 +712,8 @@ abstract class Madara(
             document.selectFirst(altNameSelector)?.ownText()?.let {
                 if (it.isBlank().not() && it.notUpdating()) {
                     manga.description = when {
-                        manga.description.isNullOrBlank() -> altName + it
-                        else -> manga.description + "\n\n$altName" + it
+                        manga.description.isNullOrBlank() -> "$altName " + it
+                        else -> manga.description + "\n\n$altName " + it
                     }
                 }
             }
