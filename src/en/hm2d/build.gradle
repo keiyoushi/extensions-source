@@ -2,8 +2,8 @@ ext {
     extName = 'HM2D'
     extClass = '.HM2D'
     themePkg = 'madara'
-    baseUrl = 'https://mangadistrict.com/hdoujin'
-    overrideVersionCode = 1
+    baseUrl = 'https://doujindistrict.com'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
