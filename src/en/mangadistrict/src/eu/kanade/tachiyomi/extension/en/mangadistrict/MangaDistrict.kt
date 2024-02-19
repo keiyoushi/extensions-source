@@ -29,80 +29,71 @@ class MangaDistrict :
 
     override fun searchMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
 
-    private val titleComment = Regex("\\(.*\\)")
+    private val titleVersion = Regex("\\(.*\\)")
 
     override fun popularMangaFromElement(element: Element): SManga {
         return super.popularMangaFromElement(element).apply {
-            if (preferences.getBoolean(REMOVE_TITLE_COMMENT_PREF, true)) {
-                title = this.title.replace(titleComment, "").trim()
+            if (isRemoveTitleVersion()) {
+                title = this.title.replace(titleVersion, "").trim()
             }
         }
     }
 
     override fun searchMangaFromElement(element: Element): SManga {
         return super.searchMangaFromElement(element).apply {
-            if (preferences.getBoolean(REMOVE_TITLE_COMMENT_PREF, true)) {
-                title = this.title.replace(titleComment, "").trim()
+            if (isRemoveTitleVersion()) {
+                title = this.title.replace(titleVersion, "").trim()
             }
         }
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
         return super.mangaDetailsParse(document).apply {
-            if (preferences.getBoolean(REMOVE_TITLE_COMMENT_PREF, true)) {
-                title = this.title.replace(titleComment, "").trim()
+            if (isRemoveTitleVersion()) {
+                title = this.title.replace(titleVersion, "").trim()
             }
         }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).filterNot {
-            when (getImgResPref()) {
-                "Full quality" -> it.url.contains("/v1-high-quality")
-                "High quality" -> it.url.contains("/v2-full-quality")
-                else -> false
-            }
+        val chapters = super.chapterListParse(response)
+        return when (getImgRes()) {
+            IMG_RES_HIGH -> chapters.filterNot { it.url.contains("/v2-full-quality") }
+            IMG_RES_FULL -> chapters.filterNot { it.url.contains("/v1-high-quality") }
+            else -> chapters
         }
     }
 
-    private fun getImgResPref(): String? = preferences.getString(IMG_RES_PREF_KEY, IMG_RES_PREF_DEFAULT_VALUE)
+    private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
+    private fun getImgRes() = preferences.getString(IMG_RES_PREF, IMG_RES_DEFAULT)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
-            key = REMOVE_TITLE_COMMENT_PREF
-            title = "Remove comments from title, e.g. \"(Official)\", \"(Doujinshi)\""
-            summary = "To help app find duplicate entries in library"
-            setDefaultValue(true)
+            key = REMOVE_TITLE_VERSION_PREF
+            title = "Remove version information from entry titles"
+            summary = "This removes version tags like “(Official)” or “(Doujinshi)” from entry titles " +
+                "and helps identify duplicate entries in your library. " +
+                "To update existing entries, remove them from your library and clear database in advanced settings."
+            setDefaultValue(false)
         }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
-            key = IMG_RES_PREF_KEY
-            title = IMG_RES_PREF_TITLE
-            entries = IMG_RES_PREF_ENTRIES
-            entryValues = IMG_RES_PREF_ENTRY_VALUES
-            setDefaultValue(IMG_RES_PREF_DEFAULT_VALUE)
-            summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(IMG_RES_PREF_KEY, entry).commit()
-            }
+            key = IMG_RES_PREF
+            title = "Image quality"
+            entries = arrayOf("All", "High quality", "Full quality")
+            entryValues = arrayOf(IMG_RES_ALL, IMG_RES_HIGH, IMG_RES_FULL)
+            summary = "%s\nRefresh entry to update the chapter list."
+            setDefaultValue(IMG_RES_DEFAULT)
         }.let(screen::addPreference)
     }
 
     companion object {
-        private const val REMOVE_TITLE_COMMENT_PREF = "REMOVE_TITLE_COMMENT"
+        private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
 
-        private const val IMG_RES_PREF_KEY = "IMG_RES"
-        private const val IMG_RES_PREF_TITLE = "Image resolution (need to refresh manga to update chapters' quality)"
-        private val IMG_RES_PREF_ENTRIES = arrayOf(
-            "Full quality",
-            "High quality",
-            "Both",
-        )
-        private val IMG_RES_PREF_ENTRY_VALUES = IMG_RES_PREF_ENTRIES
-        private val IMG_RES_PREF_DEFAULT_VALUE = IMG_RES_PREF_ENTRY_VALUES[0]
+        private const val IMG_RES_PREF = "IMG_RES"
+        private const val IMG_RES_ALL = "all"
+        private const val IMG_RES_HIGH = "high"
+        private const val IMG_RES_FULL = "full"
+        private const val IMG_RES_DEFAULT = IMG_RES_ALL
     }
 }
