@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.hm2d
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class HM2D : Madara(
     "HM2D",
