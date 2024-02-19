@@ -4,12 +4,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class BloggerDto(
+class BloggerDto(
     val feed: BloggerFeedDto,
 )
 
 @Serializable
-data class BloggerFeedDto(
+class BloggerFeedDto(
     @SerialName("openSearch\$totalResults") val totalResults: BloggerTextDto,
     @SerialName("openSearch\$startIndex") val startIndex: BloggerTextDto,
     @SerialName("openSearch\$itemsPerPage") val itemsPerPage: BloggerTextDto,
@@ -18,32 +18,26 @@ data class BloggerFeedDto(
 )
 
 @Serializable
-data class BloggerFeedEntryDto(
+class BloggerFeedEntryDto(
     val published: BloggerTextDto,
-    val category: List<BloggerCategoryDto>,
+    val category: List<BloggerCategoryDto>? = emptyList(),
     val title: BloggerTextDto,
     val content: BloggerTextDto,
     val link: List<BloggerLinkDto>,
-    val author: List<BloggerAuthorDto>,
 )
 
 @Serializable
-data class BloggerLinkDto(
+class BloggerLinkDto(
     val rel: String,
     val href: String,
 )
 
 @Serializable
-data class BloggerCategoryDto(
+class BloggerCategoryDto(
     val term: String,
 )
 
 @Serializable
-data class BloggerAuthorDto(
-    val name: BloggerTextDto,
-)
-
-@Serializable
-data class BloggerTextDto(
+class BloggerTextDto(
     @SerialName("\$t") val t: String,
 )
