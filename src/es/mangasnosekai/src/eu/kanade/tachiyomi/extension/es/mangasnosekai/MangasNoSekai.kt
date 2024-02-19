@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.mangasnosekai
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -21,15 +22,42 @@ class MangasNoSekai : Madara(
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
         .build()
 
     override val useNewChapterEndpoint = true
 
-    override val mangaSubString = "manganewo"
+    private var libraryPath = ""
+
+    private fun getLibraryPath() {
+        libraryPath = try {
+            val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+            val libraryUrl = document.selectFirst("li#menu-item-3116.menu-item > a[href]")
+
+            libraryUrl?.attr("href")?.removeSuffix("/")?.substringAfterLast("/")
+                ?: "manganewos"
+        } catch (e: Exception) {
+            "manganewos"
+        }
+    }
+
+    override fun popularMangaRequest(page: Int): Request {
+        if (libraryPath.isBlank()) getLibraryPath()
+        return GET("$baseUrl/$libraryPath/${searchPage(page)}?m_orderby=views", headers)
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        if (libraryPath.isBlank()) getLibraryPath()
+        return GET("$baseUrl/$libraryPath/${searchPage(page)}?m_orderby=latest", headers)
+    }
 
     override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
+
+    override fun popularMangaNextPageSelector() = "a.next.page-numbers"
 
     override val popularMangaUrlSelector = "a[href]"
 
