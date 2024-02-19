@@ -1,0 +1,9 @@
+ext {
+    extName = 'Blackout Scans'
+    extClass = '.BlackoutScans'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://blackoutscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
