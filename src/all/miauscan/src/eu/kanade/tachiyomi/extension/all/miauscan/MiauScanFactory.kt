@@ -20,7 +20,7 @@ class MiauScanFactory : SourceFactory {
 
 open class MiauScan(lang: String) : MangaThemesia(
     name = "Miau Scan",
-    baseUrl = "https://miaucomics.org",
+    baseUrl = "https://miauvisor.org",
     lang = lang,
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
@@ -57,6 +57,9 @@ open class MiauScan(lang: String) : MangaThemesia(
             title = title.replace(PORTUGUESE_SUFFIX, "")
         }
     }
+
+    override val seriesAuthorSelector = ".tsinfo .imptdt:contains(autor) i"
+    override val seriesStatusSelector = ".tsinfo .imptdt:contains(estado) i"
 
     override fun mangaDetailsParse(document: Document): SManga {
         return super.mangaDetailsParse(document).apply {

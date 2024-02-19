@@ -2,8 +2,8 @@ ext {
     extName = 'Miau Scan'
     extClass = '.MiauScanFactory'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://miaucomics.org'
-    overrideVersionCode = 2
+    baseUrl = 'https://miauvisor.org'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
