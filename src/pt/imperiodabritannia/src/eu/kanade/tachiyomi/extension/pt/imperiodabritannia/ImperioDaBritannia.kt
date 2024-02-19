@@ -20,5 +20,4 @@ class ImperioDaBritannia : Madara(
 
     override val useNewChapterEndpoint = true
     override val mangaDetailsSelectorTag = ""
-    override val mangaDetailsSelectorTitle = "#manga-title > h1"
 }
