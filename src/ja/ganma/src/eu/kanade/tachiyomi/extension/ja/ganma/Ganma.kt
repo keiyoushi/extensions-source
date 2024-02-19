@@ -1,11 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.ganma
 
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,16 +10,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.injectLazy
 
-open class Ganma : HttpSource(), ConfigurableSource {
-    override val id = sourceId
-    override val name = sourceName
-    override val lang = sourceLang
-    override val versionId = sourceVersionId
+class Ganma : HttpSource() {
+    override val name = "GANMA!"
+    override val lang = "ja"
     override val baseUrl = "https://ganma.jp"
     override val supportsLatest = true
 
@@ -112,11 +109,5 @@ open class Ganma : HttpSource(), ConfigurableSource {
         json.decodeFromStream<Result<T>>(it.body.byteStream()).root
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = METADATA_PREF
-            title = "Metadata (Debug)"
-            setDefaultValue("")
-        }.let { screen.addPreference(it) }
-    }
+    val json: Json by injectLazy()
 }
