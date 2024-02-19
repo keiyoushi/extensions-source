@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
@@ -39,20 +40,42 @@ class MangasNoSekai : Madara(
             val libraryUrl = document.selectFirst("li#menu-item-3116.menu-item > a[href]")
 
             libraryUrl?.attr("href")?.removeSuffix("/")?.substringAfterLast("/")
-                ?: "manganewos"
+                ?: "manga"
         } catch (e: Exception) {
-            "manganewos"
+            "manga"
         }
     }
 
     override fun popularMangaRequest(page: Int): Request {
         if (libraryPath.isBlank()) getLibraryPath()
-        return GET("$baseUrl/$libraryPath/${searchPage(page)}?m_orderby=views", headers)
+        return GET("$baseUrl/$libraryPath/#$page", headers)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val page = response.request.url.fragment?.toIntOrNull() ?: 1
+        val document = response.asJsoup()
+        val orderValue = document.selectFirst("select#order_select > option:eq(5)")
+            ?.attr("value")
+            ?: "views2"
+        val url = "$baseUrl/$libraryPath/${searchPage(page)}?m_orderby=$orderValue"
+        val newResponse = client.newCall(GET(url, headers)).execute()
+        return super.popularMangaParse(newResponse)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
         if (libraryPath.isBlank()) getLibraryPath()
-        return GET("$baseUrl/$libraryPath/${searchPage(page)}?m_orderby=latest", headers)
+        return GET("$baseUrl/$libraryPath/#$page", headers)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val page = response.request.url.fragment?.toIntOrNull() ?: 1
+        val document = response.asJsoup()
+        val orderValue = document.selectFirst("select#order_select > option:eq(1)")
+            ?.attr("value")
+            ?: "latest2"
+        val url = "$baseUrl/$libraryPath/${searchPage(page)}?m_orderby=$orderValue"
+        val newResponse = client.newCall(GET(url, headers)).execute()
+        return super.popularMangaParse(newResponse)
     }
 
     override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
