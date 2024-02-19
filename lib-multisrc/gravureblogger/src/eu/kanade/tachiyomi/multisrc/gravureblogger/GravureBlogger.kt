@@ -60,7 +60,6 @@ abstract class GravureBlogger(
                 title = entry.title.t
                 thumbnail_url = content.selectFirst("img")?.absUrl("src")
                 genre = entry.category?.joinToString { it.term }
-                author = entry.author?.joinToString { it.name.t }
                 status = SManga.COMPLETED
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
                 initialized = true

@@ -24,7 +24,6 @@ class BloggerFeedEntryDto(
     val title: BloggerTextDto,
     val content: BloggerTextDto,
     val link: List<BloggerLinkDto>,
-    val author: List<BloggerAuthorDto>? = emptyList(),
 )
 
 @Serializable
@@ -36,11 +35,6 @@ class BloggerLinkDto(
 @Serializable
 class BloggerCategoryDto(
     val term: String,
-)
-
-@Serializable
-class BloggerAuthorDto(
-    val name: BloggerTextDto,
 )
 
 @Serializable
