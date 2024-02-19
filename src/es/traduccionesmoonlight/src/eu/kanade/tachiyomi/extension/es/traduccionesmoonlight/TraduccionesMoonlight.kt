@@ -1,14 +1,24 @@
 package eu.kanade.tachiyomi.extension.es.traduccionesmoonlight
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TraduccionesMoonlight : Madara(
+class TraduccionesMoonlight : MangaThemesia(
     "Traducciones Moonlight",
     "https://traduccionesmoonlight.com",
     "es",
-    SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
+    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
 ) {
-    override val useNewChapterEndpoint = true
+    // Site moved from Madara to MangaThemesia
+    override val versionId = 2
+
+    override val client = super.client.newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
+        .build()
+
+    override val seriesAuthorSelector = ".tsinfo .imptdt:contains(autor) i"
+    override val seriesStatusSelector = ".tsinfo .imptdt:contains(estado) i"
 }
