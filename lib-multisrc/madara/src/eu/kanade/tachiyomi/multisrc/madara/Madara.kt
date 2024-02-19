@@ -723,7 +723,7 @@ abstract class Madara(
     }
 
     // Manga Details Selector
-    open val mangaDetailsSelectorTitle = "div.post-title h3, div.post-title h1, #manga-title > h1"
+    open val mangaDetailsSelectorTitle = "div.post-title h3, div.post-title h1, #manga-title > h1, div.summary_content h2"
     open val mangaDetailsSelectorAuthor = "div.author-content > a"
     open val mangaDetailsSelectorArtist = "div.artist-content > a"
     open val mangaDetailsSelectorStatus = "div.summary-content"
