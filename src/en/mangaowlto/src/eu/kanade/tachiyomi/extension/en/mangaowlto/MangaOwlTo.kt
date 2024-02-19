@@ -9,27 +9,23 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.TimeUnit
 
 class MangaOwlTo(
-    private val collectionUrl: String,
+    private val collection: String = "manga",
     extraName: String = "",
     private val genresList: List<Genre> = listOf(),
-) : ConfigurableSource, ParsedHttpSource() {
+) : ConfigurableSource, HttpSource() {
     override val name: String = "MangaOwl.To $extraName"
     override val lang = "en"
     override val supportsLatest = true
@@ -38,10 +34,8 @@ class MangaOwlTo(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private val defaultDomain: String = getMirrorPref()!!
-    override val baseUrl = "https://$defaultDomain"
-    private val API = "https://api.$defaultDomain/v1"
-    private val searchPath = "search"
+    private val defaultDomain: String = preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE) ?: MIRROR_PREF_ENTRY_VALUES[0]
+    override val baseUrl = "https://api.$defaultDomain/v1"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mirrorPref = ListPreference(screen.context).apply {
@@ -62,8 +56,6 @@ class MangaOwlTo(
         screen.addPreference(mirrorPref)
     }
 
-    private fun getMirrorPref(): String? = preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)
-
     private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -72,45 +64,27 @@ class MangaOwlTo(
         .writeTimeout(1, TimeUnit.MINUTES)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/$collectionUrl?ordering=-view_count&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int) =
+        GET("$baseUrl/stories?type=$collection&ordering=-view_count&page=$page", headers)
 
-    override fun popularMangaSelector() = "div.manga-item"
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        element.select("a:nth-child(2)").let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.text()
-        }
-        manga.thumbnail_url = element.select("a:nth-child(1) > img").attr("src")
-
-        return manga
-    }
-
-    override fun popularMangaNextPageSelector() = "div.pagination > a[title='Next']"
+    override fun popularMangaParse(response: Response) =
+        json.decodeFromString<MangaOwlToStories>(response.body.string()).toMangasPage()
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/$collectionUrl?ordering=-modified_at&page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$baseUrl/stories?type=$collection&ordering=-modified_at&page=$page", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotEmpty() || filters.isEmpty()) {
             // Search won't work together with filter
-            GET("$baseUrl/$searchPath?q=$query&page=$page", headers)
+            GET("$baseUrl/search?q=$query&page=$page", headers)
         } else {
-            val url = "$baseUrl/$collectionUrl".toHttpUrl().newBuilder()
+            val url = "$baseUrl/stories?type=$collection".toHttpUrl().newBuilder()
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> if (!filter.toUriPart().isNullOrEmpty()) {
@@ -134,42 +108,24 @@ class MangaOwlTo(
         }
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Manga summary page
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast("/")
-        return GET("$API/stories/$slug", headers)
-    }
-
-    override fun mangaDetailsParse(document: Document) =
-        json.decodeFromString<MangaOwlTitle>(document.body().text()).toSManga()
+    override fun mangaDetailsParse(response: Response) =
+        json.decodeFromString<MangaOwlToStory>(response.body.string()).toSManga()
 
     // Chapters
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
     override fun chapterListParse(response: Response) =
-        json.decodeFromString<MangaOwlTitle>(response.body.string()).chaptersList
-
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
+        json.decodeFromString<MangaOwlToStory>(response.body.string()).chaptersList
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url.substringAfterLast("/")
-        return GET("$API/chapters/$id/images?page_size=1000", headers)
-    }
 
-    override fun pageListParse(document: Document) =
-        json.decodeFromString<MangaOwlChapterPages>(document.body().text()).toPages()
+    override fun pageListParse(response: Response) =
+        json.decodeFromString<MangaOwlToChapterPages>(response.body.string()).toPages()
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
 
