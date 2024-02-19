@@ -1,6 +1,6 @@
 ext {
     extName = 'GANMA!'
-    extClass = '.GanmaFactory'
+    extClass = '.Ganma'
     extVersionCode = 2
 }
 
