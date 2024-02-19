@@ -1,9 +1,0 @@
-ext {
-    extName = 'Kuaikuai Manhua 3'
-    extClass = '.Kuaikuai3'
-    themePkg = 'mccms'
-    baseUrl = 'https://mobile3.manhuaorg.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
