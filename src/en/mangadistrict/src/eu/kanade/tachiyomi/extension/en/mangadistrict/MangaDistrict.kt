@@ -9,11 +9,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.MediaType
 import okhttp3.Response
-import okhttp3.ResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
@@ -59,25 +55,14 @@ class MangaDistrict :
         }
     }
 
-    private fun chaptersStripSelector(): String {
-        return when (getImgResPref()) {
-            "Full quality" -> "a:contains(High Quality) ~ ul.list-chap"
-            "High quality" -> "a:contains(Full Quality) ~ ul.list-chap"
-            else -> "dummy"
-        }
-    }
-
-    private fun Response.stripElements(selector: String): Response {
-        val contentType: MediaType? = body.contentType()
-        val document = asJsoup()
-        document.select(selector).remove()
-
-        val body: ResponseBody = document.body().toString().toResponseBody(contentType)
-        return newBuilder().body(body).build()
-    }
-
     override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response.stripElements(chaptersStripSelector()))
+        return super.chapterListParse(response).filterNot {
+            when (getImgResPref()) {
+                "Full quality" -> it.url.contains("/v1-high-quality")
+                "High quality" -> it.url.contains("/v2-full-quality")
+                else -> false
+            }
+        }
     }
 
     private fun getImgResPref(): String? = preferences.getString(IMG_RES_PREF_KEY, IMG_RES_PREF_DEFAULT_VALUE)
@@ -111,7 +96,7 @@ class MangaDistrict :
         private const val REMOVE_TITLE_COMMENT_PREF = "REMOVE_TITLE_COMMENT"
 
         private const val IMG_RES_PREF_KEY = "IMG_RES"
-        private const val IMG_RES_PREF_TITLE = "Image resolution"
+        private const val IMG_RES_PREF_TITLE = "Image resolution (need to refresh manga to update chapters' quality)"
         private val IMG_RES_PREF_ENTRIES = arrayOf(
             "Full quality",
             "High quality",
