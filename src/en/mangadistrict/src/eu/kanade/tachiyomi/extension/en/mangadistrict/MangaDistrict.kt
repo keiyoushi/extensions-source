@@ -73,7 +73,8 @@ class MangaDistrict :
             title = "Remove version information from entry titles"
             summary = "This removes version tags like “(Official)” or “(Doujinshi)” from entry titles " +
                 "and helps identify duplicate entries in your library. " +
-                "To update existing entries, refresh them manually."
+                "To update existing entries, remove them from your library and refresh manually. " +
+                "You might also want to clearing the database in advanced settings."
             setDefaultValue(false)
         }.let(screen::addPreference)
 
