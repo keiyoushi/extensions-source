@@ -77,7 +77,7 @@ class MangaOwlTo(
                     is StatusFilter -> if (!filter.toUriPart().isNullOrEmpty()) {
                         url.addQueryParameter("status", filter.toUriPart())
                     }
-                    is GenreFilter ->
+                    is GenresFilter ->
                         filter.state
                             .filter { it.state }
                             .forEach { url.addQueryParameter("genres", it.uriPart) }
@@ -113,7 +113,7 @@ class MangaOwlTo(
 
     override fun getFilterList() = FilterList(
         Filter.Header("Search query won't use filters"),
-        GenreFilter(genresList),
+        GenresFilter(genresList),
         StatusFilter(),
         SortFilter(),
     )

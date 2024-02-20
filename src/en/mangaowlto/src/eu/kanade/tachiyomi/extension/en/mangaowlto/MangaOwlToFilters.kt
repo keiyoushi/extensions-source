@@ -4,7 +4,8 @@ import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(name: String, val uriPart: String) : Filter.CheckBox(name)
 
-class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
+class GenresFilter(genres: List<Genre>) :
+    Filter.Group<Genre>("Genres", genres.map { Genre(it.name, it.uriPart) })
 
 class SortFilter : UriPartFilter(
     "Sort by",
