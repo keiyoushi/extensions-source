@@ -2,11 +2,14 @@ package eu.kanade.tachiyomi.extension.en.constellarscans
 
 import android.app.Application
 import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.json.jsonArray
@@ -19,12 +22,21 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.concurrent.TimeUnit
 
-class ConstellarScans : MangaThemesia("Constellar Scans", "https://constellarcomic.com", "en") {
+class ConstellarScans :
+    MangaThemesia(
+        "Constellar Scans",
+        "https://constellarcomic.com",
+        "en",
+    ),
+    ConfigurableSource {
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
     }
 
     override val client: OkHttpClient by lazy {
@@ -33,8 +45,6 @@ class ConstellarScans : MangaThemesia("Constellar Scans", "https://constellarcom
                 preferences.getPrefUAType(),
                 preferences.getPrefCustomUA(),
             )
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
             .rateLimit(1, 1)
             .build()
     }

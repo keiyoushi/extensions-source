@@ -7,6 +7,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -23,12 +24,14 @@ import java.util.Locale
 
 private const val swatUrl = "https://swatmanhua.com"
 
-class MangaSwat : MangaThemesia(
-    "MangaSwat",
-    swatUrl,
-    "ar",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-) {
+class MangaSwat :
+    MangaThemesia(
+        "MangaSwat",
+        swatUrl,
+        "ar",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
+    ),
+    ConfigurableSource {
     private val defaultBaseUrl = swatUrl
 
     override val baseUrl by lazy { getPrefBaseUrl() }
@@ -113,8 +116,6 @@ class MangaSwat : MangaThemesia(
             }
         }
         screen.addPreference(baseUrlPref)
-
-        super.setupPreferenceScreen(screen)
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
