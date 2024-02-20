@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.extension.en.mangaowlto
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class Genre(name: String, val uriPart: String) : Filter.CheckBox(name)
+class Genre(val name: String, val uriPart: String)
+
+class GenreCheckBox(name: String, val uriPart: String) : Filter.CheckBox(name)
 
 class GenresFilter(genres: List<Genre>) :
-    Filter.Group<Genre>("Genres", genres.map { Genre(it.name, it.uriPart) })
+    Filter.Group<GenreCheckBox>("Genres", genres.map { GenreCheckBox(it.name, it.uriPart) })
 
 class SortFilter : UriPartFilter(
     "Sort by",
