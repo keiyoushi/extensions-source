@@ -476,17 +476,17 @@ abstract class Madara(
         intl["order_by_filter_new"] to "new-manga",
     )
 
-    protected open val genreConditionFilterOptions: Array<String> =
-        arrayOf(
-            intl["genre_condition_filter_or"],
-            intl["genre_condition_filter_and"],
+    protected open val genreConditionFilterOptions: Map<String, String> =
+        mapOf(
+            intl["genre_condition_filter_or"] to "",
+            intl["genre_condition_filter_and"] to "1",
         )
 
-    protected open val adultContentFilterOptions: Array<String> =
-        arrayOf(
-            intl["adult_content_filter_all"],
-            intl["adult_content_filter_none"],
-            intl["adult_content_filter_only"],
+    protected open val adultContentFilterOptions: Map<String, String> =
+        mapOf(
+            intl["adult_content_filter_all"] to "",
+            intl["adult_content_filter_none"] to "0",
+            intl["adult_content_filter_only"] to "1",
         )
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) :
@@ -494,7 +494,7 @@ abstract class Madara(
         fun toUriPart() = vals[state].second
     }
 
-    open class Tag(val id: String, name: String) : Filter.CheckBox(name)
+    open class Tag(name: String, val id: String) : Filter.CheckBox(name)
 
     protected class AuthorFilter(title: String) : Filter.Text(title)
     protected class ArtistFilter(title: String) : Filter.Text(title)
@@ -505,14 +505,14 @@ abstract class Madara(
     protected class OrderByFilter(title: String, options: List<Pair<String, String>>, state: Int = 0) :
         UriPartFilter(title, options.toTypedArray(), state)
 
-    protected class GenreConditionFilter(title: String, options: Array<String>) : UriPartFilter(
+    protected class GenreConditionFilter(title: String, options: List<Pair<String, String>>) : UriPartFilter(
         title,
-        options.zip(arrayOf("", "1")).toTypedArray(),
+        options.toTypedArray(),
     )
 
-    protected class AdultContentFilter(title: String, options: Array<String>) : UriPartFilter(
+    protected class AdultContentFilter(title: String, options: List<Pair<String, String>>) : UriPartFilter(
         title,
-        options.zip(arrayOf("", "0", "1")).toTypedArray(),
+        options.toTypedArray(),
     )
 
     protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
@@ -531,12 +531,12 @@ abstract class Madara(
             ),
             OrderByFilter(
                 title = intl["order_by_filter_title"],
-                options = orderByFilterOptions.map { Pair(it.key, it.value) },
+                options = orderByFilterOptions.toList(),
                 state = 0,
             ),
             AdultContentFilter(
                 title = intl["adult_content_filter_title"],
-                options = adultContentFilterOptions,
+                options = adultContentFilterOptions.toList(),
             ),
         )
 
@@ -546,7 +546,7 @@ abstract class Madara(
                 Filter.Header(intl["genre_filter_header"]),
                 GenreConditionFilter(
                     title = intl["genre_condition_filter_title"],
-                    options = genreConditionFilterOptions,
+                    options = genreConditionFilterOptions.toList(),
                 ),
                 GenreList(
                     title = intl["genre_filter_title"],
@@ -712,8 +712,8 @@ abstract class Madara(
             document.selectFirst(altNameSelector)?.ownText()?.let {
                 if (it.isBlank().not() && it.notUpdating()) {
                     manga.description = when {
-                        manga.description.isNullOrBlank() -> "$altName " + it
-                        else -> manga.description + "\n\n$altName " + it
+                        manga.description.isNullOrBlank() -> "$altName $it"
+                        else -> "${manga.description}\n\n$altName $it"
                     }
                 }
             }
