@@ -2,13 +2,11 @@ package eu.kanade.tachiyomi.extension.en.mangaowlto
 
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
-import eu.kanade.tachiyomi.source.model.Filter
 
 class MangaOwlToFactory : SourceFactory {
-    class Genre(name: String, val uriPart: String) : Filter.CheckBox(name)
-
     override fun createSources(): List<Source> = listOf(
         MangaOwlTo(
+            collection = "manga",
             extraName = "Manga",
             genresList = listOf(
                 Genre("Action", "13"),
