@@ -241,12 +241,12 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.lol", "id", "/d
             StatusFilter(),
             TypeFilter(),
             OrderByFilter(),
-            Filter.Header("Genre exclusion is not available for all sources"),
-            GenreListFilter(getGenreList()),
+            Filter.Header(intl["genre_exclusion_warning"]),
+            GenreListFilter(intl["genre_filter_title"], getGenreList()),
             Filter.Separator(),
-            Filter.Header("NOTE: Can't be used with other filter!"),
-            Filter.Header("$name Project List page"),
-            ProjectFilter(),
+            Filter.Header(intl["project_filter_warning"]),
+            Filter.Header(intl.format("project_filter_name", name)),
+            ProjectFilter(intl["project_filter_title"], projectFilterOptions),
         )
         return FilterList(filters)
     }

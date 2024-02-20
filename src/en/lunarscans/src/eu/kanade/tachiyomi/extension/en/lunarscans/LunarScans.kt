@@ -33,19 +33,19 @@ class LunarScans : MangaThemesia(
         val filters = mutableListOf<Filter<*>>(
             Filter.Header("Note: Can't be used with text search!"),
             Filter.Separator(),
-            StatusFilter(),
-            TypeFilter(),
-            OrderByFilter(),
-            Filter.Header("Genre exclusion is not available for all sources"),
-            GenreListFilter(getGenreList()),
+            StatusFilter(intl["status_filter_title"], statusOptions),
+            TypeFilter(intl["type_filter_title"], typeFilterOptions),
+            OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
+            Filter.Header(intl["genre_exclusion_warning"]),
+            GenreListFilter(intl["genre_filter_title"], getGenreList()),
         )
         if (hasProjectPage) {
             filters.addAll(
                 mutableListOf<Filter<*>>(
                     Filter.Separator(),
-                    Filter.Header("NOTE: Can't be used with other filter!"),
-                    Filter.Header("$name Project List page"),
-                    ProjectFilter(),
+                    Filter.Header(intl["project_filter_warning"]),
+                    Filter.Header(intl.format("project_filter_name", name)),
+                    ProjectFilter(intl["project_filter_title"], projectFilterOptions),
                 ),
             )
         }

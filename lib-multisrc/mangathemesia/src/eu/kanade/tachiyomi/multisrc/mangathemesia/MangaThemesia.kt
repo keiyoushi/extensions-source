@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mangathemesia
 
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -31,7 +32,7 @@ import java.util.Locale
 abstract class MangaThemesia(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String,
+    final override val lang: String,
     val mangaUrlDirectory: String = "/manga",
     val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
 ) : ParsedHttpSource() {
@@ -45,14 +46,21 @@ abstract class MangaThemesia(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
+    protected val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en"),
+        classLoader = this::class.java.classLoader!!,
+    )
+
     open val projectPageString = "/project"
 
     // Popular (Search with popular order and nothing else)
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(OrderByFilter("popular")))
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", OrderByFilter.POPULAR)
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     // Latest (Search with update order and nothing else)
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList(OrderByFilter("update")))
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", OrderByFilter.LATEST)
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // Search
@@ -151,7 +159,7 @@ abstract class MangaThemesia(
     open val seriesStatusSelector = ".infotable tr:contains(status) td:last-child, .tsinfo .imptdt:contains(status) i, .fmed b:contains(status)+span span:contains(status)"
     open val seriesThumbnailSelector = ".infomanga > div[itemprop=image] img, .thumb img"
 
-    open val altNamePrefix = "Alternative Name: "
+    open val altNamePrefix = "${intl["alt_names_heading"]} "
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
@@ -317,9 +325,9 @@ abstract class MangaThemesia(
     }
 
     // Filters
-    protected class AuthorFilter : Filter.Text("Author")
+    protected class AuthorFilter(name: String) : Filter.Text(name)
 
-    protected class YearFilter : Filter.Text("Year")
+    protected class YearFilter(name: String) : Filter.Text(name)
 
     open class SelectFilter(
         displayName: String,
@@ -333,47 +341,73 @@ abstract class MangaThemesia(
         fun selectedValue() = vals[state].second
     }
 
-    protected class StatusFilter : SelectFilter(
-        "Status",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Ongoing", "ongoing"),
-            Pair("Completed", "completed"),
-            Pair("Hiatus", "hiatus"),
-            Pair("Dropped", "dropped"),
-        ),
+    protected class StatusFilter(
+        name: String,
+        options: Array<Pair<String, String>>,
+    ) : SelectFilter(
+        name,
+        options,
     )
 
-    protected class TypeFilter : SelectFilter(
-        "Type",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Manga", "Manga"),
-            Pair("Manhwa", "Manhwa"),
-            Pair("Manhua", "Manhua"),
-            Pair("Comic", "Comic"),
-        ),
+    protected open val statusOptions = arrayOf(
+        Pair(intl["status_filter_option_all"], ""),
+        Pair(intl["status_filter_option_ongoing"], "ongoing"),
+        Pair(intl["status_filter_option_completed"], "completed"),
+        Pair(intl["status_filter_option_hiatus"], "hiatus"),
+        Pair(intl["status_filter_option_dropped"], "dropped"),
     )
 
-    protected class OrderByFilter(defaultOrder: String? = null) : SelectFilter(
-        "Sort By",
-        arrayOf(
-            Pair("Default", ""),
-            Pair("A-Z", "title"),
-            Pair("Z-A", "titlereverse"),
-            Pair("Latest Update", "update"),
-            Pair("Latest Added", "latest"),
-            Pair("Popular", "popular"),
-        ),
+    protected class TypeFilter(
+        name: String,
+        options: Array<Pair<String, String>>,
+    ) : SelectFilter(
+        name,
+        options,
+    )
+
+    protected open val typeFilterOptions = arrayOf(
+        Pair(intl["type_filter_option_all"], ""),
+        Pair(intl["type_filter_option_manga"], "Manga"),
+        Pair(intl["type_filter_option_manhwa"], "Manhwa"),
+        Pair(intl["type_filter_option_manhua"], "Manhua"),
+        Pair(intl["type_filter_option_comic"], "Comic"),
+    )
+
+    protected class OrderByFilter(
+        name: String,
+        options: Array<Pair<String, String>>,
+        defaultOrder: String? = null,
+    ) : SelectFilter(
+        name,
+        options,
         defaultOrder,
+    ) {
+        companion object {
+            val POPULAR = FilterList(OrderByFilter("", emptyArray(), "popular"))
+            val LATEST = FilterList(OrderByFilter("", emptyArray(), "update"))
+        }
+    }
+
+    protected open val orderByFilterOptions = arrayOf(
+        Pair(intl["order_by_filter_default"], ""),
+        Pair(intl["order_by_filter_az"], "title"),
+        Pair(intl["order_by_filter_za"], "titlereverse"),
+        Pair(intl["order_by_filter_latest_update"], "update"),
+        Pair(intl["order_by_filter_latest_added"], "latest"),
+        Pair(intl["order_by_filter_popular"], "popular"),
     )
 
-    protected class ProjectFilter : SelectFilter(
-        "Filter Project",
-        arrayOf(
-            Pair("Show all manga", ""),
-            Pair("Show only project manga", "project-filter-on"),
-        ),
+    protected class ProjectFilter(
+        name: String,
+        options: Array<Pair<String, String>>,
+    ) : SelectFilter(
+        name,
+        options,
+    )
+
+    protected open val projectFilterOptions = arrayOf(
+        Pair(intl["project_filter_all_manga"], ""),
+        Pair(intl["project_filter_only_project"], "project-filter-on"),
     )
 
     protected class Genre(
@@ -382,14 +416,14 @@ abstract class MangaThemesia(
         state: Int = STATE_IGNORE,
     ) : Filter.TriState(name, state)
 
-    protected class GenreListFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
+    protected class GenreListFilter(name: String, genres: List<Genre>) : Filter.Group<Genre>(name, genres)
 
     private var genrelist: List<Genre>? = null
     protected open fun getGenreList(): List<Genre> {
         // Filters are fetched immediately once an extension loads
         // We're only able to get filters after a loading the manga directory,
         // and resetting the filters is the only thing that seems to reinflate the view
-        return genrelist ?: listOf(Genre("Press reset to attempt to fetch genres", ""))
+        return genrelist ?: listOf(Genre(intl["genre_missing_warning"], ""))
     }
 
     open val hasProjectPage = false
@@ -397,21 +431,21 @@ abstract class MangaThemesia(
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>(
             Filter.Separator(),
-            AuthorFilter(),
-            YearFilter(),
-            StatusFilter(),
-            TypeFilter(),
-            OrderByFilter(),
-            Filter.Header("Genre exclusion is not available for all sources"),
-            GenreListFilter(getGenreList()),
+            AuthorFilter(intl["author_filter_title"]),
+            YearFilter(intl["year_filter_title"]),
+            StatusFilter(intl["status_filter_title"], statusOptions),
+            TypeFilter(intl["type_filter_title"], typeFilterOptions),
+            OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
+            Filter.Header(intl["genre_exclusion_warning"]),
+            GenreListFilter(intl["genre_filter_title"], getGenreList()),
         )
         if (hasProjectPage) {
             filters.addAll(
                 mutableListOf<Filter<*>>(
                     Filter.Separator(),
-                    Filter.Header("NOTE: Can't be used with other filter!"),
-                    Filter.Header("$name Project List page"),
-                    ProjectFilter(),
+                    Filter.Header(intl["project_filter_warning"]),
+                    Filter.Header(intl.format("project_filter_name", name)),
+                    ProjectFilter(intl["project_filter_title"], projectFilterOptions),
                 ),
             )
         }
