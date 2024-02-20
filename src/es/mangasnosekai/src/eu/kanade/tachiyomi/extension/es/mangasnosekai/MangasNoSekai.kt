@@ -188,35 +188,27 @@ class MangasNoSekai : Madara(
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
 
-    private val altChapterListSelector = "div.wp-manga-chapter"
+    private val altChapterListSelector = "body > div > div"
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         launchIO { countViews(document) }
 
-        val mangaUrl = document.location().removeSuffix("/")
+        val mangaId = document.selectFirst("div.tab-summary > script:containsData(manga_id)")?.data()
+            ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
+            ?: throw Exception("No se pudo obtener el id del manga")
 
-        var xhrRequest = xhrChaptersRequest(mangaUrl)
-        var xhrResponse = client.newCall(xhrRequest).execute()
+        val chapterElements = mutableListOf<Element>()
+        var page = 1
+        do {
+            val xhrRequest = altChapterRequest(mangaId, page)
+            val xhrResponse = client.newCall(xhrRequest).execute()
+            val xhrDocument = xhrResponse.asJsoup()
+            chapterElements.addAll(xhrDocument.select(altChapterListSelector))
+            page++
+        } while (xhrDocument.select(altChapterListSelector).isNotEmpty())
 
-        val chapterElements = xhrResponse.asJsoup().select(chapterListSelector())
-        if (chapterElements.isEmpty()) {
-            val mangaId = document.selectFirst("div.tab-summary > script:containsData(manga_id)")?.data()
-                ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
-                ?: throw Exception("No se pudo obtener el id del manga")
-
-            var page = 1
-            do {
-                xhrRequest = altChapterRequest(mangaId, page)
-                xhrResponse = client.newCall(xhrRequest).execute()
-                val xhrDocument = xhrResponse.asJsoup()
-                chapterElements.addAll(xhrDocument.select(altChapterListSelector))
-                page++
-            } while (xhrDocument.select(altChapterListSelector).isNotEmpty())
-
-            return chapterElements.map(::altChapterFromElement)
-        }
-
-        return chapterElements.map(::chapterFromElement)
+        return chapterElements.map(::altChapterFromElement)
     }
 
     private fun altChapterFromElement(element: Element) = SChapter.create().apply {
