@@ -3,7 +3,11 @@ ext {
     extClass = '.Mangalek'
     themePkg = 'madara'
     baseUrl = 'https://manga-lek.net'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:configurablebaseurl"))
+}
