@@ -66,7 +66,11 @@ class MangaOwlTo(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotEmpty() || filters.isEmpty()) {
             // Search won't work together with filter
-            GET("$baseUrl/search?q=$query&page=$page".toHttpUrl(), headers)
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("page", page.toString())
+                .build()
+            GET(url, headers)
         } else {
             val url = "$baseUrl/stories?type=$collection".toHttpUrl().newBuilder()
             filters.forEach { filter ->
