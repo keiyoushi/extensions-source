@@ -71,8 +71,6 @@ android {
     }
 
     buildFeatures {
-        resValues false
-        shaders false
         buildConfig true
     }
 
@@ -93,10 +91,6 @@ android {
             "experimental:comment-wrapping",
         ]
     }
-}
-
-repositories {
-    mavenCentral()
 }
 
 dependencies {
