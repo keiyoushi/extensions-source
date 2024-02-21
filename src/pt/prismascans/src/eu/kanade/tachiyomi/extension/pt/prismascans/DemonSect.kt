@@ -1,8 +1,11 @@
 package eu.kanade.tachiyomi.extension.pt.prismascans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.OkHttpClient
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -21,5 +24,23 @@ class DemonSect : Madara(
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+
     override val useNewChapterEndpoint = true
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return client.newCall(popularMangaRequest(page))
+            .asObservable() // Site returns http 404 even if the result is successful
+            .map { response ->
+                popularMangaParse(response)
+            }
+    }
+
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        return client.newCall(latestUpdatesRequest(page))
+            .asObservable() // Site returns http 404 even if the result is successful
+            .map { response ->
+                latestUpdatesParse(response)
+            }
+    }
 }
