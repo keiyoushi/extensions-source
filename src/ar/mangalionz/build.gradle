@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaLionz'
     themePkg = 'madara'
     baseUrl = 'https://mangalionz.org'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"

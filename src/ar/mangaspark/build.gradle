@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaSpark'
     themePkg = 'madara'
     baseUrl = 'https://mangaspark.org'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
 }
 
 apply from: "$rootDir/common.gradle"

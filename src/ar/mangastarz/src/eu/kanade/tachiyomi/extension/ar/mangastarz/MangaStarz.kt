@@ -11,6 +11,6 @@ class MangaStarz : Madara(
     dateFormat = SimpleDateFormat("d MMMM، yyyy", Locale("ar")),
 ) {
     override val chapterUrlSuffix = ""
-
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = false
 }
