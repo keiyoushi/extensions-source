@@ -132,6 +132,7 @@ object NewTokiWebtoon : NewToki("NewToki", "webtoon", newTokiPreferences) {
             "인기순",
             "추천순",
         ),
+        Selection(0, false),
     )
 
     override fun getFilterList() = FilterList(

@@ -161,6 +161,7 @@ object ManaToki : NewToki("ManaToki", "comic", manaTokiPreferences) {
             "추천순",
             "업데이트순",
         ),
+        Selection(0, false),
     )
 
     override fun getFilterList() = FilterList(
