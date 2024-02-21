@@ -23,7 +23,7 @@ object NewTokiWebtoon : NewToki("NewToki", "webtoon", newTokiPreferences) {
                 }
 
                 is SearchSortTypeList -> {
-                    val state = filter.state ?: return@forEach
+                    val state = filter.state!!
                     url.addQueryParameter("sst", arrayOf("as_update", "wr_hit", "wr_good")[state.index])
                     url.addQueryParameter("sod", if (state.ascending) "asc" else "desc")
                 }

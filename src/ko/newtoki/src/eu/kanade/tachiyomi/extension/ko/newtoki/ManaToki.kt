@@ -57,7 +57,7 @@ object ManaToki : NewToki("ManaToki", "comic", manaTokiPreferences) {
                 }
 
                 is SearchSortTypeList -> {
-                    val state = filter.state ?: return@forEach
+                    val state = filter.state!!
                     url.addQueryParameter("sst", arrayOf("wr_datetime", "wr_hit", "wr_good", "as_update")[state.index])
                     url.addQueryParameter("sod", if (state.ascending) "asc" else "desc")
                 }
