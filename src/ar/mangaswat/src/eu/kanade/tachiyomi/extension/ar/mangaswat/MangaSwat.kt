@@ -21,13 +21,15 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+private const val swatUrl = "https://swatmanhua.com"
+
 class MangaSwat : MangaThemesia(
     "MangaSwat",
-    "https://goldragon.me",
+    swatUrl,
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
-    private val defaultBaseUrl = "https://goldragon.me"
+    private val defaultBaseUrl = swatUrl
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
