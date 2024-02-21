@@ -37,12 +37,12 @@ class MangasNoSekai : Madara(
     private fun getLibraryPath() {
         libraryPath = try {
             val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-            val libraryUrl = document.selectFirst("li#menu-item-3116.menu-item > a[href]")
+            val libraryUrl = document.selectFirst("ul > li[id^=menu-item] > a[href]")
 
             libraryUrl?.attr("href")?.removeSuffix("/")?.substringAfterLast("/")
-                ?: "manga"
+                ?: "manganews3"
         } catch (e: Exception) {
-            "manga"
+            "manganews3"
         }
     }
 
@@ -110,7 +110,7 @@ class MangasNoSekai : Madara(
     override val mangaDetailsSelectorThumbnail = "div.thumble-container img.img-responsive"
     override val mangaDetailsSelectorDescription = "section#section-sinopsis > p"
     override val mangaDetailsSelectorStatus = "section#section-sinopsis div.d-flex:has(div:contains(Estado)) p"
-    override val mangaDetailsSelectorAuthor = "section#section-sinopsis div.d-flex:has(div:contains(Autor)) p"
+    override val mangaDetailsSelectorAuthor = "section#section-sinopsis div.d-flex:has(div:contains(Autor)) p a"
     override val mangaDetailsSelectorGenre = "section#section-sinopsis div.d-flex:has(div:contains(Generos)) p a"
     override val altNameSelector = "section#section-sinopsis div.d-flex:has(div:contains(Otros nombres)) p"
     override val altName = "Otros nombres: "
@@ -121,7 +121,7 @@ class MangasNoSekai : Madara(
             selectFirst(mangaDetailsSelectorTitle)?.let {
                 manga.title = it.ownText()
             }
-            selectFirst(mangaDetailsSelectorAuthor)?.ownText()?.let {
+            select(mangaDetailsSelectorAuthor).joinToString { it.text() }.let {
                 manga.author = it
             }
             select(mangaDetailsSelectorDescription).let {
@@ -194,7 +194,7 @@ class MangasNoSekai : Madara(
         val document = response.asJsoup()
         launchIO { countViews(document) }
 
-        val mangaId = document.selectFirst("div.tab-summary > script:containsData(manga_id)")?.data()
+        val mangaId = document.selectFirst("script#wp-manga-js-extra")?.data()
             ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
             ?: throw Exception("No se pudo obtener el id del manga")
 
@@ -220,6 +220,6 @@ class MangasNoSekai : Madara(
     }
 
     companion object {
-        val MANGA_ID_REGEX = """manga_id\s*=\s*(.*)\s*;""".toRegex()
+        val MANGA_ID_REGEX = """\"manga_id"\s*:\s*"(.*)\"""".toRegex()
     }
 }
