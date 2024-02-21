@@ -23,11 +23,6 @@ android {
         }
     }
 
-    buildFeatures {
-        resValues = false
-        shaders = false
-    }
-
     kotlinOptions {
         freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
     }
@@ -39,10 +34,6 @@ kotlinter {
         "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
         "experimental:comment-wrapping",
     )
-}
-
-repositories {
-    mavenCentral()
 }
 
 // TODO: use versionCatalogs.named("libs") in Gradle 8.5
