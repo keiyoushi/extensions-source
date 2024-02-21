@@ -107,8 +107,7 @@ class ComX : ParsedHttpSource() {
         }
         .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Tachiyomi")
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", baseUrl)
 
     // Popular
