@@ -6,7 +6,7 @@ import java.util.Locale
 
 class ArgosComics : Madara(
     "Argos Comics",
-    "https://argoscomics.com/",
+    "https://argoscomics.com",
     "pt-BR",
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 )
