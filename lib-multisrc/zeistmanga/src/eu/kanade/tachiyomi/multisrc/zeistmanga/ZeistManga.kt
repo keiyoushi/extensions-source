@@ -162,9 +162,9 @@ abstract class ZeistManga(
             description = buildString {
                 append(profileManga.select(mangaDetailsSelectorDescription).text())
                 append("\n\n")
-                profileManga.selectFirst(mangaDetailsSelectorAltName)?.let {
+                profileManga.selectFirst(mangaDetailsSelectorAltName)?.text()?.takeIf { it.isNotBlank() }?.let {
                     append("Alternative name(s): ")
-                    append(it.text())
+                    append(it)
                 }
             }.trim()
             genre = profileManga.select(mangaDetailsSelectorGenres)
