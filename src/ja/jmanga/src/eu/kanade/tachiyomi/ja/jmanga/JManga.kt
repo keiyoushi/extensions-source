@@ -3,14 +3,17 @@ package eu.kanade.tachiyomi.extension.ja.jmanga
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
-class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), "+0900") {
+class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), null) {
 
     override fun popularMangaSelector() = "div.items article.item"
     override fun popularMangaNextPageSelector() = "li:nth-last-child(2) a.page-link"
@@ -24,7 +27,7 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
                     else -> SManga.UNKNOWN
                 }
                 genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-                description = info.select("div.detail-content p").text()
+                description = info.select("div.detail-content").text()
                 thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
             }
         }
@@ -49,6 +52,74 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
         }
 
         return GET(url.toString().replaceSearchPath(), headers)
+    }
+    override fun chapterFromElement(element: Element): SChapter {
+        val secondWords = listOf("second", "秒")
+        val minuteWords = listOf("minute", "分")
+        val hourWords = listOf("hour", "時間")
+        val dayWords = listOf("day", "日")
+        val weekWords = listOf("week", "週間")
+        val monthWords = listOf("month", "月")
+        val chapterDate = element.select("div.col-xs-4").text()
+
+        return SChapter.create().apply {
+            element.select("a").let {
+                name = it.text()
+                setUrlWithoutDomain(it.attr("href"))
+            }
+            try {
+                val trimmedDate = chapterDate.substringBefore("前").split(" ")
+                val calendar = Calendar.getInstance()
+
+                when {
+                    monthWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
+
+                    weekWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.WEEK_OF_MONTH, -trimmedDate[0].toInt()) }
+
+                    dayWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
+
+                    hourWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
+
+                    minuteWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
+
+                    secondWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.SECOND, -trimmedDate[0].toInt()) }
+                }
+
+                date_upload = calendar.timeInMillis
+            } catch (_: Exception) {
+                date_upload = 0L
+            }
+        }
     }
     override fun getStatusList(): Array<Pair<String?, String>> {
         return arrayOf(
