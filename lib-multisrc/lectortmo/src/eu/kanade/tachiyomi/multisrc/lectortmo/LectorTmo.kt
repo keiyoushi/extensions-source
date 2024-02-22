@@ -367,7 +367,7 @@ abstract class LectorTmo(
 
         if (script1 != null) {
             val data = script1.data()
-            val regexParams = """\{\s*uniqid:\s*'(.+)'\s*,\s*cascade:\s*(.+)\s*\}""".toRegex()
+            val regexParams = """\{\s*uniqid\s*:\s*'(.+)'\s*,\s*cascade\s*:\s*(.+)\s*\}""".toRegex()
             val regexAction = """form\.action\s*=\s*'(.+)'""".toRegex()
             val params = regexParams.find(data)
             val action = regexAction.find(data)?.groupValues?.get(1)?.unescapeUrl()
