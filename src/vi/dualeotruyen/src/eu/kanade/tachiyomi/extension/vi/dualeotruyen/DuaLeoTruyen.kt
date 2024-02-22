@@ -14,7 +14,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 class DuaLeoTruyen : ParsedHttpSource() {
 
@@ -24,7 +26,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
 
     override val lang = "vi"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
@@ -33,31 +35,31 @@ class DuaLeoTruyen : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/truyen-tranh-moi.html?page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/top-ngay.html?page=$page", headers)
 
-    override fun popularMangaSelector() = "div.product-grid > div"
+    override fun popularMangaSelector() = ".box_list > .li_truyen"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        title = element.selectFirst(".comics-item-title")!!.text()
-        thumbnail_url = element.selectFirst("img.card-img-top")?.absUrl("src")
+        title = element.selectFirst(".name")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
     }
 
-    override fun popularMangaNextPageSelector() = "ul.pagination li.page-item:contains(Next):not(.disabled)"
+    override fun popularMangaNextPageSelector() = "div.page_redirect > a.active:not(:last-child)"
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/truyen-moi-cap-nhat.html?page=$page", headers)
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query.isNotEmpty()) {
-                addPathSegment("tim-kiem")
-                addQueryParameter("search", query)
+                addPathSegment("tim-kiem.html")
+                addQueryParameter("key", query)
             } else {
                 val genreFilter = filters.ifEmpty { getFilterList() }
                     .filterIsInstance<GenreFilter>()
@@ -80,33 +82,35 @@ class DuaLeoTruyen : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val statusText = document.selectFirst(".card-body dt:contains(Trạng thái) + dd")?.text()
+        val statusText = document.selectFirst(".info-item:has(.fa-rss)")
+            ?.text()
+            ?.removePrefix("Tình trang: ")
 
-        title = document.selectFirst(".card-title")!!.text()
-        description = document.selectFirst(".comics-description .inner")?.text()
-        genre = document.select(".cate-item").joinToString { it.text() }
+        title = document.selectFirst(".box_info_right h1")!!.text()
+        description = document.selectFirst(".story-detail-info p")?.text()
+        genre = document.select("ul.list-tag-story li a").joinToString { it.text() }
         status = when (statusText) {
-            "Đang phát hành" -> SManga.ONGOING
-            "Đã đủ bộ" -> SManga.COMPLETED
+            "Đang cập nhật" -> SManga.ONGOING
+            "Full" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = document.selectFirst("img.img-fluid")?.absUrl("src")
+        thumbnail_url = document.selectFirst(".box_info_left img")?.absUrl("src")
     }
 
-    override fun chapterListSelector() = ".list-chapters > .item"
+    override fun chapterListSelector() = ".list-chapters .chapter-item"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        element.selectFirst(".episode-title a")!!.let {
+        element.selectFirst(".chap_name a")!!.let {
             setUrlWithoutDomain(it.attr("href"))
             name = it.text()
         }
-        date_upload = element.selectFirst(".episode-date span")?.let { parseRelativeDate(it.text()) } ?: 0L
+        date_upload = element.selectFirst(".chap_update")?.let { parseDate(it.text()) } ?: 0L
     }
 
     override fun pageListParse(document: Document): List<Page> {
         countView(document)
 
-        return document.select("img.chapter-img").mapIndexed { i, it ->
+        return document.select(".content_view_chap img").mapIndexed { i, it ->
             Page(i, imageUrl = it.absUrl("data-original"))
         }
     }
@@ -119,21 +123,24 @@ class DuaLeoTruyen : ParsedHttpSource() {
     )
 
     private fun countView(document: Document) {
-        val chapterId = document.selectFirst("input#chapter_id")!!.`val`()
-        val comicsId = document.selectFirst("input#comics_id")!!.`val`()
-        val token = document.selectFirst("meta[name=_token]")!!.attr("content")
+        val chapterId = document.selectFirst("input[name=chap]")!!.`val`()
+        val comicsId = document.selectFirst("input[name=truyen]")!!.`val`()
         val form = FormBody.Builder()
-            .add("_token", token)
-            .add("comics_id", comicsId)
-            .add("chapter_id", chapterId)
+            .add("action", "update_view_chap")
+            .add("truyen", comicsId)
+            .add("chap", chapterId)
             .build()
-        val request = POST("$baseUrl/ajax/increase-view-chapter", headers, form)
+        val request = POST("$baseUrl/process.php", headers, form)
 
         client.newCall(request).execute().close()
     }
 
-    private fun parseRelativeDate(date: String): Long {
+    private fun parseDate(date: String): Long {
         val dateParts = date.split(" ")
+
+        if (dateParts.size == 1) {
+            return DATE_FORMAT.parse(date)!!.time
+        }
 
         val calendar = Calendar.getInstance().apply {
             val amount = -dateParts[0].toInt()
@@ -156,39 +163,48 @@ class DuaLeoTruyen : ParsedHttpSource() {
 
     private class Genre(val name: String, val path: String)
 
-    private class GenreFilter(val genre: List<Genre>) : Filter.Select<String>("Thể loại", genre.map { it.name }.toTypedArray())
+    private class GenreFilter(val genre: List<Genre>) : Filter.Select<String>(
+        "Thể loại",
+        genre.map { it.name }.toTypedArray(),
+    )
 
-    // copy([...document.querySelectorAll(".dropdown-menu .dropdown-item")].map((e) => `Genre("${e.textContent.trim()}", "${new URL(e).pathname.replace("/", "")}"),`).join("\n"))
+    // copy([...document.querySelectorAll(".sub_menu .li_sub a")].map((e) => `Genre("${e.textContent.trim()}", "${new URL(e).pathname.replace("/", "")}"),`).join("\n"))
     // "Tất cả" and "Truyện full" are custom genres that are lumped in to make my life easier.
     private fun getGenreList() = listOf(
-        Genre("Tất cả", "truyen-tranh-moi.html"),
+        Genre("Top Ngày", "top-ngay.html"),
+        Genre("Top Tuần", "top-tuan.html"),
+        Genre("Top Tháng", "top-thang.html"),
+        Genre("Top Năm", "top-nam.html"),
         Genre("Truyện full", "truyen-hoan-thanh.html"),
-        Genre("18+", "the-loai/18-.html"),
-        Genre("ABO", "the-loai/abo.html"),
-        Genre("Bách Hợp", "the-loai/bach-hop.html"),
-        Genre("BoyLove", "the-loai/boylove.html"),
-        Genre("Chuyển Sinh", "the-loai/chuyen-sinh.html"),
-        Genre("Cổ Đại", "the-loai/co-dai.html"),
-        Genre("Doujinshi", "the-loai/doujinshi.html"),
-        Genre("Drama", "the-loai/drama.html"),
-        Genre("Đam Mỹ", "the-loai/dam-my.html"),
-        Genre("Echi", "the-loai/echi.html"),
-        Genre("GirlLove", "the-loai/girllove.html"),
-        Genre("Hài Hước", "the-loai/hai-huoc.html"),
-        Genre("Hành Động", "the-loai/hanh-dong.html"),
-        Genre("Harem", "the-loai/harem.html"),
-        Genre("Hentai", "the-loai/hentai.html"),
-        Genre("Kịch Tính", "the-loai/kich-tinh.html"),
-        Genre("Lãng Mạn", "the-loai/lang-man.html"),
+        Genre("Truyện mới", "truyen-tranh-moi.html"),
         Genre("Manga", "the-loai/manga.html"),
         Genre("Manhua", "the-loai/manhua.html"),
         Genre("Manhwa", "the-loai/manhwa.html"),
-        Genre("Người Thú", "the-loai/nguoi-thu.html"),
-        Genre("Oneshot", "the-loai/oneshot.html"),
-        Genre("Phiêu Lưu", "the-loai/phieu-luu.html"),
-        Genre("Tình Cảm", "the-loai/tinh-cam.html"),
+        Genre("18+", "the-loai/18-.html"),
+        Genre("Đam Mỹ", "the-loai/dam-my.html"),
+        Genre("Harem", "the-loai/harem.html"),
         Genre("Truyện Màu", "the-loai/truyen-mau.html"),
+        Genre("BoyLove", "the-loai/boylove.html"),
+        Genre("GirlLove", "the-loai/girllove.html"),
+        Genre("Phiêu lưu", "the-loai/phieu-luu.html"),
         Genre("Yaoi", "the-loai/yaoi.html"),
+        Genre("Hài Hước", "the-loai/hai-huoc.html"),
+        Genre("Bách Hợp", "the-loai/bach-hop.html"),
+        Genre("Chuyển Sinh", "the-loai/chuyen-sinh.html"),
+        Genre("Drama", "the-loai/drama.html"),
+        Genre("Hành Động", "the-loai/hanh-dong.html"),
+        Genre("Kịch Tính", "the-loai/kich-tinh.html"),
+        Genre("Cổ Đại", "the-loai/co-dai.html"),
+        Genre("Echi", "the-loai/echi.html"),
+        Genre("Hentai", "the-loai/hentai.html"),
+        Genre("Lãng Mạn", "the-loai/lang-man.html"),
+        Genre("Người Thú", "the-loai/nguoi-thu.html"),
+        Genre("Tình Cảm", "the-loai/tinh-cam.html"),
         Genre("Yuri", "the-loai/yuri.html"),
+        Genre("Oneshot", "the-loai/oneshot.html"),
+        Genre("Doujinshi", "the-loai/doujinshi.html"),
+        Genre("ABO", "the-loai/abo.html"),
     )
 }
+
+private val DATE_FORMAT = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
