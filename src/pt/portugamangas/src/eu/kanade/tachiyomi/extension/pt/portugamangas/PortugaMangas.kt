@@ -70,7 +70,7 @@ class PortugaMangas : ParsedHttpSource(), ConfigurableSource {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("pagina", "$page")
             .build()
-        return client.newCall(GET(url, headers)).request()
+        return GET(url, headers)
     }
 
     override fun latestUpdatesSelector() = "div.atualizacao"
@@ -88,7 +88,7 @@ class PortugaMangas : ParsedHttpSource(), ConfigurableSource {
             .addQueryParameter("busca", query)
             .addQueryParameter("pagina", "$page")
             .build()
-        return client.newCall(GET(url, headers)).request()
+        return GET(url, headers)
     }
 
     private fun hasNextPage(currentPage: Int, document: Document): Boolean {
