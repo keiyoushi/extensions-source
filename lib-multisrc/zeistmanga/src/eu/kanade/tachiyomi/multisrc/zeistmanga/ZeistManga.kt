@@ -147,6 +147,9 @@ abstract class ZeistManga(
     protected open val mangaDetailsSelector = ".grid.gtc-235fr"
     protected open val mangaDetailsSelectorDescription = "#synopsis"
     protected open val mangaDetailsSelectorGenres = "div.mt-15 > a[rel=tag]"
+    protected open val mangaDetailsSelectorAuthor = "span#author"
+    protected open val mangaDetailsSelectorArtist = "span#artist"
+    protected open val mangaDetailsSelectorAltName = "header > p"
     protected open val mangaDetailsSelectorInfo = ".y6x11p"
     protected open val mangaDetailsSelectorInfoTitle = "strong"
     protected open val mangaDetailsSelectorInfoDescription = "span.dt"
@@ -156,9 +159,18 @@ abstract class ZeistManga(
         val profileManga = document.selectFirst(mangaDetailsSelector)!!
         return SManga.create().apply {
             thumbnail_url = profileManga.selectFirst("img")!!.attr("abs:src")
-            description = profileManga.select(mangaDetailsSelectorDescription).text()
+            description = buildString {
+                append(profileManga.select(mangaDetailsSelectorDescription).text())
+                append("\n\n")
+                profileManga.selectFirst(mangaDetailsSelectorAltName)?.let {
+                    append("Alternative name(s): ")
+                    append(it.text())
+                }
+            }.trim()
             genre = profileManga.select(mangaDetailsSelectorGenres)
                 .joinToString { it.text() }
+            author = profileManga.selectFirst(mangaDetailsSelectorAuthor)?.text()
+            artist = profileManga.selectFirst(mangaDetailsSelectorArtist)?.text()
 
             val infoElement = profileManga.select(mangaDetailsSelectorInfo)
             infoElement.forEach { element ->
@@ -202,7 +214,7 @@ abstract class ZeistManga(
     protected open val useNewChapterFeed = false
     protected open val useOldChapterFeed = false
 
-    private val chapterFeedRegex = """clwd\.run\('([^']+)'""".toRegex()
+    private val chapterFeedRegex = """clwd\.run\(["'](.*?)["']\)""".toRegex()
     private val scriptSelector = "#clwd > script"
 
     open fun getChapterFeedUrl(doc: Document): String {
