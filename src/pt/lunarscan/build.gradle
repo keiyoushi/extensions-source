@@ -1,0 +1,9 @@
+ext {
+    extName = 'Lunar Scan'
+    extClass = '.LunarScan'
+    themePkg = 'madara'
+    baseUrl = 'https://lunarscan.com.br'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
