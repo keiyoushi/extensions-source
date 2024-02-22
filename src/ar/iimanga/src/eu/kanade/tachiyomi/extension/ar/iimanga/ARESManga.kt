@@ -12,7 +12,7 @@ import java.util.Locale
 
 class ARESManga : MangaThemesia(
     "ARESManga",
-    "https://en-aresmanga.com",
+    "https://fl-ares.com",
     "ar",
     mangaUrlDirectory = "/series",
     dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
