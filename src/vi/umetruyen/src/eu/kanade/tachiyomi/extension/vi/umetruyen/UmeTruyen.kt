@@ -1,10 +1,10 @@
-package eu.kanade.tachiyomi.extension.vi.sayhentai
+package eu.kanade.tachiyomi.extension.vi.umetruyen
 
 import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
 
-class SayHentai : ManhwaZ(
-    "SayHentai",
-    "https://sayhentai.club",
+class UmeTruyen : ManhwaZ(
+    "UmeTruyen",
+    "https://umetruyenvip.com",
     "vi",
     mangaDetailsAuthorHeading = "Tác giả",
     mangaDetailsStatusHeading = "Trạng thái",
