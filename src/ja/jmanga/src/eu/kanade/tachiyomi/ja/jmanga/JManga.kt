@@ -54,7 +54,6 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
         return GET(url.toString().replaceSearchPath(), headers)
     }
     override fun chapterFromElement(element: Element): SChapter {
-        val secondWords = listOf("second", "秒")
         val minuteWords = listOf("minute", "分")
         val hourWords = listOf("hour", "時間")
         val dayWords = listOf("day", "日")
@@ -106,13 +105,6 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
                             ignoreCase = true,
                         )
                     } -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
-
-                    secondWords.any {
-                        trimmedDate[1].contains(
-                            it,
-                            ignoreCase = true,
-                        )
-                    } -> calendar.apply { add(Calendar.SECOND, -trimmedDate[0].toInt()) }
                 }
 
                 date_upload = calendar.timeInMillis
