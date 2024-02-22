@@ -173,7 +173,7 @@ class PortugaMangas : ParsedHttpSource(), ConfigurableSource {
         val newHeaders = headersBuilder()
             .set("Referer", page.url)
             .build()
-        return client.newCall(GET(page.imageUrl!!, newHeaders)).request()
+        return GET(page.imageUrl!!, newHeaders)
     }
 
     private fun Element.srcAttr(): String = when {
