@@ -29,9 +29,9 @@ class MangaEsp : HttpSource() {
 
     override val name = "MangaEsp"
 
-    override val baseUrl = "https://mangaesp.co"
+    override val baseUrl = "https://mangaesp.net"
 
-    private val apiBaseUrl = "https://apis.mangaesp.co"
+    private val apiBaseUrl = "https://apis.mangaesp.net"
 
     override val lang = "es"
 
@@ -57,13 +57,7 @@ class MangaEsp : HttpSource() {
         val topWeekly = responseData.response.topWeekly.flatten().map { it.data }
         val topMonthly = responseData.response.topMonthly.flatten().map { it.data }
 
-        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }.map { series ->
-            SManga.create().apply {
-                title = series.name
-                thumbnail_url = series.thumbnail
-                url = "/ver/${series.slug}"
-            }
-        }
+        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }.map { it.toSManga() }
 
         return MangasPage(mangas, false)
     }
@@ -73,13 +67,7 @@ class MangaEsp : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseData = json.decodeFromString<LastUpdatesDto>(response.body.string())
 
-        val mangas = responseData.response.map { series ->
-            SManga.create().apply {
-                title = series.name
-                thumbnail_url = series.thumbnail
-                url = "/ver/${series.slug}"
-            }
-        }
+        val mangas = responseData.response.map { it.toSManga() }
 
         return MangasPage(mangas, false)
     }
@@ -154,7 +142,7 @@ class MangaEsp : HttpSource() {
 
         return MangasPage(
             filteredList.subList((page - 1) * MANGAS_PER_PAGE, min(page * MANGAS_PER_PAGE, filteredList.size))
-                .map { it.toSimpleSManga() },
+                .map { it.toSManga() },
             hasNextPage,
         )
     }
@@ -165,15 +153,7 @@ class MangaEsp : HttpSource() {
             ?: throw Exception("No se pudo encontrar los detalles del manga")
         val unescapedJson = mangaDetailsJson.replace("\\", "")
 
-        val series = json.decodeFromString<SeriesDto>(unescapedJson)
-        return SManga.create().apply {
-            title = series.name
-            thumbnail_url = series.thumbnail
-            description = series.synopsis
-            genre = series.genders.joinToString { it.gender.name }
-            author = series.authors.joinToString { it.author.name }
-            artist = series.artists.joinToString { it.artist.name }
-        }
+        return json.decodeFromString<SeriesDto>(unescapedJson).toSMangaDetails()
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -182,23 +162,13 @@ class MangaEsp : HttpSource() {
             ?: throw Exception("No se pudo encontrar la lista de capítulos")
         val unescapedJson = mangaDetailsJson.replace("\\", "")
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
-        return series.chapters.map { chapter ->
-            SChapter.create().apply {
-                name = if (chapter.name.isNullOrBlank()) {
-                    "Capítulo ${chapter.number.toString().removeSuffix(".0")}"
-                } else {
-                    "Capítulo ${chapter.number.toString().removeSuffix(".0")} - ${chapter.name}"
-                }
-                date_upload = runCatching { dateFormat.parse(chapter.date)?.time }.getOrNull() ?: 0L
-                url = "/ver/${series.slug}/${chapter.slug}"
-            }
-        }
+        return series.chapters.map { it.toSChapter(series.slug, dateFormat) }
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         return document.select("main.contenedor.read img").mapIndexed { i, img ->
-            Page(i, "", img.imgAttr())
+            Page(i, imageUrl = img.imgAttr())
         }
     }
 
