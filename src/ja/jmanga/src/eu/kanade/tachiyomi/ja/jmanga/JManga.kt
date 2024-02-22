@@ -14,7 +14,6 @@ import java.util.Calendar
 import java.util.Locale
 
 class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), null) {
-
     override fun popularMangaSelector() = "div.items article.item"
     override fun popularMangaNextPageSelector() = "li:nth-last-child(2) a.page-link"
     override fun mangaDetailsParse(document: Document): SManga {
@@ -32,7 +31,6 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
             }
         }
     }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
         val url = "$baseUrl/search/manga".toHttpUrl().newBuilder()
@@ -120,7 +118,6 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
             Pair("1", "連載中"),
         )
     }
-
     override fun getGenreList(): Array<Pair<String?, String>> {
         return arrayOf(
             null to "全てのジャンル",
