@@ -133,7 +133,7 @@ class PortugaMangas : ParsedHttpSource(), ConfigurableSource {
             genre = document.select("h5.cg_color > a.label.label-warning")
                 .map { it?.text() ?: "" }
                 .filter { it.isNotBlank() }
-                .joinToString(", ")
+                .joinToString()
 
             status = when (getMangaStatus(document)) {
                 PAGE_STATUS_ONGOING -> SManga.ONGOING
