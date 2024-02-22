@@ -17,11 +17,6 @@ class LastUpdatesDto(
 )
 
 @Serializable
-class ComicsDto(
-    val response: List<SeriesDto>,
-)
-
-@Serializable
 class TopSeriesResponseDto(
     @SerialName("mensual") val topMonthly: List<List<PayloadSeriesDto>>,
     @SerialName("semanal") val topWeekly: List<List<PayloadSeriesDto>>,
@@ -36,6 +31,7 @@ class PayloadSeriesDto(
 @Serializable
 class SeriesDto(
     val name: String,
+    val alternativeName: String? = null,
     val slug: String,
     @SerialName("sinopsis") private val synopsis: String? = null,
     @SerialName("urlImg") private val thumbnail: String? = null,
@@ -61,7 +57,11 @@ class SeriesDto(
         return SManga.create().apply {
             title = name
             thumbnail_url = thumbnail
-            description = synopsis ?: ""
+            description = synopsis
+            if (!alternativeName.isNullOrBlank()) {
+                if (!description.isNullOrBlank()) description += "\n\n"
+                description += "Nombres alternativos: $alternativeName"
+            }
             genre = genders.joinToString { it.gender.name }
             author = authors.joinToString { it.author.name }
             artist = artists.joinToString { it.artist.name }

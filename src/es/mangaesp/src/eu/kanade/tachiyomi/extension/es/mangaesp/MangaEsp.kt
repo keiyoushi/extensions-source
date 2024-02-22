@@ -110,7 +110,11 @@ class MangaEsp : HttpSource() {
 
             if (query.isNotBlank()) {
                 if (query.length < 2) throw Exception("La búsqueda debe tener al menos 2 caracteres")
-                filteredList.addAll(comicsList.filter { it.name.contains(query, ignoreCase = true) })
+                filteredList.addAll(
+                    comicsList.filter {
+                        it.name.contains(query, ignoreCase = true) || it.alternativeName?.contains(query, ignoreCase = true) == true
+                    },
+                )
             } else {
                 filteredList.addAll(comicsList)
             }
