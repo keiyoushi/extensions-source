@@ -20,7 +20,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
 
     override val name = "Dưa Leo Truyện"
 
-    override val baseUrl = "https://dualeotruyenme.com"
+    override val baseUrl = "https://dualeotruyennet.com"
 
     override val lang = "vi"
 
