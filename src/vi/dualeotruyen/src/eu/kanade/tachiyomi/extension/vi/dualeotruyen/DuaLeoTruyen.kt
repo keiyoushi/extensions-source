@@ -87,7 +87,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
             ?.removePrefix("Tình trang: ")
 
         title = document.selectFirst(".box_info_right h1")!!.text()
-        description = document.selectFirst(".story-detail-info p")?.text()
+        description = document.selectFirst(".story-detail-info")?.text()
         genre = document.select("ul.list-tag-story li a").joinToString { it.text() }
         status = when (statusText) {
             "Đang cập nhật" -> SManga.ONGOING
