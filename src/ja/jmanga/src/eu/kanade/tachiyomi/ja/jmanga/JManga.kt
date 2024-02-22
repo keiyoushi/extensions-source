@@ -51,7 +51,7 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
             addQueryParameter("sort", "-1")
         }
 
-        return GET(url.toString().replaceSearchPath(), headers)
+        return GET(url.toString(), headers)
     }
     override fun chapterFromElement(element: Element): SChapter {
         val minuteWords = listOf("minute", "分")
