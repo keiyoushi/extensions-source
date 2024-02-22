@@ -3,7 +3,7 @@ ext {
     extClass = '.Mangalink'
     themePkg = 'madara'
     baseUrl = 'https://manga-link.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
