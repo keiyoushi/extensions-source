@@ -88,13 +88,17 @@ class MangaEsp : HttpSource() {
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/api/comics", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comics", headers)
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     private fun searchMangaParse(response: Response, page: Int, query: String, filters: FilterList): MangasPage {
-        val responseData = json.decodeFromString<ComicsDto>(response.body.string())
-        comicsList = responseData.response.toMutableList()
+        val document = response.asJsoup()
+        val script = document.select("script:containsData(self.__next_f.push)").joinToString { it.data() }
+        val jsonString = MANGA_LIST_REGEX.find(script)?.groupValues?.get(1)
+            ?: throw Exception("No se pudo encontrar la lista de comics")
+        val unescapedJson = jsonString.unescape()
+        comicsList = json.decodeFromString<List<SeriesDto>>(unescapedJson).toMutableList()
         return parseComicsList(page, query, filters)
     }
 
@@ -160,7 +164,7 @@ class MangaEsp : HttpSource() {
         val responseBody = response.body.string()
         val mangaDetailsJson = MANGA_DETAILS_REGEX.find(responseBody)?.groupValues?.get(1)
             ?: throw Exception("No se pudo encontrar la lista de capítulos")
-        val unescapedJson = mangaDetailsJson.replace("\\", "")
+        val unescapedJson = mangaDetailsJson.unescape()
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
         return series.chapters.map { it.toSChapter(series.slug, dateFormat) }
     }
@@ -224,8 +228,14 @@ class MangaEsp : HttpSource() {
         else -> attr("abs:src")
     }
 
+    private fun String.unescape(): String {
+        return UNESCAPE_REGEX.replace(this, "$1")
+    }
+
     companion object {
-        private val MANGA_DETAILS_REGEX = """self.__next_f.push\(.*data\\":(\{.*lastChapters.*\}).*numFollow""".toRegex()
+        private val UNESCAPE_REGEX = """\\(.)""".toRegex()
+        private val MANGA_LIST_REGEX = """self\.__next_f\.push\(.*data\\":(\[.*trending.*])\}""".toRegex()
+        private val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*numFollow""".toRegex()
         private const val MANGAS_PER_PAGE = 15
     }
 }
