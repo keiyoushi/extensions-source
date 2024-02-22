@@ -2,8 +2,8 @@ ext {
     extName = 'ARESNOV'
     extClass = '.ARESNOV'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://aresnov.org'
-    overrideVersionCode = 0
+    baseUrl = 'https://manhuascarlet.com'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
