@@ -22,7 +22,7 @@ class Mangalink :
     ConfigurableSource {
 
     override val chapterUrlSuffix = ""
-
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     private val defaultBaseUrl = "https://manga-link.com"
     override val baseUrl by lazy { getPrefBaseUrl() }
 
