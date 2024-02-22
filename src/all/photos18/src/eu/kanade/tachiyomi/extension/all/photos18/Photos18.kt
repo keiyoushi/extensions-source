@@ -51,7 +51,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
             SManga.create().apply {
                 url = link.attr("href").stripLang()
                 title = link.ownText()
-                thumbnail_url = baseUrl + it.selectFirst(Evaluator.Tag("img"))!!.attr("data-src")
+                thumbnail_url = baseUrl + it.selectFirst(Evaluator.Tag("img"))!!.attr("src")
                 genre = cardBody.selectFirst(Evaluator.Tag("label"))!!.ownText()
                 status = SManga.COMPLETED
                 initialized = true
@@ -100,7 +100,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
         val document = response.asJsoup()
         val images = document.selectFirst(Evaluator.Id("content"))!!.select(Evaluator.Tag("img"))
         return images.mapIndexed { index, image ->
-            Page(index, imageUrl = image.attr("data-src"))
+            Page(index, imageUrl = image.attr("src"))
         }
     }
 
