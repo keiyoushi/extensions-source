@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -196,6 +195,8 @@ abstract class ManhwaZ(
     private var fetchGenreStatus = FetchGenreStatus.NOT_FETCHED
     private var fetchGenreAttempts = 0
 
+    private val scope = CoroutineScope(Dispatchers.IO)
+
     @OptIn(DelicateCoroutinesApi::class)
     private fun fetchGenreList() {
         if (fetchGenreStatus != FetchGenreStatus.NOT_FETCHED || fetchGenreAttempts >= 3) {
@@ -205,7 +206,7 @@ abstract class ManhwaZ(
         fetchGenreStatus = FetchGenreStatus.FETCHING
         fetchGenreAttempts++
 
-        GlobalScope.launch(Dispatchers.IO) {
+        scope.launch {
             try {
                 val document = client.newCall(GET("$baseUrl/genre")).await().asJsoup()
 
