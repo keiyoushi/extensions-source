@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -197,7 +196,6 @@ abstract class ManhwaZ(
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun fetchGenreList() {
         if (fetchGenreStatus != FetchGenreStatus.NOT_FETCHED || fetchGenreAttempts >= 3) {
             return
