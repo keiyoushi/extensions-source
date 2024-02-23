@@ -103,10 +103,9 @@ class ChapterDto(
 ) {
     fun toSChapter(seriesSlug: String, dateFormat: SimpleDateFormat): SChapter {
         return SChapter.create().apply {
-            name = if (this@ChapterDto.name.isNullOrBlank()) {
-                "Capítulo ${number.toString().removeSuffix(".0")}"
-            } else {
-                "Capítulo ${number.toString().removeSuffix(".0")} - ${this@ChapterDto.name}"
+            name = "Capítulo ${number.toString().removeSuffix(".0")}"
+            if (!this@ChapterDto.name.isNullOrBlank()) {
+                name += " - ${this@ChapterDto.name}"
             }
             date_upload = try {
                 dateFormat.parse(date)?.time ?: 0L
