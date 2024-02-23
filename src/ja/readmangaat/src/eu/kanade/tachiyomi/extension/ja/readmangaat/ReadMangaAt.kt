@@ -149,7 +149,7 @@ class ReadMangaAt : ParsedHttpSource() {
     // =============================== Filters ==============================
 
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("Ignored when using text search"),
+        Filter.Header("Note: filters ignore text search"),
         Filter.Separator(),
         GenreFilter(),
     )
