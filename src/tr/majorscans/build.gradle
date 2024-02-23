@@ -2,7 +2,7 @@ ext {
     extName = 'MajorScans'
     extClass = '.MajorScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.majorscans.com/'
+    baseUrl = 'https://www.majorscans.com'
     overrideVersionCode = 0
 }
 
