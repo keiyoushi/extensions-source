@@ -27,7 +27,7 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
                 }
                 genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
                 description = info.select("div.detail-content").text()
-                thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
+                thumbnail_url = imageOrNull(info[0].selectFirst("div.col-image img")!!)
             }
         }
     }
@@ -49,7 +49,7 @@ class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("
             addQueryParameter("sort", "-1")
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
     override fun chapterFromElement(element: Element): SChapter {
         val minuteWords = listOf("minute", "分")
