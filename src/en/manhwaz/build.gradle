@@ -3,7 +3,7 @@ ext {
     extClass = '.ManhwaZCom'
     themePkg = 'manhwaz'
     baseUrl = 'https://manhwaz.com'
-    overrideVersionCode = 34
+    overrideVersionCode = 35
     isNsfw = true
 }
 
