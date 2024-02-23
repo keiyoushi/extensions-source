@@ -8,5 +8,5 @@ class AloneScanlator : Madara(
     "Alone Scanlator",
     "https://alonescanlator.com.br",
     "pt-BR",
-    SimpleDateFormat("dd/mm/yyyy", Locale("pt", "BR")),
+    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 )
