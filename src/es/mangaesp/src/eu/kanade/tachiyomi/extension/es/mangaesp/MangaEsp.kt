@@ -159,7 +159,7 @@ class MangaEsp : HttpSource() {
         val responseBody = response.body.string()
         val mangaDetailsJson = MANGA_DETAILS_REGEX.find(responseBody)?.groupValues?.get(1)
             ?: throw Exception("No se pudo encontrar los detalles del manga")
-        val unescapedJson = mangaDetailsJson.replace("\\", "")
+        val unescapedJson = mangaDetailsJson.unescape()
 
         return json.decodeFromString<SeriesDto>(unescapedJson).toSMangaDetails()
     }
