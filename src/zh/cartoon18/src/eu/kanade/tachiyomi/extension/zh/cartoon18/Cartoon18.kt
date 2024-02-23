@@ -22,12 +22,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import org.jsoup.select.Evaluator
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.net.URLDecoder
 
-@Suppress("unused")
 class Cartoon18 : HttpSource(), ConfigurableSource {
     override val name = "Cartoon18"
     override val lang = "zh"
@@ -43,18 +41,18 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
         add("Referer", baseUrl)
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrlWithLang?sort=hits&page=$page".toHttpUrl(), headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrlWithLang?sort=hits&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.selectFirst(Evaluator.Id("videos"))!!.children().map {
-            val cardBody = it.selectFirst(Evaluator.Class("card-body"))!!
-            val link = cardBody.selectFirst(Evaluator.Tag("a"))!!
+        val mangas = document.selectFirst("#videos")!!.children().map {
+            val cardBody = it.selectFirst(".card-body")!!
+            val link = cardBody.selectFirst("a")!!
             val genres = cardBody.select("div a.badge")
             SManga.create().apply {
                 url = link.attr("href")
                 title = link.ownText()
-                thumbnail_url = it.selectFirst(Evaluator.Tag("img"))!!.attr("data-src")
+                thumbnail_url = it.selectFirst("img")!!.attr("data-src")
                 genre = genres.joinToString { elm -> elm.text() }
             }
         }
@@ -64,7 +62,7 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, !isLastPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrlWithLang?sort=created&page=$page".toHttpUrl(), headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrlWithLang?sort=created&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -193,7 +191,7 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
      * The request to the search page (or another one) that have the keywords list.
      */
     private fun keywordsRequest(): Request {
-        return GET("$baseUrlWithLang/category".toHttpUrl(), headers)
+        return GET("$baseUrlWithLang/category", headers)
     }
 
     /**
@@ -217,9 +215,8 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
 
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
 
-    private val preferences by lazy {
+    private val preferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
 
     private val useTrad get() = preferences.getBoolean("ZH_HANT", false)
 
