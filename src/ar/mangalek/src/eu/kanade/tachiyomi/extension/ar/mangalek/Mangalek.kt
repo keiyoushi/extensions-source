@@ -24,7 +24,7 @@ import java.util.Locale
 class Mangalek :
     Madara(
         "مانجا ليك",
-        "https://manga-lek.net",
+        "https://manga-leko.com",
         "ar",
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
@@ -34,7 +34,7 @@ class Mangalek :
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val chapterUrlSuffix = ""
 
-    private val defaultBaseUrl = "https://manga-lek.net"
+    private val defaultBaseUrl = "https://manga-leko.com"
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val preferences: SharedPreferences by lazy {
