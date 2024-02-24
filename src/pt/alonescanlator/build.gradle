@@ -3,7 +3,7 @@ ext {
     extClass = '.AloneScanlator'
     themePkg = 'madara'
     baseUrl = 'https://alonescanlator.com.br'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
 }
 
 apply from: "$rootDir/common.gradle"
