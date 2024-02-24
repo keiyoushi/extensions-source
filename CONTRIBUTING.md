@@ -753,7 +753,7 @@ Debug apk path
 ./src/<lang>/<source>/build/outputs/apk/debug/tachiyomi-<lang>.<source>-<version>-debug.apk
 ```
 
-Use adb to install or send the apk to the physical device or the emulator device.
+Use `adb` to install or send the apk to the physical device or the emulator device.
 
 ## Submitting the changes
 
