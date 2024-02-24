@@ -1,7 +1,7 @@
 ext {
     extName = 'Remanga'
     extClass = '.Remanga'
-    extVersionCode = 85
+    extVersionCode = 86
 }
 
 apply from: "$rootDir/common.gradle"

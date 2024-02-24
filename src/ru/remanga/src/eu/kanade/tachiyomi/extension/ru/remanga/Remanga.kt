@@ -171,7 +171,12 @@ class Remanga : ConfigurableSource, HttpSource() {
                 val originalRequest = chain.request()
                 val response = chain.proceed(originalRequest)
                 if (originalRequest.url.toString().contains(exManga) and !response.isSuccessful) {
-                    throw IOException("HTTP error ${response.code}. Домен ${exManga.substringAfter("//")} сервиса ExManga недоступен, выберите другой в настройках ⚙️ расширения")
+                    val erorText = json.decodeFromString<ExWrapperDto<String>>(response.body.string()).data
+                    if (erorText.isEmpty()) {
+                        throw IOException("HTTP error ${response.code}. Домен ${exManga.substringAfter("//")} сервиса ExManga недоступен, выберите другой в настройках ⚙️ расширения")
+                    } else {
+                        throw IOException("HTTP error ${response.code}. ExManga: $erorText")
+                    }
                 }
                 response
             }
