@@ -21,7 +21,7 @@ or fixing it directly by submitting a Pull Request.
    4. [Extension call flow](#extension-call-flow)
    5. [Misc notes](#misc-notes)
    6. [Advanced extension features](#advanced-extension-features)
-4. [Multi-source themes](#multi-source-themes)
+4. [Library-multi-source themes](#library-multi-source-themes)
    1. [The directory structure](#the-directory-structure)
    2. [Development workflow](#development-workflow)
    3. [Scaffolding overrides](#scaffolding-overrides)
@@ -86,12 +86,11 @@ small, just do a normal full clone instead.**
     ```bash
     git sparse-checkout set --cone --sparse-index
     # add project folders
-    git sparse-checkout add .run buildSrc core gradle lib multisrc/src/main/java/generator
+    git sparse-checkout add buildSrc core gradle lib
     # add a single source
     git sparse-checkout add src/<lang>/<source>
-    # add a multisrc theme
-    git sparse-checkout add multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
-    git sparse-checkout add multisrc/overrides/<source>
+    # add a lib-multisrc theme
+    git sparse-checkout add lib-multisrc/<source>
     ```
 
     To remove a source, open `.git/info/sparse-checkout` and delete the exact
@@ -112,13 +111,11 @@ small, just do a normal full clone instead.**
     ```bash
     /*
     !/src/*
-    !/multisrc/overrides/*
-    !/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*
+    !/lib-multisrc/*
     # allow a single source
     /src/<lang>/<source>
-    # allow a multisrc theme
-    /multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
-    /multisrc/overrides/<source>
+    # allow a lib-multisrc theme
+    /lib-multisrc/<source>
     # or type the source name directly
     <source>
     ```
@@ -186,7 +183,7 @@ the full locale string instead.
 
 ### Loading a subset of Gradle modules
 
-By default, all individual and generated multisrc extensions are loaded for local development.
+By default, all individual and lib-multisrc extensions implementations are loaded for local development.
 This may be inconvenient if you only need to work on one extension at a time.
 
 To adjust which modules are loaded, make adjustments to the `settings.gradle.kts` file as needed.
@@ -542,143 +539,57 @@ The `id` also needs to be explicity set to the old value if you're changing the 
 > the `name` field in the source class and in the Gradle file. By doing so
 > a new `id` will be generated and users will be forced to migrate.
 
-## Multi-source themes
-The `multisrc` module houses source code for generating extensions for cases where multiple source
+## Library-multi-source themes
+The `lib-multisrc` module houses source code for cases where multiple source
 sites use the same site generator tool (usually a CMS) for bootsraping their website and this makes
 them similar enough to prompt code reuse through inheritance/composition; which from now on we will
 use the general **theme** term to refer to.
 
 This module contains the *default implementation* for each theme and definitions for each source that
-builds upon that default implementation and also it's overrides upon that default implementation,
-all of this becomes a set of source code which then is used to generate individual extensions from.
+builds upon that default implementation.
 
 ### The directory structure
 ```console
-$ tree multisrc
-multisrc
-├── build.gradle.kts
-├── overrides
-│   └── <themepkg>
-│       ├── default
-│       │   ├── additional.gradle
-│       │   └── res
-│       │       ├── mipmap-hdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-mdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-xhdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-xxhdpi
-│       │       │   └── ic_launcher.png
-│       │       └── mipmap-xxxhdpi
-│       │           └── ic_launcher.png
-│       └── <sourcepkg>
-│           ├── additional.gradle
-│           ├── AndroidManifest.xml
-│           ├── res
-│           │   ├── mipmap-hdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-mdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-xhdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-xxhdpi
-│           │   │   └── ic_launcher.png
-│           │   └── mipmap-xxxhdpi
-│           │       └── ic_launcher.png
-│           └── src
-│               └── <SourceName>.kt
-└── src
-    └── main
-        ├── AndroidManifest.xml
-        └── java
-            ├── eu
-            │   └── kanade
-            │       └── tachiyomi
-            │           └── multisrc
-            │               └── <themepkg>
-            │                   ├── <ThemeName>Generator.kt
-            │                   └── <ThemeName>.kt
-            └── generator
-                ├── GeneratorMain.kt
-                ├── IntelijConfigurationGeneratorMain.kt
-                └── ThemeSourceGenerator.kt
+$ tree lib-multisrc
+
+lib-multisrc
+└── <themepkg>
+    ├── AndroidManifest.xml (optional)
+    ├── build.gradle.kts
+    ├── res
+    │   ├── mipmap-hdpi
+    │   │   └── ic_launcher.png
+    │   ├── mipmap-mdpi
+    │   │   └── ic_launcher.png
+    │   ├── mipmap-xhdpi
+    │   │   └── ic_launcher.png
+    │   ├── mipmap-xxhdpi
+    │   │   └── ic_launcher.png
+    │   └── mipmap-xxxhdpi
+    │       └── ic_launcher.png
+    └── src
+        └── eu
+            └── kanade
+                └── tachiyomi
+                    └── multisrc
+                        └── <themepkg>
+                            ├── <ThemeName>.kt
+                            └── <ThemeName>UrlActivity.kt (optional)
+
 ```
 
-- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<themepkg>/<Theme>.kt` defines the the theme's
+- `lib-multisrc/<themepkg>/src/eu/kanade/tachiyomi/multisrc/<themepkg>/<ThemeName>.kt` defines the the theme's
 default implementation.
-- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/<Theme>Generator.kt` defines the the
-theme's generator class, this is similar to a `SourceFactory` class.
-- `multisrc/overrides/<themepkg>/default/res` is the theme's default icons, if a source doesn't have
+- `lib-multisrc/<themepkg>/src/eu/kanade/tachiyomi/multisrc/<themepkg>/<ThemeName>UrlActivity.kt` defines the default entry point theme's. It's ***Optional***.
+- `lib-multisrc/<themepkg>/res` is the theme's default icons, if a source doesn't have
 overrides for `res`, then default icons will be used.
-- `multisrc/overrides/<themepkg>/default/additional.gradle` defines additional gradle code, this will
-be copied at the end of all generated sources from this theme.
-- `multisrc/overrides/<themepkg>/<sourcepkg>` contains overrides for a source that is defined inside
-the `<Theme>Generator.kt` class.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/src` contains source overrides.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/res` contains override for icons.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/additional.gradle` defines additional gradle code, this
-will be copied at the end of the generated gradle file below the theme's `additional.gradle`.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/AndroidManifest.xml` is copied as an override to the
-default `AndroidManifest.xml` generation if it exists.
-
-> [!NOTE]
-> Files ending with `Gen.kt` (i.e. `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/XxxGen.kt`)
-> are considered helper files and won't be copied to generated sources.
 
 ### Development workflow
-There are three steps in running and testing a theme source:
-
-1. Generate the sources
-    - **Option 1: Only generate sources from one theme**
-        - **Method 1:** Find and run `<ThemeName>Generator` run configuration from the
-        `Run/Debug Configuration` menu.
-        - **Method 2:** Directly run `<themepkg>.<ThemeName>Generator.main` by pressing the play
-        button in front of the method shown inside Android Studio's Code Editor to generate sources
-        from the said theme.
-    - **Option 2: Generate sources from all themes**
-        - **Method 1:** Run `./gradlew multisrc:generateExtensions` from a terminal window to
-        generate all sources.
-        - **Method 2:** Directly run `Generator.GeneratorMain.main` by pressing the play button
-        in front of the method shown inside Android Studio's Code Editor to generate all sources.
-2. Sync gradle to import the new generated sources inside `generated-src`
-    - **Method 1:** Android Studio might prompt to sync the gradle. Click on `Sync Now`.
-    - **Method 2:** Manually re-sync by opening `File` -> `Sync Project with Gradle Files` or by
-    pressing `Alt+f` then `g`.
-3. Build and test the generated Extention like normal `src` sources.
-    - It's recommended to make changes here to skip going through step 1 and 2 multiple times, and
-    when you are done, copying the changes back to `multisrc`.
-
-### Scaffolding overrides
-You can use this python script to generate scaffolds for source overrides.
-Put it inside `multisrc/overrides/<themepkg>/` as `scaffold.py`.
-```python
-import os, sys
-from pathlib import Path
-
-theme = Path(os.getcwd()).parts[-1]
-
-print(f"Detected theme: {theme}")
-
-if len(sys.argv) < 3:
-    print("Must be called with a class name and lang, for Example 'python scaffold.py LeviatanScans en'")
-    exit(-1)
-
-source = sys.argv[1]
-package = source.lower()
-lang = sys.argv[2]
-
-print(f"working on {source} with lang {lang}")
-
-os.makedirs(f"{package}/src")
-os.makedirs(f"{package}/res")
-
-with open(f"{package}/src/{source}.kt", "w") as f:
-    f.write(f"package eu.kanade.tachiyomi.extension.{lang}.{package}\n\n")
-```
+- Create a new extension: Go to [Writing an extension](#writing-an-extension);
+- Use inheritance to get an implementation of a theme that the source uses as a base. Override the implementation if necessary.
 
 ### Additional Notes
-- Generated sources extension version code is calculated as
+- Sources extension version code is calculated as
 `baseVersionCode + overrideVersionCode + multisrcLibraryVersion`.
     - Currently `multisrcLibraryVersion` is `0`
     - When a new source is added, it doesn't need to set `overrideVersionCode` as it's default is `0`.
@@ -687,12 +598,6 @@ with open(f"{package}/src/{source}.kt", "w") as f:
     - When a theme's default implementation changes, `baseVersionCode` should be increased, the
     initial value should be `1`.
     - For example, for a new theme with a new source, extention version code will be `0 + 0 + 1 = 1`.
-- `IntelijConfigurationGeneratorMainKt` should be run on creating or removing a multisrc theme.
-    - On removing a theme, you can manually remove the corresponding configuration in the `.run`
-    folder instead.
-    - Be careful if you're using sparse checkout. If other configurations are accidentally removed,
-    `git add` the file you want and `git restore` the others. Another choice is to allow
-    `/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*` before running the generator.
 
 ## Running
 
@@ -838,6 +743,18 @@ of `mitmweb`.
 APKs can be created in Android Studio via `Build > Build Bundle(s) / APK(s) > Build APK(s)` or 
 `Build > Generate Signed Bundle / APK`.
 
+You can also use the CMD/Terminal emulator to run `gradlew`. Note: JAVA_HOME and other tools need to be configured in the OS environment 
+```
+./gradlew clean assembleDebug
+```
+
+Debug apk path
+```
+./src/<lang>/<source>/build/outputs/apk/debug/tachiyomi-<lang>.<source>-<version>-debug.apk
+```
+
+Use adb to install or send the apk to the physical device or the emulator device.
+
 ## Submitting the changes
 
 When you feel confident about your changes, submit a new Pull Request so your code can be reviewed
@@ -862,7 +779,7 @@ can find it below.
 ### Pull Request checklist
 
 - Updated `extVersionCode` value in `build.gradle` for individual extensions
-- Updated `overrideVersionCode` or `baseVersionCode` as needed for all multisrc extensions
+- Updated `overrideVersionCode` or `baseVersionCode` as needed for all lib-multisrc extensions
 - Referenced all related issues in the PR body (e.g. "Closes #xyz")
 - Added the `isNsfw = true` flag in `build.gradle` when appropriate
 - Have not changed source names
