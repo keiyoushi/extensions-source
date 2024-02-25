@@ -141,7 +141,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
         val chaptersEsp = result.esp.map { it.toSChapter("Español") }
         val chaptersRaw = result.raw.map { it.toSChapter("Raw") }
 
-        val filteredRaws =  if (preferences.showAllRawsPref()) {
+        val filteredRaws = if (preferences.showAllRawsPref()) {
             chaptersEsp
         } else {
             val chapterNumbers = chaptersEsp.map { it.chapter_number }.toSet()
