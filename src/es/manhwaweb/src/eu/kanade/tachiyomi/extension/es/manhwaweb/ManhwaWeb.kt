@@ -142,7 +142,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
         val chaptersRaw = result.raw.map { it.toSChapter("Raw") }
 
         val filteredRaws = if (preferences.showAllRawsPref()) {
-            chaptersEsp
+            chaptersRaw
         } else {
             val chapterNumbers = chaptersEsp.map { it.chapter_number }.toSet()
             chaptersRaw.filter { it.chapter_number !in chapterNumbers }
