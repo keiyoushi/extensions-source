@@ -90,6 +90,7 @@ class MangaMonks : ParsedHttpSource() {
                 }
             }
 
+            url.addPathSegment(page.toString())
             GET(url.build(), headers)
         }
     }
