@@ -75,7 +75,7 @@ fun getGenres(): List<Genre> = listOf(
     Genre("Milf", 8),
 )
 
-data class SortProperty(val name: String, val value: String) {
+class SortProperty(val name: String, val value: String) {
     override fun toString(): String = name
 }
 
