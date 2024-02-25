@@ -2,8 +2,8 @@ ext {
     extName = 'Hayalistic'
     extClass = '.Hayalistic'
     themePkg = 'madara'
-    baseUrl = 'https://hayalistic.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://hayalistic.com.tr'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
