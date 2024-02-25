@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.MissingFieldException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -100,29 +101,33 @@ class MangaMonks : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
     override fun searchMangaParse(response: Response): MangasPage {
-        if (searchMode) {
-            val result = json.decodeFromString<MangaList>(response.body.string())
-            val mangaList = result.manga.map {
-                SManga.create().apply {
-                    title = it.title
-                    setUrlWithoutDomain(it.url)
-                    thumbnail_url = it.image
+        try {
+            if (searchMode) {
+                val result = json.decodeFromString<MangaList>(response.body.string())
+                val mangaList = result.manga.map {
+                    SManga.create().apply {
+                        title = it.title
+                        setUrlWithoutDomain(it.url)
+                        thumbnail_url = it.image
+                    }
                 }
+                val hasNextPage = false
+                return MangasPage(mangaList, hasNextPage)
+            } else {
+                val document = response.asJsoup()
+
+                val mangas = document.select(searchMangaSelector()).map { element ->
+                    searchMangaFromElement(element)
+                }
+
+                val hasNextPage = searchMangaNextPageSelector().let { selector ->
+                    document.select(selector).first()
+                } != null
+
+                return MangasPage(mangas, hasNextPage)
             }
-            val hasNextPage = false
-            return MangasPage(mangaList, hasNextPage)
-        } else {
-            val document = response.asJsoup()
-
-            val mangas = document.select(searchMangaSelector()).map { element ->
-                searchMangaFromElement(element)
-            }
-
-            val hasNextPage = searchMangaNextPageSelector().let { selector ->
-                document.select(selector).first()
-            } != null
-
-            return MangasPage(mangas, hasNextPage)
+        } catch (_: MissingFieldException) {
+            return MangasPage(emptyList(), false)
         }
     }
 
