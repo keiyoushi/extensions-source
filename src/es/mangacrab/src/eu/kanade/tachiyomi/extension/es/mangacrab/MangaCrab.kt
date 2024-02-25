@@ -15,12 +15,14 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaCrab : Madara(
-    "Manga Crab",
-    "https://httpmangacrab2.com",
-    "es",
-    SimpleDateFormat("dd/MM/yyyy", Locale("es")),
-), ConfigurableSource {
+class MangaCrab :
+    Madara(
+        "Manga Crab",
+        "https://httpmangacrab2.com",
+        "es",
+        SimpleDateFormat("dd/MM/yyyy", Locale("es")),
+    ),
+    ConfigurableSource {
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
