@@ -2,8 +2,8 @@ ext {
     extName = 'SummerToon'
     extClass = '.SummerToon'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://summertoon.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://summertoon.net'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
