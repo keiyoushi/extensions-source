@@ -29,9 +29,9 @@ class MangaEsp : HttpSource() {
 
     override val name = "MangaEsp"
 
-    override val baseUrl = "https://mangaesp.co"
+    override val baseUrl = "https://mangaesp.net"
 
-    private val apiBaseUrl = "https://apis.mangaesp.co"
+    private val apiBaseUrl = "https://apis.mangaesp.net"
 
     override val lang = "es"
 
@@ -57,13 +57,7 @@ class MangaEsp : HttpSource() {
         val topWeekly = responseData.response.topWeekly.flatten().map { it.data }
         val topMonthly = responseData.response.topMonthly.flatten().map { it.data }
 
-        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }.map { series ->
-            SManga.create().apply {
-                title = series.name
-                thumbnail_url = series.thumbnail
-                url = "/ver/${series.slug}"
-            }
-        }
+        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }.map { it.toSManga() }
 
         return MangasPage(mangas, false)
     }
@@ -73,13 +67,7 @@ class MangaEsp : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseData = json.decodeFromString<LastUpdatesDto>(response.body.string())
 
-        val mangas = responseData.response.map { series ->
-            SManga.create().apply {
-                title = series.name
-                thumbnail_url = series.thumbnail
-                url = "/ver/${series.slug}"
-            }
-        }
+        val mangas = responseData.response.map { it.toSManga() }
 
         return MangasPage(mangas, false)
     }
@@ -100,13 +88,17 @@ class MangaEsp : HttpSource() {
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/api/comics", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comics", headers)
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     private fun searchMangaParse(response: Response, page: Int, query: String, filters: FilterList): MangasPage {
-        val responseData = json.decodeFromString<ComicsDto>(response.body.string())
-        comicsList = responseData.response.toMutableList()
+        val document = response.asJsoup()
+        val script = document.select("script:containsData(self.__next_f.push)").joinToString { it.data() }
+        val jsonString = MANGA_LIST_REGEX.find(script)?.groupValues?.get(1)
+            ?: throw Exception("No se pudo encontrar la lista de comics")
+        val unescapedJson = jsonString.unescape()
+        comicsList = json.decodeFromString<List<SeriesDto>>(unescapedJson).toMutableList()
         return parseComicsList(page, query, filters)
     }
 
@@ -118,7 +110,11 @@ class MangaEsp : HttpSource() {
 
             if (query.isNotBlank()) {
                 if (query.length < 2) throw Exception("La búsqueda debe tener al menos 2 caracteres")
-                filteredList.addAll(comicsList.filter { it.name.contains(query, ignoreCase = true) })
+                filteredList.addAll(
+                    comicsList.filter {
+                        it.name.contains(query, ignoreCase = true) || it.alternativeName?.contains(query, ignoreCase = true) == true
+                    },
+                )
             } else {
                 filteredList.addAll(comicsList)
             }
@@ -154,7 +150,7 @@ class MangaEsp : HttpSource() {
 
         return MangasPage(
             filteredList.subList((page - 1) * MANGAS_PER_PAGE, min(page * MANGAS_PER_PAGE, filteredList.size))
-                .map { it.toSimpleSManga() },
+                .map { it.toSManga() },
             hasNextPage,
         )
     }
@@ -163,42 +159,24 @@ class MangaEsp : HttpSource() {
         val responseBody = response.body.string()
         val mangaDetailsJson = MANGA_DETAILS_REGEX.find(responseBody)?.groupValues?.get(1)
             ?: throw Exception("No se pudo encontrar los detalles del manga")
-        val unescapedJson = mangaDetailsJson.replace("\\", "")
+        val unescapedJson = mangaDetailsJson.unescape()
 
-        val series = json.decodeFromString<SeriesDto>(unescapedJson)
-        return SManga.create().apply {
-            title = series.name
-            thumbnail_url = series.thumbnail
-            description = series.synopsis
-            genre = series.genders.joinToString { it.gender.name }
-            author = series.authors.joinToString { it.author.name }
-            artist = series.artists.joinToString { it.artist.name }
-        }
+        return json.decodeFromString<SeriesDto>(unescapedJson).toSMangaDetails()
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val responseBody = response.body.string()
         val mangaDetailsJson = MANGA_DETAILS_REGEX.find(responseBody)?.groupValues?.get(1)
             ?: throw Exception("No se pudo encontrar la lista de capítulos")
-        val unescapedJson = mangaDetailsJson.replace("\\", "")
+        val unescapedJson = mangaDetailsJson.unescape()
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
-        return series.chapters.map { chapter ->
-            SChapter.create().apply {
-                name = if (chapter.name.isNullOrBlank()) {
-                    "Capítulo ${chapter.number.toString().removeSuffix(".0")}"
-                } else {
-                    "Capítulo ${chapter.number.toString().removeSuffix(".0")} - ${chapter.name}"
-                }
-                date_upload = runCatching { dateFormat.parse(chapter.date)?.time }.getOrNull() ?: 0L
-                url = "/ver/${series.slug}/${chapter.slug}"
-            }
-        }
+        return series.chapters.map { it.toSChapter(series.slug, dateFormat) }
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         return document.select("main.contenedor.read img").mapIndexed { i, img ->
-            Page(i, "", img.imgAttr())
+            Page(i, imageUrl = img.imgAttr())
         }
     }
 
@@ -254,8 +232,14 @@ class MangaEsp : HttpSource() {
         else -> attr("abs:src")
     }
 
+    private fun String.unescape(): String {
+        return UNESCAPE_REGEX.replace(this, "$1")
+    }
+
     companion object {
-        private val MANGA_DETAILS_REGEX = """self.__next_f.push\(.*data\\":(\{.*lastChapters.*\}).*numFollow""".toRegex()
+        private val UNESCAPE_REGEX = """\\(.)""".toRegex()
+        private val MANGA_LIST_REGEX = """self\.__next_f\.push\(.*data\\":(\[.*trending.*])\}""".toRegex()
+        private val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*numFollow""".toRegex()
         private const val MANGAS_PER_PAGE = 15
     }
 }

@@ -1,91 +1,118 @@
 package eu.kanade.tachiyomi.extension.es.mangaesp
 
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
 
 @Serializable
-data class TopSeriesDto(
+class TopSeriesDto(
     val response: TopSeriesResponseDto,
 )
 
 @Serializable
-data class LastUpdatesDto(
+class LastUpdatesDto(
     val response: List<SeriesDto>,
 )
 
 @Serializable
-data class ComicsDto(
-    val response: List<SeriesDto>,
-)
-
-@Serializable
-data class TopSeriesResponseDto(
+class TopSeriesResponseDto(
     @SerialName("mensual") val topMonthly: List<List<PayloadSeriesDto>>,
     @SerialName("semanal") val topWeekly: List<List<PayloadSeriesDto>>,
     @SerialName("diario") val topDaily: List<List<PayloadSeriesDto>>,
 )
 
 @Serializable
-data class PayloadSeriesDto(
+class PayloadSeriesDto(
     @SerialName("project") val data: SeriesDto,
 )
 
 @Serializable
-data class SeriesDto(
+class SeriesDto(
     val name: String,
+    val alternativeName: String? = null,
     val slug: String,
-    @SerialName("sinopsis") val synopsis: String? = null,
-    @SerialName("urlImg") val thumbnail: String? = null,
-    val isVisible: Boolean,
+    @SerialName("sinopsis") private val synopsis: String? = null,
+    @SerialName("urlImg") private val thumbnail: String? = null,
     @SerialName("actualizacionCap") val lastChapterDate: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("state_id") val status: Int? = 0,
-    val genders: List<SeriesGenderDto> = emptyList(),
-    @SerialName("lastChapters") val chapters: List<SeriesChapterDto> = emptyList(),
-    val trending: SeriesTrendingDto? = null,
-    @SerialName("autors") val authors: List<SeriesAuthorDto> = emptyList(),
-    val artists: List<SeriesArtistDto> = emptyList(),
+    private val genders: List<GenderDto> = emptyList(),
+    @SerialName("lastChapters") val chapters: List<ChapterDto> = emptyList(),
+    val trending: TrendingDto? = null,
+    @SerialName("autors") private val authors: List<AuthorDto> = emptyList(),
+    private val artists: List<ArtistDto> = emptyList(),
 
 ) {
-    fun toSimpleSManga(): SManga {
+    fun toSManga(): SManga {
         return SManga.create().apply {
             title = name
             thumbnail_url = thumbnail
             url = "/ver/$slug"
         }
     }
+
+    fun toSMangaDetails(): SManga {
+        return SManga.create().apply {
+            title = name
+            thumbnail_url = thumbnail
+            description = synopsis
+            if (!alternativeName.isNullOrBlank()) {
+                if (!description.isNullOrBlank()) description += "\n\n"
+                description += "Nombres alternativos: $alternativeName"
+            }
+            genre = genders.joinToString { it.gender.name }
+            author = authors.joinToString { it.author.name }
+            artist = artists.joinToString { it.artist.name }
+        }
+    }
 }
 
 @Serializable
-data class SeriesTrendingDto(
+class TrendingDto(
     @SerialName("visitas") val views: Int? = 0,
 )
 
 @Serializable
-data class SeriesGenderDto(
-    val gender: SeriesDetailDataNameDto,
+class GenderDto(
+    val gender: DetailDataNameDto,
 )
 
 @Serializable
-data class SeriesAuthorDto(
-    @SerialName("autor") val author: SeriesDetailDataNameDto,
+class AuthorDto(
+    @SerialName("autor") val author: DetailDataNameDto,
 )
 
 @Serializable
-data class SeriesArtistDto(
-    val artist: SeriesDetailDataNameDto,
+class ArtistDto(
+    val artist: DetailDataNameDto,
 )
 
 @Serializable
-data class SeriesDetailDataNameDto(
+class DetailDataNameDto(
     val name: String,
 )
 
 @Serializable
-data class SeriesChapterDto(
-    @SerialName("num") val number: Float,
-    val name: String? = null,
-    val slug: String,
-    @SerialName("created_at") val date: String,
-)
+class ChapterDto(
+    @SerialName("num") private val number: Float,
+    private val name: String? = null,
+    private val slug: String,
+    @SerialName("created_at") private val date: String,
+) {
+    fun toSChapter(seriesSlug: String, dateFormat: SimpleDateFormat): SChapter {
+        return SChapter.create().apply {
+            name = "Capítulo ${number.toString().removeSuffix(".0")}"
+            if (!this@ChapterDto.name.isNullOrBlank()) {
+                name += " - ${this@ChapterDto.name}"
+            }
+            date_upload = try {
+                dateFormat.parse(date)?.time ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+            url = "/ver/$seriesSlug/$slug"
+        }
+    }
+}
