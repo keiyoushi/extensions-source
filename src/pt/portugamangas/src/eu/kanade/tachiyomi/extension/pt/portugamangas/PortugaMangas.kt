@@ -38,21 +38,17 @@ class PortugaMangas : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by lazy {
+    private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
-    override val client: OkHttpClient by lazy {
+    override val client: OkHttpClient =
         network.cloudflareClient.newBuilder()
             .setRandomUserAgent(
                 preferences.getPrefUAType(),
                 preferences.getPrefCustomUA(),
             )
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
             .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
             .build()
-    }
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
