@@ -49,7 +49,7 @@ class BlackoutComics : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         thumbnail_url = element.selectFirst("img:not(.hidden)")?.absUrl("src")
-        title = element.selectFirst("p:not(.hidden), span.text-comic")?.text() ?: "Manga"
+        title = element.selectFirst("p:not(.hidden), span.text-comic")!!.text()
     }
 
     override fun popularMangaNextPageSelector() = null
