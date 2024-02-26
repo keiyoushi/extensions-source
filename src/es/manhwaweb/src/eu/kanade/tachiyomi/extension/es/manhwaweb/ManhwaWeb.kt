@@ -47,7 +47,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/manhwa/nuevos", headers)
