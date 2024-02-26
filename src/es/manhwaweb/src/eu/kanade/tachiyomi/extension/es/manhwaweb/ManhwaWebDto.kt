@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.manhwaweb
 
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -121,17 +120,9 @@ class PayloadChapterDto(
 @Serializable
 class ChapterDto(
     @SerialName("chapter") val number: Float,
-    @SerialName("link") private val url: String,
-    @SerialName("create") private val createdAt: Long?,
-) {
-    fun toSChapter(type: String = "", baseUrl: String) = SChapter.create().apply {
-        name = "Capítulo ${number.toString().removeSuffix(".0")}"
-        chapter_number = number
-        createdAt?.let { date_upload = it }
-        url = this@ChapterDto.url.substringAfter(baseUrl)
-        scanlator = type
-    }
-}
+    @SerialName("link") val url: String,
+    @SerialName("create") val createdAt: Long?,
+)
 
 @Serializable
 class PayloadPageDto(

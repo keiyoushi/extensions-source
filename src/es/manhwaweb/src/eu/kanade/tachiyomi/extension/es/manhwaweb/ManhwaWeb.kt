@@ -143,8 +143,24 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = json.decodeFromString<PayloadChapterDto>(response.body.string())
-        val chaptersEsp = result.esp.map { it.toSChapter("Español", baseUrl) }
-        val chaptersRaw = result.raw.map { it.toSChapter("Raw", baseUrl) }
+        val chaptersEsp = result.esp.map {
+            SChapter.create().apply {
+                name = "Capítulo ${it.number.toString().removeSuffix(".0")}"
+                chapter_number = it.number
+                date_upload = it.createdAt ?: 0
+                setUrlWithoutDomain(it.url)
+                scanlator = "Español"
+            }
+        }
+        val chaptersRaw = result.raw.map {
+            SChapter.create().apply {
+                name = "Capítulo ${it.number.toString().removeSuffix(".0")}"
+                chapter_number = it.number
+                date_upload = it.createdAt ?: 0
+                setUrlWithoutDomain(it.url)
+                scanlator = "Raw"
+            }
+        }
 
         val filteredRaws = if (preferences.showAllRawsPref()) {
             chaptersRaw
