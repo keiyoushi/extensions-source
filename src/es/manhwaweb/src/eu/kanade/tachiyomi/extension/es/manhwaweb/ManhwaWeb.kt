@@ -137,7 +137,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response): SManga =
         json.decodeFromString<ComicDetailsDto>(response.body.string()).toSManga()
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
