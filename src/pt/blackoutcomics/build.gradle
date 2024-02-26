@@ -1,7 +1,7 @@
 ext {
     extName = 'Blackout Comics'
     extClass = '.BlackoutComics'
-    extVersionCode = 1
+    extVersionCode = 2
     isNsfw = true
 }
 
