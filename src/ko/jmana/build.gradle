@@ -1,7 +1,0 @@
-ext {
-    extName = 'JMana'
-    extClass = '.JMana'
-    extVersionCode = 15
-}
-
-apply from: "$rootDir/common.gradle"
