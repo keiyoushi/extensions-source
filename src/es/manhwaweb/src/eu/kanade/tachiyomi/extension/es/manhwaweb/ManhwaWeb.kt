@@ -177,7 +177,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
 
     private fun SharedPreferences.showAllRawsPref() = getBoolean(SHOW_ALL_RAWS_PREF, SHOW_ALL_RAWS_DEFAULT)
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
         filterIsInstance<R>().firstOrNull()
