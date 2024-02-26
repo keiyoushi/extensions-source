@@ -1,9 +1,0 @@
-ext {
-    extName = 'Esomanga'
-    extClass = '.Esomanga'
-    themePkg = 'madara'
-    baseUrl = 'https://esomanga.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
