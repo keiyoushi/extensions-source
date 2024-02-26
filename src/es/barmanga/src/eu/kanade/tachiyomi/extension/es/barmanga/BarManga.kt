@@ -8,7 +8,7 @@ class BarManga : Madara(
     "BarManga",
     "https://barmanga.com",
     "es",
-    SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
+    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val mangaDetailsSelectorDescription = "div.flamesummary > div.manga-excerpt"
