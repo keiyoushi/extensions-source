@@ -515,8 +515,9 @@ abstract class Madara(
         options.toTypedArray(),
     )
 
-    protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
-    class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
+    protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) })
+    class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
+    class Genre(val name: String, val id: String = name)
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
