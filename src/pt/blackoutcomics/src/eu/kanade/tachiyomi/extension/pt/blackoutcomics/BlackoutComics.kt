@@ -98,7 +98,7 @@ class BlackoutComics : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val row = document.selectFirst("section > div.container > div.row")!!
         thumbnail_url = row.selectFirst("img:not(.hidden)")?.absUrl("src")
-        title = row.selectFirst("div.trailer-content > h2:not(.hidden)")?.text() ?: "Manga"
+        title = row.selectFirst("div.trailer-content > h2:not(.hidden)")!!.text()
 
         with(row.selectFirst("div.trailer-content:has(h3:containsOwn(Detalhes))")!!) {
             println(outerHtml())
