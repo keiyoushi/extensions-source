@@ -1,9 +1,9 @@
 ext {
     extName = 'ManhwaZ'
-    extClass = '.ManhwaZ'
-    themePkg = 'madara'
+    extClass = '.ManhwaZCom'
+    themePkg = 'manhwaz'
     baseUrl = 'https://manhwaz.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 35
     isNsfw = true
 }
 
