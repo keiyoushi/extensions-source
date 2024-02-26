@@ -78,27 +78,30 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
         val url = "$apiUrl/manhwa/library".toHttpUrl().newBuilder()
             .addQueryParameter("buscar", query)
 
-        val typeFilter = filters.firstInstanceOrNull<TypeFilter>()
-        val demographyFilter = filters.firstInstanceOrNull<DemographyFilter>()
-        val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
-        val eroticFilter = filters.firstInstanceOrNull<EroticFilter>()
-        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
-        val sortByFilter = filters.firstInstanceOrNull<SortByFilter>()
+        filters.forEach { filter ->
+            when (filter) {
+                is TypeFilter -> url.addQueryParameter("tipo", filter.toUriPart())
+                is DemographyFilter -> url.addQueryParameter("demografia", filter.toUriPart())
+                is StatusFilter -> url.addQueryParameter("estado", filter.toUriPart())
+                is EroticFilter -> url.addQueryParameter("erotico", filter.toUriPart())
+                is GenreFilter -> {
+                    val genres = filter.state
+                        .filter { it.state }
+                        .joinToString("a") { it.id.toString() }
+                    url.addQueryParameter("generes", genres)
+                }
 
-        if (typeFilter != null) url.addQueryParameter("tipo", typeFilter.toUriPart())
-        if (demographyFilter != null) url.addQueryParameter("demografia", demographyFilter.toUriPart())
-        if (statusFilter != null) url.addQueryParameter("estado", statusFilter.toUriPart())
-        if (eroticFilter != null) url.addQueryParameter("erotico", eroticFilter.toUriPart())
+                is SortByFilter -> {
+                    url.addQueryParameter(
+                        "order_dir",
+                        if (filter.state!!.ascending) "asc" else "desc",
+                    )
+                    url.addQueryParameter("order_item", filter.selected)
+                }
 
-        if (genreFilter != null) {
-            val genres = genreFilter.state
-                .filter { it.state }
-                .joinToString("a") { it.id.toString() }
-            url.addQueryParameter("generes", genres)
+                else -> {}
+            }
         }
-
-        url.addQueryParameter("order_dir", if (sortByFilter?.state?.ascending == true) "asc" else "desc")
-        url.addQueryParameter("order_item", sortByFilter?.selected ?: "alfabetico")
 
         url.addQueryParameter("page", (page - 1).toString())
 
@@ -134,12 +137,14 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response): SManga =
         json.decodeFromString<ComicDetailsDto>(response.body.string()).toSManga()
 
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
+
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = json.decodeFromString<PayloadChapterDto>(response.body.string())
-        val chaptersEsp = result.esp.map { it.toSChapter("Español") }
-        val chaptersRaw = result.raw.map { it.toSChapter("Raw") }
+        val chaptersEsp = result.esp.map { it.toSChapter("Español", baseUrl) }
+        val chaptersRaw = result.raw.map { it.toSChapter("Raw", baseUrl) }
 
         val filteredRaws = if (preferences.showAllRawsPref()) {
             chaptersRaw
@@ -150,8 +155,6 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
 
         return (chaptersEsp + filteredRaws).sortedByDescending { it.chapter_number }
     }
-
-    override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request {
         val slug = chapter.url.removeSuffix("/").substringAfterLast("/")
@@ -178,9 +181,6 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
     private fun SharedPreferences.showAllRawsPref() = getBoolean(SHOW_ALL_RAWS_PREF, SHOW_ALL_RAWS_DEFAULT)
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
-        filterIsInstance<R>().firstOrNull()
 
     companion object {
         private const val SHOW_ALL_RAWS_PREF = "pref_show_all_raws_"

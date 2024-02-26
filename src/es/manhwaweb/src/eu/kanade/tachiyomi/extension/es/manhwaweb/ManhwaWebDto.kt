@@ -124,11 +124,11 @@ class ChapterDto(
     @SerialName("link") private val url: String,
     @SerialName("create") private val createdAt: Long?,
 ) {
-    fun toSChapter(type: String = "") = SChapter.create().apply {
+    fun toSChapter(type: String = "", baseUrl: String) = SChapter.create().apply {
         name = "Capítulo ${number.toString().removeSuffix(".0")}"
         chapter_number = number
         createdAt?.let { date_upload = it }
-        url = this@ChapterDto.url
+        url = this@ChapterDto.url.substringAfter(baseUrl)
         scanlator = type
     }
 }
