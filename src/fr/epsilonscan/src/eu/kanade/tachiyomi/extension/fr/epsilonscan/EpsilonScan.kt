@@ -8,10 +8,12 @@ class EpsilonScan : Madara(
     "Epsilon Scan",
     "https://epsilonscan.fr",
     "fr",
-    SimpleDateFormat("dd/MM/yy", Locale.FRENCH)
+    SimpleDateFormat("dd/MM/yy", Locale.FRENCH),
 ) {
     // Site moved from MangaThemesia to Madara
     override val versionId = 2
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
+
+    override val useNewChapterEndpoint = true
 }
