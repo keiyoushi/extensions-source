@@ -124,7 +124,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = null
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mais-vistos/", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mais-vistos/")
 
     override fun popularMangaSelector() = "div.content .item"
 
@@ -137,7 +137,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addPathSegment(query)
                 .build()
-            return GET(url, headers)
+            return GET(url)
         }
 
         val genre = (filters.first() as GenreList).selected
@@ -146,7 +146,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
             else -> "$baseUrl/genero/${genre.id}"
         }
 
-        return GET("$path/page/$page", headers)
+        return GET("$path/page/$page")
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
