@@ -1,7 +1,7 @@
 ext {
     extName = 'Epsilon Scan'
     extClass = '.EpsilonScan'
-    themePkg = 'mangathemesia'
+    themePkg = 'madara'
     baseUrl = 'https://epsilonscan.fr'
     overrideVersionCode = 0
     isNsfw = true
