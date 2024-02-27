@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -88,22 +89,11 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesNextPageSelector() = null
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/capitulo/page/$page")
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        val url = "$baseUrl/capitulo/page/$page"
-        return client
-            .newCall(GET(url, headers))
-            .asObservableSuccess()
-            .map {
-                val document = it.asJsoup()
-                val mangas = document
-                    .select(latestUpdatesSelector())
-                    .map { latestUpdatesFromElement(it) }
-                    .distinctBy { it.title }
-
-                MangasPage(mangas, false)
-            }
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val mangesPage = super.latestUpdatesParse(response)
+        return mangesPage.copy(mangas = mangesPage.mangas.distinctBy { it.title })
     }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
