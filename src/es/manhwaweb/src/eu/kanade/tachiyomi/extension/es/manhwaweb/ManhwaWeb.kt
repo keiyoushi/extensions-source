@@ -160,7 +160,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
         name = "Capítulo ${number.toString().removeSuffix(".0")}"
         chapter_number = number
         date_upload = createdAt ?: 0
-        setUrlWithoutDomain(url)
+        setUrlWithoutDomain(this@toSChapter.url)
         scanlator = type
     }
 
