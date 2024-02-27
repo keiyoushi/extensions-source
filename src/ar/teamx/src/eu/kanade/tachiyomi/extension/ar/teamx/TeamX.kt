@@ -22,7 +22,7 @@ class TeamX : ParsedHttpSource() {
 
     override val name = "Team X"
 
-    override val baseUrl = "https://team1x1shojo.com"
+    override val baseUrl = "https://www.team1x1shojo.com"
 
     override val lang = "ar"
 
