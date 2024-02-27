@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.es.kumanga
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,12 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -36,78 +33,71 @@ class Kumanga : HttpSource() {
 
     override val baseUrl = "https://www.kumanga.com"
 
+    private val apiUrl = "https://www.kumanga.com/backend/ajax/searchengine_master.php"
+
     override val lang = "es"
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient
-        .newBuilder()
-        .followRedirects(true)
-        .addInterceptor { chain ->
-            val originalRequest = chain.request()
-            if (originalRequest.url.toString().endsWith("token=")) {
-                getKumangaToken()
-                val url = originalRequest.url.toString() + kumangaToken
-                val newRequest = originalRequest.newBuilder().url(url).build()
-                chain.proceed(newRequest)
-            } else {
-                chain.proceed(originalRequest)
-            }
-        }
-        .build()
+    private var kumangaToken = ""
 
     private val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
 
-    private var kumangaToken = ""
+    override val client: OkHttpClient = network.cloudflareClient
+        .newBuilder()
+        .rateLimit(2)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            if (!request.url.toString().startsWith(apiUrl)) return@addInterceptor chain.proceed(request)
+            if (kumangaToken.isBlank()) getKumangaToken()
+            var newRequest = addTokenToRequest(request)
+            val response = chain.proceed(newRequest)
+            if (response.code == 400) {
+                response.close()
+                getKumangaToken()
+                newRequest = addTokenToRequest(request)
+                chain.proceed(newRequest)
+            } else {
+                response
+            }
+        }
+        .build()
 
-    private fun encodeAndReverse(dtValue: String): String {
-        return Base64.encodeToString(dtValue.toByteArray(), Base64.DEFAULT).reversed().trim()
+    private fun addTokenToRequest(request: Request): Request {
+        return request.newBuilder()
+            .url(request.url.newBuilder().removeAllQueryParameters("token").addQueryParameter("token", kumangaToken).build())
+            .build()
     }
 
-    private fun decodeBase64(encodedString: String): String {
-        return Base64.decode(encodedString, Base64.DEFAULT).toString(charset("UTF-8"))
-    }
-
-    private fun getKumangaToken(): String {
+    private fun getKumangaToken() {
         val body = client.newCall(GET("$baseUrl/mangalist?&page=1", headers)).execute().asJsoup()
         val dt = body.select("#searchinput").attr("dt").toString()
         val kumangaTokenKey = encodeAndReverse(encodeAndReverse(dt))
             .replace("=", "k")
             .lowercase(Locale.ROOT)
         kumangaToken = body.select("div.input-group [type=hidden]").attr(kumangaTokenKey)
-        return kumangaToken
-    }
-
-    private fun getMangaCover(mangaId: String) = "$baseUrl/kumathumb.php?src=$mangaId"
-
-    private fun getMangaUrl(mangaId: String, mangaSlug: String, page: Int) = "/manga/$mangaId/p/$page/$mangaSlug#cl"
-
-    private fun parseMangaFromJson(jsonObj: JsonObject) = SManga.create().apply {
-        title = jsonObj["name"]!!.jsonPrimitive.content
-        description = jsonObj["description"]!!.jsonPrimitive.content.replace("\\", "")
-        url = getMangaUrl(jsonObj["id"]!!.jsonPrimitive.content, jsonObj["slug"]!!.jsonPrimitive.content, 1)
-        thumbnail_url = getMangaCover(jsonObj["id"]!!.jsonPrimitive.content)
-        genre = jsonObj["categories"]!!.jsonArray
-            .joinToString { it.jsonObject["name"]!!.jsonPrimitive.content }
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        getKumangaToken() // Get new token every request (prevent http 400)
-        return POST("$baseUrl/backend/ajax/searchengine.php?page=$page&perPage=10&keywords=&retrieveCategories=true&retrieveAuthors=false&contentType=manga&token=$kumangaToken", headers)
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("perPage", CONTENT_PER_PAGE.toString())
+            .addQueryParameter("retrieveCategories", "true")
+            .addQueryParameter("retrieveAuthors", "true")
+            .addQueryParameter("contentType", "manga")
+            .build()
+
+        return POST(url.toString(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val jsonResult = json.parseToJsonElement(response.body.string()).jsonObject
-
-        val mangaList = jsonResult["contents"]!!.jsonArray
-            .map { jsonEl -> parseMangaFromJson(jsonEl.jsonObject) }
-
-        val hasNextPage = jsonResult["retrievedCount"]!!.jsonPrimitive.int == 10
-
-        return MangasPage(mangaList, hasNextPage)
+        val jsonResult = json.decodeFromString<ComicsPayloadDto>(response.body.string())
+        val mangas = jsonResult.contents.map { it.toSManga(baseUrl) }
+        val hasNextPage = jsonResult.retrievedCount == CONTENT_PER_PAGE
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
@@ -115,31 +105,25 @@ class Kumanga : HttpSource() {
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val body = response.asJsoup()
-        thumbnail_url = body.selectFirst("div.km-img-gral-2 img")?.attr("abs:src")
-        body.select("div#tab2").let {
+        val document = response.asJsoup()
+        thumbnail_url = document.selectFirst("div.km-img-gral-2 img")?.attr("abs:src")
+        document.select("div#tab1").let {
+            description = it.select("p").text()
+        }
+        document.select("div#tab2").let {
             status = parseStatus(it.select("span").text().orEmpty())
-            author = it.select("p:nth-child(3) > a").text()
-            artist = it.select("p:nth-child(4) > a").text()
+            author = it.select("p:contains(Autor) > a").text()
+            artist = it.select("p:contains(Artista) > a").text()
         }
     }
 
-    private fun parseStatus(status: String) = when {
-        status.contains("Activo") -> SManga.ONGOING
-        status.contains("Finalizado") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
-    private fun parseChapterDate(date: String): Long = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-        .parse(date)?.time ?: 0L
-
-    private fun chapterSelector() = "div#accordion .title"
+    private fun chapterSelector() = "div[id^=accordion] .title"
 
     private fun chapterFromElement(element: Element) = SChapter.create().apply {
         element.select("a:has(i)").let {
             setUrlWithoutDomain(it.attr("abs:href").replace("/c/", "/leer/"))
             name = it.text()
-            date_upload = parseChapterDate(it.attr("title"))
+            date_upload = parseDate(it.attr("title"))
         }
         scanlator = element.select("span.pull-right.greenSpan").text()
     }
@@ -157,7 +141,6 @@ class Kumanga : HttpSource() {
             val numberOfPages = (numberChapters / 10.toDouble() + 0.4).roundToInt()
             document.select(chapterSelector()).map { add(chapterFromElement(it)) }
             var page = 2
-
             while (page <= numberOfPages) {
                 document = client.newCall(GET(baseUrl + getMangaUrl(mangaId, mangaSlug, page))).execute().asJsoup()
                 document.select(chapterSelector()).map { add(chapterFromElement(it)) }
@@ -185,13 +168,12 @@ class Kumanga : HttpSource() {
                 ?.substringAfter("var pUrl=")
                 ?.substringBefore(";")
                 ?.let { decodeBase64(decodeBase64(it).reversed().dropLast(10).drop(10)) }
-                ?: throw Exception("imagesJsonListStr null")
+                ?: throw Exception("No se pudo obtener la lista de imágenes")
 
-            val jsonResult = json.parseToJsonElement(imagesJsonRaw).jsonArray
+            val jsonResult = json.decodeFromString<List<ImageDto>>(imagesJsonRaw)
 
-            return jsonResult.mapIndexed { i, jsonEl ->
-                val jsonObj = jsonEl.jsonObject
-                val imagePath = jsonObj["imgURL"]!!.jsonPrimitive.content.replace("\\", "")
+            return jsonResult.mapIndexed { i, item ->
+                val imagePath = item.imgURL.replace("\\", "")
                 val docUrl = document.location()
                 val baseUrl = URL(docUrl).protocol + "://" + URL(docUrl).host // For some reason baseUri returns the full url
                 Page(i, baseUrl, "$baseUrl/$imagePath")
@@ -209,8 +191,13 @@ class Kumanga : HttpSource() {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        getKumangaToken()
-        val url = "$baseUrl/backend/ajax/searchengine.php?page=$page&perPage=10&keywords=$query&retrieveCategories=true&retrieveAuthors=false&contentType=manga&token=$kumangaToken".toHttpUrl().newBuilder()
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("perPage", CONTENT_PER_PAGE.toString())
+            .addQueryParameter("retrieveCategories", "true")
+            .addQueryParameter("retrieveAuthors", "true")
+            .addQueryParameter("contentType", "manga")
+            .addQueryParameter("keywords", query)
 
         filters.forEach { filter ->
             when (filter) {
@@ -319,4 +306,33 @@ class Kumanga : HttpSource() {
         Genre("Yaoi", "44"),
         Genre("Yuri", "45"),
     )
+
+    private fun parseStatus(status: String) = when {
+        status.contains("Activo") -> SManga.ONGOING
+        status.contains("Finalizado") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
+
+    private fun parseDate(date: String): Long {
+        return try {
+            DATE_FORMAT.parse(date)?.time ?: 0
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    private fun getMangaUrl(mangaId: String, mangaSlug: String, page: Int) = "/manga/$mangaId/p/$page/$mangaSlug"
+
+    private fun encodeAndReverse(dtValue: String): String {
+        return Base64.encodeToString(dtValue.toByteArray(), Base64.DEFAULT).reversed().trim()
+    }
+
+    private fun decodeBase64(encodedString: String): String {
+        return Base64.decode(encodedString, Base64.DEFAULT).toString(charset("UTF-8"))
+    }
+
+    companion object {
+        private val DATE_FORMAT = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ROOT)
+        private const val CONTENT_PER_PAGE = 24
+    }
 }
