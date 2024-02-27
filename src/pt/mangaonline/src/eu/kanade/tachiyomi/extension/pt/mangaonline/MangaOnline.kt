@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.mangaonline
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
@@ -176,18 +177,22 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun fetchMangaGenre() {
-        val request = client
-            .newCall(GET("$baseUrl/generos/"))
-            .execute()
+        try {
+            val request = client
+                .newCall(GET("$baseUrl/generos/"))
+                .execute()
 
-        val document = request.asJsoup()
+            val document = request.asJsoup()
 
-        genresSet = document.select(".wp-content a").map {
-            val id = it.absUrl("href")
-                .split("/")
-                .last { it.isNotEmpty() }
-            Genre(it.ownText(), id)
-        }.toSet()
+            genresSet = document.select(".wp-content a").map {
+                val id = it.absUrl("href")
+                    .split("/")
+                    .last { it.isNotEmpty() }
+                Genre(it.ownText(), id)
+            }.toSet()
+        } catch (e: Exception) {
+            Log.e("MangaOnline", e.stackTraceToString())
+        }
     }
 
     private fun String.toDate(): Long {
