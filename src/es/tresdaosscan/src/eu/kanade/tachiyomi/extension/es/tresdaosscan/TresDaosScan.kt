@@ -1,20 +1,25 @@
 package eu.kanade.tachiyomi.extension.es.tresdaosscan
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class TresDaosScan : MangaThemesia(
+class TresDaosScan : Madara(
     "Tres Daos Scan",
     "https://tresdaos.com",
     "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
+    // Site move from MangaThemesia to Madara
+    override val versionId = 2
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
+    override val useNewChapterEndpoint = true
+
     override val client = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
-
-    override val seriesStatusSelector = ".tsinfo .imptdt:contains(estado) i"
 }
