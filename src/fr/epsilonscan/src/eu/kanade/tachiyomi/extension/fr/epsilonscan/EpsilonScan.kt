@@ -1,7 +1,19 @@
 package eu.kanade.tachiyomi.extension.fr.epsilonscan
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class EpsilonScan : MangaThemesia("Epsilon Scan", "https://epsilonscan.fr", "fr", dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRENCH))
+class EpsilonScan : Madara(
+    "Epsilon Scan",
+    "https://epsilonscan.fr",
+    "fr",
+    SimpleDateFormat("dd/MM/yy", Locale.FRENCH),
+) {
+    // Site moved from MangaThemesia to Madara
+    override val versionId = 2
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
+    override val useNewChapterEndpoint = true
+}
