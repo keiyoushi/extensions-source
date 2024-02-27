@@ -153,16 +153,16 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = ".pagination > .current + a"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val genre = (filters.first() as GenreList).selected
-        if (genre.isGlobal()) {
-            val url = "$baseUrl/${genre.id}/page/$page".toHttpUrl().newBuilder()
+        if (query.isNotBlank()) {
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addPathSegment(query)
                 .build()
             return GET(url, headers)
         }
 
-        if (query.isNotBlank()) {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addPathSegment(query)
+        val genre = (filters.first() as GenreList).selected
+        if (genre.isGlobal()) {
+            val url = "$baseUrl/${genre.id}/page/$page".toHttpUrl().newBuilder()
                 .build()
             return GET(url, headers)
         }
