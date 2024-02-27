@@ -140,7 +140,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
 
         val genre = (filters.first() as GenreList).selected
         val path = when (genre) {
-            Genre.Global -> "$baseUrl/${genre.id}"
+            Genre.GLOBAL -> "$baseUrl/${genre.id}"
             else -> "$baseUrl/genero/${genre.id}"
         }
 
@@ -154,7 +154,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
             fetchMangaGenre()
         }
 
-        genresSet += Genre.Global
+        genresSet += Genre.GLOBAL
 
         return FilterList(
             GenreList(
@@ -193,11 +193,10 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
 }
 
 data class Genre(val name: String, val id: String) {
-    fun isGlobal(): Boolean = this == Global
     override fun toString() = name
 
     companion object {
-        val Global = Genre("Todos", "manga")
+        val GLOBAL = Genre("Todos", "manga")
     }
 }
 
