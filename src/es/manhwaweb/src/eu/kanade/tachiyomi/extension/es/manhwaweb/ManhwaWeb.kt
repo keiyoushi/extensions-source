@@ -43,7 +43,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 
@@ -143,24 +143,8 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = json.decodeFromString<PayloadChapterDto>(response.body.string())
-        val chaptersEsp = result.esp.map {
-            SChapter.create().apply {
-                name = "Capítulo ${it.number.toString().removeSuffix(".0")}"
-                chapter_number = it.number
-                date_upload = it.createdAt ?: 0
-                setUrlWithoutDomain(it.url)
-                scanlator = "Español"
-            }
-        }
-        val chaptersRaw = result.raw.map {
-            SChapter.create().apply {
-                name = "Capítulo ${it.number.toString().removeSuffix(".0")}"
-                chapter_number = it.number
-                date_upload = it.createdAt ?: 0
-                setUrlWithoutDomain(it.url)
-                scanlator = "Raw"
-            }
-        }
+        val chaptersEsp = result.esp.map { it.toSChapter("Esp") }
+        val chaptersRaw = result.raw.map { it.toSChapter("Raw") }
 
         val filteredRaws = if (preferences.showAllRawsPref()) {
             chaptersRaw
@@ -170,6 +154,14 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
         }
 
         return (chaptersEsp + filteredRaws).sortedByDescending { it.chapter_number }
+    }
+
+    private fun ChapterDto.toSChapter(type: String) = SChapter.create().apply {
+        name = "Capítulo ${number.toString().removeSuffix(".0")}"
+        chapter_number = number
+        date_upload = createdAt ?: 0
+        setUrlWithoutDomain(url)
+        scanlator = type
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
