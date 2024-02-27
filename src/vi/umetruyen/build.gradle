@@ -1,0 +1,10 @@
+ext {
+    extName = "UmeTruyen"
+    extClass = ".UmeTruyen"
+    themePkg = "manhwaz"
+    baseUrl = "https://umetruyenvip.com"
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

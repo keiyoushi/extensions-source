@@ -1,7 +1,15 @@
 package eu.kanade.tachiyomi.extension.pt.portugamangas
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,12 +23,13 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class PortugaMangas : ParsedHttpSource() {
-
+class PortugaMangas : ParsedHttpSource(), ConfigurableSource {
     override val name = "Portuga Mangas"
 
     override val baseUrl = "https://portugamanga.online"
@@ -29,9 +38,17 @@ class PortugaMangas : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
-        .build()
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
+    override val client: OkHttpClient =
+        network.cloudflareClient.newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            )
+            .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
+            .build()
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -46,7 +63,7 @@ class PortugaMangas : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String? = null
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl".toHttpUrl().newBuilder()
+        val url = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("pagina", "$page")
             .build()
         return GET(url, headers)
@@ -112,7 +129,7 @@ class PortugaMangas : ParsedHttpSource() {
             genre = document.select("h5.cg_color > a.label.label-warning")
                 .map { it?.text() ?: "" }
                 .filter { it.isNotBlank() }
-                .joinToString(", ")
+                .joinToString()
 
             status = when (getMangaStatus(document)) {
                 PAGE_STATUS_ONGOING -> SManga.ONGOING
@@ -175,5 +192,9 @@ class PortugaMangas : ParsedHttpSource() {
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
         }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
     }
 }
