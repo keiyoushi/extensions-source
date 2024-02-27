@@ -256,7 +256,7 @@ class ReadMangaAt : ParsedHttpSource() {
         } catch (_: ParseException) {
             0L
         }
-        element.selectFirst("a")!!.run {
+        with(element.selectFirst("a")!!) {
             name = text()
             setUrlWithoutDomain(attr("abs:href"))
         }
