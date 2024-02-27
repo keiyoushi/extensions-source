@@ -105,7 +105,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
 
                 /*
                  NOTE: do not navigate to the next page because the manga will be duplicated.
-                 This end point launches new chapters unbundled.
+                 This source launches latest manga chapters unbundled.
                  */
                 MangasPage(mangas, false)
             }
