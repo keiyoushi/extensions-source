@@ -185,10 +185,8 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private fun String.toDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(trim())?.time }
-            .getOrNull() ?: 0L
-    }
+    private fun String.toDate() =
+        try { DATE_FORMATTER.parse(trim())!!.time } catch (_: Exception) { 0L }
 
     companion object {
         val MIN_LENGTH_GENRER_NAME = 1
