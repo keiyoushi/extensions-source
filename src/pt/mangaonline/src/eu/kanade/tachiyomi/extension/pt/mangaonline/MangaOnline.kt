@@ -161,13 +161,12 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
         }
 
         val genre = (filters.first() as GenreList).selected
-        if (genre.isGlobal()) {
-            val url = "$baseUrl/${genre.id}/page/$page".toHttpUrl().newBuilder()
-                .build()
-            return GET(url, headers)
+        val path = when (genre) {
+            Genre.Global -> "$baseUrl/${genre.id}"
+            else -> "$baseUrl/genero/${genre.id}"
         }
 
-        val url = "$baseUrl/genero/${genre.id}/page/$page".toHttpUrl().newBuilder()
+        val url = "$path/page/$page".toHttpUrl().newBuilder()
             .build()
         return GET(url, headers)
     }
