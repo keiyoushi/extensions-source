@@ -86,7 +86,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
         setUrlWithoutDomain(mangaUrl)
     }
 
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector() = null
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
