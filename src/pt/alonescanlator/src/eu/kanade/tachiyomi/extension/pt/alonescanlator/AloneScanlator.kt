@@ -9,4 +9,6 @@ class AloneScanlator : Madara(
     "https://alonescanlator.com.br",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-)
+) {
+    override val useNewChapterEndpoint: Boolean = true
+}
