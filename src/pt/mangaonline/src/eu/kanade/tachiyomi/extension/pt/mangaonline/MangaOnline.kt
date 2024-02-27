@@ -115,7 +115,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
         description = containerInfo.selectFirst("p:last-child")?.ownText()
         genre = containerInfo.select("div.sgeneros a")
             .map { it.ownText() }
-            .filter { it.length > MIN_LENGTH_GENRER }
+            .filter { it.length > MIN_LENGTH_GENRER_NAME }
             .joinToString()
         setUrlWithoutDomain(document.location())
     }
@@ -201,7 +201,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
     }
 
     companion object {
-        val MIN_LENGTH_GENRER = 1
+        val MIN_LENGTH_GENRER_NAME = 1
         val DATE_FORMATTER = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
     }
 }
@@ -216,6 +216,5 @@ data class Genre(val name: String, val id: String) {
 }
 
 class GenreList(title: String, private val genres: Array<Genre>) : Filter.Select<Genre>(title, genres) {
-    val selected
-        get() = genres[state]
+    val selected get() = genres[state]
 }
