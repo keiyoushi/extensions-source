@@ -121,11 +121,11 @@ class ReadMangaAt : ParsedHttpSource() {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             val genreFilter = filters.filterIsInstance<GenreFilter>().first()
 
-            if (genreFilter.toUriPart().isNotBlank()) {
+            if (query.isNotBlank()) {
+                addQueryParameter("s", query)
+            } else {
                 addPathSegment("genres")
                 addEncodedPathSegment(genreFilter.toUriPart())
-            } else {
-                addQueryParameter("s", query)
             }
 
             addPathSegment("")
@@ -149,7 +149,7 @@ class ReadMangaAt : ParsedHttpSource() {
     // =============================== Filters ==============================
 
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("Note: filters ignore text search"),
+        Filter.Header("Note: ignored when using text search"),
         Filter.Separator(),
         GenreFilter(),
     )
@@ -162,7 +162,6 @@ class ReadMangaAt : ParsedHttpSource() {
     class GenreFilter : UriPartFilter(
         "Genre",
         arrayOf(
-            Pair("<select>", ""),
             Pair("Ecchi", "ecchi"),
             Pair("SF.ファンタジー", "sf-%e3%83%95%e3%82%a1%e3%83%b3%e3%82%bf%e3%82%b8%e3%83%bc"),
             Pair("お嬢様・令嬢", "%e3%81%8a%e5%ac%a2%e6%a7%98%e3%83%bb%e4%bb%a4%e5%ac%a2"),
