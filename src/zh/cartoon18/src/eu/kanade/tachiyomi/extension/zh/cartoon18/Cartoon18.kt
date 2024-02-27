@@ -16,12 +16,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.net.URLDecoder
@@ -37,22 +35,21 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
 
     override val client = network.client.newBuilder().followRedirects(false).build()
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("Referer", baseUrl)
-    }
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrlWithLang?sort=hits&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.selectFirst("#videos")!!.children().map {
-            val cardBody = it.selectFirst(".card-body")!!
-            val link = cardBody.selectFirst("a")!!
+        val mangas = document.select("#videos div.card").map { card ->
+            val cardBody = card.select(".card-body")
+            val link = cardBody.select("a")
             val genres = cardBody.select("div a.badge")
             SManga.create().apply {
                 url = link.attr("href")
-                title = link.ownText()
-                thumbnail_url = it.selectFirst("img")!!.attr("data-src")
+                title = link.text()
+                thumbnail_url = card.select("img").attr("data-src")
                 genre = genres.joinToString { elm -> elm.text() }
             }
         }
@@ -178,35 +175,25 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
     private fun fetchKeywords() {
         if (fetchKeywordsAttempts < 3 && keywordsList.isEmpty()) {
             try {
-                keywordsList = client.newCall(keywordsRequest()).execute()
-                    .use { parseKeywords(it.asJsoup()) }
+                keywordsList = client.newCall(GET("$baseUrlWithLang/category", headers)).execute()
+                    .use { response ->
+                        val document = response.asJsoup()
+                        val items = document.select("div.content a.btn")
+                        buildList(items.size + 1) {
+                            add(Keyword("None", ""))
+                            items.mapTo(this) { keyword ->
+                                val queryValue = URLDecoder.decode(
+                                    keyword.attr("href")
+                                        .substringAfterLast('/'),
+                                    "UTF-8",
+                                )
+                                Keyword(keyword.text(), queryValue)
+                            }
+                        }
+                    }
             } catch (_: Exception) {
             } finally {
                 fetchKeywordsAttempts++
-            }
-        }
-    }
-
-    /**
-     * The request to the search page (or another one) that have the keywords list.
-     */
-    private fun keywordsRequest(): Request {
-        return GET("$baseUrlWithLang/category", headers)
-    }
-
-    /**
-     * Get the keywords from the search page document.
-     *
-     * @param document The search page document
-     */
-    private fun parseKeywords(document: Document): List<Keyword> {
-        val items = document.select("div.content a.btn")
-        return buildList(items.size + 1) {
-            add(Keyword("None", ""))
-            items.mapTo(this) {
-                val value = it.text()
-                val queryValue = URLDecoder.decode(it.attr("href").substringAfterLast('/'), "UTF-8")
-                Keyword(value, queryValue)
             }
         }
     }
