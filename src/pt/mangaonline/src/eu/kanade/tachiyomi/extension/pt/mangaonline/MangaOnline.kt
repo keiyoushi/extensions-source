@@ -90,9 +90,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        val url = "$baseUrl/capitulo/page/$page".toHttpUrl().newBuilder()
-            .build()
-
+        val url = "$baseUrl/capitulo/page/$page"
         return client
             .newCall(GET(url, headers))
             .asObservableSuccess()
@@ -103,10 +101,6 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
                     .map { latestUpdatesFromElement(it) }
                     .distinctBy { it.title }
 
-                /*
-                 NOTE: do not navigate to the next page because the manga will be duplicated.
-                 This source launches latest manga chapters unbundled.
-                 */
                 MangasPage(mangas, false)
             }
     }
@@ -139,12 +133,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = null
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/mais-vistos/".toHttpUrl()
-            .newBuilder()
-            .build()
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mais-vistos/", headers)
 
     override fun popularMangaSelector() = "div.content .item"
 
@@ -166,9 +155,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
             else -> "$baseUrl/genero/${genre.id}"
         }
 
-        val url = "$path/page/$page".toHttpUrl().newBuilder()
-            .build()
-        return GET(url, headers)
+        return GET("$path/page/$page", headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
