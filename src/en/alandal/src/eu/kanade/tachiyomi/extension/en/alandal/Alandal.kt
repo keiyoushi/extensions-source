@@ -151,7 +151,7 @@ class Alandal : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.name.startsWith("[LOCKED]")) {
-            throw Exception("Log in and unlock chapter in webview")
+            throw Exception("Log in and unlock chapter in webview, then refresh chapter list")
         }
 
         val url = "$apiUrl${chapter.url}".toHttpUrl().newBuilder().apply {
