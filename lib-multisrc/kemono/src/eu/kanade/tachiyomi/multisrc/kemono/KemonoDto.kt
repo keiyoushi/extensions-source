@@ -60,7 +60,7 @@ class KemonoPostDto(
             if (file.path != null) add(KemonoAttachmentDto(file.name!!, file.path))
             addAll(attachments)
         }.filter {
-            when (it.name.substringAfterLast('.').lowercase()) {
+            when (it.path.substringAfterLast('.').lowercase()) {
                 "png", "jpg", "gif", "jpeg", "webp" -> true
                 else -> false
             }
@@ -91,6 +91,7 @@ class KemonoPostDto(
 @Serializable
 class KemonoFileDto(val name: String? = null, val path: String? = null)
 
+// name might have ".jpe" extension for JPEG, path might have ".m4v" extension for MP4
 @Serializable
 class KemonoAttachmentDto(val name: String, val path: String) {
     override fun toString() = "$path?f=$name"
