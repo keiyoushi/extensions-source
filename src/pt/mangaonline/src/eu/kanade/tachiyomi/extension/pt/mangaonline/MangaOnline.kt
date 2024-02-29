@@ -94,7 +94,7 @@ class MangaOnline : ParsedHttpSource(), ConfigurableSource {
 
         return MangasPage(
             mangesPage.mangas.distinctBy { it.title },
-            mangesPage.hasNextPage
+            mangesPage.hasNextPage,
         )
     }
 
