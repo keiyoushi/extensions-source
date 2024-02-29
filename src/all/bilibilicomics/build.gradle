@@ -1,9 +1,0 @@
-ext {
-    extName = 'BILIBILI COMICS'
-    extClass = '.BilibiliComicsFactory'
-    themePkg = 'bilibili'
-    baseUrl = 'https://www.bilibilicomics.com'
-    overrideVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"
