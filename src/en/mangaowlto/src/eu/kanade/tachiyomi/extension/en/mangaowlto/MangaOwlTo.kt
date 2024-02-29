@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -32,7 +34,10 @@ class MangaOwlTo(
 
     private val defaultDomain: String =
         preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
-    override val baseUrl = "https://api.$defaultDomain/v1"
+
+    override val baseUrl = "https://$defaultDomain"
+
+    private val apiUrl = "https://api.$defaultDomain/v1"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mirrorPref = ListPreference(screen.context).apply {
@@ -49,7 +54,7 @@ class MangaOwlTo(
     private val json: Json by injectLazy()
 
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/stories?type=$collection&ordering=-view_count&page=$page".toHttpUrl(), headers)
+        GET("$apiUrl/stories?type=$collection&ordering=-view_count&page=$page".toHttpUrl(), headers)
 
     override fun popularMangaParse(response: Response) =
         json.decodeFromString<MangaOwlToStories>(response.body.string()).toMangasPage()
@@ -57,7 +62,7 @@ class MangaOwlTo(
     // Latest
 
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/stories?type=$collection&ordering=-modified_at&page=$page".toHttpUrl(), headers)
+        GET("$apiUrl/stories?type=$collection&ordering=-modified_at&page=$page".toHttpUrl(), headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -66,13 +71,13 @@ class MangaOwlTo(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotEmpty() || filters.isEmpty()) {
             // Search won't work together with filter
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            val url = "$apiUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .addQueryParameter("page", page.toString())
                 .build()
             GET(url, headers)
         } else {
-            val url = "$baseUrl/stories?type=$collection".toHttpUrl().newBuilder()
+            val url = "$apiUrl/stories?type=$collection".toHttpUrl().newBuilder()
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> if (!filter.toUriPart().isNullOrEmpty()) {
@@ -97,16 +102,32 @@ class MangaOwlTo(
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Manga summary page
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return GET("$apiUrl/stories/${manga.url}", headers)
+    }
 
     override fun mangaDetailsParse(response: Response) =
         json.decodeFromString<MangaOwlToStory>(response.body.string()).toSManga()
 
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl/10-comic/${manga.url}"
+    }
+
     // Chapters
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response) =
         json.decodeFromString<MangaOwlToStory>(response.body.string()).chaptersList
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        return "$baseUrl${chapter.url}"
+    }
+
     // Pages
+    override fun pageListRequest(chapter: SChapter): Request {
+        val id = chapter.url.substringAfterLast("/")
+        return GET("$apiUrl/chapters/$id/images?page_size=1000", headers)
+    }
 
     override fun pageListParse(response: Response) =
         json.decodeFromString<MangaOwlToChapterPages>(response.body.string()).toPages()
@@ -114,7 +135,6 @@ class MangaOwlTo(
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
-
     override fun getFilterList() = FilterList(
         Filter.Header("Search query won't use filters"),
         GenresFilter(genresList),
@@ -146,3 +166,4 @@ class MangaOwlTo(
         const val COMPLETED = "completed"
     }
 }
+
