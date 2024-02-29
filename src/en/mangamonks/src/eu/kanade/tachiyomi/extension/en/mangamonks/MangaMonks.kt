@@ -59,19 +59,14 @@ class MangaMonks : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     // search
-    private var searchMode: Boolean = false
-
-    private val searchUrl = "https://mangamonks.com/search/live"
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
         return if (query.isNotEmpty()) {
-            searchMode = true
             val requestBody = query.toFormRequestBody()
             val requestHeaders = headersBuilder().buildApiHeaders(requestBody)
 
-            POST(searchUrl, requestHeaders, requestBody)
+            POST("$baseUrl/search/live", requestHeaders, requestBody)
         } else {
-            searchMode = false
             val url = "$baseUrl/genre/".toHttpUrl().newBuilder()
             filterList.forEach { filter ->
                 when (filter) {
@@ -101,8 +96,9 @@ class MangaMonks : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
     override fun searchMangaParse(response: Response): MangasPage {
-        try {
-            if (searchMode) {
+        val isJson = response.header("Content-Type")?.contains("application/json") ?: false
+        if (isJson) {
+            return try {
                 val result = json.decodeFromString<MangaList>(response.body.string())
                 val mangaList = result.manga.map {
                     SManga.create().apply {
@@ -112,22 +108,22 @@ class MangaMonks : ParsedHttpSource() {
                     }
                 }
                 val hasNextPage = false
-                return MangasPage(mangaList, hasNextPage)
-            } else {
-                val document = response.asJsoup()
-
-                val mangas = document.select(searchMangaSelector()).map { element ->
-                    searchMangaFromElement(element)
-                }
-
-                val hasNextPage = searchMangaNextPageSelector().let { selector ->
-                    document.select(selector).first()
-                } != null
-
-                return MangasPage(mangas, hasNextPage)
+                MangasPage(mangaList, hasNextPage)
+            } catch (_: MissingFieldException) {
+                MangasPage(emptyList(), false)
             }
-        } catch (_: MissingFieldException) {
-            return MangasPage(emptyList(), false)
+        } else {
+            val document = response.asJsoup()
+
+            val mangas = document.select(searchMangaSelector()).map { element ->
+                searchMangaFromElement(element)
+            }
+
+            val hasNextPage = searchMangaNextPageSelector().let { selector ->
+                document.select(selector).first()
+            } != null
+
+            return MangasPage(mangas, hasNextPage)
         }
     }
 
@@ -157,7 +153,11 @@ class MangaMonks : ParsedHttpSource() {
 
     // pages
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#zoomContainer .image img").mapIndexed { i, it -> Page(i, imageUrl = baseUrl + it.attr("src")) }
+        return document.select("#zoomContainer .image img").mapIndexed { i, it ->
+            val src = it.attr("src")
+            val imageUrl = if (src.startsWith("https")) src else baseUrl + src
+            Page(i, imageUrl = imageUrl)
+        }
     }
 
     // filters

@@ -28,45 +28,41 @@ object MangaMonksHelper {
         }
     }
     fun String?.toDate(): Long {
-        return try {
-            val trimmedDate = this!!.substringBefore(" ago").removeSuffix("s").split(" ")
-            val calendar = Calendar.getInstance()
+        val trimmedDate = this!!.substringBefore(" ago").removeSuffix("s").split(" ")
+        val calendar = Calendar.getInstance()
 
-            when {
-                trimmedDate[1].contains(
-                    "Year",
-                    ignoreCase = true,
-                ) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
+        when {
+            trimmedDate[1].contains(
+                "Year",
+                ignoreCase = true,
+            ) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
 
-                trimmedDate[1].contains(
-                    "Month",
-                    ignoreCase = true,
-                ) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
+            trimmedDate[1].contains(
+                "Month",
+                ignoreCase = true,
+            ) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
 
-                trimmedDate[1].contains(
-                    "Week",
-                    ignoreCase = true,
-                ) -> calendar.apply { add(Calendar.WEEK_OF_MONTH, -trimmedDate[0].toInt()) }
+            trimmedDate[1].contains(
+                "Week",
+                ignoreCase = true,
+            ) -> calendar.apply { add(Calendar.WEEK_OF_MONTH, -trimmedDate[0].toInt()) }
 
-                trimmedDate[1].contains(
-                    "Day",
-                    ignoreCase = true,
-                ) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
+            trimmedDate[1].contains(
+                "Day",
+                ignoreCase = true,
+            ) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
 
-                trimmedDate[1].contains(
-                    "Hour",
-                    ignoreCase = true,
-                ) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
+            trimmedDate[1].contains(
+                "Hour",
+                ignoreCase = true,
+            ) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
 
-                trimmedDate[1].contains(
-                    "Minute",
-                    ignoreCase = true,
-                ) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
-            }
-
-            calendar.timeInMillis
-        } catch (_: Exception) {
-            0L
+            trimmedDate[1].contains(
+                "Minute",
+                ignoreCase = true,
+            ) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
         }
+
+        return calendar.timeInMillis
     }
 }
