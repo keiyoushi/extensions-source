@@ -41,16 +41,6 @@ jobs:
             [
               {
                 "type": "body",
-                "regex": ".*\\* (Tachiyomi version|Android version|Device): \\?.*",
-                "message": "Requested information in the template was not filled out."
-              },
-              {
-                "type": "title",
-                "regex": ".*(Source name|Short description).*",
-                "message": "You did not fill out the description in the title."
-              },
-              {
-                "type": "body",
                 "regex": "- \\[[xX]\\] I have admitted that I am a clown by having checked this box, as I have not read these acknowledgements\\.",
                 "labels": [":clown_face:"],
                 "message": "You have not carefully read the acknowledgements. Read them again and edit the checkboxes before reopening the issue."
@@ -61,6 +51,13 @@ jobs:
                 "ignoreCase": true,
                 "labels": ["Cloudflare protected"],
                 "message": "Refer to the **Solving Cloudflare issues** section at https://tachiyomi.org/docs/guides/troubleshooting/#cloudflare. If it doesn't work, migrate to other sources or wait until they lower their protection."
+              },
+              {
+                "type": "both",
+                "regex": "remanga\\.org",
+                "ignoreCase": true,
+                "labels": ["invalid"],
+                "message": "ReManga (Russian) will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca)."
               }
             ]
           auto-close-ignore-label: do-not-autoclose
