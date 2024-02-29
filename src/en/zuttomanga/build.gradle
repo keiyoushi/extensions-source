@@ -1,9 +1,0 @@
-ext {
-    extName = 'ZuttoManga'
-    extClass = '.ZuttoManga'
-    themePkg = 'madara'
-    baseUrl = 'https://zuttomanga.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
