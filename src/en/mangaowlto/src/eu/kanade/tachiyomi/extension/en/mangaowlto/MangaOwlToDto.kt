@@ -1,5 +1,3 @@
-@file:Suppress("unused", "PrivatePropertyName")
-
 package eu.kanade.tachiyomi.extension.en.mangaowlto
 
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,9 +12,7 @@ import java.util.Locale
 
 @Serializable
 class MangaOwlToStories(
-    private val count: Int,
     private val next: String?,
-    private val previous: String?,
     private val results: List<MangaOwlToStory>,
 ) {
     fun toMangasPage() = MangasPage(
@@ -27,33 +23,28 @@ class MangaOwlToStories(
 
 @Serializable
 class MangaOwlToStory(
-    private val id: String,
     private val name: String,
     private val slug: String,
     @SerialName("status") private val titleStatus: String?, // ongoing & completed
     @SerialName("thumbnail") private val thumbnailUrl: String,
     @SerialName("al_name") private val altName: String?,
     private val rating: Float?,
-    private val view_count: Int,
+    @SerialName("view_count") private val views: Int,
     private val description: String?,
-    private val type: String?, // manga & comic
     private val genres: List<MangaOwlToGenre> = emptyList(),
     private val authors: List<MangaOwlToAuthor> = emptyList(),
     private val chapters: List<MangaOwlToChapter> = emptyList(),
-    private val latest_chapter: MangaOwlToChapter?,
-    private val created_at: String,
-    private val modified_at: String,
 ) {
     private val fullDescription: String
         get() = buildString {
             append(description)
             altName?.let { append("\n\n $it") }
             append("\n\nRating: $rating")
-            append("\nViews: $view_count")
+            append("\nViews: $views")
         }
 
     val chaptersList: List<SChapter>
-        get() = chapters.reversed().map { it.toSChapter() }
+        get() = chapters.reversed().map { it.toSChapter(slug) }
 
     fun toSManga(): SManga = SManga.create().apply {
         title = name
@@ -66,36 +57,30 @@ class MangaOwlToStory(
             else -> SManga.UNKNOWN
         }
         thumbnail_url = thumbnailUrl
-        url = "/stories/$slug"
+        url = slug
     }
 }
 
 @Serializable
 class MangaOwlToGenre(
-    private val id: Int,
     val name: String,
 )
 
 @Serializable
 class MangaOwlToAuthor(
-    private val id: Int,
     val name: String,
-    private val created_at: String,
-    private val modified_at: String,
 )
 
 @Serializable
 class MangaOwlToChapter(
     private val id: Int,
     @SerialName("name") private val title: String,
-    private val created_at: String,
-    private val order: Int,
-    private val views: Int,
+    @SerialName("created_at") private val createdAt: String,
 ) {
-    fun toSChapter(): SChapter = SChapter.create().apply {
+    fun toSChapter(slug: String): SChapter = SChapter.create().apply {
         name = title
         date_upload = parseDate()
-        url = "/chapters/$id/images?page_size=1000"
+        url = "/reading/$slug/$id"
     }
 
     companion object {
@@ -103,7 +88,7 @@ class MangaOwlToChapter(
     }
 
     private fun parseDate(): Long = try {
-        dateFormat.parse(created_at)!!.time
+        dateFormat.parse(createdAt)!!.time
     } catch (_: ParseException) {
         0L
     }
@@ -112,7 +97,6 @@ class MangaOwlToChapter(
 @Serializable
 class MangaOwlToChapterPages(
     @SerialName("results") private val pages: List<MangaOwlToPage> = emptyList(),
-    private val count: Int,
 ) {
     fun toPages() =
         pages.mapIndexed { idx, page ->
