@@ -1,9 +1,7 @@
 ext {
     extName = 'BILIBILI MANGA'
     extClass = '.BilibiliManga'
-    themePkg = 'bilibili'
-    baseUrl = 'https://manga.bilibili.com'
-    overrideVersionCode = 2
+    extVersionCode = 11
 }
 
 apply from: "$rootDir/common.gradle"
