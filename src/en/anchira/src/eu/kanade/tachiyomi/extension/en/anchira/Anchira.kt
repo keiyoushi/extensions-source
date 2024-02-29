@@ -117,59 +117,76 @@ class Anchira : HttpSource(), ConfigurableSource {
         }
     }
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        val trendingFilter = filterList.findInstance<TrendingFilter>()
+        val sortTrendingFilter = filters.findInstance<SortTrendingFilter>()
         var url = libraryUrl.toHttpUrl().newBuilder()
 
         url.addQueryParameter("page", page.toString())
 
-        if (query.isNotBlank()) {
-            url.addQueryParameter("s", query)
-        }
-
-        filters.forEach { filter ->
-            when (filter) {
-                is CategoryGroup -> {
-                    var sum = 0
-
-                    filter.state.forEach { category ->
-                        when (category.name) {
-                            "Manga" -> if (category.state) sum = sum or 1
-                            "Doujinshi" -> if (category.state) sum = sum or 2
-                            "Illustration" -> if (category.state) sum = sum or 4
-                        }
-                    }
-
-                    if (sum > 0) url.addQueryParameter("cat", sum.toString())
-                }
-
-                is SortFilter -> {
-                    val sort = when (filter.state?.index) {
-                        0 -> "1"
-                        1 -> "2"
-                        2 -> "4"
-                        4 -> "32"
-                        else -> ""
-                    }
-
-                    if (sort.isNotEmpty()) url.addQueryParameter("sort", sort)
-                    if (filter.state?.ascending == true) url.addQueryParameter("order", "1")
-                }
-
-                is FavoritesFilter -> {
-                    if (filter.state) {
-                        if (!isLoggedIn()) {
-                            throw IOException("No login cookie found")
-                        }
-
-                        url = url.toString().replace("library", "user/favorites").toHttpUrl()
-                            .newBuilder()
-                    }
-                }
-
-                else -> {}
+        if (trendingFilter?.state == true) {
+            val interval = when (sortTrendingFilter?.state) {
+                1 -> "3"
+                else -> ""
             }
-        }
 
-        return GET(url.build(), headers)
+            if (interval.isNotBlank()) url.addQueryParameter("interval", interval)
+
+            url = url.toString().replace("library", "trending").toHttpUrl()
+                .newBuilder()
+
+            return GET(url.build(), headers)
+        } else {
+            if (query.isNotBlank()) {
+                url.addQueryParameter("s", query)
+            }
+
+            filters.forEach { filter ->
+                when (filter) {
+                    is CategoryGroup -> {
+                        var sum = 0
+
+                        filter.state.forEach { category ->
+                            when (category.name) {
+                                "Manga" -> if (category.state) sum = sum or 1
+                                "Doujinshi" -> if (category.state) sum = sum or 2
+                                "Illustration" -> if (category.state) sum = sum or 4
+                            }
+                        }
+
+                        if (sum > 0) url.addQueryParameter("cat", sum.toString())
+                    }
+
+                    is SortFilter -> {
+                        val sort = when (filter.state?.index) {
+                            0 -> "1"
+                            1 -> "2"
+                            2 -> "4"
+                            4 -> "32"
+                            else -> ""
+                        }
+
+                        if (sort.isNotEmpty()) url.addQueryParameter("sort", sort)
+                        if (filter.state?.ascending == true) url.addQueryParameter("order", "1")
+                    }
+
+                    is FavoritesFilter -> {
+                        if (filter.state) {
+                            if (!isLoggedIn()) {
+                                throw IOException("No login cookie found")
+                            }
+
+                            url = url.toString().replace("library", "user/favorites").toHttpUrl()
+                                .newBuilder()
+                        }
+                    }
+
+                    else -> {}
+                }
+            }
+
+            return GET(url.build(), headers)
+        }
     }
 
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
@@ -298,6 +315,10 @@ class Anchira : HttpSource(), ConfigurableSource {
         CategoryGroup(),
         SortFilter(),
         FavoritesFilter(),
+        Filter.Separator(),
+        Filter.Header("Others are ignored if trending only"),
+        TrendingFilter(),
+        SortTrendingFilter(),
     )
 
     private class CategoryFilter(name: String) : Filter.CheckBox(name, false)
@@ -316,6 +337,18 @@ class Anchira : HttpSource(), ConfigurableSource {
         arrayOf("Title", "Pages", "Date published", "Date uploaded", "Popularity"),
         Selection(2, false),
     )
+
+    private class TrendingFilter : Filter.CheckBox(
+        "Show only trending",
+    )
+
+    private class SortTrendingFilter : PartFilter(
+        "Sort By",
+        arrayOf("Trending: Weekly", "Trending: Monthly"),
+    )
+
+    private open class PartFilter(displayName: String, value: Array<String>) :
+        Filter.Select<String>(displayName, value)
 
     private val SharedPreferences.imageQuality
         get() = getString(IMAGE_QUALITY_PREF, "b")!!
@@ -361,6 +394,8 @@ class Anchira : HttpSource(), ConfigurableSource {
         client.newCall(GET(DATA_JSON, headers)).execute()
             .use { json.decodeFromStream<List<EntryKey>>(it.body.byteStream()) }
     }
+
+    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
     companion object {
         const val SLUG_SEARCH_PREFIX = "id:"
