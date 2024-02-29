@@ -110,7 +110,7 @@ class MangaOwlTo(
         json.decodeFromString<MangaOwlToStory>(response.body.string()).toSManga()
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/10-comic/${manga.url}"
+        return "$baseUrl/comic/${manga.url}"
     }
 
     // Chapters
