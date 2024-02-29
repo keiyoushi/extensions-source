@@ -34,7 +34,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
+class MangaOnline : ParsedHttpSource(), ConfigurableSource {
     override val lang = "pt-BR"
 
     override val supportsLatest = true
@@ -91,7 +91,11 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val mangesPage = super.latestUpdatesParse(response)
-        return mangesPage.copy(mangas = mangesPage.mangas.distinctBy { it.title })
+
+        return MangasPage(
+            mangesPage.mangas.distinctBy { it.title },
+            mangesPage.hasNextPage
+        )
     }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
@@ -103,9 +107,8 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
         description = containerInfo.selectFirst("p:last-child")?.ownText()
         genre = containerInfo.select("div.sgeneros a")
             .map { it.ownText() }
-            .filter { it.length > MIN_LENGTH_GENRER_NAME }
+            .filter { it.length > 1 }
             .joinToString()
-        setUrlWithoutDomain(document.location())
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -138,8 +141,7 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
             return GET(url)
         }
 
-        val genre = (filters.first() as GenreList).selected
-        val path = when (genre) {
+        val path = when (val genre = (filters.first() as GenreList).selected) {
             Genre.GLOBAL -> "$baseUrl/${genre.id}"
             else -> "$baseUrl/genero/${genre.id}"
         }
@@ -172,11 +174,11 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
 
             val document = request.asJsoup()
 
-            genresSet = document.select(".wp-content a").map {
-                val id = it.absUrl("href")
+            genresSet = document.select(".wp-content a").map { element ->
+                val id = element.absUrl("href")
                     .split("/")
                     .last { it.isNotEmpty() }
-                Genre(it.ownText(), id)
+                Genre(element.ownText(), id)
             }.toSet()
         } catch (e: Exception) {
             Log.e("MangaOnline", e.stackTraceToString())
@@ -184,12 +186,9 @@ class MangaOnline() : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun String.toDate() =
-        try { DATE_FORMATTER.parse(trim())!!.time } catch (_: Exception) { 0L }
+        try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
 
-    companion object {
-        val MIN_LENGTH_GENRER_NAME = 1
-        val DATE_FORMATTER = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
-    }
+    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 }
 
 data class Genre(val name: String, val id: String) {
