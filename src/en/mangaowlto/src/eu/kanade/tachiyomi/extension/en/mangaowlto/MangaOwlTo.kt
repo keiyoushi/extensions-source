@@ -166,4 +166,3 @@ class MangaOwlTo(
         const val COMPLETED = "completed"
     }
 }
-
