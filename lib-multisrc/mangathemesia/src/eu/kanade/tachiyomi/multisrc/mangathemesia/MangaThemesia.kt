@@ -53,7 +53,7 @@ abstract class MangaThemesia(
         language = lang,
         baseLanguage = "en",
         availableLanguages = setOf("en"),
-        classLoader = this::class.java.classLoader!!,
+        classLoader = javaClass.classLoader!!,
     )
 
     open val projectPageString = "/project"

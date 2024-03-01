@@ -33,10 +33,11 @@ open class MiauScan(lang: String) : MangaThemesia(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val genreFilterIndex = filters.indexOfFirst { it is GenreListFilter }
         val genreFilter = filters.getOrNull(genreFilterIndex) as? GenreListFilter
-            ?: GenreListFilter(emptyList())
+            ?: GenreListFilter("", emptyList())
 
         val overloadedGenreFilter = GenreListFilter(
-            genres = genreFilter.state + listOf(
+            genreFilter.name,
+            genreFilter.state + listOf(
                 Genre("", PORTUGUESE_GENRE_ID, portugueseMode),
             ),
         )
