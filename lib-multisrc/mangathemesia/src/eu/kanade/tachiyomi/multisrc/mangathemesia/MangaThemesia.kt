@@ -271,7 +271,7 @@ abstract class MangaThemesia(
             "مستمرة", "En curso", "En Curso", "Ongoing", "OnGoing", "On going", "Ativo", "En Cours", "En cours", "En cours \uD83D\uDFE2",
             "En cours de publication", "Đang tiến hành", "Em lançamento", "em lançamento", "Em Lançamento", "Онгоінг", "Publishing",
             "Devam Ediyor", "Em Andamento", "In Corso", "Güncel", "Berjalan", "Продолжается", "Updating", "Lançando", "In Arrivo", "Emision",
-            "En emision", "مستمر", "Curso", "En marcha", "Publicandose", "Publicando", "连载中", "Devam ediyor", "Devam Etmekte", "連載中"
+            "En emision", "مستمر", "Curso", "En marcha", "Publicandose", "Publicando", "连载中", "Devam ediyor", "Devam Etmekte", "連載中",
             -> SManga.ONGOING
 
             "Completed", "Completo", "Complété", "Fini", "Achevé", "Terminé", "Terminé ⚫", "Tamamlandı", "Đã hoàn thành", "Hoàn Thành",
@@ -494,21 +494,21 @@ abstract class MangaThemesia(
         Pair(intl["project_filter_only_project"], "project-filter-on"),
     )
 
+    protected class GenreData(
+        val name: String,
+        val value: String,
+        val state: Int = Filter.TriState.STATE_IGNORE,
+    )
+
     protected class Genre(
         name: String,
         val value: String,
-        state: Int = STATE_IGNORE,
+        state: Int,
     ) : Filter.TriState(name, state)
 
     protected class GenreListFilter(name: String, genres: List<Genre>) : Filter.Group<Genre>(name, genres)
 
-    private var genrelist: List<Genre>? = null
-    protected open fun getGenreList(): List<Genre> {
-        // Filters are fetched immediately once an extension loads
-        // We're only able to get filters after a loading the manga directory,
-        // and resetting the filters is the only thing that seems to reinflate the view
-        return genrelist ?: listOf(Genre(intl["genre_missing_warning"], ""))
-    }
+    private var genrelist: List<GenreData>? = null
 
     open val hasProjectPage = false
 
@@ -521,8 +521,12 @@ abstract class MangaThemesia(
             TypeFilter(intl["type_filter_title"], typeFilterOptions),
             OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
             Filter.Header(intl["genre_exclusion_warning"]),
-            GenreListFilter(intl["genre_filter_title"], getGenreList()),
         )
+        if (!genrelist.isNullOrEmpty()) {
+            filters.add(
+                GenreListFilter(intl["genre_filter_title"], genrelist!!.map { Genre(it.name, it.value, it.state) }),
+            )
+        }
         if (hasProjectPage) {
             filters.addAll(
                 mutableListOf<Filter<*>>(
@@ -577,9 +581,9 @@ abstract class MangaThemesia(
             (!strict && url.pathSegments.size == n + 1 && url.pathSegments[n].isEmpty())
     }
 
-    private fun parseGenres(document: Document): List<Genre>? {
+    private fun parseGenres(document: Document): List<GenreData>? {
         return document.selectFirst("ul.genrez")?.select("li")?.map { li ->
-            Genre(
+            GenreData(
                 li.selectFirst("label")!!.text(),
                 li.selectFirst("input[type=checkbox]")!!.attr("value"),
             )
