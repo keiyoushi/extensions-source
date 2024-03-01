@@ -267,22 +267,22 @@ abstract class MangaThemesia(
     open fun String?.parseStatus(): Int {
         if (this == null) return SManga.UNKNOWN
 
-        return when (this) {
-            "مستمرة", "En curso", "En Curso", "Ongoing", "OnGoing", "On going", "Ativo", "En Cours", "En cours", "En cours \uD83D\uDFE2",
-            "En cours de publication", "Đang tiến hành", "Em lançamento", "em lançamento", "Em Lançamento", "Онгоінг", "Publishing",
-            "Devam Ediyor", "Em Andamento", "In Corso", "Güncel", "Berjalan", "Продолжается", "Updating", "Lançando", "In Arrivo", "Emision",
-            "En emision", "مستمر", "Curso", "En marcha", "Publicandose", "Publicando", "连载中", "Devam ediyor", "Devam Etmekte", "連載中",
+        return when (this.lowercase().trim()) {
+            "مستمرة", "en curso", "ongoing", "on going", "ativo", "en cours",
+            "en cours de publication", "Đang tiến hành", "em lançamento", "Онгоінг", "publishing",
+            "devam ediyor", "em andamento", "in corso", "güncel", "berjalan", "Продолжается", "updating", "lançando", "in arrivo", "emision",
+            "en emision", "مستمر", "curso", "en marcha", "publicandose", "publicando", "连载中", "devam etmekte", "連載中",
             -> SManga.ONGOING
 
-            "Completed", "Completo", "Complété", "Fini", "Achevé", "Terminé", "Terminé ⚫", "Tamamlandı", "Đã hoàn thành", "Hoàn Thành",
-            "مكتملة", "Завершено", "Finished", "Finalizado", "Completata", "One-Shot", "Bitti", "Tamat", "Completado", "Concluído", "完結",
-            "Concluido", "已完结", "Bitmiş",
+            "completed", "completo", "complété", "fini", "achevé", "terminé", "tamamlandı", "Đã hoàn thành", "hoàn thành",
+            "مكتملة", "Завершено", "finished", "finalizado", "completata", "one-shot", "bitti", "tamat", "completado", "concluído", "完結",
+            "concluido", "已完结", "bitmiş",
             -> SManga.COMPLETED
 
-            "Canceled", "Cancelled", "Cancelado", "cancellato", "Cancelados", "Dropped", "Discontinued", "abandonné", "Abandonné",
+            "canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné",
             -> SManga.CANCELLED
 
-            "Hiatus", "On Hold", "Pausado", "En espera", "En pause", "En Pause", "En attente", "人気",
+            "hiatus", "on hold", "pausado", "en espera", "en pause", "en attente", "人気",
             -> SManga.ON_HIATUS
 
             else -> SManga.UNKNOWN
@@ -404,15 +404,13 @@ abstract class MangaThemesia(
             return
         }
 
-        try {
-            val request = countViewsRequest(document) ?: return
-            client.newCall(request).enqueue(countViewsCallback)
-        } catch (_: Exception) { }
-    }
-
-    private val countViewsCallback = object : Callback {
-        override fun onResponse(call: Call, response: Response) = response.close()
-        override fun onFailure(call: Call, e: IOException) = Unit
+        val request = countViewsRequest(document) ?: return
+        client.newCall(request).enqueue(
+            object : Callback {
+                override fun onResponse(call: Call, response: Response) = response.close()
+                override fun onFailure(call: Call, e: IOException) = Unit
+            },
+        )
     }
 
     // Filters
