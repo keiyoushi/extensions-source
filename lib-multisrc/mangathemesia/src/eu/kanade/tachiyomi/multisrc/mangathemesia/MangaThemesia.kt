@@ -52,7 +52,7 @@ abstract class MangaThemesia(
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en"),
+        availableLanguages = setOf("en", "es"),
         classLoader = javaClass.classLoader!!,
     )
 
