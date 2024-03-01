@@ -405,12 +405,12 @@ abstract class MangaThemesia(
         }
 
         val request = countViewsRequest(document) ?: return
-        client.newCall(request).enqueue(
-            object : Callback {
-                override fun onResponse(call: Call, response: Response) = response.close()
-                override fun onFailure(call: Call, e: IOException) = Unit
-            },
-        )
+        val callback = object : Callback {
+            override fun onResponse(call: Call, response: Response) = response.close()
+            override fun onFailure(call: Call, e: IOException) = Unit
+        }
+
+        client.newCall(request).enqueue(callback)
     }
 
     // Filters
@@ -527,7 +527,6 @@ abstract class MangaThemesia(
             StatusFilter(intl["status_filter_title"], statusOptions),
             TypeFilter(intl["type_filter_title"], typeFilterOptions),
             OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
-            Filter.Header(intl["genre_exclusion_warning"]),
         )
         if (!genrelist.isNullOrEmpty()) {
             filters.addAll(
