@@ -4,15 +4,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ListEntry(
-    val id: Int,
-    val key: String,
-    val title: String,
-    @SerialName("thumb_index") val thumbnailIndex: Int,
-    val tags: List<Tag> = emptyList(),
-)
-
-@Serializable
 data class Tag(
     var name: String,
     var namespace: Int? = null,
@@ -20,7 +11,7 @@ data class Tag(
 
 @Serializable
 data class LibraryResponse(
-    val entries: List<ListEntry> = emptyList(),
+    val entries: List<Entry> = emptyList(),
     val total: Int,
     val page: Int,
     val limit: Int,
@@ -30,11 +21,12 @@ data class LibraryResponse(
 data class Entry(
     val id: Int,
     val key: String,
-    @SerialName("published_at") val publishedAt: Long,
+    @SerialName("published_at") val publishedAt: Long = 0L,
     val title: String,
-    @SerialName("thumb_index") val thumbnailIndex: Int,
+    @SerialName("thumb_index") val thumbnailIndex: Int = 1,
     val tags: List<Tag> = emptyList(),
     val url: String? = null,
+    val pages: Int,
 )
 
 @Serializable

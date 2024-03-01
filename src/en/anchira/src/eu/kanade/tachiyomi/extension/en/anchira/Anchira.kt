@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.createChapter
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.getPathFromUrl
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.prepareTags
 import eu.kanade.tachiyomi.network.GET
@@ -33,6 +34,8 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.math.ceil
+import kotlin.math.min
 
 class Anchira : HttpSource(), ConfigurableSource {
     override val name = "Anchira"
@@ -106,6 +109,12 @@ class Anchira : HttpSource(), ConfigurableSource {
             // url deep link
             val idKey = query.substringAfter(SLUG_SEARCH_PREFIX)
             val manga = SManga.create().apply { this.url = "/g/$idKey" }
+            fetchMangaDetails(manga).map {
+                MangasPage(listOf(it), false)
+            }
+        } else if (query.startsWith(SLUG_BUNDLE_PREFIX)) {
+            // bundle entries as chapters
+            val manga = SManga.create().apply { this.url = "?s=${query.substringAfter(SLUG_BUNDLE_PREFIX)}&order=1" }
             fetchMangaDetails(manga).map {
                 MangasPage(listOf(it), false)
             }
@@ -193,26 +202,42 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     // Details
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$libraryUrl/${getPathFromUrl(manga.url)}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val data = json.decodeFromString<Entry>(response.body.string())
-
-        return SManga.create().apply {
-            url = "/g/${data.id}/${data.key}"
-            title = data.title
-            thumbnail_url =
-                "$cdnUrl/${data.id}/${data.key}/b/${data.thumbnailIndex + 1}"
-            artist = data.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
-            author = data.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
-            genre = prepareTags(data.tags, preferences.useTagGrouping)
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            status = SManga.COMPLETED
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return if (manga.url.startsWith("?")) {
+            GET(libraryUrl + manga.url, headers)
+        } else {
+            GET("$libraryUrl/${getPathFromUrl(manga.url)}", headers)
         }
     }
 
-    override fun getMangaUrl(manga: SManga) = if (preferences.openSource) {
+    override fun mangaDetailsParse(response: Response): SManga {
+        return if (response.request.url.pathSegments.count() == apiUrl.toHttpUrl().pathSegments.count()) {
+            val manga = latestUpdatesParse(response).mangas.first()
+            val query = response.request.url.queryParameter("s")
+            manga.apply {
+                url = "?${response.request.url.query}"
+                description = "Bundled from $query"
+                title = "[Bundle] $query"
+                update_strategy = UpdateStrategy.ALWAYS_UPDATE
+            }
+        } else {
+            val data = json.decodeFromString<Entry>(response.body.string())
+
+            SManga.create().apply {
+                url = "/g/${data.id}/${data.key}"
+                title = data.title
+                thumbnail_url =
+                    "$cdnUrl/${data.id}/${data.key}/b/${data.thumbnailIndex + 1}"
+                artist = data.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
+                author = data.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
+                genre = prepareTags(data.tags, preferences.useTagGrouping)
+                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                status = SManga.COMPLETED
+            }
+        }
+    }
+
+    override fun getMangaUrl(manga: SManga) = if (preferences.openSource && !manga.url.startsWith("?")) {
         val id = manga.url.split("/").reversed()[1].toInt()
         anchiraData.find { it.id == id }?.url ?: "$baseUrl${manga.url}"
     } else {
@@ -221,20 +246,44 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     // Chapter
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$libraryUrl/${getPathFromUrl(manga.url)}", headers)
+    override fun chapterListRequest(manga: SManga): Request {
+        return if (manga.url.startsWith("?")) {
+            GET(libraryUrl + manga.url, headers)
+        } else {
+            GET("$libraryUrl/${getPathFromUrl(manga.url)}", headers)
+        }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = json.decodeFromString<Entry>(response.body.string())
-
-        return listOf(
-            SChapter.create().apply {
-                url = "/g/${data.id}/${data.key}"
-                name = "Chapter"
-                date_upload = data.publishedAt * 1000
-                chapter_number = 1f
-            },
-        )
+        val chapterList = mutableListOf<SChapter>()
+        if (response.request.url.pathSegments.count() == apiUrl.toHttpUrl().pathSegments.count()) {
+            var results = json.decodeFromString<LibraryResponse>(response.body.string())
+            val pages = min(5, ceil((results.total.toFloat() / results.limit)).toInt())
+            for (page in 1..pages) {
+                results.entries.forEach { data ->
+                    chapterList.add(
+                        createChapter(data, response, anchiraData),
+                    )
+                }
+                if (page < pages) {
+                    results = json.decodeFromString<LibraryResponse>(
+                        client.newCall(
+                            GET(
+                                response.request.url.newBuilder()
+                                    .addQueryParameter("page", (page + 1).toString()).build(),
+                                headers,
+                            ),
+                        ).execute().body.string(),
+                    )
+                }
+            }
+        } else {
+            val data = json.decodeFromString<Entry>(response.body.string())
+            chapterList.add(
+                createChapter(data, response, anchiraData),
+            )
+        }
+        return chapterList
     }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/g/${getPathFromUrl(chapter.url)}"
@@ -399,6 +448,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     companion object {
         const val SLUG_SEARCH_PREFIX = "id:"
+        const val SLUG_BUNDLE_PREFIX = "bundle:"
         private const val IMAGE_QUALITY_PREF = "image_quality"
         private const val OPEN_SOURCE_PREF = "use_manga_source"
         private const val USE_TAG_GROUPING = "use_tag_grouping"
