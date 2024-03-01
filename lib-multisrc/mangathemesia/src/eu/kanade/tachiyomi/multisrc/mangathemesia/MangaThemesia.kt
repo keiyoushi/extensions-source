@@ -156,6 +156,7 @@ abstract class MangaThemesia(
 
     // Manga details
     open val seriesDetailsSelector = "div.bigcontent, div.animefull, div.main-info, div.postbody"
+
     open val seriesTitleSelector = "h1.entry-title, .ts-breadcrumb li:last-child span"
 
     private val artistLabels = listOf(
@@ -182,6 +183,7 @@ abstract class MangaThemesia(
     )
 
     open val seriesAuthorSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)", authorLabels)
+
     open val seriesDescriptionSelector = ".desc, .entry-content[itemprop=description]"
 
     private val altnameLabel = listOf(
@@ -223,6 +225,7 @@ abstract class MangaThemesia(
     )
 
     open val seriesStatusSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span span:contains(%s)", statusLabels)
+
     open val seriesThumbnailSelector = ".infomanga > div[itemprop=image] img, .thumb img"
 
     open val altNamePrefix = "${intl["alt_names_heading"]} "
@@ -385,8 +388,6 @@ abstract class MangaThemesia(
             .build()
 
         val newHeaders = headersBuilder()
-            .set("Content-Length", formBody.contentLength().toString())
-            .set("Content-Type", formBody.contentType().toString())
             .set("Referer", document.location())
             .build()
 
@@ -614,7 +615,6 @@ abstract class MangaThemesia(
         const val URL_SEARCH_PREFIX = "url:"
 
         // More info: https://issuetracker.google.com/issues/36970498
-        @Suppress("RegExpRedundantEscape")
         private val MANGA_PAGE_ID_REGEX = "post_id\\s*:\\s*(\\d+)\\}".toRegex()
         private val CHAPTER_PAGE_ID_REGEX = "chapter_id\\s*=\\s*(\\d+);".toRegex()
 
