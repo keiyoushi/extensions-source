@@ -71,6 +71,8 @@ class ConstellarScans :
             .build()
 
     override fun pageListParse(document: Document): List<Page> {
+        launchIO { countViews(document) }
+
         val html = document.toString()
         if (!html.contains("ts_rea_der_._run(\"")) {
             return super.pageListParse(document)
@@ -90,7 +92,6 @@ class ConstellarScans :
             }
             .joinToString("")
 
-        countViews(document)
         return json.parseToJsonElement(tsReaderRawData).jsonObject["sources"]!!.jsonArray[0].jsonObject["images"]!!.jsonArray.mapIndexed { idx, it ->
             Page(idx, imageUrl = it.jsonPrimitive.content)
         }

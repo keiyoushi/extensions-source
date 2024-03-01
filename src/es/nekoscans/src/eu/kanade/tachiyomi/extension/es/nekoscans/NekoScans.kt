@@ -25,12 +25,12 @@ class NekoScans : MangaThemesia(
     override val seriesStatusSelector = ".tsinfo .imptdt:contains(estado) i"
 
     override fun pageListParse(document: Document): List<Page> {
+        launchIO { countViews(document) }
+
         val chapterUrl = document.location()
         val htmlPages = document.select(pageSelector)
             .filterNot { it.imgAttr().isEmpty() }
             .mapIndexed { i, img -> Page(i, chapterUrl, img.imgAttr()) }
-
-        countViews(document)
 
         // Some sites also loads pages via javascript
         if (htmlPages.isNotEmpty()) { return htmlPages }
