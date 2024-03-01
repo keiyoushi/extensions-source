@@ -532,8 +532,15 @@ abstract class MangaThemesia(
             Filter.Header(intl["genre_exclusion_warning"]),
         )
         if (!genrelist.isNullOrEmpty()) {
+            filters.addAll(
+                listOf(
+                    Filter.Header(intl["genre_exclusion_warning"]),
+                    GenreListFilter(intl["genre_filter_title"], getGenreList()),
+                )
+            )
+        } else {
             filters.add(
-                GenreListFilter(intl["genre_filter_title"], getGenreList()),
+                Filter.Header(intl["genre_missing_warning"])
             )
         }
         if (hasProjectPage) {
