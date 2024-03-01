@@ -37,8 +37,12 @@ class LunarScans : MangaThemesia(
             TypeFilter(intl["type_filter_title"], typeFilterOptions),
             OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
             Filter.Header(intl["genre_exclusion_warning"]),
-            GenreListFilter(intl["genre_filter_title"], getGenreList()),
         )
+        if (!genrelist.isNullOrEmpty()) {
+            filters.add(
+                GenreListFilter(intl["genre_filter_title"], getGenreList()),
+            )
+        }
         if (hasProjectPage) {
             filters.addAll(
                 mutableListOf<Filter<*>>(

@@ -513,7 +513,11 @@ abstract class MangaThemesia(
 
     protected class GenreListFilter(name: String, genres: List<Genre>) : Filter.Group<Genre>(name, genres)
 
-    private var genrelist: List<GenreData>? = null
+    protected var genrelist: List<GenreData>? = null
+
+    protected open fun getGenreList(): List<Genre> {
+        return genrelist?.map { Genre(it.name, it.value, it.state) }.orEmpty()
+    }
 
     open val hasProjectPage = false
 
@@ -529,7 +533,7 @@ abstract class MangaThemesia(
         )
         if (!genrelist.isNullOrEmpty()) {
             filters.add(
-                GenreListFilter(intl["genre_filter_title"], genrelist!!.map { Genre(it.name, it.value, it.state) }),
+                GenreListFilter(intl["genre_filter_title"], getGenreList()),
             )
         }
         if (hasProjectPage) {
