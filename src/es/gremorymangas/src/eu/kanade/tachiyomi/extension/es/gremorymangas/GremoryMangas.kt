@@ -8,5 +8,5 @@ class GremoryMangas : MangaThemesia(
     "Gremory Mangas",
     "https://gremorymangas.com",
     "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 )
