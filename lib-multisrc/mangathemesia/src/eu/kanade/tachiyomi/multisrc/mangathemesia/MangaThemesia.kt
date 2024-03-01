@@ -59,11 +59,11 @@ abstract class MangaThemesia(
     open val projectPageString = "/project"
 
     // Popular (Search with popular order and nothing else)
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", OrderByFilter.POPULAR)
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", popularFilter)
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     // Latest (Search with update order and nothing else)
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", OrderByFilter.LATEST)
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", latestFilter)
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // Search
@@ -151,7 +151,7 @@ abstract class MangaThemesia(
     override fun searchMangaNextPageSelector() = "div.pagination .next, div.hpage .r"
 
     private fun selector(selector: String, contains: List<String>): String {
-        return contains.onEach { selector.replace("%s", it) }.joinToString(", ")
+        return contains.joinToString(", ") { selector.replace("%s", it) }
     }
 
     // Manga details
@@ -261,7 +261,7 @@ abstract class MangaThemesia(
     }
 
     protected fun String?.removeEmptyPlaceholder(): String? {
-        return if (this.isNullOrBlank() || this == "-" || this == "N/A") null else this
+        return if (this.isNullOrBlank() || this == "-" || this == "N/A" || this == "n/a") null else this
     }
 
     open fun String?.parseStatus(): Int {
@@ -271,18 +271,18 @@ abstract class MangaThemesia(
             "مستمرة", "En curso", "En Curso", "Ongoing", "OnGoing", "On going", "Ativo", "En Cours", "En cours", "En cours \uD83D\uDFE2",
             "En cours de publication", "Đang tiến hành", "Em lançamento", "em lançamento", "Em Lançamento", "Онгоінг", "Publishing",
             "Devam Ediyor", "Em Andamento", "In Corso", "Güncel", "Berjalan", "Продолжается", "Updating", "Lançando", "In Arrivo", "Emision",
-            "En emision", "مستمر", "Curso", "En marcha", "Publicandose", "Publicando", "连载中", "Devam ediyor", "Devam Etmekte",
+            "En emision", "مستمر", "Curso", "En marcha", "Publicandose", "Publicando", "连载中", "Devam ediyor", "Devam Etmekte", "連載中"
             -> SManga.ONGOING
 
             "Completed", "Completo", "Complété", "Fini", "Achevé", "Terminé", "Terminé ⚫", "Tamamlandı", "Đã hoàn thành", "Hoàn Thành",
-            "مكتملة", "Завершено", "Finished", "Finalizado", "Completata", "One-Shot", "Bitti", "Tamat", "Completado", "Concluído",
+            "مكتملة", "Завершено", "Finished", "Finalizado", "Completata", "One-Shot", "Bitti", "Tamat", "Completado", "Concluído", "完結",
             "Concluido", "已完结", "Bitmiş",
             -> SManga.COMPLETED
 
             "Canceled", "Cancelled", "Cancelado", "cancellato", "Cancelados", "Dropped", "Discontinued", "abandonné", "Abandonné",
             -> SManga.CANCELLED
 
-            "Hiatus", "On Hold", "Pausado", "En espera", "En pause", "En Pause", "En attente",
+            "Hiatus", "On Hold", "Pausado", "En espera", "En pause", "En Pause", "En attente", "人気",
             -> SManga.ON_HIATUS
 
             else -> SManga.UNKNOWN
@@ -467,12 +467,7 @@ abstract class MangaThemesia(
         name,
         options,
         defaultOrder,
-    ) {
-        companion object {
-            val POPULAR = FilterList(OrderByFilter("", emptyArray(), "popular"))
-            val LATEST = FilterList(OrderByFilter("", emptyArray(), "update"))
-        }
-    }
+    )
 
     protected open val orderByFilterOptions = arrayOf(
         Pair(intl["order_by_filter_default"], ""),
@@ -482,6 +477,9 @@ abstract class MangaThemesia(
         Pair(intl["order_by_filter_latest_added"], "latest"),
         Pair(intl["order_by_filter_popular"], "popular"),
     )
+
+    protected val popularFilter by lazy { FilterList(OrderByFilter("", orderByFilterOptions, "popular")) }
+    protected val latestFilter by lazy { FilterList(OrderByFilter("", orderByFilterOptions, "update")) }
 
     protected class ProjectFilter(
         name: String,
