@@ -11,12 +11,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -28,6 +27,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -295,7 +295,7 @@ abstract class MangaThemesia(
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        launchIO { countViews(document) }
+        countViews(document)
 
         val chapters = document.select(chapterListSelector()).map { chapterFromElement(it) }
 
@@ -335,7 +335,7 @@ abstract class MangaThemesia(
     open val pageSelector = "div#readerarea img"
 
     override fun pageListParse(document: Document): List<Page> {
-        launchIO { countViews(document) }
+        countViews(document)
 
         val chapterUrl = document.location()
         val htmlPages = document.select(pageSelector)
@@ -406,8 +406,13 @@ abstract class MangaThemesia(
 
         try {
             val request = countViewsRequest(document) ?: return
-            client.newCall(request).execute().close()
+            client.newCall(request).enqueue(countViewsCallback)
         } catch (_: Exception) { }
+    }
+
+    private val countViewsCallback = object : Callback {
+        override fun onResponse(call: Call, response: Response) = response.close()
+        override fun onFailure(call: Call, e: IOException) = Unit
     }
 
     // Filters
@@ -598,9 +603,6 @@ abstract class MangaThemesia(
     }
 
     protected open fun Elements.imgAttr(): String = this.first()!!.imgAttr()
-
-    private val scope = CoroutineScope(Dispatchers.IO)
-    protected fun launchIO(block: () -> Unit) = scope.launch { block() }
 
     // Unused
     override fun popularMangaSelector(): String = throw UnsupportedOperationException()

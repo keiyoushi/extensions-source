@@ -25,7 +25,7 @@ class NekoScans : MangaThemesia(
     override val seriesStatusSelector = ".tsinfo .imptdt:contains(estado) i"
 
     override fun pageListParse(document: Document): List<Page> {
-        launchIO { countViews(document) }
+        countViews(document)
 
         val chapterUrl = document.location()
         val htmlPages = document.select(pageSelector)

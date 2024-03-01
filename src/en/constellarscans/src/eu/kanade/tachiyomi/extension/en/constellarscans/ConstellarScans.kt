@@ -71,7 +71,7 @@ class ConstellarScans :
             .build()
 
     override fun pageListParse(document: Document): List<Page> {
-        launchIO { countViews(document) }
+        countViews(document)
 
         val html = document.toString()
         if (!html.contains("ts_rea_der_._run(\"")) {
