@@ -147,23 +147,86 @@ abstract class MangaThemesia(
 
     override fun searchMangaNextPageSelector() = "div.pagination .next, div.hpage .r"
 
+    private fun selector(selector: String, contains: List<String>): String {
+        return contains.onEach { selector.replace("%s", it) }.joinToString(", ")
+    }
+
     // Manga details
     open val seriesDetailsSelector = "div.bigcontent, div.animefull, div.main-info, div.postbody"
-    open val seriesTitleSelector = "h1.entry-title"
-    open val seriesArtistSelector = ".infotable tr:contains(artist) td:last-child, .tsinfo .imptdt:contains(artist) i, .fmed b:contains(artist)+span, span:contains(artist)"
-    open val seriesAuthorSelector = ".infotable tr:contains(author) td:last-child, .tsinfo .imptdt:contains(author) i, .fmed b:contains(author)+span, span:contains(author)"
+    open val seriesTitleSelector = "h1.entry-title, .ts-breadcrumb li:last-child span"
+
+    private val artistLabels = listOf(
+        "artist",
+        "Artiste",
+        "Artista",
+        "الرسام",
+        "الناشر",
+        "İllüstratör",
+        "Çizer",
+    )
+
+    open val seriesArtistSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)", artistLabels)
+
+    private val authorLabels = listOf(
+        "Author",
+        "Auteur",
+        "autor",
+        "المؤلف",
+        "Mangaka",
+        "seniman",
+        "Pengarang",
+        "Yazar",
+    )
+
+    open val seriesAuthorSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)", authorLabels)
     open val seriesDescriptionSelector = ".desc, .entry-content[itemprop=description]"
-    open val seriesAltNameSelector = ".alternative, .wd-full:contains(alt) span, .alter, .seriestualt"
-    open val seriesGenreSelector = "div.gnr a, .mgen a, .seriestugenre a, span:contains(genre)"
-    open val seriesTypeSelector = ".infotable tr:contains(type) td:last-child, .tsinfo .imptdt:contains(type) i, .tsinfo .imptdt:contains(type) a, .fmed b:contains(type)+span, span:contains(type) a, a[href*=type\\=]"
-    open val seriesStatusSelector = ".infotable tr:contains(status) td:last-child, .tsinfo .imptdt:contains(status) i, .fmed b:contains(status)+span span:contains(status)"
+
+    private val altnameLabel = listOf(
+        "Alternative",
+        "Alternatif",
+        "الأسماء الثانوية"
+    )
+
+    open val seriesAltNameSelector = ".alternative, .wd-full:contains(alt) span, .alter, .seriestualt, ${selector(".infotable tr:contains(%s) td:last-child", altnameLabel)}"
+
+    private val genreLabels = listOf(
+        "genre",
+        "التصنيف"
+    )
+
+    open val seriesGenreSelector = "div.gnr a, .mgen a, .seriestugenre a, ${selector("span:contains(%s)", genreLabels)}"
+
+    private val typeLabels = listOf(
+        "type",
+        "ประเภท",
+        "النوع",
+        "tipe",
+        "Türü"
+    )
+
+    open val seriesTypeSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .tsinfo .imptdt:contains(%s) a, .fmed b:contains(%s)+span, span:contains(%s) a, a[href*=type\\=]", typeLabels)
+
+    private val statusLabels = listOf(
+        "status",
+        "Statut",
+        "Durum",
+        "連載状況",
+        "Estado",
+        "الحالة",
+        "حالة العمل",
+        "สถานะ",
+        "stato",
+        "Statüsü"
+    )
+
+    open val seriesStatusSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span span:contains(%s)", statusLabels)
     open val seriesThumbnailSelector = ".infomanga > div[itemprop=image] img, .thumb img"
 
     open val altNamePrefix = "${intl["alt_names_heading"]} "
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
-            title = seriesDetails.selectFirst(seriesTitleSelector)?.text().orEmpty()
+            title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
             artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
             author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
             description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
@@ -195,13 +258,29 @@ abstract class MangaThemesia(
         return if (this.isNullOrBlank() || this == "-" || this == "N/A") null else this
     }
 
-    open fun String?.parseStatus(): Int = when {
-        this == null -> SManga.UNKNOWN
-        listOf("ongoing", "publishing").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
-        this.contains("hiatus", ignoreCase = true) -> SManga.ON_HIATUS
-        this.contains("completed", ignoreCase = true) -> SManga.COMPLETED
-        listOf("dropped", "cancelled").any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
+    open fun String?.parseStatus(): Int {
+        if (this == null) return SManga.UNKNOWN
+
+        return when (this) {
+            "مستمرة", "En curso", "En Curso", "Ongoing", "OnGoing", "On going", "Ativo", "En Cours", "En cours", "En cours \uD83D\uDFE2",
+            "En cours de publication", "Đang tiến hành", "Em lançamento", "em lançamento", "Em Lançamento", "Онгоінг", "Publishing",
+            "Devam Ediyor", "Em Andamento", "In Corso", "Güncel", "Berjalan", "Продолжается", "Updating", "Lançando", "In Arrivo", "Emision",
+            "En emision", "مستمر", "Curso", "En marcha", "Publicandose", "Publicando", "连载中", "Devam ediyor", "Devam Etmekte",
+            -> SManga.ONGOING
+
+            "Completed", "Completo", "Complété", "Fini", "Achevé", "Terminé", "Terminé ⚫", "Tamamlandı", "Đã hoàn thành", "Hoàn Thành",
+            "مكتملة", "Завершено", "Finished", "Finalizado", "Completata", "One-Shot", "Bitti", "Tamat", "Completado", "Concluído",
+            "Concluido", "已完结", "Bitmiş",
+            -> SManga.COMPLETED
+
+            "Canceled", "Cancelled", "Cancelado", "cancellato", "Cancelados", "Dropped", "Discontinued", "abandonné", "Abandonné",
+            -> SManga.CANCELLED
+
+            "Hiatus", "On Hold", "Pausado", "En espera", "En pause", "En Pause", "En attente",
+            -> SManga.ON_HIATUS
+
+            else -> SManga.UNKNOWN
+        }
     }
 
     // Chapter list
@@ -331,7 +410,7 @@ abstract class MangaThemesia(
 
     open class SelectFilter(
         displayName: String,
-        val vals: Array<Pair<String, String>>,
+        private val vals: Array<Pair<String, String>>,
         defaultValue: String? = null,
     ) : Filter.Select<String>(
         displayName,
