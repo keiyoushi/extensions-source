@@ -189,14 +189,14 @@ abstract class MangaThemesia(
     private val altnameLabel = listOf(
         "Alternative",
         "Alternatif",
-        "الأسماء الثانوية"
+        "الأسماء الثانوية",
     )
 
     open val seriesAltNameSelector = ".alternative, .wd-full:contains(alt) span, .alter, .seriestualt, ${selector(".infotable tr:contains(%s) td:last-child", altnameLabel)}"
 
     private val genreLabels = listOf(
         "genre",
-        "التصنيف"
+        "التصنيف",
     )
 
     open val seriesGenreSelector = "div.gnr a, .mgen a, .seriestugenre a, ${selector("span:contains(%s)", genreLabels)}"
@@ -206,7 +206,7 @@ abstract class MangaThemesia(
         "ประเภท",
         "النوع",
         "tipe",
-        "Türü"
+        "Türü",
     )
 
     open val seriesTypeSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .tsinfo .imptdt:contains(%s) a, .fmed b:contains(%s)+span, span:contains(%s) a, a[href*=type\\=]", typeLabels)
@@ -221,7 +221,7 @@ abstract class MangaThemesia(
         "حالة العمل",
         "สถานะ",
         "stato",
-        "Statüsü"
+        "Statüsü",
     )
 
     open val seriesStatusSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span span:contains(%s)", statusLabels)
