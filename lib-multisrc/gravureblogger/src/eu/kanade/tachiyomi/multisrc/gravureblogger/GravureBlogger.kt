@@ -65,7 +65,7 @@ abstract class GravureBlogger(
                 initialized = true
             }
         }
-        val hasNextPage = (data.feed.startIndex.t.toInt() + data.feed.itemsPerPage.t.toInt()) <= data.feed.totalResults.t.toInt()
+        val hasNextPage = data.feed.entry.size == MAX_RESULTS
 
         return MangasPage(manga, hasNextPage)
     }
