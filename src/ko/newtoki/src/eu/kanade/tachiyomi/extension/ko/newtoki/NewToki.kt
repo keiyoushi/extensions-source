@@ -183,7 +183,9 @@ abstract class NewToki(
         mangaDetailsParse(document).apply {
             // TODO: don't throw when there is download folder rename feature
             if (manga.description.isNullOrEmpty() && manga.title != title) {
-                throw Exception(titleNotMatch(title))
+                val tmp = title.split("…")[0]
+                if (!manga.title.contains(tmp))
+                    throw Exception(titleNotMatch(title))
             }
         }
 
