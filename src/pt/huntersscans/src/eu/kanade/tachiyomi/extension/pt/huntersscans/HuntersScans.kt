@@ -104,7 +104,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
         do {
             val chapterList = fetchChapterList(origin, currentPage)
-            if (chapterList.isEmpty() || chapterList.size < 2) {
+            if (chapterList.size < 2) {
                 chapters += chapterList
                 break
             }
