@@ -1,9 +1,0 @@
-ext {
-    extName = '247Manga'
-    extClass = '.Manga247'
-    themePkg = 'madara'
-    baseUrl = 'https://247manga.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
