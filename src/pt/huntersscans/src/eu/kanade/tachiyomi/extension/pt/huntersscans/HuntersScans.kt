@@ -233,7 +233,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
             val matches = chapterNameRegex.find(trim())?.groupValues ?: emptyList()
             matches.last()
                 .replace(" ", "")
-                .replace("-".toRegex(), ".")
+                .replace("-", ".")
         } catch (e: Exception) { "0" }
     }
 
