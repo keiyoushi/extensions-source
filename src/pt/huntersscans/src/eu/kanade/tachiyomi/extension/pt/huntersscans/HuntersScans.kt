@@ -43,7 +43,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
     override val id = 7310576253330700902
 
-    private val mangaSubString = "manga"
+    override val versionId = 2
 
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -185,7 +185,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
         super.fetchPopularManga(page).map { it.removeNovels() }
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/$mangaSubString".toHttpUrl().newBuilder()
+        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", "$page")
             .build()
         return GET(url, headers)
@@ -198,7 +198,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$mangaSubString".toHttpUrl().newBuilder()
+        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .addQueryParameter("page", "$page")
             .build()
@@ -209,7 +209,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(slugPrefix)) {
-            val mangaUrl = "/$mangaSubString/${query.substringAfter(slugPrefix)}"
+            val mangaUrl = "/manga/${query.substringAfter(slugPrefix)}"
             return client.newCall(GET("$baseUrl$mangaUrl", headers))
                 .asObservableSuccess().map { response ->
                     val manga = mangaDetailsParse(response).apply {
