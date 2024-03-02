@@ -24,7 +24,7 @@ class Nudemoon : ParsedHttpSource() {
 
     override val name = "Nude-Moon"
 
-    override val baseUrl = "https://x.nude-moon.fun"
+    override val baseUrl = "https://a.nude-moon.fun"
 
     override val lang = "ru"
 
