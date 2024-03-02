@@ -2,8 +2,9 @@
   "extends": [
     "config:recommended"
   ],
-  "schedule": ["every sunday"],
+  "schedule": ["on sunday"],
   "includePaths": [
+    "buildSrc/gradle/**",
     "gradle/**",
     ".github/**"
   ],
