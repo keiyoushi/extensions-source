@@ -3,7 +3,7 @@ ext {
     extClass = '.Todaymic'
     themePkg = 'madara'
     baseUrl = 'https://todaymic.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
