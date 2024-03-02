@@ -82,6 +82,17 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         return archiveToSManga(archive)
     }
 
+    override fun getMangaUrl(manga: SManga): String {
+        val namespace = preferences.getString(URL_TAG_PREFIX_KEY, URL_TAG_PREFIX_DEFAULT)
+
+        if (namespace.isNullOrEmpty()) {
+            return super.getMangaUrl(manga)
+        }
+
+        val tag = manga.genre?.split(", ")?.find { it.startsWith("$namespace") }
+        return tag?.substringAfter("$namespace") ?: super.getMangaUrl(manga)
+    }
+
     override fun chapterListRequest(manga: SManga): Request {
         val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getReaderId(manga.url)
         val uri = getApiUriBuilder("/api/archives/$id/metadata").build()
@@ -310,6 +321,7 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         screen.addPreference(screen.checkBoxPreference(CLEAR_NEW_KEY, "Clear New status", CLEAR_NEW_DEFAULT, "Clear an entry's New status when its details are viewed."))
         screen.addPreference(screen.checkBoxPreference(NEW_ONLY_KEY, "Latest - New Only", NEW_ONLY_DEFAULT))
         screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added."))
+        screen.addPreference(screen.editTextPreference(URL_TAG_PREFIX_KEY, "Set tag prefix to get WebView URL", URL_TAG_PREFIX_DEFAULT, "Example: 'source:' will try to get the URL from the first tag starting with 'source:' and it will open it in the WebView. Leave empty for the default behavior."))
     }
 
     private fun androidx.preference.PreferenceScreen.checkBoxPreference(key: String, title: String, default: Boolean, summary: String = ""): androidx.preference.CheckBoxPreference {
@@ -494,5 +506,7 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         private const val SORT_BY_NS_KEY = "latestNamespacePref"
         private const val CLEAR_NEW_KEY = "clearNew"
         private const val CLEAR_NEW_DEFAULT = true
+        private const val URL_TAG_PREFIX_KEY = "urlTagPrefix"
+        private const val URL_TAG_PREFIX_DEFAULT = ""
     }
 }
