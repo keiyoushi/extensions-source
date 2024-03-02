@@ -150,81 +150,89 @@ abstract class MangaThemesia(
 
     override fun searchMangaNextPageSelector() = "div.pagination .next, div.hpage .r"
 
+    // Manga details
     private fun selector(selector: String, contains: List<String>): String {
         return contains.joinToString(", ") { selector.replace("%s", it) }
     }
 
-    // Manga details
     open val seriesDetailsSelector = "div.bigcontent, div.animefull, div.main-info, div.postbody"
 
     open val seriesTitleSelector = "h1.entry-title, .ts-breadcrumb li:last-child span"
 
-    private val artistLabels = listOf(
-        "artist",
-        "Artiste",
-        "Artista",
-        "الرسام",
-        "الناشر",
-        "İllüstratör",
-        "Çizer",
+    open val seriesArtistSelector = selector(
+        ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)",
+        listOf(
+            "artist",
+            "Artiste",
+            "Artista",
+            "الرسام",
+            "الناشر",
+            "İllüstratör",
+            "Çizer",
+        ),
     )
 
-    open val seriesArtistSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)", artistLabels)
-
-    private val authorLabels = listOf(
-        "Author",
-        "Auteur",
-        "autor",
-        "المؤلف",
-        "Mangaka",
-        "seniman",
-        "Pengarang",
-        "Yazar",
+    open val seriesAuthorSelector = selector(
+        ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)",
+        listOf(
+            "Author",
+            "Auteur",
+            "autor",
+            "المؤلف",
+            "Mangaka",
+            "seniman",
+            "Pengarang",
+            "Yazar",
+        ),
     )
-
-    open val seriesAuthorSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)", authorLabels)
 
     open val seriesDescriptionSelector = ".desc, .entry-content[itemprop=description]"
 
-    private val altnameLabel = listOf(
-        "Alternative",
-        "Alternatif",
-        "الأسماء الثانوية",
+    open val seriesAltNameSelector = ".alternative, .wd-full:contains(alt) span, .alter, .seriestualt, " +
+        selector(
+            ".infotable tr:contains(%s) td:last-child",
+            listOf(
+                "Alternative",
+                "Alternatif",
+                "الأسماء الثانوية",
+            ),
+        )
+
+    open val seriesGenreSelector = "div.gnr a, .mgen a, .seriestugenre a, " +
+        selector(
+            "span:contains(%s)",
+            listOf(
+                "genre",
+                "التصنيف",
+            ),
+        )
+
+    open val seriesTypeSelector = selector(
+        ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .tsinfo .imptdt:contains(%s) a, .fmed b:contains(%s)+span, span:contains(%s) a",
+        listOf(
+            "type",
+            "ประเภท",
+            "النوع",
+            "tipe",
+            "Türü",
+        )
+    ) + ", a[href*=type\\=]"
+
+    open val seriesStatusSelector = selector(
+        ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span span:contains(%s)",
+        listOf(
+            "status",
+            "Statut",
+            "Durum",
+            "連載状況",
+            "Estado",
+            "الحالة",
+            "حالة العمل",
+            "สถานะ",
+            "stato",
+            "Statüsü",
+        ),
     )
-
-    open val seriesAltNameSelector = ".alternative, .wd-full:contains(alt) span, .alter, .seriestualt, ${selector(".infotable tr:contains(%s) td:last-child", altnameLabel)}"
-
-    private val genreLabels = listOf(
-        "genre",
-        "التصنيف",
-    )
-
-    open val seriesGenreSelector = "div.gnr a, .mgen a, .seriestugenre a, ${selector("span:contains(%s)", genreLabels)}"
-
-    private val typeLabels = listOf(
-        "type",
-        "ประเภท",
-        "النوع",
-        "tipe",
-        "Türü",
-    )
-
-    open val seriesTypeSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .tsinfo .imptdt:contains(%s) a, .fmed b:contains(%s)+span, span:contains(%s) a, a[href*=type\\=]", typeLabels)
-
-    private val statusLabels = listOf(
-        "status",
-        "Statut",
-        "Durum",
-        "連載状況",
-        "Estado",
-        "الحالة",
-        "حالة العمل",
-        "สถานะ",
-        "stato",
-        "Statüsü",
-    )
-
-    open val seriesStatusSelector = selector(".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span span:contains(%s)", statusLabels)
 
     open val seriesThumbnailSelector = ".infomanga > div[itemprop=image] img, .thumb img"
 
