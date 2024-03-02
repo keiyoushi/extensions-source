@@ -1,15 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.mangagalaxy
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
-class MangaGalaxy : Madara(
+class MangaGalaxy : MangaThemesia(
     "Manga Galaxy",
     "https://mangagalaxy.me",
     "en",
-    dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
+    mangaUrlDirectory = "/series",
 ) {
-    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(status) + div.summary-content"
-    override val mangaDetailsSelectorDescription = "div.summary-heading:contains(Summary) + div"
+    // moved from Madara to MangaThemesia
+    override val versionId = 2
 }
