@@ -162,7 +162,10 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
             genre = container.select("ul > li:nth-child(5) p").joinToString { it.ownText() }
 
             val statusLabel = container.selectFirst("ul > li:nth-child(3) p")?.ownText()
-            status = statusManga.getOrDefault(statusLabel, SManga.UNKNOWN)
+            status = when (statusLabel) {
+                "ongoing" -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
             description = document.selectFirst("main > div > div")?.text()
         }
 
