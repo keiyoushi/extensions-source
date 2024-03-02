@@ -83,8 +83,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
                 .first { chapterRegex.find(it) != null }
 
             val chaptersLinks = chapterRegex.findAll(jScript)
-                .map { result -> result.groups.map { it?.value } }
-                .flatMap { it }
+                .flatMap { result -> result.groups.mapNotNull { it?.value } }
                 .toSet()
 
             chaptersLinks.map { chapterLink ->
