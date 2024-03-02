@@ -103,11 +103,13 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
         var currentPage = 1
 
         do {
-            chapters += fetchChapterList(origin, currentPage)
-                .sortedBy { it.name.toInt() }
+            val chapterList = fetchChapterList(origin, currentPage)
+            if (chapterList.isEmpty() || chapterList.size < 2) {
+                chapters += chapterList
+                break
+            }
 
-            if (chapters.size < 2) { break }
-
+            chapters += chapterList.sortedBy { it.name.toFloat() }
             alwaysVisibleChapters += chapters.removeFirst()
             alwaysVisibleChapters += chapters.removeLast()
 
@@ -119,7 +121,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
         return chapters
             .distinctBy { it.name }
-            .sortedBy { it.name.toInt() }
+            .sortedBy { it.name.toFloat() }
             .reversed()
     }
 
@@ -229,15 +231,17 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
     private fun String.toChapterName(): String {
         return try {
             val matches = chapterNameRegex.find(trim())?.groupValues ?: emptyList()
-            matches.last().replace("-", ".")
+            matches.last()
+                .replace(" ", "")
+                .replace("-".toRegex(), ".")
         } catch (e: Exception) { "0" }
     }
 
     private fun String.toChapterAbsUrl() = "$baseUrl${trim()}"
 
     companion object {
-        val chapterRegex = """/ler/[\w+-]+-capitulo-\d+""".toRegex()
-        val chapterNameRegex = """capitulo-([\d-]+)""".toRegex()
+        val chapterRegex = """/ler/[\w+-]+-capitulo-[\d.-]+""".toRegex()
+        val chapterNameRegex = """capitulo-([\d-.]+)""".toRegex()
         val slugPrefix = "slug:"
     }
 }
