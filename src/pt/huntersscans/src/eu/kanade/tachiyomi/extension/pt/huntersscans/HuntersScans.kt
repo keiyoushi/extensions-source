@@ -63,19 +63,19 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    private fun fetchChapterRequest(url: HttpUrl, page: Int): List<SChapter> {
+    private fun fetchChapterList(url: HttpUrl, page: Int): List<SChapter> {
         return try {
             val mangaPaged = url.newBuilder()
                 .addQueryParameter("page", "$page")
                 .build()
-            chapterFromJScript(client.newCall(GET(mangaPaged, headers)).execute())
+            chapterListParseFromJS(client.newCall(GET(mangaPaged, headers)).execute())
         } catch (e: Exception) {
             Log.e("HuntersScans", e.toString())
             emptyList()
         }
     }
 
-    private fun chapterFromJScript(response: Response): List<SChapter> {
+    private fun chapterListParseFromJS(response: Response): List<SChapter> {
         val jScript = response.asJsoup().select(chapterListSelector())
             .map { element -> element.html() }
             .filter { element -> element.isNotEmpty() }
@@ -105,7 +105,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
         var currentPage = 1
 
         do {
-            chapters += fetchChapterRequest(origin, currentPage)
+            chapters += fetchChapterList(origin, currentPage)
                 .sortedBy { it.name.toInt() }
 
             if (chapters.size < 2) { break }
