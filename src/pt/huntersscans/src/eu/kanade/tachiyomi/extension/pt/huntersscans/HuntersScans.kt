@@ -68,21 +68,21 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
             val mangaPaged = url.newBuilder()
                 .addQueryParameter("page", "$page")
                 .build()
-            chapterFromJSScript(client.newCall(GET(mangaPaged, headers)).execute())
+            chapterFromJScript(client.newCall(GET(mangaPaged, headers)).execute())
         } catch (e: Exception) {
             Log.e("HuntersScans", e.toString())
             emptyList()
         }
     }
 
-    private fun chapterFromJSScript(response: Response): MutableList<SChapter> {
+    private fun chapterFromJScript(response: Response): MutableList<SChapter> {
         return try {
-            val jsScript = response.asJsoup().select(chapterListSelector())
+            val jScript = response.asJsoup().select(chapterListSelector())
                 .map { element -> element.html() }
                 .filter { element -> element.isNotEmpty() }
                 .first { chapterRegex.find(it) != null }
 
-            val chaptersLinks = chapterRegex.findAll(jsScript)
+            val chaptersLinks = chapterRegex.findAll(jScript)
                 .map { result -> result.groups.map { it?.value } }
                 .flatMap { it }
                 .toSet()
@@ -104,7 +104,7 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = chapterFromJSScript(response)
+        val chapters = chapterFromJScript(response)
         val alwaysVisibleChapters = mutableSetOf<SChapter>()
 
         val origin = response.request.url
