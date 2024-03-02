@@ -1,0 +1,10 @@
+ext {
+    extName = 'YakshaScans'
+    extClass = '.YakshaScans'
+    themePkg = 'madara'
+    baseUrl = 'https://yakshascans.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
