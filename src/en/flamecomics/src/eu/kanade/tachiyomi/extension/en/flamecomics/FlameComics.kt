@@ -9,6 +9,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -25,12 +26,14 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.ByteArrayOutputStream
 
-class FlameComics : MangaThemesia(
-    "Flame Comics",
-    "https://flamecomics.com",
-    "en",
-    mangaUrlDirectory = "/series",
-) {
+class FlameComics :
+    MangaThemesia(
+        "Flame Comics",
+        "https://flamecomics.com",
+        "en",
+        mangaUrlDirectory = "/series",
+    ),
+    ConfigurableSource {
 
     // Flame Scans -> Flame Comics
     override val id = 6350607071566689772

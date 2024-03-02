@@ -19,7 +19,7 @@ class CosmicScansID : MangaThemesia("CosmicScans.id", "https://cosmicscans.id", 
     override val hasProjectPage = true
     override val projectPageString = "/semua-komik"
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl" + if (page > 1) "/page/$page" else "", headers)
+    override fun latestUpdatesRequest(page: Int) = GET(baseUrl + if (page > 1) "/page/$page" else "", headers)
 
     // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -47,8 +47,8 @@ class CosmicScansID : MangaThemesia("CosmicScans.id", "https://cosmicscans.id", 
         val filters = mutableListOf<Filter<*>>(
             Filter.Separator(),
             Filter.Header("$name Project List page"),
-            ProjectFilter(),
-            OrderByFilter(),
+            ProjectFilter(intl["project_filter_title"], projectFilterOptions),
+            OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
         )
         return FilterList(filters)
     }
