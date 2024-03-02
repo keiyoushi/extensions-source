@@ -1,8 +1,21 @@
 {
   "extends": [
-    "config:base"
+    "config:recommended"
   ],
+  "schedule": ["every sunday"],
   "includePaths": [
+    "gradle/**",
     ".github/**"
+  ],
+  "ignoreDeps": ["keiyoushi/issue-moderator-action"],
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "{{manager}} dependencies"
+    },
+    {
+      "matchManagers": ["gradle"],
+      "enabled": false
+    }
   ]
 }
