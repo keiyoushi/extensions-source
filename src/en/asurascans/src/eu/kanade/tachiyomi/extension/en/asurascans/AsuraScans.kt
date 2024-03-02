@@ -6,6 +6,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -26,12 +27,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class AsuraScans : MangaThemesia(
-    "Asura Scans",
-    "https://asuratoon.com",
-    "en",
-    dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
-) {
+class AsuraScans :
+    MangaThemesia(
+        "Asura Scans",
+        "https://asuratoon.com",
+        "en",
+        dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
+    ),
+    ConfigurableSource {
 
     private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -281,8 +284,6 @@ class AsuraScans : MangaThemesia(
             summary = PREF_PERM_MANGA_URL_SUMMARY
             setDefaultValue(true)
         }.also(screen::addPreference)
-
-        super.setupPreferenceScreen(screen)
     }
 
     private val SharedPreferences.permaUrlPref

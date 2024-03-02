@@ -6,6 +6,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -20,7 +21,15 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 
-class LuminousScans : MangaThemesia("Luminous Scans", "https://lumitoon.com", "en", mangaUrlDirectory = "/series") {
+class LuminousScans :
+    MangaThemesia(
+        "Luminous Scans",
+        "https://lumitoon.com",
+        "en",
+        mangaUrlDirectory = "/series",
+    ),
+    ConfigurableSource {
+
     override val client = super.client.newBuilder()
         .addInterceptor(::urlChangeInterceptor)
         .rateLimit(2)
@@ -201,8 +210,6 @@ class LuminousScans : MangaThemesia("Luminous Scans", "https://lumitoon.com", "e
             summary = PREF_PERM_MANGA_URL_SUMMARY
             setDefaultValue(true)
         }.also(screen::addPreference)
-
-        super.setupPreferenceScreen(screen)
     }
 
     private val SharedPreferences.permaUrlPref
