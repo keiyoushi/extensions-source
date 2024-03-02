@@ -274,8 +274,8 @@ abstract class MangaThemesia(
             "en emision", "مستمر", "curso", "en marcha", "publicandose", "publicando", "连载中", "devam etmekte", "連載中",
             -> SManga.ONGOING
 
-            "completed", "completo", "complété", "fini", "achevé", "terminé", "tamamlandı", "Đã hoàn thành", "hoàn thành",
-            "مكتملة", "Завершено", "finished", "finalizado", "completata", "one-shot", "bitti", "tamat", "completado", "concluído", "完結",
+            "completed", "completo", "complété", "fini", "achevé", "terminé", "tamamlandı", "đã hoàn thành", "hoàn thành",
+            "مكتملة", "завершено", "finished", "finalizado", "completata", "one-shot", "bitti", "tamat", "completado", "concluído", "完結",
             "concluido", "已完结", "bitmiş",
             -> SManga.COMPLETED
 
