@@ -5,18 +5,18 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class PizzaResultsDto(
-    val comics: List<PizzaComicDto> = emptyList()
+    val comics: List<PizzaComicDto> = emptyList(),
 )
 
 @Serializable
 data class PizzaResultDto(
-    val comic: PizzaComicDto? = null
+    val comic: PizzaComicDto? = null,
 )
 
 @Serializable
 data class PizzaReaderDto(
     val chapter: PizzaChapterDto? = null,
-    val comic: PizzaComicDto? = null
+    val comic: PizzaComicDto? = null,
 )
 
 @Serializable
@@ -30,12 +30,12 @@ data class PizzaComicDto(
     val status: String = "",
     val title: String = "",
     val thumbnail: String = "",
-    val url: String = ""
+    val url: String = "",
 )
 
 @Serializable
 data class PizzaGenreDto(
-    val name: String = ""
+    val name: String = "",
 )
 
 @Serializable
@@ -46,10 +46,10 @@ data class PizzaChapterDto(
     @SerialName("published_on") val publishedOn: String = "",
     val subchapter: Int? = null,
     val teams: List<PizzaTeamDto?> = emptyList(),
-    val url: String = ""
+    val url: String = "",
 )
 
 @Serializable
 data class PizzaTeamDto(
-    val name: String = ""
+    val name: String = "",
 )
