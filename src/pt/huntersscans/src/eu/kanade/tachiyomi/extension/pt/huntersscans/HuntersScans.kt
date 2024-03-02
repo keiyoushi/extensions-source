@@ -75,26 +75,21 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private fun chapterFromJScript(response: Response): MutableList<SChapter> {
-        return try {
-            val jScript = response.asJsoup().select(chapterListSelector())
-                .map { element -> element.html() }
-                .filter { element -> element.isNotEmpty() }
-                .first { chapterRegex.find(it) != null }
+    private fun chapterFromJScript(response: Response): List<SChapter> {
+        val jScript = response.asJsoup().select(chapterListSelector())
+            .map { element -> element.html() }
+            .filter { element -> element.isNotEmpty() }
+            .first { chapterRegex.find(it) != null }
 
-            val chaptersLinks = chapterRegex.findAll(jScript)
-                .flatMap { result -> result.groups.mapNotNull { it?.value } }
-                .toSet()
+        val chaptersLinks = chapterRegex.findAll(jScript)
+            .flatMap { result -> result.groups.mapNotNull { it?.value } }
+            .toSet()
 
-            chaptersLinks.map { chapterLink ->
-                SChapter.create().apply {
-                    name = chapterLink!!.toChapterName()
-                    setUrlWithoutDomain(chapterLink.toChapterAbsUrl())
-                }
-            }.toMutableList()
-        } catch (e: Exception) {
-            Log.e("HuntersScans", e.toString())
-            mutableListOf()
+        return chaptersLinks.map { chapterLink ->
+            SChapter.create().apply {
+                name = chapterLink.toChapterName()
+                setUrlWithoutDomain(chapterLink.toChapterAbsUrl())
+            }
         }
     }
 
@@ -103,21 +98,22 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = chapterFromJScript(response)
+        val chapters = mutableListOf<SChapter>()
         val alwaysVisibleChapters = mutableSetOf<SChapter>()
 
         val origin = response.request.url
-        var nextPage = 2
+        var currentPage = 1
 
         do {
-            if (chapters.size < 2) { break }
+            chapters += fetchChapterRequest(origin, currentPage)
+                .sortedBy { it.name.toInt() }
 
-            chapters += fetchChapterRequest(origin, nextPage).sortedBy { it.name.toInt() }
+            if (chapters.size < 2) { break }
 
             alwaysVisibleChapters += chapters.removeFirst()
             alwaysVisibleChapters += chapters.removeLast()
 
-            nextPage++
+            currentPage++
         }
         while (!containsDuplicate(chapters) && chapters.isNotEmpty())
 
