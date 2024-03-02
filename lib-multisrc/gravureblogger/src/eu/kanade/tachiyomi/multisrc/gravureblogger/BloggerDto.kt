@@ -10,9 +10,6 @@ class BloggerDto(
 
 @Serializable
 class BloggerFeedDto(
-    @SerialName("openSearch\$totalResults") val totalResults: BloggerTextDto,
-    @SerialName("openSearch\$startIndex") val startIndex: BloggerTextDto,
-    @SerialName("openSearch\$itemsPerPage") val itemsPerPage: BloggerTextDto,
     val category: List<BloggerCategoryDto> = emptyList(),
     val entry: List<BloggerFeedEntryDto> = emptyList(),
 )
