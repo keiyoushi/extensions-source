@@ -4,8 +4,8 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 
-class Yakshascans : Madara(
-    "Yakshascans",
+class YakshaScans : Madara(
+    "YakshaScans",
     "https://yakshascans.com",
     "en",
 ) {

@@ -1,6 +1,6 @@
 ext {
-    extName = 'Yakshascans'
-    extClass = '.yakshascans'
+    extName = 'YakshaScans'
+    extClass = '.YakshaScans'
     themePkg = 'madara'
     baseUrl = 'https://yakshascans.com'
     overrideVersionCode = 0
