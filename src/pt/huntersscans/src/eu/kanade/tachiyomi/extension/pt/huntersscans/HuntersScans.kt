@@ -41,8 +41,6 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
     override val baseUrl = "https://huntersscan.xyz"
 
-    override val id = 7310576253330700902
-
     override val versionId = 2
 
     private val preferences: SharedPreferences =
