@@ -182,7 +182,7 @@ abstract class NewToki(
     private fun mangaDetailsParseWithTitleCheck(manga: SManga, document: Document) =
         mangaDetailsParse(document).apply {
             // TODO: don't throw when there is download folder rename feature
-            if (manga.description.isNullOrEmpty() && manga.title != title) {
+            if (manga.description.isNullOrEmpty() && title.removeSuffix("…") !in manga.title) {
                 throw Exception(titleNotMatch(title))
             }
         }
