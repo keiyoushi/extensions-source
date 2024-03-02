@@ -131,7 +131,8 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesFromElement(element: Element) =
         SManga.create().apply {
-            title = element.selectFirst("h3")!!.ownText()
+            val type = element.selectFirst("span")!!.ownText().toCapitalize()
+            title = "${element.selectFirst("h3")!!.ownText()} - $type"
             thumbnail_url = element.selectFirst("img")?.absUrl("src")
             setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         }
@@ -153,7 +154,8 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document) =
         SManga.create().apply {
             val container = document.selectFirst("div.container")!!
-            title = container.selectFirst("h2")!!.ownText()
+            val type = container.selectFirst("ul > li:nth-child(1) p")!!.ownText().toCapitalize()
+            title = "${container.selectFirst("h2")!!.ownText()} - $type"
             thumbnail_url = container.selectFirst("img")?.absUrl("src")
             genre = container.select("ul > li:nth-child(5) p").joinToString { it.ownText() }
 
@@ -170,7 +172,8 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
             .mapIndexed { i, element -> Page(i, imageUrl = element.absUrl("src")) }
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.selectFirst("h2")!!.ownText()
+        val type = element.selectFirst("span")!!.ownText().toCapitalize()
+        title = "${element.selectFirst("h2")!!.ownText()} - $type"
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
         setUrlWithoutDomain(element.absUrl("href"))
     }
@@ -227,6 +230,9 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
             hasNextPage = this.hasNextPage,
         )
     }
+
+    private fun String.toCapitalize() =
+        trim().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
     private fun String.toChapterName(): String {
         return try {
