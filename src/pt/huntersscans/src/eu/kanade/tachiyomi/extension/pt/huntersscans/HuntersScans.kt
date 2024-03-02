@@ -238,9 +238,6 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
     private fun String.toChapterAbsUrl() = "$baseUrl${trim()}"
 
     companion object {
-        val statusManga = mapOf(
-            "ongoing" to SManga.ONGOING,
-        )
         val chapterRegex = """/ler/[\w+-]+-capitulo-\d+""".toRegex()
         val chapterNameRegex = """capitulo-([\d-]+)""".toRegex()
         val slugPrefix = "slug:"
