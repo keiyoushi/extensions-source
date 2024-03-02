@@ -142,8 +142,8 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        super.fetchLatestUpdates(page).map { it.removeNovels() }
+    override fun latestUpdatesParse(response: Response) =
+        super.latestUpdatesParse(response).removeNovels()
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/ultimas-atualizacoes".toHttpUrl().newBuilder()
@@ -181,8 +181,8 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = "li[aria-label='next page button']:not([aria-disabled])"
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        super.fetchPopularManga(page).map { it.removeNovels() }
+    override fun popularMangaParse(response: Response) =
+        super.popularMangaParse(response).removeNovels()
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/manga".toHttpUrl().newBuilder()
@@ -196,6 +196,9 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
+    override fun searchMangaParse(response: Response) =
+        super.searchMangaParse(response).removeNovels()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/manga".toHttpUrl().newBuilder()
@@ -215,11 +218,11 @@ class HuntersScans : ParsedHttpSource(), ConfigurableSource {
                     val manga = mangaDetailsParse(response).apply {
                         url = mangaUrl
                     }
-                    MangasPage(listOf(manga), false).removeNovels()
+                    MangasPage(listOf(manga), false)
                 }
         }
 
-        return super.fetchSearchManga(page, query, filters).map { it.removeNovels() }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     private fun MangasPage.removeNovels(): MangasPage {
