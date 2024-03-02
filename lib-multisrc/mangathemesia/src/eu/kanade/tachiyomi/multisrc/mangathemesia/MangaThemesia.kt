@@ -215,7 +215,7 @@ abstract class MangaThemesia(
             "النوع",
             "tipe",
             "Türü",
-        )
+        ),
     ) + ", a[href*=type\\=]"
 
     open val seriesStatusSelector = selector(
