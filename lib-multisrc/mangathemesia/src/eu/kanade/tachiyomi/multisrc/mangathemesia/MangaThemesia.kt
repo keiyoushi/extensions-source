@@ -282,7 +282,7 @@ abstract class MangaThemesia(
             "canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné",
             -> SManga.CANCELLED
 
-            "hiatus", "on hold", "pausado", "en espera", "en pause", "en attente", "人気",
+            "hiatus", "on hold", "pausado", "en espera", "en pause", "en attente",
             -> SManga.ON_HIATUS
 
             else -> SManga.UNKNOWN
