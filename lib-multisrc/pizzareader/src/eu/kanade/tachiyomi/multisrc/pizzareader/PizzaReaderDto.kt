@@ -21,7 +21,7 @@ data class PizzaReaderDto(
 
 @Serializable
 data class PizzaComicDto(
-    val artist: String = "",
+    val artist: String? = null,
     val author: String = "",
     val chapters: List<PizzaChapterDto> = emptyList(),
     val description: String = "",
