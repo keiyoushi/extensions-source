@@ -230,7 +230,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         return if (response.request.url.pathSegments.count() == libraryUrl.toHttpUrl().pathSegments.count()) {
             val manga = latestUpdatesParse(response).mangas.first()
             val query = response.request.url.queryParameter("s")
-            val cleanTitle = Regex("(?<!20\\d\\d-)\\b[\\d.]{1,4}$").replace(manga.title, "").trim()
+            val cleanTitle = Regex(CHAPTER_SUFFIX).replace(manga.title, "").trim()
             manga.apply {
                 url = "?${response.request.url.query}"
                 description = "Bundled from $query"
@@ -476,3 +476,5 @@ class Anchira : HttpSource(), ConfigurableSource {
             "https://gist.githubusercontent.com/LetrixZ/2b559cc5829d1c221c701e02ecd81411/raw/data-v5.json"
     }
 }
+
+const val CHAPTER_SUFFIX = "(?<!20\\d\\d-)\\b[\\d.]{1,4}$"

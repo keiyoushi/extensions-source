@@ -33,7 +33,7 @@ object AnchiraHelper {
     fun createChapter(entry: Entry, response: Response, anchiraData: List<EntryKey>) =
         SChapter.create().apply {
             val ch =
-                Regex("(?<!20\\d\\d-)\\b[\\d.]{1,4}$").find(entry.title)?.value?.trim('.') ?: "1"
+                Regex(CHAPTER_SUFFIX).find(entry.title)?.value?.trim('.') ?: "1"
             val source = anchiraData.find { it.id == entry.id }?.url
                 ?: response.request.url.toString()
             url = "/g/${entry.id}/${entry.key}"
