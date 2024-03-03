@@ -230,7 +230,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         return if (response.request.url.pathSegments.count() == libraryUrl.toHttpUrl().pathSegments.count()) {
             val manga = latestUpdatesParse(response).mangas.first()
             val query = response.request.url.queryParameter("s")
-            val cleanTitle = Regex(CHAPTER_SUFFIX).replace(manga.title, "").trim()
+            val cleanTitle = CHAPTER_SUFFIX_RE.replace(manga.title, "").trim()
             manga.apply {
                 url = "?${response.request.url.query}"
                 description = "Bundled from $query"
@@ -477,4 +477,4 @@ class Anchira : HttpSource(), ConfigurableSource {
     }
 }
 
-const val CHAPTER_SUFFIX = "(?<!20\\d\\d-)\\b[\\d.]{1,4}$"
+val CHAPTER_SUFFIX_RE = Regex("(?<!20\\d\\d-)\\b[\\d.]{1,4}$")
