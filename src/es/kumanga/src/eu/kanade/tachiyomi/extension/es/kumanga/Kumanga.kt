@@ -25,7 +25,6 @@ import uy.kohesive.injekt.injectLazy
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.math.roundToInt
 
 class Kumanga : HttpSource() {
 
@@ -43,12 +42,20 @@ class Kumanga : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+        .add("Accept-language", "es-419,es;q=0.6")
+        .add("Cache-Control", "max-age=0")
+        .add("Sec-Fetch-Dest", "document")
+        .add("Sec-Fetch-Mode", "navigate")
+        .add("Sec-Fetch-Site", "none")
+        .add("Sec-Fetch-User", "?1")
+        .add("Sec-GPC", "1")
+        .add("Upgrade-Insecure-Requests", "1")
 
-    override val client: OkHttpClient = network.cloudflareClient
-        .newBuilder()
-        .rateLimit(2)
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(1)
         .addInterceptor { chain ->
             val request = chain.request()
             if (!request.url.toString().startsWith(apiUrl)) return@addInterceptor chain.proceed(request)
@@ -130,24 +137,23 @@ class Kumanga : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> = mutableListOf<SChapter>().apply {
         var document = response.asJsoup()
+        var location = document.location()
         val params = document.select("script:containsData(totCntnts)").toString()
 
-        val numberChapters = params.substringAfter("totCntnts=").substringBefore(";").toIntOrNull()
         val mangaId = params.substringAfter("mid=").substringBefore(";")
         val mangaSlug = params.substringAfter("slg='").substringBefore("';")
 
-        if (numberChapters != null) {
-            // Calculating total of pages, Kumanga shows 10 chapters per page, total_pages = #chapters / 10
-            val numberOfPages = (numberChapters / 10.toDouble() + 0.4).roundToInt()
+        var hasNextPage = document.select("ul.pagination li.next:not(.disabled)").isNotEmpty()
+
+        document.select(chapterSelector()).map { add(chapterFromElement(it)) }
+        var page = 2
+        while (hasNextPage) {
+            val pageHeaders = headersBuilder().set("Referer", location).build()
+            document = client.newCall(GET(baseUrl + getMangaUrl(mangaId, mangaSlug, page), pageHeaders)).execute().asJsoup()
+            location = document.location()
             document.select(chapterSelector()).map { add(chapterFromElement(it)) }
-            var page = 2
-            while (page <= numberOfPages) {
-                document = client.newCall(GET(baseUrl + getMangaUrl(mangaId, mangaSlug, page))).execute().asJsoup()
-                document.select(chapterSelector()).map { add(chapterFromElement(it)) }
-                page++
-            }
-        } else {
-            throw Exception("No fue posible obtener los capítulos")
+            page++
+            hasNextPage = document.select("ul.pagination li.next:not(.disabled)").isNotEmpty()
         }
     }
 
