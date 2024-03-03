@@ -1,73 +1,109 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
 
 @Serializable
-data class PayloadSeriesDto(
+class PayloadSeriesDto(
     val data: List<SeriesDto>,
-    @SerialName("current_page")val currentPage: Int = 0,
-    @SerialName("last_page") val lastPage: Int = 0,
-)
+    @SerialName("current_page") private val currentPage: Int = 0,
+    @SerialName("last_page") private val lastPage: Int = 0,
+) {
+    fun hasNextPage() = currentPage < lastPage
+}
 
 @Serializable
-data class SeriesDto(
-    val id: Long,
-    val name: String,
-    val slug: String,
-    val cover: String? = null,
+class SeriesDto(
+    private val id: Long,
+    private val name: String,
+    private val slug: String,
+    private val cover: String? = null,
     val type: String? = null,
-    val summary: String? = null,
-    val status: SeriesStatusDto? = null,
-    val genres: List<FilterDto>? = null,
-)
+    private val summary: String? = null,
+    private val status: SeriesStatusDto? = null,
+    private val genres: List<FilterDto>? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = "/series/comic-$slug#$id"
+        title = name
+        thumbnail_url = cover
+    }
+
+    fun toSMangaDetails() = SManga.create().apply {
+        title = name
+        thumbnail_url = cover
+        description = summary
+        status = parseStatus(this@SeriesDto.status?.id)
+        genre = genres?.joinToString { it.name.trim() }
+    }
+
+    private fun parseStatus(statusId: Long?) = when (statusId) {
+        906397890812182531, 911437469204086787 -> SManga.ONGOING
+        906409397258190851 -> SManga.ON_HIATUS
+        906409532796731395, 911793517664960513 -> SManga.COMPLETED
+        906426661911756802, 906428048651190273, 911793767845265410, 911793856861798402 -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
+}
 
 @Serializable
-data class PayloadSeriesDetailsDto(
+class PayloadSeriesDetailsDto(
     val series: SeriesDto,
 )
 
 @Serializable
-data class PayloadChaptersDto(
+class PayloadChaptersDto(
     var data: List<ChapterDto>,
 )
 
 @Serializable
-data class ChapterDto(
-    val id: Long,
-    val name: String,
+class ChapterDto(
+    private val id: Long,
+    private val name: String,
     @SerialName("published_at") val date: String,
-)
+) {
+    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
+        url = "/capitulo/$id"
+        name = "Capítulo ${this@ChapterDto.name}"
+        date_upload = try {
+            dateFormat.parse(date)?.time ?: 0L
+        } catch (e: Exception) {
+            0L
+        }
+    }
+}
 
 @Serializable
-data class PayloadPagesDto(
+class PayloadPagesDto(
     val chapter: PageDto,
 )
 
 @Serializable
-data class PageDto(
+class PageDto(
     val pages: List<String>,
 )
 
 @Serializable
-data class SeriesStatusDto(
+class SeriesStatusDto(
     val id: Long,
-    val name: String,
 )
 
 @Serializable
-data class PayloadFiltersDto(
+class PayloadFiltersDto(
     val data: GenresStatusesDto,
 )
 
 @Serializable
-data class GenresStatusesDto(
+class GenresStatusesDto(
     val genres: List<FilterDto>,
     val statuses: List<FilterDto>,
 )
 
 @Serializable
-data class FilterDto(
+class FilterDto(
     val id: Long,
     val name: String,
 )
