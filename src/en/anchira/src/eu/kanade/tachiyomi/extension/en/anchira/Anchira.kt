@@ -24,6 +24,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -114,7 +115,18 @@ class Anchira : HttpSource(), ConfigurableSource {
             }
         } else if (query.startsWith(SLUG_BUNDLE_PREFIX)) {
             // bundle entries as chapters
-            val manga = SManga.create().apply { this.url = "?s=${query.substringAfter(SLUG_BUNDLE_PREFIX)}&order=1" }
+            val url = applyFilters(
+                page,
+                query.substringAfter(SLUG_BUNDLE_PREFIX),
+                filters,
+            ).removeAllQueryParameters("page")
+            if (
+                url.build().queryParameter("sort") == "4"
+            ) {
+                url.removeAllQueryParameters("sort")
+            }
+            val manga = SManga.create()
+                .apply { this.url = "?${url.build().query}" }
             fetchMangaDetails(manga).map {
                 MangasPage(listOf(it), false)
             }
@@ -125,13 +137,15 @@ class Anchira : HttpSource(), ConfigurableSource {
                 .map(::searchMangaParse)
         }
     }
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+        GET(applyFilters(page, query, filters).build(), headers)
+
+    private fun applyFilters(page: Int, query: String, filters: FilterList): HttpUrl.Builder {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val trendingFilter = filterList.findInstance<TrendingFilter>()
         val sortTrendingFilter = filters.findInstance<SortTrendingFilter>()
         var url = libraryUrl.toHttpUrl().newBuilder()
-
-        url.addQueryParameter("page", page.toString())
 
         if (trendingFilter?.state == true) {
             val interval = when (sortTrendingFilter?.state) {
@@ -139,15 +153,13 @@ class Anchira : HttpSource(), ConfigurableSource {
                 else -> ""
             }
 
-            if (interval.isNotBlank()) url.addQueryParameter("interval", interval)
+            if (interval.isNotBlank()) url.setQueryParameter("interval", interval)
 
             url = url.toString().replace("library", "trending").toHttpUrl()
                 .newBuilder()
-
-            return GET(url.build(), headers)
         } else {
             if (query.isNotBlank()) {
-                url.addQueryParameter("s", query)
+                url.setQueryParameter("s", query)
             }
 
             filters.forEach { filter ->
@@ -163,7 +175,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                             }
                         }
 
-                        if (sum > 0) url.addQueryParameter("cat", sum.toString())
+                        if (sum > 0) url.setQueryParameter("cat", sum.toString())
                     }
 
                     is SortFilter -> {
@@ -175,8 +187,8 @@ class Anchira : HttpSource(), ConfigurableSource {
                             else -> ""
                         }
 
-                        if (sort.isNotEmpty()) url.addQueryParameter("sort", sort)
-                        if (filter.state?.ascending == true) url.addQueryParameter("order", "1")
+                        if (sort.isNotEmpty()) url.setQueryParameter("sort", sort)
+                        if (filter.state?.ascending == true) url.setQueryParameter("order", "1")
                     }
 
                     is FavoritesFilter -> {
@@ -193,9 +205,13 @@ class Anchira : HttpSource(), ConfigurableSource {
                     else -> {}
                 }
             }
-
-            return GET(url.build(), headers)
         }
+
+        if (page > 1) {
+            url.setQueryParameter("page", page.toString())
+        }
+
+        return url
     }
 
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
@@ -237,12 +253,13 @@ class Anchira : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun getMangaUrl(manga: SManga) = if (preferences.openSource && !manga.url.startsWith("?")) {
-        val id = manga.url.split("/").reversed()[1].toInt()
-        anchiraData.find { it.id == id }?.url ?: "$baseUrl${manga.url}"
-    } else {
-        "$baseUrl${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga) =
+        if (preferences.openSource && !manga.url.startsWith("?")) {
+            val id = manga.url.split("/").reversed()[1].toInt()
+            anchiraData.find { it.id == id }?.url ?: "$baseUrl${manga.url}"
+        } else {
+            "$baseUrl${manga.url}"
+        }
 
     // Chapter
 
@@ -344,14 +361,16 @@ class Anchira : HttpSource(), ConfigurableSource {
         val openSourcePref = SwitchPreferenceCompat(screen.context).apply {
             key = OPEN_SOURCE_PREF
             title = "Open source website in WebView"
-            summary = "Enable to open the original source website of the gallery (if available) instead of Anchira."
+            summary =
+                "Enable to open the original source website of the gallery (if available) instead of Anchira."
             setDefaultValue(false)
         }
 
         val useTagGrouping = SwitchPreferenceCompat(screen.context).apply {
             key = USE_TAG_GROUPING
             title = "Group tags"
-            summary = "Enable to group tags together by artist, circle, parody, magazine and general tags"
+            summary =
+                "Enable to group tags together by artist, circle, parody, magazine and general tags"
             setDefaultValue(false)
         }
 
