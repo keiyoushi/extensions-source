@@ -46,14 +46,14 @@ class IkigaiMangas : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/swf/series?type=comic&page=$page&column=view_count&direction=desc"
+        val apiUrl = "$apiBaseUrl/api/swf/series?page=$page&type=comic&column=view_count&direction=desc"
         return GET(apiUrl, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/swf/series?type=comic&page=$page&column=last_chapter_date&direction=desc"
+        val apiUrl = "$apiBaseUrl/api/swf/series?page=$page&type=comic&column=last_chapter_date&direction=desc"
         return GET(apiUrl, headers)
     }
 
@@ -66,8 +66,8 @@ class IkigaiMangas : HttpSource() {
 
         if (query.isNotEmpty()) apiUrl.addQueryParameter("search", query)
 
-        apiUrl.addQueryParameter("type", "comic")
         apiUrl.addQueryParameter("page", page.toString())
+        apiUrl.addQueryParameter("type", "comic")
 
         val genres = filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
             .filter(Genre::state)
