@@ -6,7 +6,7 @@ import java.util.Locale
 
 class Mangatxunoriginal : Madara(
     "Manga-TX",
-    "https://manga-tx.com",
+    "https://mangaempress.com",
     "en",
     dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
 )
