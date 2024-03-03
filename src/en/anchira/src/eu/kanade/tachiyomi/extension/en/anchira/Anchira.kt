@@ -211,13 +211,13 @@ class Anchira : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        return if (response.request.url.pathSegments.count() == apiUrl.toHttpUrl().pathSegments.count()) {
+        return if (response.request.url.pathSegments.count() == libraryUrl.toHttpUrl().pathSegments.count()) {
             val manga = latestUpdatesParse(response).mangas.first()
             val query = response.request.url.queryParameter("s")
             manga.apply {
                 url = "?${response.request.url.query}"
                 description = "Bundled from $query"
-                title = "[Bundle] $query"
+                title = "[Bundle] ${manga.title}"
                 update_strategy = UpdateStrategy.ALWAYS_UPDATE
             }
         } else {
@@ -256,7 +256,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = mutableListOf<SChapter>()
-        if (response.request.url.pathSegments.count() == apiUrl.toHttpUrl().pathSegments.count()) {
+        if (response.request.url.pathSegments.count() == libraryUrl.toHttpUrl().pathSegments.count()) {
             var results = json.decodeFromString<LibraryResponse>(response.body.string())
             val pages = min(5, ceil((results.total.toFloat() / results.limit)).toInt())
             for (page in 1..pages) {
@@ -270,7 +270,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                         client.newCall(
                             GET(
                                 response.request.url.newBuilder()
-                                    .addQueryParameter("page", (page + 1).toString()).build(),
+                                    .setQueryParameter("page", (page + 1).toString()).build(),
                                 headers,
                             ),
                         ).execute().body.string(),

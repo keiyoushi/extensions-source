@@ -26,7 +26,7 @@ data class Entry(
     @SerialName("thumb_index") val thumbnailIndex: Int = 1,
     val tags: List<Tag> = emptyList(),
     val url: String? = null,
-    val pages: Int,
+    val pages: Int = 1,
 )
 
 @Serializable
