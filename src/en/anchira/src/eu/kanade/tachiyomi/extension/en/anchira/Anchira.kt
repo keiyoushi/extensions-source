@@ -230,10 +230,11 @@ class Anchira : HttpSource(), ConfigurableSource {
         return if (response.request.url.pathSegments.count() == libraryUrl.toHttpUrl().pathSegments.count()) {
             val manga = latestUpdatesParse(response).mangas.first()
             val query = response.request.url.queryParameter("s")
+            val cleanTitle = Regex("(?<!20\\d\\d-)\\b[\\d.]{1,4}$").replace(manga.title, "").trim()
             manga.apply {
                 url = "?${response.request.url.query}"
                 description = "Bundled from $query"
-                title = "[Bundle] ${manga.title}"
+                title = "[Bundle] $cleanTitle"
                 update_strategy = UpdateStrategy.ALWAYS_UPDATE
             }
         } else {
