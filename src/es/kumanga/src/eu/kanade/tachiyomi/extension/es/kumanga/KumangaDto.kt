@@ -22,7 +22,7 @@ class ComicDto(
     }
 
     private fun guessMangaCover(mangaId: String, baseUrl: String) = "$baseUrl/kumathumb.php?src=$mangaId"
-    private fun createMangaUrl(mangaId: String, mangaSlug: String) = "/manga/$mangaId/p/1/$mangaSlug"
+    private fun createMangaUrl(mangaId: String, mangaSlug: String) = "/manga/$mangaId/$mangaSlug"
 }
 
 @Serializable
