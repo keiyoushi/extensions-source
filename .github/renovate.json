@@ -17,6 +17,14 @@
     {
       "matchManagers": ["gradle"],
       "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "gradle"
+      ],
+      "draftPR": true,
+      "enabled": true
     }
   ]
 }
