@@ -7,6 +7,30 @@ import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 
 @Serializable
+class PayloadLatestDto(
+    val data: List<LatestDto>,
+    @SerialName("current_page") private val currentPage: Int = 0,
+    @SerialName("last_page") private val lastPage: Int = 0,
+) {
+    fun hasNextPage() = currentPage < lastPage
+}
+
+@Serializable
+class LatestDto(
+    @SerialName("series_id") private val id: Long,
+    @SerialName("series_name") private val name: String,
+    @SerialName("series_slug") private val slug: String,
+    private val thumbnail: String? = null,
+    val type: String? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = "/series/comic-$slug#$id"
+        title = name
+        thumbnail_url = thumbnail
+    }
+}
+
+@Serializable
 class PayloadSeriesDto(
     val data: List<SeriesDto>,
     @SerialName("current_page") private val currentPage: Int = 0,

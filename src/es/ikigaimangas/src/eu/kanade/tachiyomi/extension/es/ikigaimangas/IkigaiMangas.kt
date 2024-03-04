@@ -31,12 +31,13 @@ class IkigaiMangas : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
+        .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
@@ -46,18 +47,26 @@ class IkigaiMangas : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/swf/series?page=$page&type=comic&column=view_count&direction=desc"
+        val apiUrl = "$apiBaseUrl/api/swf/series/ranking-list?type=total_ranking&series_type=comic"
         return GET(apiUrl, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
+        val mangaList = result.data.map { it.toSManga() }
+        return MangasPage(mangaList, false)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/swf/series?page=$page&type=comic&column=last_chapter_date&direction=desc"
+        val apiUrl = "$apiBaseUrl/api/swf/new-chapters?page=$page"
         return GET(apiUrl, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = json.decodeFromString<PayloadLatestDto>(response.body.string())
+        val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
+        return MangasPage(mangaList, result.hasNextPage())
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val sortByFilter = filters.firstInstanceOrNull<SortByFilter>()
