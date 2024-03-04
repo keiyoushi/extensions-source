@@ -4,6 +4,7 @@ import android.util.Base64
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -52,13 +53,54 @@ class LeerCapitulo : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String? = null
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search-autocomplete".toHttpUrl().newBuilder()
-            .addQueryParameter("term", query)
+        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
 
-        return GET(url.build(), headers)
+        if (query.isNotBlank()) {
+            urlBuilder.addPathSegment("search-autocomplete")
+            urlBuilder.addQueryParameter("term", query)
+
+            return GET(urlBuilder.build(), headers)
+        } else {
+            for (filter in filters) {
+                when (filter) {
+                    is GenreFilter -> {
+                        if (filter.state != 0) {
+                            urlBuilder.addPathSegment("genre")
+                            urlBuilder.addPathSegment(filter.toUriPart())
+                            break
+                        }
+                    }
+                    is AlphabeticFilter -> {
+                        if (filter.state != 0) {
+                            urlBuilder.addPathSegment("initial")
+                            urlBuilder.addPathSegment(filter.toUriPart())
+                            break
+                        }
+                    }
+                    is StatusFilter -> {
+                        if (filter.state != 0) {
+                            urlBuilder.addPathSegment("status")
+                            urlBuilder.addPathSegment(filter.toUriPart())
+                            break
+                        }
+                    }
+                    else -> {}
+                }
+            }
+            urlBuilder.addPathSegment("") // Empty path segment to avoid 404
+            urlBuilder.addQueryParameter("page", page.toString())
+        }
+        val url = urlBuilder.build()
+        if (url.pathSegments.size <= 1) throw Exception("Debe seleccionar un filtro o realizar una búsqueda por texto.")
+
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        if (!response.request.url.pathSegments.contains("search-autocomplete")) {
+            return super.searchMangaParse(response)
+        }
+
         val mangas = json.decodeFromString<List<MangaDto>>(response.body.string()).map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.link)
@@ -70,11 +112,25 @@ class LeerCapitulo : ParsedHttpSource() {
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+    override fun searchMangaSelector(): String = "div.cate-manga div.mainpage-manga"
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("div.media-body a")!!.attr("href"))
+        title = element.selectFirst("div.media-body a")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
+    }
 
-    override fun searchMangaNextPageSelector(): String? = null
+    override fun searchMangaNextPageSelector(): String = "ul.pagination > li.active + li"
+
+    override fun getFilterList(): FilterList {
+        return FilterList(
+            Filter.Header("Los filtros serán ignorados si se realiza una búsqueda por texto."),
+            Filter.Header("Los filtros no se pueden combinar  entre ellos."),
+            GenreFilter(),
+            AlphabeticFilter(),
+            StatusFilter(),
+        )
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
@@ -167,10 +223,9 @@ class LeerCapitulo : ParsedHttpSource() {
     }
 
     @Serializable
-    data class MangaDto(
+    class MangaDto(
         val label: String,
         val link: String,
         val thumbnail: String,
-        val value: String,
     )
 }
