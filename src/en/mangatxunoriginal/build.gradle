@@ -1,5 +1,5 @@
 ext {
-    extName = 'Manga-TX'
+    extName = 'MangaEmpress'
     extClass = '.Mangatxunoriginal'
     themePkg = 'madara'
     baseUrl = 'https://mangaempress.com'
