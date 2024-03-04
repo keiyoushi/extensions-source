@@ -12,4 +12,7 @@ class RawINU : FMReader(
     override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
+
+    // =========================== Manga Details ============================
+    override val infoElementSelector = "div.card-body div.row"
 }
