@@ -1,0 +1,10 @@
+ext {
+    extName = 'Winter Sun'
+    extClass = '.WinterSun'
+    themePkg = 'madara'
+    baseUrl = 'https://wintersunscan.xyz'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
