@@ -1,0 +1,10 @@
+ext {
+    extName = 'Jobsibe'
+    extClass = '.Jobsibe'
+    themePkg = 'madara'
+    baseUrl = 'https://jobsibe.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
