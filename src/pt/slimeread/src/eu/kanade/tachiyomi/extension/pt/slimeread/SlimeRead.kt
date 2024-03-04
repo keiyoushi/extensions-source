@@ -30,7 +30,7 @@ class SlimeRead : HttpSource() {
 
     override val baseUrl = "https://slimeread.com"
 
-    private val apiUrl = "https://free.slimeread.com:8443"
+    private val apiUrl = "https://old.slimeread.com:8443"
 
     override val lang = "pt-BR"
 
