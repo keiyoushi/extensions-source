@@ -61,6 +61,7 @@ class MangaSwat :
 
     override fun searchMangaNextPageSelector() = "a[rel=next]"
 
+    override val seriesTitleSelector = "h1[itemprop=headline]"
     override val seriesArtistSelector = "span:contains(الناشر) i"
     override val seriesAuthorSelector = "span:contains(المؤلف) i"
     override val seriesGenreSelector = "span:contains(التصنيف) a, .mgen a"
