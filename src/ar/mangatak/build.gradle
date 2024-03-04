@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaTak'
+    extClass = '.MangaTak'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangatak.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
