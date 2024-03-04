@@ -2,8 +2,8 @@ ext {
     extName = 'S2Manga'
     extClass = '.S2Manga'
     themePkg = 'madara'
-    baseUrl = 'https://www.s2manga.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://s2manga.com'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
