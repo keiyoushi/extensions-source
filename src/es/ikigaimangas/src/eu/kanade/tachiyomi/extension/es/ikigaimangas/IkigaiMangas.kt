@@ -18,6 +18,7 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.concurrent.thread
 
 class IkigaiMangas : HttpSource() {
 
@@ -30,12 +31,13 @@ class IkigaiMangas : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
+        .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
@@ -45,18 +47,26 @@ class IkigaiMangas : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/swf/series?page=$page&column=view_count&direction=desc"
+        val apiUrl = "$apiBaseUrl/api/swf/series/ranking-list?type=total_ranking&series_type=comic"
         return GET(apiUrl, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
+        val mangaList = result.data.map { it.toSManga() }
+        return MangasPage(mangaList, false)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/swf/series?page=$page&column=last_chapter_date&direction=desc"
+        val apiUrl = "$apiBaseUrl/api/swf/new-chapters?page=$page"
         return GET(apiUrl, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = json.decodeFromString<PayloadLatestDto>(response.body.string())
+        val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
+        return MangasPage(mangaList, result.hasNextPage())
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val sortByFilter = filters.firstInstanceOrNull<SortByFilter>()
@@ -66,6 +76,7 @@ class IkigaiMangas : HttpSource() {
         if (query.isNotEmpty()) apiUrl.addQueryParameter("search", query)
 
         apiUrl.addQueryParameter("page", page.toString())
+        apiUrl.addQueryParameter("type", "comic")
 
         val genres = filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
             .filter(Genre::state)
@@ -82,23 +93,14 @@ class IkigaiMangas : HttpSource() {
 
         apiUrl.addQueryParameter("column", sortByFilter?.selected ?: "name")
         apiUrl.addQueryParameter("direction", if (sortByFilter?.state?.ascending == true) "asc" else "desc")
-        apiUrl.addQueryParameter("type", "comic")
 
         return GET(apiUrl.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        runCatching { fetchFilters() }
         val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
-        val mangaList = result.data.filter { it.type == "comic" }.map {
-            SManga.create().apply {
-                url = "/series/comic-${it.slug}#${it.id}"
-                title = it.name
-                thumbnail_url = it.cover
-            }
-        }
-        val hasNextPage = result.currentPage < result.lastPage
-        return MangasPage(mangaList, hasNextPage)
+        val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
+        return MangasPage(mangaList, result.hasNextPage())
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -109,13 +111,7 @@ class IkigaiMangas : HttpSource() {
         val apiUrl = "$apiBaseUrl/api/swf/series/$slug".toHttpUrl()
         val newResponse = client.newCall(GET(url = apiUrl, headers = headers)).execute()
         val result = json.decodeFromString<PayloadSeriesDetailsDto>(newResponse.body.string())
-        return SManga.create().apply {
-            title = result.series.name
-            thumbnail_url = result.series.cover
-            description = result.series.summary
-            status = parseStatus(result.series.status?.id)
-            genre = result.series.genres?.joinToString { it.name.trim() }
-        }
+        return result.series.toSMangaDetails()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = pageViewerUrl + chapter.url
@@ -127,14 +123,7 @@ class IkigaiMangas : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = json.decodeFromString<PayloadChaptersDto>(response.body.string())
-        return result.data.map {
-            SChapter.create().apply {
-                url = "/capitulo/${it.id}"
-                name = "Capítulo ${it.name}"
-                date_upload = runCatching { dateFormat.parse(it.date)?.time }
-                    .getOrNull() ?: 0L
-            }
-        }.reversed()
+        return result.data.map { it.toSChapter(dateFormat) }.reversed()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -150,33 +139,14 @@ class IkigaiMangas : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun parseStatus(statusId: Long?) = when (statusId) {
-        906397890812182531, 911437469204086787 -> SManga.ONGOING
-        906409397258190851 -> SManga.ON_HIATUS
-        906409532796731395, 911793517664960513 -> SManga.COMPLETED
-        906426661911756802, 906428048651190273, 911793767845265410, 911793856861798402 -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
-
-    data class SortProperty(val name: String, val value: String) {
-        override fun toString(): String = name
-    }
-
-    private fun getSortProperties(): List<SortProperty> = listOf(
-        SortProperty("Nombre", "name"),
-        SortProperty("Creado en", "created_at"),
-        SortProperty("Actualización más reciente", "last_chapter_date"),
-        SortProperty("Número de favoritos", "bookmark_count"),
-        SortProperty("Número de valoración", "rating_count"),
-        SortProperty("Número de vistas", "view_count"),
-    )
-
     override fun getFilterList(): FilterList {
+        fetchFilters()
+
         val filters = mutableListOf<Filter<*>>(
             SortByFilter("Ordenar por", getSortProperties()),
         )
 
-        filters += if (genresList.isNotEmpty() || statusesList.isNotEmpty()) {
+        filters += if (filtersState == FiltersState.FETCHED) {
             listOf(
                 StatusFilter("Estados", getStatusFilters()),
                 GenreFilter("Géneros", getGenreFilters()),
@@ -190,27 +160,44 @@ class IkigaiMangas : HttpSource() {
         return FilterList(filters)
     }
 
+    private fun getSortProperties(): List<SortProperty> = listOf(
+        SortProperty("Nombre", "name"),
+        SortProperty("Creado en", "created_at"),
+        SortProperty("Actualización más reciente", "last_chapter_date"),
+        SortProperty("Número de favoritos", "bookmark_count"),
+        SortProperty("Número de valoración", "rating_count"),
+        SortProperty("Número de vistas", "view_count"),
+    )
+
     private fun getGenreFilters(): List<Genre> = genresList.map { Genre(it.first, it.second) }
     private fun getStatusFilters(): List<Status> = statusesList.map { Status(it.first, it.second) }
 
     private var genresList: List<Pair<String, Long>> = emptyList()
     private var statusesList: List<Pair<String, Long>> = emptyList()
     private var fetchFiltersAttempts = 0
-    private var fetchFiltersFailed = false
+    private var filtersState = FiltersState.NOT_FETCHED
 
     private fun fetchFilters() {
-        if (fetchFiltersAttempts <= 3 && ((genresList.isEmpty() && statusesList.isEmpty()) || fetchFiltersFailed)) {
-            val filters = runCatching {
+        if (filtersState != FiltersState.NOT_FETCHED || fetchFiltersAttempts >= 3) return
+        filtersState = FiltersState.FETCHING
+        fetchFiltersAttempts++
+        thread {
+            try {
                 val response = client.newCall(GET("$apiBaseUrl/api/swf/filter-options", headers)).execute()
-                json.decodeFromString<PayloadFiltersDto>(response.body.string())
-            }
+                val filters = json.decodeFromString<PayloadFiltersDto>(response.body.string())
 
-            fetchFiltersFailed = filters.isFailure
-            genresList = filters.getOrNull()?.data?.genres?.map { it.name.trim() to it.id } ?: emptyList()
-            statusesList = filters.getOrNull()?.data?.statuses?.map { it.name.trim() to it.id } ?: emptyList()
+                genresList = filters.data.genres.map { it.name.trim() to it.id }
+                statusesList = filters.data.statuses.map { it.name.trim() to it.id }
+
+                filtersState = FiltersState.FETCHED
+            } catch (e: Throwable) {
+                filtersState = FiltersState.NOT_FETCHED
+            }
         }
     }
 
     private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
         filterIsInstance<R>().firstOrNull()
+
+    private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 }
