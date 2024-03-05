@@ -6,7 +6,6 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -46,9 +45,7 @@ abstract class Gmanga(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client = network.client.newBuilder()
-        .rateLimit(4)
-        .build()
+    override val client = network.cloudflareClient
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
