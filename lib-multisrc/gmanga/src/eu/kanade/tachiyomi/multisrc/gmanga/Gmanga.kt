@@ -80,7 +80,7 @@ abstract class Gmanga(
         }
 
         return MangasPage(
-            mangas.map { it.toSManga(cdnUrl) }.distinctBy { it.url },
+            mangas.map { it.toSManga(cdnUrl) },
             hasNextPage = (mangas.size >= 30) && !isLatest,
         )
     }
