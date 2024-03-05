@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ar.gmanga
+package eu.kanade.tachiyomi.multisrc.gmanga
 
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.source.model.Filter
@@ -14,7 +14,7 @@ import kotlinx.serialization.json.putJsonObject
 import java.text.ParseException
 import java.text.SimpleDateFormat
 
-class GmangaFilters() {
+class Filters {
 
     companion object {
 
@@ -139,7 +139,7 @@ class GmangaFilters() {
         private const val ERROR_INVALID_MIN_CHAPTER_COUNT = "الحد الأدنى لعدد الفصول غير صالح"
         private const val ERROR_INVALID_MAX_CHAPTER_COUNT = "الحد الأقصى لعدد الفصول غير صالح"
 
-        private class MangaTypeFilter() : Filter.Group<TagFilter>(
+        private class MangaTypeFilter : Filter.Group<TagFilter>(
             "الأصل",
             listOf(
                 TagFilter("1", "يابانية", TriState.STATE_INCLUDE),
@@ -153,14 +153,14 @@ class GmangaFilters() {
             ),
         )
 
-        private class OneShotFilter() : Filter.Group<TagFilter>(
+        private class OneShotFilter : Filter.Group<TagFilter>(
             "ونشوت؟",
             listOf(
                 TagFilter(FILTER_ID_ONE_SHOT, "نعم", TriState.STATE_EXCLUDE),
             ),
         )
 
-        private class StoryStatusFilter() : Filter.Group<TagFilter>(
+        private class StoryStatusFilter : Filter.Group<TagFilter>(
             "حالة القصة",
             listOf(
                 TagFilter("2", "مستمرة"),
@@ -168,7 +168,7 @@ class GmangaFilters() {
             ),
         )
 
-        private class TranslationStatusFilter() : Filter.Group<TagFilter>(
+        private class TranslationStatusFilter : Filter.Group<TagFilter>(
             "حالة الترجمة",
             listOf(
                 TagFilter("0", "منتهية"),
@@ -178,7 +178,7 @@ class GmangaFilters() {
             ),
         )
 
-        private class ChapterCountFilter() : Filter.Group<IntFilter>(
+        private class ChapterCountFilter : Filter.Group<IntFilter>(
             "عدد الفصول",
             listOf(
                 IntFilter(FILTER_ID_MIN_CHAPTER_COUNT, "على الأقل"),
@@ -186,7 +186,7 @@ class GmangaFilters() {
             ),
         )
 
-        private class DateRangeFilter() : Filter.Group<DateFilter>(
+        private class DateRangeFilter : Filter.Group<DateFilter>(
             "تاريخ النشر",
             listOf(
                 DateFilter(FILTER_ID_START_DATE, "تاريخ النشر"),
@@ -194,7 +194,7 @@ class GmangaFilters() {
             ),
         )
 
-        private class CategoryFilter() : Filter.Group<TagFilter>(
+        private class CategoryFilter : Filter.Group<TagFilter>(
             "التصنيفات",
             listOf(
                 TagFilter("1", "إثارة"),
