@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.CrystalComics
+package eu.kanade.tachiyomi.extension.pt.crystalcomics
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
