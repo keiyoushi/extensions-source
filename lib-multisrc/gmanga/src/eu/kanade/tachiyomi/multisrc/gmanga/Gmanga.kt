@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.gmanga
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -89,15 +89,93 @@ abstract class Gmanga(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return Filters.buildSearchPayload(
-            page,
-            query,
-            if (filters.isEmpty()) getFilterList() else filters,
-        ).let {
-            val body = it.toString().toRequestBody(MEDIA_TYPE)
-            POST("$baseUrl/api/mangas/search", headers, body)
-        }
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+
+        val mangaTypeFilter = filterList.findInstance<MangaTypeFilter>()!!
+        val oneShotFilter = filterList.findInstance<OneShotFilter>()!!
+        val storyStatusFilter = filterList.findInstance<StoryStatusFilter>()!!
+        val translationStatusFilter = filterList.findInstance<TranslationStatusFilter>()!!
+        val chapterCountFilter = filterList.findInstance<ChapterCountFilter>()!!
+        val dateRangeFilter = filterList.findInstance<DateRangeFilter>()!!
+        val categoryFilter = filterList.findInstance<CategoryFilter>()!!
+
+        val body = SearchPayload(
+            oneshot = OneShot(
+                value = oneShotFilter.state.first().run {
+                    when {
+                        isIncluded() -> true
+                        isExcluded() -> false
+                        else -> null
+                    }
+                },
+            ),
+            title = query,
+            page = page,
+            mangaTypes = IncludeExclude(
+                include = mangaTypeFilter.state.filter { it.isIncluded() }.map { it.id },
+                exclude = mangaTypeFilter.state.filter { it.isExcluded() }.map { it.id },
+            ),
+            storyStatus = IncludeExclude(
+                include = storyStatusFilter.state.filter { it.isIncluded() }.map { it.id },
+                exclude = storyStatusFilter.state.filter { it.isExcluded() }.map { it.id },
+            ),
+            tlStatus = IncludeExclude(
+                include = translationStatusFilter.state.filter { it.isIncluded() }.map { it.id },
+                exclude = translationStatusFilter.state.filter { it.isExcluded() }.map { it.id },
+            ),
+            categories = IncludeExclude(
+                // always include null, maybe to avoid shifting index in the backend
+                include = listOf(null) + categoryFilter.state.filter { it.isIncluded() }.map { it.id },
+                exclude = categoryFilter.state.filter { it.isExcluded() }.map { it.id },
+            ),
+            chapters = MinMax(
+                min = chapterCountFilter.min.run {
+                    when {
+                        state == "" -> ""
+                        isValid() -> state
+                        else -> throw Exception("الحد الأدنى لعدد الفصول غير صالح")
+                    }
+                },
+                max = chapterCountFilter.max.run {
+                    when {
+                        state == "" -> ""
+                        isValid() -> state
+                        else -> throw Exception("الحد الأقصى لعدد الفصول غير صالح")
+                    }
+                },
+            ),
+            dates = StartEnd(
+                start = dateRangeFilter.start.run {
+                    when {
+                        state == "" -> ""
+                        isValid() -> state
+                        else -> throw Exception("تاريخ بداية غير صالح")
+                    }
+                },
+                end = dateRangeFilter.end.run {
+                    when {
+                        state == "" -> ""
+                        isValid() -> state
+                        else -> throw Exception("تاريخ نهاية غير صالح")
+                    }
+                },
+            ),
+        ).let(json::encodeToString).toRequestBody(MEDIA_TYPE)
+
+        return POST("$baseUrl/api/mangas/search", headers, body)
     }
+
+    abstract fun getCategoryFilter(): List<TagFilterData>
+
+    override fun getFilterList() = FilterList(
+        MangaTypeFilter(),
+        OneShotFilter(),
+        StoryStatusFilter(),
+        TranslationStatusFilter(),
+        ChapterCountFilter(),
+        DateRangeFilter(),
+        CategoryFilter(getCategoryFilter()),
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decryptAs<SearchMangaDto>()
@@ -222,15 +300,13 @@ abstract class Gmanga(
         getString(PREF_LATEST_LISTING_KEY, PREF_LASTETS_LISTING_SHOW_LASTETS_CHAPTER)!!
 
     private inline fun <reified T> Response.decryptAs(): T =
-        decrypt(parseAs<EncryptedResponse>().data)
-            .also { Log.d(name, it) }
-            .parseAs<T>()
+        decrypt(parseAs<EncryptedResponse>().data).parseAs()
 
     private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
 
     private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    override fun getFilterList() = Filters.getFilterList()
+    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
     override fun imageUrlParse(response: Response): String =
         throw UnsupportedOperationException()
