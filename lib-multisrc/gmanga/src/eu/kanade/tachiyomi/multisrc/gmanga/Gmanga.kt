@@ -2,11 +2,14 @@ package eu.kanade.tachiyomi.multisrc.gmanga
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +17,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -94,7 +100,7 @@ abstract class Gmanga(
         val translationStatusFilter = filterList.findInstance<TranslationStatusFilter>()!!
         val chapterCountFilter = filterList.findInstance<ChapterCountFilter>()!!
         val dateRangeFilter = filterList.findInstance<DateRangeFilter>()!!
-        val categoryFilter = filterList.findInstance<CategoryFilter>()!!
+        val categoryFilter = filterList.findInstance<CategoryFilter>() ?: CategoryFilter(emptyList())
 
         val body = SearchPayload(
             oneshot = OneShot(
@@ -162,17 +168,64 @@ abstract class Gmanga(
         return POST("$baseUrl/api/mangas/search", headers, body)
     }
 
-    abstract fun getCategoryFilter(): List<TagFilterData>
+    private var categories: List<TagFilterData> = emptyList()
+    private var filtersState = FilterState.Unfetched
+    private var filterAttempts = 0
 
-    override fun getFilterList() = FilterList(
-        MangaTypeFilter(),
-        OneShotFilter(),
-        StoryStatusFilter(),
-        TranslationStatusFilter(),
-        ChapterCountFilter(),
-        DateRangeFilter(),
-        CategoryFilter(getCategoryFilter()),
-    )
+    private enum class FilterState {
+        Fetching, Fetched, Unfetched
+    }
+
+    private suspend fun fetchFilters() {
+        if (filtersState == FilterState.Unfetched && filterAttempts < 3) {
+            filtersState = FilterState.Fetching
+            filterAttempts++
+
+            try {
+                categories = client.newCall(GET("$baseUrl/mangas/", headers))
+                    .await()
+                    .asJsoup()
+                    .select(".js-react-on-rails-component").html()
+                    .parseAs<FiltersDto>()
+                    .run {
+                        categories ?: categoryTypes!!.flatMap { it.categories!! }
+                    }
+                    .map { TagFilterData(it.id.toString(), it.name) }
+
+                filtersState = FilterState.Fetched
+            } catch (e: Exception) {
+                Log.e(name, e.stackTraceToString())
+                filtersState = FilterState.Unfetched
+            }
+        }
+    }
+
+    override fun getFilterList(): FilterList {
+        CoroutineScope(Dispatchers.IO).launch { fetchFilters() }
+
+        val filters = mutableListOf<Filter<*>>(
+            MangaTypeFilter(),
+            OneShotFilter(),
+            StoryStatusFilter(),
+            TranslationStatusFilter(),
+            ChapterCountFilter(),
+            DateRangeFilter(),
+        )
+
+        filters += if (filtersState == FilterState.Fetched) {
+            listOf(
+                CategoryFilter(categories),
+            )
+        } else {
+            listOf(
+                Filter.Separator(),
+                // need arabic tl
+                Filter.Header("Press 'reset' to load more filters"),
+            )
+        }
+
+        return FilterList(filters)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decryptAs<SearchMangaDto>()

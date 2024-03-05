@@ -44,6 +44,18 @@ class BrowseManga(
 }
 
 @Serializable
+class FiltersDto(
+    val categoryTypes: List<FiltersDto>? = null,
+    val categories: List<FilterDto>? = null,
+)
+
+@Serializable
+class FilterDto(
+    val name: String,
+    val id: Int,
+)
+
+@Serializable
 class MangaDetailsDto(
     val mangaData: Manga,
 )

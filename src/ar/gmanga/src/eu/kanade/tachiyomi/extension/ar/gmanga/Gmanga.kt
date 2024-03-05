@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.gmanga
 
 import eu.kanade.tachiyomi.multisrc.gmanga.Gmanga
-import eu.kanade.tachiyomi.multisrc.gmanga.TagFilterData
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class Gmanga : Gmanga(
@@ -14,6 +13,9 @@ class Gmanga : Gmanga(
     override val client = super.client.newBuilder()
         .rateLimit(4)
         .build()
+}
+
+/*
 
     override fun getCategoryFilter() =
         listOf(
@@ -55,4 +57,4 @@ class Gmanga : Gmanga(
             TagFilterData("38", "ويب-تون"),
             TagFilterData("39", "زمنكاني"),
         )
-}
+ */
