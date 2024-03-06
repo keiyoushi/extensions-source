@@ -6,7 +6,11 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+<<<<<<< HEAD
 class NetTruyen : WPComics("NetTruyen", "https://www.nettruyenkk.com", "vi", SimpleDateFormat("dd/MM/yy", Locale.getDefault()), null) {
+=======
+class NetTruyen : WPComics("NetTruyen", "https://www.nettruyenbb.com", "vi", SimpleDateFormat("dd/MM/yy", Locale.getDefault()), null) {
+>>>>>>> parent of 5642a0e4 (change domain for nettruyen)
     override fun String.replaceSearchPath() = replace("/$searchPath?status=2&", "/truyen-full?")
 
     /**
