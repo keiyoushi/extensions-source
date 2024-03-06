@@ -27,7 +27,7 @@ class MangaDistrict :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun searchMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
+    override fun popularMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
 
     private val titleVersion = Regex("\\(.*\\)")
 
