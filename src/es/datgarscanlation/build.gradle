@@ -1,5 +1,5 @@
 ext {
-    extName = 'DatGarScanlation'
+    extName = 'Dat-Gar Scan'
     extClass = '.DatGarScanlation'
     themePkg = 'zeistmanga'
     baseUrl = 'https://datgarscanlation.blogspot.com'
