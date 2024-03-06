@@ -272,29 +272,30 @@ abstract class MangaThemesia(
         return if (this.isNullOrBlank() || this == "-" || this == "N/A" || this == "n/a") null else this
     }
 
-    open fun String?.parseStatus(): Int {
-        if (this == null) return SManga.UNKNOWN
+    open fun String?.parseStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
 
-        return when (this.lowercase().trim()) {
-            "مستمرة", "en curso", "ongoing", "on going", "ativo", "en cours",
-            "en cours de publication", "đang tiến hành", "em lançamento", "онгоінг", "publishing",
-            "devam ediyor", "em andamento", "in corso", "güncel", "berjalan", "продолжается", "updating", "lançando", "in arrivo", "emision",
-            "en emision", "مستمر", "curso", "en marcha", "publicandose", "publicando", "连载中", "devam etmekte", "連載中",
-            -> SManga.ONGOING
+        listOf(
+            "مستمرة", "en curso", "ongoing", "on going", "ativo", "en cours", "en cours de publication",
+            "đang tiến hành", "em lançamento", "онгоінг", "publishing", "devam ediyor", "em andamento",
+            "in corso", "güncel", "berjalan", "продолжается", "updating", "lançando", "in arrivo",
+            "emision", "en emision", "مستمر", "curso", "en marcha", "publicandose", "publicando",
+            "连载中", "devam etmekte", "連載中",
+        ).any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
 
-            "completed", "completo", "complété", "fini", "achevé", "terminé", "tamamlandı", "đã hoàn thành", "hoàn thành",
-            "مكتملة", "завершено", "finished", "finalizado", "completata", "one-shot", "bitti", "tamat", "completado", "concluído", "完結",
-            "concluido", "已完结", "bitmiş",
-            -> SManga.COMPLETED
+        listOf(
+            "completed", "completo", "complété", "fini", "achevé", "terminé", "tamamlandı", "đã hoàn thành",
+            "hoàn thành", "مكتملة", "завершено", "finished", "finalizado", "completata", "one-shot",
+            "bitti", "tamat", "completado", "concluído", "完結", "concluido", "已完结", "bitmiş",
+        ).any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
 
-            "canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné",
-            -> SManga.CANCELLED
+        listOf("canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
 
-            "hiatus", "on hold", "pausado", "en espera", "en pause", "en attente",
-            -> SManga.ON_HIATUS
+        listOf("hiatus", "on hold", "pausado", "en espera", "en pause", "en attente")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
 
-            else -> SManga.UNKNOWN
-        }
+        else -> SManga.UNKNOWN
     }
 
     // Chapter list
