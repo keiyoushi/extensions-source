@@ -391,6 +391,7 @@ abstract class ZeistManga(
     protected open val statusOnGoingList = listOf(
         "ongoing",
         "en curso",
+        "en emisión",
         "ativo",
         "lançando",
         "مستمر",

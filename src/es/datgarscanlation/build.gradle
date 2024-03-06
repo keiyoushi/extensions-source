@@ -1,0 +1,9 @@
+ext {
+    extName = 'Dat-Gar Scan'
+    extClass = '.DatGarScanlation'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://datgarscanlation.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
