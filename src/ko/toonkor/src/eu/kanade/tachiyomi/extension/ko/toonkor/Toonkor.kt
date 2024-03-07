@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Base64
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,10 +13,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.schedulers.Schedulers
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.nio.charset.Charset
@@ -26,7 +29,7 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "Toonkor"
 
-    private val defaultBaseUrl = "https://tkor.dog"
+    private val defaultBaseUrl = "auto"
 
     private val BASE_URL_PREF = "overrideBaseUrl_v${AppInfo.getVersionName()}"
 
@@ -213,7 +216,21 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
         screen.addPreference(baseUrlPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private fun getPrefBaseUrl(): String {
+        val prefUrl = preferences.getString(BASE_URL_PREF, defaultBaseUrl) ?: defaultBaseUrl
+        if (prefUrl != "auto") return prefUrl
+
+        return client.newCall(GET("https://t.me/s/new_toonkor"))
+            .asObservableSuccess()
+            .subscribeOn(Schedulers.io())
+            .map { response ->
+                val document = response.asJsoup()
+                document.select(".tgme_widget_message_text").last()
+                    ?.selectFirst("a")
+                    ?.attr("href")
+                    ?.dropLastWhile { it == '/' }!!
+            }.toBlocking().first()
+    }
 
     companion object {
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
