@@ -90,8 +90,6 @@ class IRovedOut : HttpSource() {
         return Observable.just(pages)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
-
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
