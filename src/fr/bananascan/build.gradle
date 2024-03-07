@@ -1,9 +1,9 @@
 ext {
-    extName = 'Banana-Scan'
-    extClass = '.BananaScan'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://banana-scan.com'
-    overrideVersionCode = 0
+    extName = 'Harmony-Scan'
+    extClass = '.HarmonyScan'
+    themePkg = 'madara'
+    baseUrl = 'https://harmony-scan.fr'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
