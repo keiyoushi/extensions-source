@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.tr.mangawt
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 
-class MangaWT : MangaThemesia("MangaWT", "https://mangawt.com", "tr", dateFormat = SimpleDateFormat("MMM d, yyyy", Locale("tr")))
+class MangaWT : Madara(
+    "MangaWT",
+    "https://mangawt.com",
+    "tr",
+) {
+    override val useNewChapterEndpoint = true
+}
