@@ -23,10 +23,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -39,15 +35,14 @@ abstract class Gmanga(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
-    private val apiUrl: String = baseUrl.replace("://", "://api."),
-    private val cdnUrl: String = baseUrl.replace("://", "://media."),
+    protected val cdnUrl: String = baseUrl,
 ) : ConfigurableSource, HttpSource() {
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    protected val json: Json by injectLazy()
 
-    private val preferences by lazy {
+    protected val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
@@ -57,37 +52,18 @@ abstract class Gmanga(
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val latestUrl = when (preferences.getLatestListingPref()) {
-            PREF_LASTETS_LISTING_SHOW_LASTETS_MANGA -> "$baseUrl/mangas/latest"
-            PREF_LASTETS_LISTING_SHOW_LASTETS_CHAPTER -> "$apiUrl/api/releases?page=$page"
-            else -> "$baseUrl/mangas/latest"
-        }
-        return GET(latestUrl, headers)
+        return GET("$baseUrl/api/releases?page=$page", headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val isLatest = when (preferences.getLatestListingPref()) {
-            PREF_LASTETS_LISTING_SHOW_LASTETS_MANGA -> true
-            PREF_LASTETS_LISTING_SHOW_LASTETS_CHAPTER -> false
-            else -> true
-        }
+        val releases = response.parseAs<LatestChaptersDto>().releases
 
-        val mangas = if (!isLatest) {
-            val decMga = response.decryptAs<JsonObject>()
-            val selectedManga = decMga["rows"]!!.jsonArray[0].jsonObject["rows"]!!.jsonArray
-            selectedManga.map {
-                json.decodeFromJsonElement<BrowseManga>(it.jsonArray[17])
-            }
-        } else {
-            response.asJsoup()
-                .select(".js-react-on-rails-component").html()
-                .parseAs<MangaDataAction<LatestMangaDto>>()
-                .mangaDataAction.newMangas
-        }
+        val entries = releases.map { it.manga.toSManga(::createThumbnail) }
+            .distinctBy { it.url }
 
         return MangasPage(
-            mangas.map { it.toSManga(cdnUrl) },
-            hasNextPage = (mangas.size >= 30) && !isLatest,
+            entries,
+            hasNextPage = (releases.size >= 30),
         )
     }
 
@@ -230,7 +206,7 @@ abstract class Gmanga(
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decryptAs<SearchMangaDto>()
         return MangasPage(
-            data.mangas.map { it.toSManga(cdnUrl) },
+            data.mangas.map { it.toSManga(::createThumbnail) },
             hasNextPage = data.mangas.size == 50,
         )
     }
@@ -240,7 +216,7 @@ abstract class Gmanga(
             .select(".js-react-on-rails-component").html()
             .parseAs<MangaDataAction<MangaDetailsDto>>()
             .mangaDataAction.mangaData
-            .toSManga(cdnUrl)
+            .toSManga(::createThumbnail)
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -326,49 +302,34 @@ abstract class Gmanga(
             summary = "%s"
             setDefaultValue(PREF_CHAPTER_LISTING_SHOW_POPULAR)
         }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_LATEST_LISTING_KEY
-            title = "كيفية عرض بقائمة الأعمال الجديدة"
-            entries = arrayOf(
-                "اختيار آخر الإضافات",
-                "اختيار لمانجات الجديدة",
-            )
-            entryValues = arrayOf(
-                PREF_LASTETS_LISTING_SHOW_LASTETS_CHAPTER,
-                PREF_LASTETS_LISTING_SHOW_LASTETS_MANGA,
-            )
-            summary = "%s"
-            setDefaultValue(PREF_LASTETS_LISTING_SHOW_LASTETS_CHAPTER)
-        }.also(screen::addPreference)
     }
 
-    private fun SharedPreferences.getChapterListingPref() =
+    protected fun SharedPreferences.getChapterListingPref() =
         getString(PREF_CHAPTER_LISTING_KEY, PREF_CHAPTER_LISTING_SHOW_POPULAR)!!
 
-    private fun SharedPreferences.getLatestListingPref() =
-        getString(PREF_LATEST_LISTING_KEY, PREF_LASTETS_LISTING_SHOW_LASTETS_CHAPTER)!!
-
-    private inline fun <reified T> Response.decryptAs(): T =
+    protected inline fun <reified T> Response.decryptAs(): T =
         decrypt(parseAs<EncryptedResponse>().data).parseAs()
 
-    private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
+    protected inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
 
-    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
+    protected inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
+    protected inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
+
+    protected open fun createThumbnail(mangaId: String, cover: String): String {
+        val thumbnail = "large_${cover.substringBeforeLast(".")}.webp"
+
+        return "$cdnUrl/uploads/manga/cover/$mangaId/$thumbnail"
+    }
 
     override fun imageUrlParse(response: Response): String =
         throw UnsupportedOperationException()
 
     companion object {
         private const val PREF_CHAPTER_LISTING_KEY = "gmanga_chapter_listing"
-        private const val PREF_LATEST_LISTING_KEY = "gmanga_last_listing"
 
-        private const val PREF_CHAPTER_LISTING_SHOW_ALL = "gmanga_gmanga_chapter_listing_show_all"
-        private const val PREF_CHAPTER_LISTING_SHOW_POPULAR = "gmanga_chapter_listing_most_viewed"
-        private const val PREF_LASTETS_LISTING_SHOW_LASTETS_CHAPTER = "gmanga_Last_listing_last_chapter_added"
-        private const val PREF_LASTETS_LISTING_SHOW_LASTETS_MANGA = "gmanga_chapter_listing_last_manga_added"
+        const val PREF_CHAPTER_LISTING_SHOW_ALL = "gmanga_gmanga_chapter_listing_show_all"
+        const val PREF_CHAPTER_LISTING_SHOW_POPULAR = "gmanga_chapter_listing_most_viewed"
 
         private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
     }

@@ -19,8 +19,13 @@ class EncryptedResponse(val data: String)
 class MangaDataAction<T>(val mangaDataAction: T)
 
 @Serializable
-class LatestMangaDto(
-    val newMangas: List<BrowseManga>,
+class LatestChaptersDto(
+    val releases: List<LatestReleaseDto>,
+)
+
+@Serializable
+class LatestReleaseDto(
+    val manga: BrowseManga,
 )
 
 @Serializable
@@ -34,12 +39,11 @@ class BrowseManga(
     private val title: String,
     private val cover: String,
 ) {
-    private val thumbnail = "medium_${cover.substringBeforeLast(".")}.webp"
 
-    fun toSManga(cdnUrl: String) = SManga.create().apply {
+    fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
         url = "/mangas/$id"
         title = this@BrowseManga.title
-        thumbnail_url = "$cdnUrl/uploads/manga/cover/$id/$thumbnail"
+        thumbnail_url = createThumbnail(id.toString(), cover)
     }
 }
 
@@ -77,11 +81,9 @@ class Manga(
     @SerialName("japanese") private val jpTitle: String? = null,
     @SerialName("english") private val enTitle: String? = null,
 ) {
-    private val thumbnail = "large_${cover.substringBeforeLast(".")}.webp"
-
-    fun toSManga(cdnUrl: String) = SManga.create().apply {
+    fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
         title = this@Manga.title
-        thumbnail_url = "$cdnUrl/uploads/manga/cover/$id/$thumbnail"
+        thumbnail_url = createThumbnail(id.toString(), cover)
         artist = artists.joinToString { it.name }
         author = authors.joinToString { it.name }
         status = when (this@Manga.status) {

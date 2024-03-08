@@ -1,18 +1,40 @@
 package eu.kanade.tachiyomi.extension.ar.gmanga
 
+import eu.kanade.tachiyomi.multisrc.gmanga.BrowseManga
 import eu.kanade.tachiyomi.multisrc.gmanga.Gmanga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.MangasPage
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import okhttp3.Response
 
 class Gmanga : Gmanga(
     "GMANGA",
     "https://gmanga.org",
     "ar",
-    "https://api.gmanga.me",
     "https://media.gmanga.me",
 ) {
     override val client = super.client.newBuilder()
         .rateLimit(4)
         .build()
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val decMga = response.decryptAs<JsonObject>()
+        val selectedManga = decMga["rows"]!!.jsonArray[0].jsonObject["rows"]!!.jsonArray
+        val manags = selectedManga.map {
+            json.decodeFromJsonElement<BrowseManga>(it.jsonArray[17])
+        }
+
+        val entries = manags.map { it.toSManga(::createThumbnail) }
+            .distinctBy { it.url }
+
+        return MangasPage(
+            entries,
+            hasNextPage = (manags.size >= 30),
+        )
+    }
 }
 
 /*
