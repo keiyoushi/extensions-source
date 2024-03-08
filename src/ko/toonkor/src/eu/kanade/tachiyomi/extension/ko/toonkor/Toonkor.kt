@@ -29,9 +29,13 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "Toonkor"
 
-    private val defaultBaseUrl = "auto"
+    private val defaultBaseUrl = "https://toonkor342.com"
+
+    private val defaultAutoBaseUrl = true
 
     private val BASE_URL_PREF = "overrideBaseUrl_v${AppInfo.getVersionName()}"
+
+    private val AUTO_BASE_URL_PREF = "autoBaseUrl"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -194,11 +198,24 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
     }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+            androidx.preference.CheckBoxPreference(screen.context).apply {
+                key = AUTO_BASE_URL_PREF_TITLE
+                title = AUTO_BASE_URL_PREF_TITLE
+                summary = AUTO_BASE_URL_PREF_SUMMARY
+                setDefaultValue(defaultAutoBaseUrl)
+
+                setOnPreferenceChangeListener { _, newValue ->
+                    val checkValue = newValue as Boolean
+                    preferences.edit().putBoolean(AUTO_BASE_URL_PREF, checkValue).commit()
+                }
+            }.also(screen::addPreference)
+
+        androidx.preference.EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF_TITLE
             title = BASE_URL_PREF_TITLE
             summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(defaultBaseUrl)
+            setDefaultValue(defaultBaseUrl)
+
             dialogTitle = BASE_URL_PREF_TITLE
             dialogMessage = "Default: $defaultBaseUrl"
 
@@ -211,29 +228,35 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
                     false
                 }
             }
-        }
-
-        screen.addPreference(baseUrlPref)
+        }.also(screen::addPreference)
     }
 
     private fun getPrefBaseUrl(): String {
+        val autoUrl = preferences.getBoolean(AUTO_BASE_URL_PREF, defaultAutoBaseUrl)
         val prefUrl = preferences.getString(BASE_URL_PREF, defaultBaseUrl) ?: defaultBaseUrl
-        if (prefUrl != "auto") return prefUrl
+        if (!autoUrl) return prefUrl.ifBlank { defaultBaseUrl }
 
-        return client.newCall(GET("https://t.me/s/new_toonkor"))
-            .asObservableSuccess()
-            .subscribeOn(Schedulers.io())
-            .map { response ->
-                val document = response.asJsoup()
-                document.select(".tgme_widget_message_text").last()
-                    ?.selectFirst("a")
-                    ?.attr("href")
-                    ?.dropLastWhile { it == '/' }!!
-            }.toBlocking().first()
+        return try {
+            client.newCall(GET("https://t.me/s/new_toonkor"))
+                .asObservableSuccess()
+                .subscribeOn(Schedulers.io())
+                .map { response ->
+                    val document = response.asJsoup()
+                    document.select(".tgme_widget_message_text").last()
+                        ?.selectFirst("a")
+                        ?.attr("href")
+                        ?.dropLastWhile { it == '/' }!!
+                }.toBlocking().first()
+        } catch (_: Exception) {
+            prefUrl
+        }
     }
 
     companion object {
+        private const val AUTO_BASE_URL_PREF_TITLE = "Automatically update BaseUrl"
+        private const val AUTO_BASE_URL_PREF_SUMMARY = "Automatically update the domain when the app opens"
+
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = "Override default domain with a different one"
+        private const val BASE_URL_PREF_SUMMARY = "Ignored when BaseUrl is updated automatically\nOverride default domain with a different one"
     }
 }
