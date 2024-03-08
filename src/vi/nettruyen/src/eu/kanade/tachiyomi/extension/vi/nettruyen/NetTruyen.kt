@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+
 class NetTruyen : WPComics("NetTruyen", "https://www.nettruyenee.com", "vi", SimpleDateFormat("dd/MM/yy", Locale.getDefault()), null) {
     override fun String.replaceSearchPath() = replace("/$searchPath?status=2&", "/truyen-full?")
 
