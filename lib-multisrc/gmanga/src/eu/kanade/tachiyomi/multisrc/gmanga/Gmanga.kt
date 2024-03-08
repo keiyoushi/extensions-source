@@ -83,8 +83,7 @@ abstract class Gmanga(
                 value = oneShotFilter.state.first().run {
                     when {
                         isIncluded() -> true
-                        isExcluded() -> false
-                        else -> null
+                        else -> false
                     }
                 },
             ),
@@ -176,14 +175,37 @@ abstract class Gmanga(
         }
     }
 
+    protected open fun getTypesFilter() = listOf(
+        TagFilterData("1", "يابانية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("2", "كورية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("3", "صينية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("4", "عربية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("5", "كوميك", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("6", "هواة", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("7", "إندونيسية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("8", "روسية", Filter.TriState.STATE_INCLUDE),
+    )
+
+    protected open fun getStatusFilter() = listOf(
+        TagFilterData("2", "مستمرة"),
+        TagFilterData("3", "منتهية"),
+    )
+
+    protected open fun getTranslationFilter() = listOf(
+        TagFilterData("0", "منتهية"),
+        TagFilterData("1", "مستمرة"),
+        TagFilterData("2", "متوقفة"),
+        TagFilterData("3", "غير مترجمة", Filter.TriState.STATE_EXCLUDE),
+    )
+
     override fun getFilterList(): FilterList {
         CoroutineScope(Dispatchers.IO).launch { fetchFilters() }
 
         val filters = mutableListOf<Filter<*>>(
-            MangaTypeFilter(),
+            MangaTypeFilter(getTypesFilter()),
             OneShotFilter(),
-            StoryStatusFilter(),
-            TranslationStatusFilter(),
+            StoryStatusFilter(getStatusFilter()),
+            TranslationStatusFilter(getTranslationFilter()),
             ChapterCountFilter(),
             DateRangeFilter(),
         )

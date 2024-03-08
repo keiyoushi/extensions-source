@@ -18,7 +18,7 @@ class SearchPayload(
 
 @Serializable
 class OneShot(
-    private val value: Boolean?,
+    private val value: Boolean,
 )
 
 @Serializable

@@ -44,18 +44,9 @@ class IntFilter(val id: String, name: String) : ValidatingTextFilter(name) {
     override fun isValid(): Boolean = state.toIntOrNull() != null
 }
 
-class MangaTypeFilter : Filter.Group<TagFilter>(
+class MangaTypeFilter(types: List<TagFilterData>) : Filter.Group<TagFilter>(
     "الأصل",
-    listOf(
-        TagFilter("1", "يابانية", TriState.STATE_INCLUDE),
-        TagFilter("2", "كورية", TriState.STATE_INCLUDE),
-        TagFilter("3", "صينية", TriState.STATE_INCLUDE),
-        TagFilter("4", "عربية", TriState.STATE_INCLUDE),
-        TagFilter("5", "كوميك", TriState.STATE_INCLUDE),
-        TagFilter("6", "هواة", TriState.STATE_INCLUDE),
-        TagFilter("7", "إندونيسية", TriState.STATE_INCLUDE),
-        TagFilter("8", "روسية", TriState.STATE_INCLUDE),
-    ),
+    types.map { it.toTagFilter() },
 )
 
 class OneShotFilter : Filter.Group<TagFilter>(
@@ -65,22 +56,14 @@ class OneShotFilter : Filter.Group<TagFilter>(
     ),
 )
 
-class StoryStatusFilter : Filter.Group<TagFilter>(
+class StoryStatusFilter(status: List<TagFilterData>) : Filter.Group<TagFilter>(
     "حالة القصة",
-    listOf(
-        TagFilter("2", "مستمرة"),
-        TagFilter("3", "منتهية"),
-    ),
+    status.map { it.toTagFilter() },
 )
 
-class TranslationStatusFilter : Filter.Group<TagFilter>(
+class TranslationStatusFilter(tlStatus: List<TagFilterData>) : Filter.Group<TagFilter>(
     "حالة الترجمة",
-    listOf(
-        TagFilter("0", "منتهية"),
-        TagFilter("1", "مستمرة"),
-        TagFilter("2", "متوقفة"),
-        TagFilter("3", "غير مترجمة", TriState.STATE_EXCLUDE),
-    ),
+    tlStatus.map { it.toTagFilter() },
 )
 
 class ChapterCountFilter : Filter.Group<IntFilter>(
