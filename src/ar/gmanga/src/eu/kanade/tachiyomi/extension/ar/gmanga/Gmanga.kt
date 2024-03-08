@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.gmanga
 
+import android.app.Application
 import eu.kanade.tachiyomi.multisrc.gmanga.BrowseManga
 import eu.kanade.tachiyomi.multisrc.gmanga.Gmanga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -10,6 +11,8 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class Gmanga : Gmanga(
     "GMANGA",
@@ -20,6 +23,18 @@ class Gmanga : Gmanga(
     override val client = super.client.newBuilder()
         .rateLimit(4)
         .build()
+
+    init {
+        // remove obsolete preferences
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).run {
+            if (contains("gmanga_chapter_listing")) {
+                edit().remove("gmanga_chapter_listing").apply()
+            }
+            if (contains("gmanga_last_listing")) {
+                edit().remove("gmanga_last_listing").apply()
+            }
+        }
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val decMga = response.decryptAs<JsonObject>()
