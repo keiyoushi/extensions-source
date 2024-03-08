@@ -39,6 +39,9 @@ abstract class Gmanga(
 
     override val client = network.cloudflareClient
 
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
