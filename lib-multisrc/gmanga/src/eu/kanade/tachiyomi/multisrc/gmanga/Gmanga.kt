@@ -1,14 +1,9 @@
 package eu.kanade.tachiyomi.multisrc.gmanga
 
-import android.app.Application
-import android.content.SharedPreferences
 import android.util.Log
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -27,24 +22,20 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 abstract class Gmanga(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
     protected val cdnUrl: String = baseUrl,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
     protected val json: Json by injectLazy()
-
-    protected val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
     override val client = network.cloudflareClient
 
@@ -247,33 +238,19 @@ abstract class Gmanga(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterList = response.decryptAs<TableDto>()
-            .asChapterList(json)
+        val releases = response.parseAs<ChapterListDto>().releases
 
-        val releases = when (preferences.getChapterListingPref()) {
-            PREF_CHAPTER_LISTING_SHOW_POPULAR ->
-                chapterList.releases
-                    .groupBy { release -> release.chapterizationId }
-                    .mapNotNull { (_, releases) -> releases.maxByOrNull { it.views } }
-            PREF_CHAPTER_LISTING_SHOW_ALL -> chapterList.releases
-            else -> emptyList()
-        }
-
-        return releases.map { release ->
-            SChapter.create().apply {
-                val chapter = chapterList.chapters.first { it.id == release.chapterizationId }
-                val team = chapterList.teams.firstOrNull { it.id == release.teamId }
-
-                url = "/r/${release.id}"
-                chapter_number = chapter.chapter
-                date_upload = release.timestamp * 1000
-                scanlator = team?.name
-
-                val chapterName = chapter.title.let { if (it.trim() != "") " - $it" else "" }
-                name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
-            }
-        }.sortedWith(compareBy({ -it.chapter_number }, { -it.date_upload }))
+        return releases.map {
+            it.toSChapter(dateFormat)
+        }.sortedWith(
+            compareBy(
+                { -it.chapter_number },
+                { -it.date_upload },
+            ),
+        )
     }
+
+    protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
     override fun pageListParse(response: Response): List<Page> {
         val url = response.request.url.toString()
@@ -300,7 +277,7 @@ abstract class Gmanga(
             }
     }
 
-    private val pageSort = compareBy<String>(
+    protected val pageSort = compareBy<String>(
         { parseNumber(0, it) ?: Double.MAX_VALUE },
         { parseNumber(1, it) },
         { parseNumber(2, it) },
@@ -308,26 +285,6 @@ abstract class Gmanga(
 
     private fun parseNumber(index: Int, string: String): Double? =
         Regex("\\d+").findAll(string).map { it.value }.toList().getOrNull(index)?.toDoubleOrNull()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_CHAPTER_LISTING_KEY
-            title = "كيفية عرض الفصل بقائمة الفصول"
-            entries = arrayOf(
-                "اختيار النسخة الأكثر مشاهدة",
-                "عرض جميع النسخ",
-            )
-            entryValues = arrayOf(
-                PREF_CHAPTER_LISTING_SHOW_POPULAR,
-                PREF_CHAPTER_LISTING_SHOW_ALL,
-            )
-            summary = "%s"
-            setDefaultValue(PREF_CHAPTER_LISTING_SHOW_POPULAR)
-        }.also(screen::addPreference)
-    }
-
-    protected fun SharedPreferences.getChapterListingPref() =
-        getString(PREF_CHAPTER_LISTING_KEY, PREF_CHAPTER_LISTING_SHOW_POPULAR)!!
 
     protected inline fun <reified T> Response.decryptAs(): T =
         decrypt(parseAs<EncryptedResponse>().data).parseAs()
@@ -348,11 +305,6 @@ abstract class Gmanga(
         throw UnsupportedOperationException()
 
     companion object {
-        private const val PREF_CHAPTER_LISTING_KEY = "gmanga_chapter_listing"
-
-        const val PREF_CHAPTER_LISTING_SHOW_ALL = "gmanga_gmanga_chapter_listing_show_all"
-        const val PREF_CHAPTER_LISTING_SHOW_POPULAR = "gmanga_chapter_listing_most_viewed"
-
         private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
     }
 }
