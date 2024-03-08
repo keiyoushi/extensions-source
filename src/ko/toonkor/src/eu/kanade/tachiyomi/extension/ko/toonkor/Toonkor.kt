@@ -77,7 +77,8 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -146,12 +147,18 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val encoded = document.select("script:containsData(toon_img)").firstOrNull()?.data()
-            ?.substringAfter("'")?.substringBefore("'") ?: throw Exception("toon_img script not found")
+            ?.substringAfter("'")?.substringBefore("'")
+            ?: throw Exception("toon_img script not found")
 
         val decoded = Base64.decode(encoded, Base64.DEFAULT).toString(Charset.defaultCharset())
 
         return pageListRegex.findAll(decoded).toList().mapIndexed { i, matchResult ->
-            Page(i, "", matchResult.destructured.component1().let { if (it.startsWith("http")) it else baseUrl + it })
+            Page(
+                i,
+                "",
+                matchResult.destructured.component1()
+                    .let { if (it.startsWith("http")) it else baseUrl + it },
+            )
         }
     }
 
@@ -189,7 +196,8 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
         fun toUriPart() = vals[state].second
     }
 
-    private inline fun <reified T> FilterList.findUriPartFilter(): UriPartFilter = this.find { it is T } as UriPartFilter
+    private inline fun <reified T> FilterList.findUriPartFilter(): UriPartFilter =
+        this.find { it is T } as UriPartFilter
 
     // Preferences
 
@@ -198,17 +206,17 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
     }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-            androidx.preference.CheckBoxPreference(screen.context).apply {
-                key = AUTO_BASE_URL_PREF_TITLE
-                title = AUTO_BASE_URL_PREF_TITLE
-                summary = AUTO_BASE_URL_PREF_SUMMARY
-                setDefaultValue(defaultAutoBaseUrl)
+        androidx.preference.CheckBoxPreference(screen.context).apply {
+            key = AUTO_BASE_URL_PREF_TITLE
+            title = AUTO_BASE_URL_PREF_TITLE
+            summary = AUTO_BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultAutoBaseUrl)
 
-                setOnPreferenceChangeListener { _, newValue ->
-                    val checkValue = newValue as Boolean
-                    preferences.edit().putBoolean(AUTO_BASE_URL_PREF, checkValue).commit()
-                }
-            }.also(screen::addPreference)
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+                preferences.edit().putBoolean(AUTO_BASE_URL_PREF, checkValue).commit()
+            }
+        }.also(screen::addPreference)
 
         androidx.preference.EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF_TITLE
@@ -221,7 +229,8 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
             setOnPreferenceChangeListener { _, newValue ->
                 try {
-                    val res = preferences.edit().putString(BASE_URL_PREF, newValue as String).commit()
+                    val res =
+                        preferences.edit().putString(BASE_URL_PREF, newValue as String).commit()
                     res
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -254,9 +263,11 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     companion object {
         private const val AUTO_BASE_URL_PREF_TITLE = "Automatically update BaseUrl"
-        private const val AUTO_BASE_URL_PREF_SUMMARY = "Automatically update the domain when the app opens"
+        private const val AUTO_BASE_URL_PREF_SUMMARY =
+            "Automatically update the domain when the app opens"
 
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = "Ignored when BaseUrl is updated automatically\nOverride default domain with a different one"
+        private const val BASE_URL_PREF_SUMMARY =
+            "Ignored when BaseUrl is updated automatically\nOverride default domain with a different one"
     }
 }
