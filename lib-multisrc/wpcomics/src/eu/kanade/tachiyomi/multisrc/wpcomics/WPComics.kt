@@ -1,6 +1,12 @@
 package eu.kanade.tachiyomi.multisrc.wpcomics
 
+import android.app.Application
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,21 +19,29 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
 abstract class WPComics(
     override val name: String,
-    override val baseUrl: String,
+    private val defaultUrl: String,
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
     private val gmtOffset: String? = "+0500",
-) : ParsedHttpSource() {
+) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
+
+    private val preferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
@@ -35,8 +49,7 @@ abstract class WPComics(
 
     private fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 
-    // Popular
-
+    // ============================== Popular ==============================
     open val popularPath = "hot"
 
     override fun popularMangaRequest(page: Int): Request {
@@ -57,8 +70,7 @@ abstract class WPComics(
 
     override fun popularMangaNextPageSelector() = "a.next-page, a[rel=next]"
 
-    // Latest
-
+    // ============================== Latest ==============================
     override fun latestUpdatesRequest(page: Int): Request {
         return GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
     }
@@ -69,8 +81,7 @@ abstract class WPComics(
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    // Search
-
+    // ============================== Search ==============================
     protected open val searchPath = "tim-truyen"
     protected open val queryParam = "keyword"
 
@@ -115,8 +126,7 @@ abstract class WPComics(
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    // Details
-
+    // ============================== Details ==============================
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             document.select("article#item-detail").let { info ->
@@ -140,8 +150,7 @@ abstract class WPComics(
         }
     }
 
-    // Chapters
-
+    // ============================== Chapters ==============================
     override fun chapterListSelector() = "div.list-chapter li.row:not(.heading)"
 
     override fun chapterFromElement(element: Element): SChapter {
@@ -194,14 +203,13 @@ abstract class WPComics(
         }
     }
 
-    // Pages
-
+    // ============================== Pages ==============================
     // sources sometimes have an image element with an empty attr that isn't really an image
     open fun imageOrNull(element: Element): String? {
         fun Element.hasValidAttr(attr: String): Boolean {
             val regex = Regex("""https?://.*""", RegexOption.IGNORE_CASE)
             return when {
-                this.attr(attr).isNullOrBlank() -> false
+                this.attr(attr).isBlank() -> false
                 this.attr("abs:$attr").matches(regex) -> true
                 else -> false
             }
@@ -225,8 +233,7 @@ abstract class WPComics(
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    // Filters
-
+    // ============================== Filters ==============================
     protected class StatusFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Status", vals)
     protected class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Genre", vals)
 
@@ -298,8 +305,35 @@ abstract class WPComics(
         )
     }
 
-    protected open class UriPartFilter(displayName: String, val vals: Array<Pair<String?, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
-        fun toUriPart() = vals[state].first
+    protected open class UriPartFilter(displayName: String, private val pairs: Array<Pair<String?, String>>) :
+        Filter.Select<String>(displayName, pairs.map { it.second }.toTypedArray()) {
+        fun toUriPart() = pairs[state].first
     }
+
+    // ============================== Settings ==============================
+    companion object {
+        private val BASE_URL_PREF = "overrideBaseUrl_v${AppInfo.getVersionName()}"
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = "Edit site's domain"
+            summary = "For temporary use. Updating the application might delete the settings."
+            setDefaultValue(defaultUrl)
+            dialogTitle = "Edit site's domain"
+            dialogMessage = "Default: $defaultUrl"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(
+                    screen.context,
+                    "To apply the new settings, restart app.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultUrl)!!
 }
