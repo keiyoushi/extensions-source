@@ -80,7 +80,8 @@ class PayloadSeriesDetailsDto(
 
 @Serializable
 class PayloadChaptersDto(
-    var data: List<ChapterDto>,
+    val data: List<ChapterDto>,
+    val meta: ChapterMetaDto,
 )
 
 @Serializable
@@ -98,6 +99,14 @@ class ChapterDto(
             0L
         }
     }
+}
+
+@Serializable
+class ChapterMetaDto(
+    @SerialName("current_page") private val currentPage: Int,
+    @SerialName("last_page") private val lastPage: Int,
+) {
+    fun hasNextPage() = currentPage < lastPage
 }
 
 @Serializable
