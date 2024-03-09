@@ -116,13 +116,25 @@ class IkigaiMangas : HttpSource() {
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("#")
-        return GET("$apiBaseUrl/api/swf/series/$id/chapter-list", headers)
+        val slug = manga.url.substringAfter("/series/comic-").substringBefore("#")
+        return GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=1", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = json.decodeFromString<PayloadChaptersDto>(response.body.string())
-        return result.data.map { it.toSChapter(dateFormat) }.reversed()
+        val slug = response.request.url.toString()
+            .substringAfter("/series/")
+            .substringBefore("/chapters")
+        var result = json.decodeFromString<PayloadChaptersDto>(response.body.string())
+        val mangas = mutableListOf<SChapter>()
+        mangas.addAll(result.data.map { it.toSChapter(dateFormat) })
+        var page = 2
+        while (result.meta.hasNextPage()) {
+            val newResponse = client.newCall(GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=$page", headers)).execute()
+            result = json.decodeFromString<PayloadChaptersDto>(newResponse.body.string())
+            mangas.addAll(result.data.map { it.toSChapter(dateFormat) })
+            page++
+        }
+        return mangas
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
