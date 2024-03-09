@@ -244,13 +244,16 @@ abstract class Gmanga(
 
         return releases.map {
             it.toSChapter(dateFormat)
-        }.sortedWith(
+        }.sortChapters()
+    }
+
+    protected fun List<SChapter>.sortChapters() =
+        sortedWith(
             compareBy(
                 { -it.chapter_number },
                 { -it.date_upload },
             ),
         )
-    }
 
     protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
@@ -269,20 +272,21 @@ abstract class Gmanga(
             else -> data.pages to "hq"
         }
 
-        return pages.sortedWith(pageSort)
-            .mapIndexed { index, pageUri ->
-                Page(
-                    index = index,
-                    url = "$url#page_$index",
-                    imageUrl = "$cdnUrl/uploads/releases/${data.key}/$directory/$pageUri",
-                )
-            }
+        return pages.mapIndexed { index, pageUri ->
+            Page(
+                index = index,
+                url = "$url#page_$index",
+                imageUrl = "$cdnUrl/uploads/releases/${data.key}/$directory/$pageUri",
+            )
+        }.sortPages()
     }
 
-    protected val pageSort = compareBy<String>(
-        { parseNumber(0, it) ?: Double.MAX_VALUE },
-        { parseNumber(1, it) },
-        { parseNumber(2, it) },
+    protected fun List<Page>.sortPages() = sortedWith(
+        compareBy(
+            { parseNumber(0, it.imageUrl!!) ?: Double.MAX_VALUE },
+            { parseNumber(1, it.imageUrl!!) },
+            { parseNumber(2, it.imageUrl!!) },
+        ),
     )
 
     private fun parseNumber(index: Int, string: String): Double? =

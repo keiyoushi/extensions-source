@@ -20,9 +20,11 @@ class ChapterRelease(
     @SerialName("team_name") private val teamName: String,
     @SerialName("created_at") private val createdAt: String,
 
-    val has_rev_link: Boolean,
-    val support_link: String,
+    private val has_rev_link: Boolean,
+    private val support_link: String,
 ) {
+    val isMonetized get() = has_rev_link && support_link.isNotEmpty()
+
     fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
         url = "/r/$id"
         chapter_number = chapter.float

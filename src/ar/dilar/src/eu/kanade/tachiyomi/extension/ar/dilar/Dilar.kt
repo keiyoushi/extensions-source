@@ -11,15 +11,10 @@ class Dilar : Gmanga(
 ) {
     override fun chapterListParse(response: Response): List<SChapter> {
         val releases = response.parseAs<ChapterListDto>().releases
-            .filterNot { it.has_rev_link && it.support_link.isNotEmpty() }
+            .filterNot { it.isMonetized }
 
         return releases.map {
             it.toSChapter(dateFormat)
-        }.sortedWith(
-            compareBy(
-                { -it.chapter_number },
-                { -it.date_upload },
-            ),
-        )
+        }.sortChapters()
     }
 }

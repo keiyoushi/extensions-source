@@ -36,12 +36,7 @@ class MangaTales : Gmanga(
 
         return releases.map {
             it.toSChapter(dateFormat)
-        }.sortedWith(
-            compareBy(
-                { -it.chapter_number },
-                { -it.date_upload },
-            ),
-        )
+        }.sortChapters()
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -50,9 +45,8 @@ class MangaTales : Gmanga(
             .parseAs<ReaderDto>()
 
         return data.readerDataAction.readerData.release.pages
-            .sortedWith(pageSort)
             .mapIndexed { idx, img ->
                 Page(idx, imageUrl = "$cdnUrl/uploads/releases/$img?ak=${data.globals.mediaKey}")
-            }
+            }.sortPages()
     }
 }

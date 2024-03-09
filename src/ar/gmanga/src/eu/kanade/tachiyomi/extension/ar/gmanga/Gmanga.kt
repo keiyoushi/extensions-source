@@ -85,6 +85,6 @@ class Gmanga : Gmanga(
                 val chapterName = chapter.title.let { if (it.trim() != "") " - $it" else "" }
                 name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
             }
-        }.sortedWith(compareBy({ -it.chapter_number }, { -it.date_upload }))
+        }.sortChapters()
     }
 }
