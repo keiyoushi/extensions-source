@@ -2,16 +2,38 @@ package eu.kanade.tachiyomi.extension.en.hentairead
 
 import android.net.Uri
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import okhttp3.Response
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import org.jsoup.nodes.Document
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)) {
 
     override val versionId: Int = 2
+
+    override val mangaSubString = "hentai"
+    override val fetchGenres = false
+
+    override fun getFilterList() = FilterList()
+
+    override fun searchLoadMoreRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl${searchPage(page)}".toHttpUrl().newBuilder()
+            .addQueryParameter("s", query)
+            .addQueryParameter("post_type", "wp-manga")
+            .build()
+
+        return GET(url, headers)
+    }
+
+    override fun searchMangaSelector() = "div.c-tabs-item div.page-item-detail"
 
     override val mangaDetailsSelectorDescription = "div.post-sub-title.alt-title > h2"
     override val mangaDetailsSelectorAuthor = "div.post-meta.post-tax-wp-manga-artist > span.post-tags > a > span.tag-name"
@@ -20,6 +42,13 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
     override val mangaDetailsSelectorTag = "div.post-meta.post-tax-wp-manga-tag > span.post-tags > a > span.tag-name"
 
     override val pageListParseSelector = "li.chapter-image-item > a > div.image-wrapper"
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        return super.mangaDetailsParse(document).apply {
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.COMPLETED
+        }
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
@@ -37,12 +66,14 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return listOf(
-            SChapter.create().apply {
-                name = "Chapter"
-                setUrlWithoutDomain(response.request.url.encodedPath)
-            },
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return Observable.just(
+            listOf(
+                SChapter.create().apply {
+                    name = "Chapter"
+                    url = manga.url
+                },
+            ),
         )
     }
 }
