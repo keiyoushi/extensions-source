@@ -1,9 +1,9 @@
 ext {
-    extName = 'Komik AV'
-    extClass = '.KomikAV'
+    extName = 'APKOMIK'
+    extClass = '.Apkomik'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://komikav.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://apkomik.cc'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
