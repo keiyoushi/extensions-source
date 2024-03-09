@@ -3,14 +3,20 @@ package eu.kanade.tachiyomi.extension.ar.gmanga
 import android.app.Application
 import eu.kanade.tachiyomi.multisrc.gmanga.BrowseManga
 import eu.kanade.tachiyomi.multisrc.gmanga.Gmanga
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.float
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -52,20 +58,28 @@ class Gmanga : Gmanga(
         )
     }
 
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return client.newCall(chapterListRequest(manga))
+            .asObservable() // sites returns false 302 code
+            .map(::chapterListParse)
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaId = manga.url.substringAfterLast("/")
+        return GET("https://api2.gmanga.me/api/mangas/$mangaId/releases", headers)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterList = response.decryptAs<TableDto>()
-            .asChapterList(json)
+        val chapterList = response.parseAs<ChapterListResponse>()
 
-        val releases = chapterList.releases
-
-        return releases.map { release ->
+        return chapterList.releases.map {
             SChapter.create().apply {
-                val chapter = chapterList.chapters.first { it.id == release.chapterizationId }
-                val team = chapterList.teams.firstOrNull { it.id == release.teamId }
+                val chapter = chapterList.chapterizations.first { chap -> chap.id == it.chapId }
+                val team = chapterList.teams.firstOrNull { team -> team.id == it.teamId }
 
-                url = "/r/${release.id}"
-                chapter_number = chapter.chapter
-                date_upload = release.timestamp * 1000
+                url = "/r/${it.id}"
+                chapter_number = it.chapter.float
+                date_upload = it.timestamp * 1000
                 scanlator = team?.name
 
                 val chapterName = chapter.title.let { if (it.trim() != "") " - $it" else "" }
