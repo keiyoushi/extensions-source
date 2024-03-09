@@ -24,7 +24,6 @@ class IkigaiMangas : HttpSource() {
 
     override val baseUrl: String = "https://ikigaimangas.com"
     private val apiBaseUrl: String = "https://panel.ikigaimangas.com"
-    private val pageViewerUrl: String = "https://ikigaitoon.com"
 
     override val lang: String = "es"
     override val name: String = "Ikigai Mangas"
@@ -114,11 +113,11 @@ class IkigaiMangas : HttpSource() {
         return result.series.toSMangaDetails()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = pageViewerUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("#")
-        return GET("$apiBaseUrl/api/swf/series/$id/chapter-list")
+        return GET("$apiBaseUrl/api/swf/series/$id/chapter-list", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -128,7 +127,7 @@ class IkigaiMangas : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.substringAfter("/capitulo/")
-        return GET("$apiBaseUrl/api/swf/chapters/$id")
+        return GET("$apiBaseUrl/api/swf/chapters/$id", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
