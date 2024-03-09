@@ -35,7 +35,6 @@ class BrowseManga(
     private val title: String,
     private val cover: String,
 ) {
-
     fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
         url = "/mangas/$id"
         title = this@BrowseManga.title

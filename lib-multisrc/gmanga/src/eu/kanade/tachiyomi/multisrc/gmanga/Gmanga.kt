@@ -211,8 +211,7 @@ abstract class Gmanga(
         } else {
             listOf(
                 Filter.Separator(),
-                // need arabic tl
-                Filter.Header("Press 'reset' to load more filters"),
+                Filter.Header("اضغط على\"إعادة تعيين\"لمحاولة تحميل التصنيفات"),
             )
         }
 
