@@ -10,7 +10,7 @@ class LuminousScans : MangaThemesiaAlt(
     "https://lumitoon.com",
     "en",
     mangaUrlDirectory = "/series",
-    randomUrlPrefKey = "pref_permanent_manga_url_2_",
+    randomUrlPrefKey = "pref_permanent_manga_url_2_en",
 ) {
     init {
         // remove legacy preferences
