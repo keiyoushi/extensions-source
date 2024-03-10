@@ -14,7 +14,7 @@ class AsuraScans : MangaThemesiaAlt(
     "https://asuratoon.com",
     "en",
     dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
-    randomUrlPrefKey = "pref_permanent_manga_url_2_",
+    randomUrlPrefKey = "pref_permanent_manga_url_2_en",
 ) {
     init {
         // remove legacy preferences
