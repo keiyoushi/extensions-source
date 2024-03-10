@@ -58,10 +58,6 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
                 genre = select("span p.drop-shadow-sm").text()
             }
         }
-        genre = element.select("span a[href*='?genre=']")
-            .map { it.text() }
-            .let { listOf(genre) + it }
-            .joinToString()
     }
 
     override fun popularMangaNextPageSelector() = "ul.pagination > li:last-child:not(.pagination-disabled)"
@@ -145,7 +141,7 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
         setUrlWithoutDomain(element.attr("href"))
         name = "\u061C" + element.select("#item-title").text() // Add unicode ARABIC LETTER MARK to ensure all titles are right to left
 
-        date_upload = parseRelativeDate(element.select("#item-title + span").text()) ?: Calendar.getInstance().timeInMillis
+        date_upload = parseRelativeDate(element.select("#item-title + span").text()) ?: 0L
     }
 
     /**
