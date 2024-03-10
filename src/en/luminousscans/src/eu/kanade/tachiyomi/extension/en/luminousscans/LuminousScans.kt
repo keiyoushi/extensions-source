@@ -17,6 +17,9 @@ class LuminousScans : MangaThemesiaAlt(
             if (contains("pref_url_map")) {
                 edit().remove("pref_url_map").apply()
             }
+            if (contains("pref_permanent_manga_url_2_$lang")) {
+                edit().remove("pref_permanent_manga_url_2_$lang").apply()
+            }
         }
     }
 
