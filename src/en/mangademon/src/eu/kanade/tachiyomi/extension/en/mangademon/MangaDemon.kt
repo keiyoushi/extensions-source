@@ -195,7 +195,7 @@ class MangaDemon : ParsedHttpSource() {
 
         return SManga.create().apply {
             title = infoElement.select("h1.novel-title").text()
-            author = infoElement.select("div.author").text().drop(7).trim()
+            author = infoElement.select("div.author > [itemprop=author]").text()
             status = parseStatus(infoElement.select("span:has(small:containsOwn(Status))").text())
             genre = infoElement.select("a.property-item").joinToString { it.text() }
             description = infoElement.select("p.description").text()
