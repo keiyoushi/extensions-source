@@ -116,9 +116,8 @@ abstract class MangaThemesiaAlt(
             .substringAfterLast("/")
             .replaceFirst(slugRegex, "")
 
-        // we don't want to crash whole app upon opening entry
-        // if it fails to get random part, possibly due to cf
-        val randomPart = randomPartCache.tryGet()?.let { "$it-" } ?: ""
+        // we don't want to make network calls when user simply opens the entry
+        val randomPart = randomPartCache.peek()?.let { "$it-" } ?: ""
 
         return "$baseUrl$mangaUrlDirectory/$randomPart$slug/"
     }
@@ -156,12 +155,8 @@ internal class SuspendLazy<T : Any>(
         }
     }
 
-    fun tryGet(): T? {
-        return try {
-            blockingGet()
-        } catch (_: Exception) {
-            null
-        }
+    fun peek(): T? {
+        return cachedValue?.get()
     }
 
     fun blockingGet(): T {
