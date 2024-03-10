@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.unionmangas
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -16,7 +18,11 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.security.MessageDigest
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 class UnionMangas(
     override val lang: String,
@@ -37,15 +43,61 @@ class UnionMangas(
 
     override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun getFilterList() = FilterList(LangGroupFilter(getLangFilter()))
 
-    override fun chapterFromElement(element: Element): SChapter {
-        TODO("Not yet implemented")
+    @RequiresApi(Build.VERSION_CODES.O)
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val date = DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now())
+        val mangaSlug = manga.url.split("/").last()
+            .replace("/", "")
+
+        var currentPage = 0
+
+        val url = "$apiUrl/api/v3/po/GetChapterListFilter/$mangaSlug/16/$currentPage/all/ASC"
+        val path = "/api/v3/po/GetChapterListFilter/$mangaSlug/16/$currentPage/all/ASC"
+
+        val headers = headersBuilder()
+            .add("_hash", buildHashRequest(apiSeed + domain + date))
+            .add("_tranId", buildHashRequest(apiSeed + domain + date + path))
+            .add("_date", date)
+            .add("_domain", domain)
+            .add("_path", path)
+            .add("Origin", baseUrl)
+            .add("Host", apiUrl.removeProtocol())
+            .add("Referer", "$baseUrl/")
+            .add("Sec-Fetch-Mode", "cors")
+            .add("Sec-Fetch-Site", "cross-site")
+            .add("Accept-Language", "pt-BR,en-US;q=0.7,en;q=0.3")
+            .add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/${(0..20100101).random()} Firefox/123.0")
+            .build()
+
+        client.newCall(GET(url, headers))
+
+        return super.fetchChapterList(manga)
     }
 
-    override fun chapterListSelector(): String {
-        TODO("Not yet implemented")
+    private fun buildHashRequest(payload: String): String = MD5(payload).toByteArray().toHex()
+
+    private fun MD5(input: String): String {
+        val md = MessageDigest.getInstance("MD5")
+        val bytes = input.toByteArray()
+        val digest = md.digest(bytes)
+        return digest
+            .fold("") { str, byte -> str + "%02x".format(byte) }
+            .padStart(32, '0')
     }
+
+    private fun ByteArray.toHex(): String {
+        val sb = StringBuilder(this.size * 2)
+        for (byte in this) {
+            sb.append(String.format("%02x", byte)) // "%02x" formats with leading zeros
+        }
+        return sb.toString()
+    }
+
+    override fun chapterListSelector(): String = ""
 
     override fun imageUrlParse(document: Document): String {
         TODO("Not yet implemented")
@@ -117,8 +169,13 @@ class UnionMangas(
         val jsonContent = asJsoup().selectFirst("script#__NEXT_DATA__")!!.html()
         return json.decodeFromString<UnionMangasDto>(jsonContent)
     }
+
+    private fun String.removeProtocol() = trim().replace("https://", "")
+
     companion object {
         val apiUrl = "https://api.unionmanga.xyz"
+        val apiSeed = "8e0550790c94d6abc71d738959a88d209690dc86"
+        val domain = "yaoi-chan.xyz"
     }
 }
 
