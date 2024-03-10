@@ -91,7 +91,7 @@ abstract class MangaThemesiaAlt(
         }
     }
 
-    protected val slugRegex = Regex("""^\d+-""")
+    protected open val slugRegex = Regex("""^\d+-""")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (!getRandomUrlPref()) return super.mangaDetailsRequest(manga)
