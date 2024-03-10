@@ -27,18 +27,19 @@ abstract class MangaThemesiaAlt(
     lang: String,
     mangaUrlDirectory: String = "/manga",
     dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
+    private val randomUrlPrefKey: String = "pref_auto_random_url",
 ) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat), ConfigurableSource {
 
-    protected val preference: SharedPreferences by lazy {
+    protected val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
-            key = randomEnablePrefKey
-            title = "Automatically update dynamic urls"
-            summary = "Enabling this will automatically update random numeric part of manga urls.\n" +
-                "Helps with 404 during update and \"in library\" mark when browsing the source.\n\n" +
+            key = randomUrlPrefKey
+            title = "Automatically update dynamic URLs"
+            summary = "Automatically update random numbers in manga URLs.\n" +
+                "Helps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\n\n" +
                 "example: https://example.com/manga/12345-cool-manga -> https://example.com/manga/4567-cool-manga\n\n" +
                 "Note: This setting may require clearing database in advanced settings\n" +
                 "and migrating all manga to the same source"
@@ -46,9 +47,7 @@ abstract class MangaThemesiaAlt(
         }.also(screen::addPreference)
     }
 
-    private val randomEnablePrefKey = "pref_auto_random_url"
-
-    private fun getRandomUrlPref() = preference.getBoolean(randomEnablePrefKey, true)
+    private fun getRandomUrlPref() = preferences.getBoolean(randomUrlPrefKey, true)
 
     private var randomPartCache = SuspendLazy(::updateRandomPart)
 
@@ -77,16 +76,16 @@ abstract class MangaThemesiaAlt(
     }
 
     protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> {
-        return map {
-            val permaSlug = it.url
+        for (i in indices) {
+            val permaSlug = this[i].url
                 .removeSuffix("/")
                 .substringAfterLast("/")
                 .replaceFirst(slugRegex, "")
 
-            it.url = "$mangaUrlDirectory/$permaSlug/"
-
-            it
+            this[i].url = "$mangaUrlDirectory/$permaSlug/"
         }
+
+        return this
     }
 
     protected open val slugRegex = Regex("""^\d+-""")

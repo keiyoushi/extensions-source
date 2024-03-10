@@ -14,10 +14,11 @@ class AsuraScans : MangaThemesiaAlt(
     "https://asuratoon.com",
     "en",
     dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
+    randomUrlPrefKey = "pref_permanent_manga_url_2_",
 ) {
     init {
         // remove legacy preferences
-        preference.run {
+        preferences.run {
             if (contains("pref_url_map")) {
                 edit().remove("pref_url_map").apply()
             }
