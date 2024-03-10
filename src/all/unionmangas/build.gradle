@@ -1,0 +1,12 @@
+ext {
+    extName = 'Union Mangas'
+    extClass = '.UnionMangasFactory'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:cryptoaes'))
+}
