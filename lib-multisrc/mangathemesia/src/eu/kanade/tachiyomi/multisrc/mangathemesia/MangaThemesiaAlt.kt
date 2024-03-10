@@ -78,15 +78,13 @@ abstract class MangaThemesiaAlt(
 
     protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> {
         return map {
-            val sMangaTitleFirstWord = it.title.split(" ")[0]
-            if (!it.url.contains("/$sMangaTitleFirstWord", ignoreCase = true)) {
-                val permaSlug = it.url
-                    .removeSuffix("/")
-                    .substringAfterLast("/")
-                    .replaceFirst(slugRegex, "")
+            val permaSlug = it.url
+                .removeSuffix("/")
+                .substringAfterLast("/")
+                .replaceFirst(slugRegex, "")
 
-                it.url = "$mangaUrlDirectory/$permaSlug/"
-            }
+            it.url = "$mangaUrlDirectory/$permaSlug/"
+
             it
         }
     }
