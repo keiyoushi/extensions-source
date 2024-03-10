@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class NexoScans : Madara(
     "Nexo Scans",
-    "https://nexoscans.com",
+    "https://nexoscans.net",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale.US),
 ) {
