@@ -2,8 +2,8 @@ ext {
     extName = 'Shinigami'
     extClass = '.Shinigami'
     themePkg = 'madara'
-    baseUrl = 'https://home.shinigami.cx'
-    overrideVersionCode = 18
+    baseUrl = 'https://shinigami.cx'
+    overrideVersionCode = 19
 }
 
 apply from: "$rootDir/common.gradle"
