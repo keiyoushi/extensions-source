@@ -33,28 +33,32 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     private val synopsis = "Clown Corps is a comic about crime-fighting clowns. " +
         "It's pronounced \"core.\" Like marine corps."
 
-    override val client: OkHttpClient
-        get() = super.client.newBuilder()
+    override val client = network.client.newBuilder()
             .addInterceptor(TextInterceptor())
             .build()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        SManga.create().apply {
-            title = name
-            artist = creator
-            author = creator
-            description = synopsis
-            status = SManga.ONGOING
-            //Image from: https://clowncorps.net/about/
-            thumbnail_url = "https://clowncorps.net/wp-content/uploads/2022/11/clowns41.jpg"
-            setUrlWithoutDomain("/comic")
-        }.let { Observable.just(MangasPage(listOf(it), false))!! }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
+        MangasPage(
+            listOf(
+                SManga.create().apply {
+                    title = name
+                    artist = creator
+                    author = creator
+                    description = synopsis
+                    status = SManga.ONGOING
+                    //Image from: https://clowncorps.net/about/
+                    thumbnail_url = "https://clowncorps.net/wp-content/uploads/2022/11/clowns41.jpg"
+                    setUrlWithoutDomain("/comic")
+                }
+            ),
+            hasNextPage = false
+        )
+    }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        Observable.just(MangasPage(emptyList(), false))!!
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = fetchPopularManga(page)
 
     override fun fetchMangaDetails(manga: SManga) =
-        Observable.just(manga.apply { initialized = true })!!
+        Observable.just(manga.apply { initialized = true })
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
@@ -144,10 +148,6 @@ class ClownCorps : ConfigurableSource, HttpSource() {
             summary = "Enable to see the author's notes at the end of chapters (if they're there)."
             setDefaultValue(false)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(SHOW_AUTHORS_NOTES_KEY, checkValue).commit()
-            }
         }
         screen.addPreference(authorsNotesPref)
     }
