@@ -19,6 +19,9 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class ClownCorps : ConfigurableSource, HttpSource() {
     override val baseUrl = "https://clowncorps.net"
@@ -74,10 +77,15 @@ class ClownCorps : ConfigurableSource, HttpSource() {
             for (comic in comics) {
                 val link = comic.selectFirst(".post-title a")?.attr("href")
                 val title = comic.selectFirst(".post-title a")?.text()
-                if (link == null || title == null) continue
+                val postDate = comic.selectFirst(".post-date")?.text()
+                val postTime = comic.selectFirst(".post-time")?.text()
+                if (link == null || title == null || postDate == null || postTime == null) continue
+                val date = parseDate("$postDate $postTime")
+
                 val chapter = SChapter.create().apply {
                     setUrlWithoutDomain(link)
                     name = title
+                    date_upload = date
                 }
                 chapters.add(chapter)
             }
@@ -91,6 +99,18 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         }*/
 
         return chapters
+    }
+
+    private fun parseDate(dateStr: String): Long {
+        return try {
+            dateFormat.parse(dateStr)!!.time
+        } catch (_: ParseException) {
+            0L
+        }
+    }
+
+    private val dateFormat by lazy {
+        SimpleDateFormat("MMMM dd, yyyy hh:mm aa", Locale.ENGLISH)
     }
 
     override fun pageListParse(response: Response): List<Page> {
