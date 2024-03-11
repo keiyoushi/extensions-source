@@ -1,9 +1,17 @@
 package eu.kanade.tachiyomi.extension.es.kumanga
 
+import android.app.Application
+import android.content.SharedPreferences
 import android.util.Base64
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,12 +29,15 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.roundToInt
 
-class Kumanga : HttpSource() {
+class Kumanga : HttpSource(), ConfigurableSource {
 
     override val name = "Kumanga"
 
@@ -42,6 +53,9 @@ class Kumanga : HttpSource() {
 
     private val json: Json by injectLazy()
 
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
@@ -55,6 +69,10 @@ class Kumanga : HttpSource() {
         .add("Upgrade-Insecure-Requests", "1")
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .rateLimit(1)
         .addInterceptor { chain ->
             val request = chain.request()
@@ -139,21 +157,28 @@ class Kumanga : HttpSource() {
         var document = response.asJsoup()
         var location = document.location()
         val params = document.select("script:containsData(totCntnts)").toString()
-
-        val mangaId = params.substringAfter("mid=").substringBefore(";")
-        val mangaSlug = params.substringAfter("slg='").substringBefore("';")
-
-        var hasNextPage = document.select("ul.pagination li.next:not(.disabled)").isNotEmpty()
-
-        document.select(chapterSelector()).map { add(chapterFromElement(it)) }
-        var page = 2
-        while (hasNextPage) {
-            val pageHeaders = headersBuilder().set("Referer", location).build()
-            document = client.newCall(GET(baseUrl + getMangaUrl(mangaId, mangaSlug, page), pageHeaders)).execute().asJsoup()
-            location = document.location()
+        val pagesVar = params.substringAfter("totCntnts").substringAfter("=").substringBefore(";").trim()
+        val chaptersNumber = params.substringAfter(pagesVar).substringAfter("=").substringBefore(";").toIntOrNull()
+        val mangaId = params.substringAfter("mid").substringAfter("=").substringBefore(";").trim()
+        val mangaSlug = params.substringAfter("slg").substringAfter("=").substringBefore(";").trim().removeSurrounding("'")
+        if (chaptersNumber != null) {
+            val numberOfPages = ((chaptersNumber - 10) / 10.toDouble() + 0.4).roundToInt()
             document.select(chapterSelector()).map { add(chapterFromElement(it)) }
-            page++
-            hasNextPage = document.select("ul.pagination li.next:not(.disabled)").isNotEmpty()
+            var page = 2
+            while (page <= numberOfPages) {
+                val pageHeaders = headersBuilder().set("Referer", location).build()
+                document = client.newCall(
+                    GET(
+                        baseUrl + getMangaUrl(mangaId, mangaSlug, page),
+                        pageHeaders,
+                    ),
+                ).execute().asJsoup()
+                location = document.location()
+                document.select(chapterSelector()).map { add(chapterFromElement(it)) }
+                page++
+            }
+        } else {
+            throw Exception("No fue posible obtener los capítulos")
         }
     }
 
@@ -238,6 +263,10 @@ class Kumanga : HttpSource() {
         Filter.Separator(),
         GenreList(getGenreList()),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
+    }
 
     private class Type(name: String, val id: String) : Filter.CheckBox(name)
     private class TypeList(types: List<Type>) : Filter.Group<Type>("Filtrar por tipos", types)
