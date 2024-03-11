@@ -28,7 +28,7 @@ class MangaDemon : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = true
     override val name = "Manga Demon"
-    override val baseUrl = "https://demontoon.com"
+    override val baseUrl = "https://demonreader.org"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
@@ -195,7 +195,7 @@ class MangaDemon : ParsedHttpSource() {
 
         return SManga.create().apply {
             title = infoElement.select("h1.novel-title").text()
-            author = infoElement.select("div.author").text().drop(7)
+            author = infoElement.select("div.author > [itemprop=author]").text()
             status = parseStatus(infoElement.select("span:has(small:containsOwn(Status))").text())
             genre = infoElement.select("a.property-item").joinToString { it.text() }
             description = infoElement.select("p.description").text()
