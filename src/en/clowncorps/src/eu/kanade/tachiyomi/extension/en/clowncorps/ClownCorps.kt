@@ -15,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.OkHttpClient
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -29,13 +28,13 @@ class ClownCorps : ConfigurableSource, HttpSource() {
 
     private val creator = "Joe Chouinard"
 
-    //Text from: https://clowncorps.net/about/
+    // Text from: https://clowncorps.net/about/
     private val synopsis = "Clown Corps is a comic about crime-fighting clowns. " +
         "It's pronounced \"core.\" Like marine corps."
 
     override val client = network.client.newBuilder()
-            .addInterceptor(TextInterceptor())
-            .build()
+        .addInterceptor(TextInterceptor())
+        .build()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         MangasPage(
@@ -46,24 +45,28 @@ class ClownCorps : ConfigurableSource, HttpSource() {
                     author = creator
                     description = synopsis
                     status = SManga.ONGOING
-                    //Image from: https://clowncorps.net/about/
+                    // Image from: https://clowncorps.net/about/
                     thumbnail_url = "https://clowncorps.net/wp-content/uploads/2022/11/clowns41.jpg"
                     setUrlWithoutDomain("/comic")
-                }
+                },
             ),
-            hasNextPage = false
+            hasNextPage = false,
         )
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = fetchPopularManga(page)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
+        fetchPopularManga(page)
 
-    override fun fetchMangaDetails(manga: SManga) =
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
         Observable.just(manga.apply { initialized = true })
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val pageStatus = response.asJsoup().select("#paginav li.paginav-pages").text()
+        val pageCount = pageStatus.split(" ").last().toInt()
+
         val chapters = mutableListOf<SChapter>()
 
-        for (page in 1..Int.MAX_VALUE) {
+        for (page in 1..pageCount) {
             val url = "https://clowncorps.net/comic/page/$page/"
             val resp = client.newCall(GET(url, headers)).execute()
             if (resp.code == 404) break
@@ -147,7 +150,6 @@ class ClownCorps : ConfigurableSource, HttpSource() {
             title = "Show author's notes"
             summary = "Enable to see the author's notes at the end of chapters (if they're there)."
             setDefaultValue(false)
-
         }
         screen.addPreference(authorsNotesPref)
     }
