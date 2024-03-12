@@ -49,7 +49,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
                     description = synopsis
                     status = SManga.ONGOING
                     // Image from: https://clowncorps.net/about/
-                    thumbnail_url = "https://clowncorps.net/wp-content/uploads/2022/11/clowns41.jpg"
+                    thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
                     setUrlWithoutDomain("/comic")
                 },
             ),
@@ -70,9 +70,8 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         val chapters = mutableListOf<SChapter>()
 
         for (page in 1..pageCount) {
-            val url = "https://clowncorps.net/comic/page/$page/"
+            val url = "$baseUrl/comic/page/$page/"
             val resp = client.newCall(GET(url, headers)).execute()
-            if (resp.code == 404) break
             val comics = resp.asJsoup().select(".comic")
             for (comic in comics) {
                 val link = comic.selectFirst(".post-title a")?.attr("href")
