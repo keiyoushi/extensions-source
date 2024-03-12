@@ -1,0 +1,8 @@
+ext {
+    extName = 'Manga Tales'
+    extClass = '.MangaTales'
+    themePkg = 'gmanga'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
