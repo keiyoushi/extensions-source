@@ -116,8 +116,8 @@ class ArabsHentai : ParsedHttpSource() {
                 }
                 val genres = mutableListOf<String>()
                 selectFirst("#manga-info")?.run {
-                    description = select(".wp-content p").text() +
-                        "\n" + select(otherNameSelector).text() + "أسماء أُخرى: "
+                    description = "\u061C" + select(".wp-content p").text() +
+                        "\n" + "أسماء أُخرى: " + select(otherNameSelector).text()
                     status = select(seriesStatusSelector).text().parseStatus()
                     author = select(seriesAuthorSelector).text()
                     artist = select(seriesArtistSelector).text()
