@@ -23,8 +23,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 abstract class Gmanga(
     override val name: String,
@@ -234,20 +232,13 @@ abstract class Gmanga(
             .toSManga(::createThumbnail)
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
-        return GET("$baseUrl/api/mangas/$mangaId/releases", headers)
-    }
+    abstract fun chaptersRequest(manga: SManga): Request
+    abstract fun chaptersParse(response: Response): List<SChapter>
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val releases = response.parseAs<ChapterListDto>().releases
+    final override fun chapterListRequest(manga: SManga) = chaptersRequest(manga)
+    final override fun chapterListParse(response: Response) = chaptersParse(response).sortChapters()
 
-        return releases.map {
-            it.toSChapter(dateFormat)
-        }.sortChapters()
-    }
-
-    protected fun List<SChapter>.sortChapters() =
+    private fun List<SChapter>.sortChapters() =
         sortedWith(
             compareBy(
                 { -it.chapter_number },
@@ -255,11 +246,7 @@ abstract class Gmanga(
             ),
         )
 
-    protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
-
     override fun pageListParse(response: Response): List<Page> {
-        val url = response.request.url.toString()
-
         val data = response.asJsoup()
             .select(".js-react-on-rails-component").html()
             .parseAs<ReaderDto>()
@@ -272,22 +259,16 @@ abstract class Gmanga(
             else -> data.pages to "hq"
         }
 
-        return pages.mapIndexed { index, pageUri ->
+        return pages.sortedWith(pageSort).mapIndexed { index, pageUri ->
             Page(
                 index = index,
-                url = "$url#page_$index",
                 imageUrl = "$cdnUrl/uploads/releases/${data.key}/$directory/$pageUri",
             )
-        }.sortPages()
+        }
     }
 
-    protected fun List<Page>.sortPages() = sortedWith(
-        compareBy(
-            { parseNumber(0, it.imageUrl!!) ?: Double.MAX_VALUE },
-            { parseNumber(1, it.imageUrl!!) },
-            { parseNumber(2, it.imageUrl!!) },
-        ),
-    )
+    private val pageSort =
+        compareBy<String>({ parseNumber(0, it) ?: Double.MAX_VALUE }, { parseNumber(1, it) }, { parseNumber(2, it) })
 
     private fun parseNumber(index: Int, string: String): Double? =
         Regex("\\d+").findAll(string).map { it.value }.toList().getOrNull(index)?.toDoubleOrNull()

@@ -26,17 +26,15 @@ class MangaTales : Gmanga(
         TagFilterData("2", "إنجليزي", Filter.TriState.STATE_INCLUDE),
     )
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override fun chaptersRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfterLast("/")
         return GET("$baseUrl/api/mangas/$mangaId", headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun chaptersParse(response: Response): List<SChapter> {
         val releases = response.parseAs<ChapterListDto>().mangaReleases
 
-        return releases.map {
-            it.toSChapter(dateFormat)
-        }.sortChapters()
+        return releases.map { it.toSChapter() }
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -47,6 +45,6 @@ class MangaTales : Gmanga(
         return data.readerDataAction.readerData.release.pages
             .mapIndexed { idx, img ->
                 Page(idx, imageUrl = "$cdnUrl/uploads/releases/$img?ak=${data.globals.mediaKey}")
-            }.sortPages()
+            }
     }
 }

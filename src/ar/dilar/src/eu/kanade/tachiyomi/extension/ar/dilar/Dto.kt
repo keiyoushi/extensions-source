@@ -5,7 +5,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.float
-import java.text.SimpleDateFormat
 
 @Serializable
 class ChapterListDto(
@@ -18,21 +17,17 @@ class ChapterRelease(
     private val chapter: JsonPrimitive,
     private val title: String,
     @SerialName("team_name") private val teamName: String,
-    @SerialName("created_at") private val createdAt: String,
+    @SerialName("time_stamp") private val timestamp: Long,
 
-    private val has_rev_link: Boolean,
-    private val support_link: String,
+    @SerialName("has_rev_link") private val hasRevLink: Boolean,
+    @SerialName("support_link") private val supportLink: String,
 ) {
-    val isMonetized get() = has_rev_link && support_link.isNotEmpty()
+    val isMonetized get() = hasRevLink && supportLink.isNotEmpty()
 
-    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter() = SChapter.create().apply {
         url = "/r/$id"
         chapter_number = chapter.float
-        date_upload = try {
-            dateFormat.parse(createdAt)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+        date_upload = timestamp * 1000
         scanlator = teamName
 
         val chapterName = title.let { if (it.trim() != "") " - $it" else "" }

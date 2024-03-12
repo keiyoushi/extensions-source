@@ -64,12 +64,12 @@ class Gmanga : Gmanga(
             .map(::chapterListParse)
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override fun chaptersRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfterLast("/")
         return GET("https://api2.gmanga.me/api/mangas/$mangaId/releases", headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun chaptersParse(response: Response): List<SChapter> {
         val chapterList = response.parseAs<ChapterListResponse>()
 
         return chapterList.releases.map {
@@ -85,6 +85,6 @@ class Gmanga : Gmanga(
                 val chapterName = chapter.title.let { if (it.trim() != "") " - $it" else "" }
                 name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
             }
-        }.sortChapters()
+        }
     }
 }
