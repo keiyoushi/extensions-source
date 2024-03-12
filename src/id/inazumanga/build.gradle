@@ -3,7 +3,7 @@ ext {
     extClass = '.ReYume'
     themePkg = 'makaru'
     baseUrl = 'https://www.re-yume.my.id'
-    overrideVersionCode = 34
+    overrideVersionCode = 35
 }
 
 apply from: "$rootDir/common.gradle"
