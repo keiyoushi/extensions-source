@@ -21,8 +21,10 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.security.MessageDigest
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class UnionMangas(
     override val lang: String,
@@ -49,7 +51,10 @@ class UnionMangas(
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val date = DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now())
+        val date = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
+            .apply { timeZone = TimeZone.getTimeZone("GMT") }
+            .format(Date())
+
         val mangaSlug = manga.url.split("/").last()
             .replace("/", "")
 
@@ -73,28 +78,20 @@ class UnionMangas(
             .add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/${(0..20100101).random()} Firefox/123.0")
             .build()
 
-        client.newCall(GET(url, headers))
+        throw UnsupportedOperationException("${client.newCall(GET(url, headers)).execute().code}")
 
         return super.fetchChapterList(manga)
     }
 
-    private fun buildHashRequest(payload: String): String = MD5(payload).toByteArray().toHex()
+    private fun buildHashRequest(payload: String): String = payload.MD5()
 
-    private fun MD5(input: String): String {
+    private fun String.MD5(): String {
         val md = MessageDigest.getInstance("MD5")
-        val bytes = input.toByteArray()
+        val bytes = trim().toByteArray()
         val digest = md.digest(bytes)
         return digest
             .fold("") { str, byte -> str + "%02x".format(byte) }
             .padStart(32, '0')
-    }
-
-    private fun ByteArray.toHex(): String {
-        val sb = StringBuilder(this.size * 2)
-        for (byte in this) {
-            sb.append(String.format("%02x", byte)) // "%02x" formats with leading zeros
-        }
-        return sb.toString()
     }
 
     override fun chapterListSelector(): String = ""
