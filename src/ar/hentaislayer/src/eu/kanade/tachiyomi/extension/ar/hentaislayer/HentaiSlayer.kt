@@ -118,6 +118,7 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
                     author = select("p:has(span:contains(المؤلف)) span:nth-child(2)").text()
                     artist = select("p:has(span:contains(الرسام)) span:nth-child(2)").text()
                 }
+                var desc = "\u061C"
                 selectFirst("section > div:nth-child(1) > div:nth-child(2)")?.run {
                     select("h1").text().takeIf { it.isNotEmpty() }?.let {
                         title = it
@@ -130,10 +131,10 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
                             }
                             .joinToString()
                     select("h2").text().takeIf { it.isNotEmpty() }?.let {
-                        description = "\u061C" + "${it}أسماء أُخرى: "
+                        desc += "أسماء أُخرى: $it\n"
                     }
                 }
-                description += select("#description").text()
+                description = desc + select("#description").text()
             }
         }
 
