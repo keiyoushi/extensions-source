@@ -14,7 +14,7 @@ fun decrypt(responseData: String): String {
 }
 
 private fun String.hexStringToByteArray(): ByteArray {
-    val len = this.length
+    val len = length
     val data = ByteArray(len / 2)
     var i = 0
     while (i < len) {

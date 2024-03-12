@@ -29,7 +29,7 @@ private val DATE_FITLER_FORMAT = SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH).
 
 private fun SimpleDateFormat.isValid(date: String): Boolean {
     return try {
-        this.parse(date)
+        parse(date)
         true
     } catch (e: ParseException) {
         false
@@ -37,7 +37,7 @@ private fun SimpleDateFormat.isValid(date: String): Boolean {
 }
 
 class DateFilter(val id: String, name: String) : ValidatingTextFilter("(yyyy/MM/dd) $name)") {
-    override fun isValid(): Boolean = DATE_FITLER_FORMAT.isValid(this.state)
+    override fun isValid(): Boolean = DATE_FITLER_FORMAT.isValid(state)
 }
 
 class IntFilter(val id: String, name: String) : ValidatingTextFilter(name) {
