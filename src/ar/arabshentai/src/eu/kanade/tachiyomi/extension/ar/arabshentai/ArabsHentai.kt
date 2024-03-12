@@ -68,7 +68,8 @@ class ArabsHentai : ParsedHttpSource() {
 
     // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/page/$page/?s=$query".toHttpUrl().newBuilder()
+        val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
+        url.addQueryParameter("s", query)
         filters.forEach { filter ->
             when (filter) {
                 is GenresOpFilter -> url.addQueryParameter("op", filter.toUriPart())
