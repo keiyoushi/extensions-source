@@ -90,13 +90,6 @@ class ClownCorps : ConfigurableSource, HttpSource() {
             }
         }
 
-        // Add chapter numbers to the chapters, to ensure correct sorting.
-        // Seems to be unnecessary, as it already bases the order on the chapter names.
-        // Kept here, commented out, just in case.
-        /*chapters.forEachIndexed { index, sChapter ->
-            sChapter.chapter_number = chapters.size - index.toFloat()
-        }*/
-
         return chapters
     }
 
