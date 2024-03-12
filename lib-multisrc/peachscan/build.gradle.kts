@@ -2,10 +2,8 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 2
+baseVersionCode = 3
 
 dependencies {
-    // Only PeachScan sources uses the image-decoder dependency.
-    //noinspection UseTomlInstead
-    compileOnly("com.github.tachiyomiorg:image-decoder:fbd6601290")
+    compileOnly("com.github.tachiyomiorg:image-decoder:398d3c074f")
 }
