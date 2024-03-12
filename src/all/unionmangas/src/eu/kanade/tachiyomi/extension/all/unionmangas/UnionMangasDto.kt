@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.unionmangas
 
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -40,6 +41,35 @@ data class UnionMangasDto(
     }
 
     private fun mangaUrlParse(slug: String, pathSegment: String) = "/$pathSegment/$slug"
+}
+
+@Serializable
+data class ChapterPageDto(
+    val totalRecode: Int,
+    val currentPage: String,
+    val totalPage: Int,
+    @SerialName("data") val chapters: List<ChapterDto>,
+) {
+    fun toModel(): List<SChapter> =
+        chapters.map { chapter ->
+            SChapter.create().apply {
+                name = chapter.name
+                date_upload = chapter.date.toDate()
+            }
+        }
+
+    private fun String.toDate(): Long =
+        try { UnionMangas.dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+}
+
+@Serializable
+data class ChapterDto(
+    val slug: String,
+    val date: String,
+    @SerialName("idDetail") private val _id: String,
+    @SerialName("nameChapter") val name: String,
+) {
+    val id get() = "cap-$_id"
 }
 
 @Serializable

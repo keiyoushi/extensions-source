@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.unionmangas
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttp
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -49,7 +49,6 @@ class UnionMangas(
 
     override fun getFilterList() = FilterList(LangGroupFilter(getLangFilter()))
 
-    @RequiresApi(Build.VERSION_CODES.O)
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val date = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
             .apply { timeZone = TimeZone.getTimeZone("GMT") }
@@ -61,7 +60,8 @@ class UnionMangas(
         var currentPage = 0
 
         val url = "$apiUrl/api/v3/po/GetChapterListFilter/$mangaSlug/16/$currentPage/all/ASC"
-        val path = "/api/v3/po/GetChapterListFilter/$mangaSlug/16/$currentPage/all/ASC"
+
+        val path = url.replace(apiUrl, "")
 
         val headers = headersBuilder()
             .add("_hash", buildHashRequest(apiSeed + domain + date))
@@ -78,9 +78,9 @@ class UnionMangas(
             .add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/${(0..20100101).random()} Firefox/123.0")
             .build()
 
-        throw UnsupportedOperationException("${client.newCall(GET(url, headers)).execute().code}")
-
-        return super.fetchChapterList(manga)
+        return client.newCall(GET(url, headers))
+            .asObservableSuccess()
+            .map { json.decodeFromString<ChapterPageDto>(it.body.string()).toModel() }
     }
 
     private fun buildHashRequest(payload: String): String = payload.MD5()
@@ -173,6 +173,7 @@ class UnionMangas(
         val apiUrl = "https://api.unionmanga.xyz"
         val apiSeed = "8e0550790c94d6abc71d738959a88d209690dc86"
         val domain = "yaoi-chan.xyz"
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd")
     }
 }
 
