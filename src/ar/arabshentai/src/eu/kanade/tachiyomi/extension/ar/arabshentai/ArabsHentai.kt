@@ -47,11 +47,11 @@ class ArabsHentai : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) =
         SManga.create().apply {
-            thumbnail_url = element.selectFirst("a .poster img")!!.imgAttr()
             element.selectFirst(".data h3 a")!!.run {
                 setUrlWithoutDomain(absUrl("href"))
                 title = text()
             }
+            thumbnail_url = element.selectFirst("a .poster img")?.imgAttr()
         }
 
     override fun popularMangaNextPageSelector() = ".pagination a.arrow_pag i#nextpagination"
@@ -91,11 +91,11 @@ class ArabsHentai : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) =
         SManga.create().apply {
-            thumbnail_url = element.selectFirst(".image .thumbnail a img")!!.imgAttr()
             element.selectFirst(".details .title")!!.run {
                 setUrlWithoutDomain(selectFirst("a")!!.absUrl("href"))
                 title = ownText()
             }
+            thumbnail_url = element.selectFirst(".image .thumbnail a img")?.imgAttr()
         }
 
     override fun searchMangaNextPageSelector() = ".pagination span.current + a"
@@ -104,8 +104,8 @@ class ArabsHentai : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) =
         SManga.create().apply {
             document.selectFirst(".content")!!.run {
-                thumbnail_url = selectFirst(".sheader .poster img")!!.imgAttr()
                 title = selectFirst(".sheader .data h1")!!.text()
+                thumbnail_url = selectFirst(".sheader .poster img")?.imgAttr()
                 val genres = mutableListOf<String>()
                 selectFirst("#manga-info")?.run {
                     description = "\u061C" + select(".wp-content p").text() +
