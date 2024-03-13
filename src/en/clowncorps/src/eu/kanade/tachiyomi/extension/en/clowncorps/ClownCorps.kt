@@ -33,30 +33,27 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         .addInterceptor(TextInterceptor())
         .build()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
-        MangasPage(
-            listOf(
-                SManga.create().apply {
-                    title = name
-                    artist = CREATOR
-                    author = CREATOR
-                    status = SManga.ONGOING
-                    // Image and description from: https://clowncorps.net/about/
-                    thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
-                    description = "Clown Corps is a comic about crime-fighting clowns.\n" +
-                        "It's pronounced \"core.\" Like marine corps."
-                    setUrlWithoutDomain("/comic")
-                },
-            ),
-            hasNextPage = false,
-        ),
-    )
+    private fun getManga() = SManga.create().apply {
+        title = name
+        artist = CREATOR
+        author = CREATOR
+        status = SManga.ONGOING
+        initialized = true
+        // Image and description from: https://clowncorps.net/about/
+        thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
+        description = "Clown Corps is a comic about crime-fighting clowns.\n" +
+            "It's pronounced \"core.\" Like marine corps."
+        setUrlWithoutDomain("/comic")
+    }
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        Observable.just(MangasPage(listOf(getManga()), hasNextPage = false))
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
         fetchPopularManga(page)
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        Observable.just(manga.apply { initialized = true })
+        Observable.just(getManga())
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val pageStatus = response.asJsoup().select("#paginav li.paginav-pages").text()
