@@ -9,6 +9,6 @@ class MangaTime : Madara(
     "https://anime-time.net",
     "ar",
     dateFormat = SimpleDateFormat("dd MMMM، yyyy", Locale("ar")),
-){
+) {
     override val useNewChapterEndpoint = true
 }
