@@ -58,6 +58,13 @@ jobs:
                 "ignoreCase": true,
                 "labels": ["invalid"],
                 "message": "ReManga (Russian) will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca)."
+              },
+              {
+                "type": "both",
+                "regex": ".*(kumanga\\.com).*",
+                "ignoreCase": true,
+                "labels": ["invalid"],
+                "message": "{match} will not be added back as it is too difficult to maintain."
               }
             ]
           auto-close-ignore-label: do-not-autoclose
