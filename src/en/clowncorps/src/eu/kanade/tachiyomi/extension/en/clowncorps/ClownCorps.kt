@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.en.clowncorps
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
@@ -15,6 +17,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -55,34 +61,70 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
         Observable.just(getManga())
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val pageStatus = response.asJsoup().select("#paginav li.paginav-pages").text()
-        val pageCount = pageStatus.split(" ").last().toInt()
-
-        val chapters = mutableListOf<SChapter>()
-
-        for (page in 1..pageCount) {
-            val url = "$baseUrl/comic/page/$page/"
-            val resp = client.newCall(GET(url, headers)).execute()
-            val comics = resp.asJsoup().select(".comic")
-            for (comic in comics) {
-                val link = comic.selectFirst(".post-title a")?.attr("href")
-                val title = comic.selectFirst(".post-title a")?.text()
-                val postDate = comic.selectFirst(".post-date")?.text()
-                val postTime = comic.selectFirst(".post-time")?.text()
-                if (link == null || title == null || postDate == null || postTime == null) continue
-                val date = parseDate("$postDate $postTime")
-
-                val chapter = SChapter.create().apply {
-                    setUrlWithoutDomain(link)
-                    name = title
-                    date_upload = date
-                }
-                chapters.add(chapter)
-            }
+    @Serializable
+    data class SerializableChapter(val fullLink: String, val name: String, val dateUpload: Long) {
+        override fun hashCode(): Int {
+            return name.hashCode()
         }
 
-        return chapters
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as SerializableChapter
+
+            return name == other.name
+        }
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        // The total number of webpages with chapters on them
+        val currentPageIndicator = response.asJsoup().select("#paginav li.paginav-pages").text()
+        val totalWebpageCount = currentPageIndicator.split(" ").last().toInt()
+
+        val allChapters = getChaptersFromCache().toMutableSet()
+        // Fetch all the chapters from the website until we reached where the cache left off
+        for (webpageIndex in 1..totalWebpageCount) {
+            val anyChaptersWereAdded = allChapters.addAll(fetchWebpageChapters(webpageIndex))
+            if (!anyChaptersWereAdded) break // No new chapters were added from this webpage, so we're done
+        }
+
+        // Save the chapters to cache
+        val fullJsonString = Json.encodeToString(allChapters)
+        preferences.edit().putString(CACHE_KEY_CHAPTERS, fullJsonString).apply()
+
+        // Convert the serializable chapters to SChapters
+        return allChapters.map { chapter ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(chapter.fullLink)
+                name = chapter.name
+                date_upload = chapter.dateUpload
+            }
+        }
+    }
+
+    private fun getChaptersFromCache(): Set<SerializableChapter> {
+        val cachedChaps = preferences.getString(CACHE_KEY_CHAPTERS, null)
+        if (cachedChaps != null) return Json.decodeFromString(cachedChaps)
+        return emptySet()
+    }
+
+    private fun fetchWebpageChapters(webpageIndex: Int): List<SerializableChapter> {
+        val url = "$baseUrl/comic/page/$webpageIndex/"
+        val resp = client.newCall(GET(url, headers)).execute()
+        val comics = resp.asJsoup().select(".comic")
+        return comics.mapNotNull {
+            val link = it.selectFirst(".post-title a")?.attr("href")
+            val title = it.selectFirst(".post-title a")?.text()
+            val postDate = it.selectFirst(".post-date")?.text()
+            val postTime = it.selectFirst(".post-time")?.text()
+            if (link != null && title != null && postDate != null && postTime != null) {
+                val date = parseDate("$postDate $postTime")
+                SerializableChapter(link, title, date)
+            } else {
+                null
+            }
+        }
     }
 
     private fun parseDate(dateStr: String): Long {
@@ -149,20 +191,51 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
+    private fun showAuthorsNotesPref() = preferences.getBoolean(SETTING_KEY_SHOW_AUTHORS_NOTES, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_AUTHORS_NOTES_KEY
+            key = SETTING_KEY_SHOW_AUTHORS_NOTES
             title = "Show author's notes"
-            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+            summary =
+                "Enable to see the author's notes at the end of chapters (if they're there)."
             setDefaultValue(false)
         }
         screen.addPreference(authorsNotesPref)
+
+        // I couldn't find a way to create a simple button, so here's a workaround that uses
+        // a MultiSelectListPreference with a single option as a kind of confirmation window.
+        val clearCachePref = MultiSelectListPreference(screen.context).apply {
+            key = SETTING_KEY_CLEAR_CHAPTER_CACHE
+            title = "Clear chapter cache"
+            summary = "Clears the chapter cache, forcing a full re-fetch from the website."
+            dialogTitle = "Are you sure you want to clear the chapter cache?"
+            entries = arrayOf("Yes, I'm sure")
+            entryValues = arrayOf(VALUE_CONFIRM)
+            setDefaultValue(emptySet<String>())
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Set<*>
+                if (checkValue.contains(VALUE_CONFIRM)) {
+                    preferences.edit().remove(CACHE_KEY_CHAPTERS).apply()
+                    Toast.makeText(screen.context, "Cleared chapter cache", Toast.LENGTH_SHORT)
+                        .show()
+                }
+
+                false // Don't actually save the "yes"
+            }
+        }
+        screen.addPreference(clearCachePref)
     }
 
     companion object {
         private const val CREATOR = "Joe Chouinard"
-        private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
+
+        private const val SETTING_KEY_SHOW_AUTHORS_NOTES = "showAuthorsNotes"
+
+        private const val CACHE_KEY_CHAPTERS = "chaptersCache"
+
+        private const val SETTING_KEY_CLEAR_CHAPTER_CACHE = "clearChapterCache"
+        private const val VALUE_CONFIRM = "yes"
     }
 }
