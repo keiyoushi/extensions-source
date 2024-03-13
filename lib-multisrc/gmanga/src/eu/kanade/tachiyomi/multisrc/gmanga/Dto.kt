@@ -29,12 +29,12 @@ class SearchMangaDto(
 class BrowseManga(
     private val id: Int,
     private val title: String,
-    private val cover: String,
+    private val cover: String? = null,
 ) {
     fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
         url = "/mangas/$id"
         title = this@BrowseManga.title
-        thumbnail_url = createThumbnail(id.toString(), cover)
+        thumbnail_url = cover?.let { createThumbnail(id.toString(), cover) }
     }
 }
 
@@ -58,7 +58,7 @@ class MangaDetailsDto(
 @Serializable
 class Manga(
     private val id: Int,
-    private val cover: String,
+    private val cover: String? = null,
     private val title: String,
     private val summary: String? = null,
     private val artists: List<NameDto>,
@@ -74,7 +74,7 @@ class Manga(
 ) {
     fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
         title = this@Manga.title
-        thumbnail_url = createThumbnail(id.toString(), cover)
+        thumbnail_url = cover?.let { createThumbnail(id.toString(), cover) }
         artist = artists.joinToString { it.name }
         author = authors.joinToString { it.name }
         status = when (this@Manga.status) {
@@ -105,6 +105,8 @@ class Manga(
             }
 
             val titles = listOfNotNull(synonyms, arTitle, jpTitle, enTitle)
+                .filterNot(String::isEmpty)
+
             if (titles.isNotEmpty()) {
                 append("\n\n")
                 append("مسميّات أخرى")
