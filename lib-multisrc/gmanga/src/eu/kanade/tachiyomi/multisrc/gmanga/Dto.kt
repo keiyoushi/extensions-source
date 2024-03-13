@@ -105,6 +105,8 @@ class Manga(
             }
 
             val titles = listOfNotNull(synonyms, arTitle, jpTitle, enTitle)
+                .filterNot(String::isEmpty)
+
             if (titles.isNotEmpty()) {
                 append("\n\n")
                 append("مسميّات أخرى")
