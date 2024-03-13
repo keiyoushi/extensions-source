@@ -15,6 +15,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -46,10 +47,8 @@ class ArabsHentai : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) =
         SManga.create().apply {
-            element.selectFirst("a .poster img")?.run {
-                thumbnail_url = imgAttr()
-            }
-            element.selectFirst(".data h3 a")?.run {
+            thumbnail_url = element.selectFirst("a .poster img")!!.imgAttr()
+            element.selectFirst(".data h3 a")!!.run {
                 setUrlWithoutDomain(absUrl("href"))
                 title = text()
             }
@@ -92,13 +91,9 @@ class ArabsHentai : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) =
         SManga.create().apply {
-            element.selectFirst(".image .thumbnail a img")?.run {
-                thumbnail_url = imgAttr()
-            }
-            element.selectFirst(".details .title")?.run {
-                selectFirst("a")?.run {
-                    setUrlWithoutDomain(absUrl("href"))
-                }
+            thumbnail_url = element.selectFirst(".image .thumbnail a img")!!.imgAttr()
+            element.selectFirst(".details .title")!!.run {
+                setUrlWithoutDomain(selectFirst("a")!!.absUrl("href"))
                 title = ownText()
             }
         }
@@ -108,37 +103,22 @@ class ArabsHentai : ParsedHttpSource() {
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) =
         SManga.create().apply {
-            document.selectFirst(".content")?.run {
-                selectFirst(".sheader .poster img")?.run {
-                    thumbnail_url = imgAttr()
-                }
-                selectFirst(".sheader .data h1")?.run {
-                    title = text()
-                }
+            document.selectFirst(".content")!!.run {
+                thumbnail_url = selectFirst(".sheader .poster img")!!.imgAttr()
+                title = selectFirst(".sheader .data h1")!!.text()
                 val genres = mutableListOf<String>()
                 selectFirst("#manga-info")?.run {
                     description = "\u061C" + select(".wp-content p").text() +
-                        "\n" + "أسماء أُخرى: " + select(otherNameSelector).text()
-                    status = select(seriesStatusSelector).text().parseStatus()
-                    author = select(seriesAuthorSelector).text()
-                    artist = select(seriesArtistSelector).text()
-                    genres += select(seriesTypeSelector).text()
+                        "\n" + "أسماء أُخرى: " + select("div b:contains(أسماء أُخرى) + span").text()
+                    status = select("div b:contains(حالة المانجا) + span").text().parseStatus()
+                    author = select("div b:contains(الكاتب) + span a").text()
+                    artist = select("div b:contains(الرسام) + span a").text()
+                    genres += select("div b:contains(نوع العمل) + span a").text()
                 }
                 genres += select(".data .sgeneros a").map { it.text() }
                 genre = genres.joinToString()
             }
         }
-
-    private val otherNameSelector =
-        "div b:contains(أسماء أُخرى) + span"
-    private val seriesStatusSelector =
-        "div b:contains(حالة المانجا) + span"
-    private val seriesArtistSelector =
-        "div b:contains(الرسام) + span a"
-    private val seriesAuthorSelector =
-        "div b:contains(الكاتب) + span a"
-    private val seriesTypeSelector =
-        "div b:contains(نوع العمل) + span a"
 
     private fun String?.parseStatus() =
         when {
@@ -159,7 +139,7 @@ class ArabsHentai : ParsedHttpSource() {
             if (url.contains("style=paged")) {
                 setUrlWithoutDomain(url.substringBeforeLast("?"))
                 name = "ونشوت"
-                date_upload = 0
+                date_upload = 0L
             } else {
                 name = element.select(".chapternum").text()
                 date_upload = element.select(".chapterdate").text().parseChapterDate()
@@ -168,11 +148,11 @@ class ArabsHentai : ParsedHttpSource() {
         }
 
     private fun String?.parseChapterDate(): Long {
-        if (this == null) return 0
+        if (this == null) return 0L
         return try {
-            dateFormat.parse(this)?.time ?: 0
-        } catch (_: Exception) {
-            0
+            dateFormat.parse(this)!!.time
+        } catch (_: ParseException) {
+            0L
         }
     }
 
@@ -213,11 +193,9 @@ class ArabsHentai : ParsedHttpSource() {
     private fun fetchGenres() {
         if (fetchGenresAttempts < 3 && genreList.isEmpty()) {
             try {
-                client.newCall(genresRequest()).execute()
-                    .let {
-                        val document = it.asJsoup()
-                        genreList = parseGenres(document)
-                    }
+                genreList = client.newCall(genresRequest()).execute()
+                    .asJsoup()
+                    .let(::parseGenres)
             } catch (_: Exception) {
             } finally {
                 fetchGenresAttempts++
