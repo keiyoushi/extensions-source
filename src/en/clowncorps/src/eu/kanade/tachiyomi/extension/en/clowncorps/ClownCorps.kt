@@ -43,7 +43,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
         description = "Clown Corps is a comic about crime-fighting clowns.\n" +
             "It's pronounced \"core.\" Like marine corps."
-        setUrlWithoutDomain("/comic")
+        url = "/comic"
     }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> =
