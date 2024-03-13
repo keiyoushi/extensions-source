@@ -59,7 +59,7 @@ data class ChapterPageDto(
 
     private fun String.toDate(): Long =
         try { UnionMangas.dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
-    private fun ChapterDto.toChapterUrl() = "${this.slugManga}/${this.id}"
+    private fun ChapterDto.toChapterUrl() = "/${this.slugManga}/${this.id}"
 }
 
 @Serializable
