@@ -55,17 +55,20 @@ data class ChapterPageDto(
             SChapter.create().apply {
                 name = chapter.name
                 date_upload = chapter.date.toDate()
+                url = chapter.toChapterUrl()
             }
         }
 
     private fun String.toDate(): Long =
         try { UnionMangas.dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+    private fun ChapterDto.toChapterUrl() = "${this.slugManga}/${this.id}"
 }
 
 @Serializable
 data class ChapterDto(
-    val slug: String,
     val date: String,
+    val slug: String,
+    @SerialName("idDoc") val slugManga: String,
     @SerialName("idDetail") private val _id: String,
     @SerialName("nameChapter") val name: String,
 ) {

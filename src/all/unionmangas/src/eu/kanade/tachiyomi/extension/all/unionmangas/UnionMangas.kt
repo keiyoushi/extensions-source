@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.unionmangas
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,9 +13,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttp
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -50,37 +50,43 @@ class UnionMangas(
     override fun getFilterList() = FilterList(LangGroupFilter(getLangFilter()))
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val date = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
-            .apply { timeZone = TimeZone.getTimeZone("GMT") }
-            .format(Date())
-
-        val mangaSlug = manga.url.split("/").last()
-            .replace("/", "")
-
+        val chapters = mutableListOf<SChapter>()
         var currentPage = 0
+        do {
+            val chaptersDto = fetchChapterListPageable(manga, currentPage)
+            chapters += chaptersDto?.toModel() ?: emptyList()
+            currentPage++
+        } while (currentPage <= (chaptersDto?.totalPage ?: 0))
+        return Observable.from(listOf(chapters))
+    }
 
-        val url = "$apiUrl/api/v3/po/GetChapterListFilter/$mangaSlug/16/$currentPage/all/ASC"
+    private fun fetchChapterListPageable(manga: SManga, page: Int): ChapterPageDto? {
+        return try {
+            val date = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
+                .apply { timeZone = TimeZone.getTimeZone("GMT") }
+                .format(Date())
 
-        val path = url.replace(apiUrl, "")
+            val url = "$apiUrl/api/v3/po/GetChapterListFilter/${manga.slug()}/16/$page/all/ASC"
+            val path = url.toUrlWithoutDomain()
 
-        val headers = headersBuilder()
-            .add("_hash", buildHashRequest(apiSeed + domain + date))
-            .add("_tranId", buildHashRequest(apiSeed + domain + date + path))
-            .add("_date", date)
-            .add("_domain", domain)
-            .add("_path", path)
-            .add("Origin", baseUrl)
-            .add("Host", apiUrl.removeProtocol())
-            .add("Referer", "$baseUrl/")
-            .add("Sec-Fetch-Mode", "cors")
-            .add("Sec-Fetch-Site", "cross-site")
-            .add("Accept-Language", "pt-BR,en-US;q=0.7,en;q=0.3")
-            .add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/${(0..20100101).random()} Firefox/123.0")
-            .build()
+            val headers = headersBuilder()
+                .add("_hash", buildHashRequest(apiSeed + domain + date))
+                .add("_tranId", buildHashRequest(apiSeed + domain + date + path))
+                .add("_date", date)
+                .add("_domain", domain)
+                .add("_path", path)
+                .add("Origin", baseUrl)
+                .add("Host", apiUrl.removeProtocol())
+                .add("Referer", "$baseUrl/")
+                .build()
 
-        return client.newCall(GET(url, headers))
-            .asObservableSuccess()
-            .map { json.decodeFromString<ChapterPageDto>(it.body.string()).toModel() }
+            return client
+                .newCall(GET(url, headers))
+                .execute().body.toChapterDto()
+        } catch (e: Exception) {
+            Log.e("::fetchChapter", e.toString())
+            null
+        }
     }
 
     private fun buildHashRequest(payload: String): String = payload.MD5()
@@ -167,7 +173,14 @@ class UnionMangas(
         return json.decodeFromString<UnionMangasDto>(jsonContent)
     }
 
+    private fun ResponseBody.toChapterDto() =
+        json.decodeFromString<ChapterPageDto>(string())
+
     private fun String.removeProtocol() = trim().replace("https://", "")
+
+    private fun SManga.slug() = this.url.split("/").last()
+
+    private fun String.toUrlWithoutDomain() = trim().replace(apiUrl, "")
 
     companion object {
         val apiUrl = "https://api.unionmanga.xyz"
