@@ -16,7 +16,7 @@ data class UnionMangasDto(
     private val popularMangaDto get() = popularMangaRawContent?.map { it.details }
     private val mangaDetailsDto get() = props.pageProps.mangaDetailsDto
 
-    fun hasNextPageToLatestUpdates() = latestUpdateRawContent?.currentPage?.toInt()!! < latestUpdateRawContent?.totalPage!!
+    fun hasNextPageToLatestUpdates() = latestUpdateRawContent?.hasNextPage() ?: false
 
     fun hasNextPageToPopularMangas() = false
 
@@ -39,8 +39,6 @@ data class UnionMangasDto(
         url = mangaUrlParse(dto.slug, query.type)
         genre = dto.genres
     }
-
-    private fun mangaUrlParse(slug: String, pathSegment: String) = "/$pathSegment/$slug"
 }
 
 @Serializable
@@ -85,17 +83,29 @@ data class Props(val pageProps: PageProps)
 
 @Serializable
 data class PageProps(
-    @SerialName("data_lastuppdate") val latestUpdateDto: LatestUpdate?,
+    @SerialName("data_lastuppdate") val latestUpdateDto: PageableMangaListDto?,
     @SerialName("data_popular") val popularMangaDto: List<PopularMangaDto>?,
     @SerialName("dataManga") val mangaDetailsDto: MangaDetailsDto?,
 )
 
 @Serializable
-data class LatestUpdate(
-    val currentPage: String,
+data class PageableMangaListDto(
+    val currentPage: String?,
     val totalPage: Int,
     @SerialName("data") val mangas: List<MangaDto>,
-)
+) {
+    fun hasNextPage(): Boolean = ((currentPage?.toInt() ?: 0) + 1) < totalPage
+
+    fun toModels(siteLang: String) = mangas.map { dto ->
+        SManga.create().apply {
+            title = dto.title
+            thumbnail_url = dto.thumbnailUrl
+            status = dto.status
+            url = mangaUrlParse(dto.slug, siteLang)
+            genre = dto.genres
+        }
+    }
+}
 
 @Serializable
 data class PopularMangaDto(
@@ -133,6 +143,8 @@ data class MangaDetailsDto(
         val name: String,
     )
 }
+
+private fun mangaUrlParse(slug: String, pathSegment: String) = "/$pathSegment/$slug"
 
 private fun statusToModel(status: String) =
     when (status.lowercase()) {
