@@ -26,14 +26,14 @@ import java.util.Locale
 class ClownCorps : ConfigurableSource, HttpSource() {
     override val baseUrl = "https://clowncorps.net"
     override val lang = "en"
-    override val name = NAME
-    override val supportsLatest = SUPPORTS_LATEST
+    override val name = "Clown Corps"
+    override val supportsLatest = false
 
     override val client = network.client.newBuilder()
         .addInterceptor(TextInterceptor())
         .build()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
         MangasPage(
             listOf(
                 SManga.create().apply {
@@ -49,8 +49,8 @@ class ClownCorps : ConfigurableSource, HttpSource() {
                 },
             ),
             hasNextPage = false,
-        )
-    }
+        ),
+    )
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
         fetchPopularManga(page)
@@ -165,11 +165,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     }
 
     companion object {
-        private const val NAME = "Clown Corps"
-        private const val SUPPORTS_LATEST = false
-
         private const val CREATOR = "Joe Chouinard"
-
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
     }
 }
