@@ -39,6 +39,8 @@ class UnionMangas(
 
     private val json: Json by injectLazy()
 
+    private fun authorization(payload: String): String = payload.md5()
+
     private fun apiHeaders(url: String): Headers {
         val date = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
             .apply { timeZone = TimeZone.getTimeZone("GMT") }
@@ -46,8 +48,8 @@ class UnionMangas(
         val path = url.toUrlWithoutDomain()
 
         return headersBuilder()
-            .add("_hash", buildHashRequest(apiSeed + domain + date))
-            .add("_tranId", buildHashRequest(apiSeed + domain + date + path))
+            .add("_hash", authorization(apiSeed + domain + date))
+            .add("_tranId", authorization(apiSeed + domain + date + path))
             .add("_date", date)
             .add("_domain", domain)
             .add("_path", path)
@@ -91,8 +93,6 @@ class UnionMangas(
             null
         }
     }
-
-    private fun buildHashRequest(payload: String): String = payload.md5()
 
     private fun String.md5(): String {
         val md = MessageDigest.getInstance("MD5")
