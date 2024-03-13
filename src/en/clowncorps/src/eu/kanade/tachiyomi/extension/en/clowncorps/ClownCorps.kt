@@ -26,14 +26,8 @@ import java.util.Locale
 class ClownCorps : ConfigurableSource, HttpSource() {
     override val baseUrl = "https://clowncorps.net"
     override val lang = "en"
-    override val name = "Clown Corps"
-    override val supportsLatest = false
-
-    private val creator = "Joe Chouinard"
-
-    // Text from: https://clowncorps.net/about/
-    private val synopsis = "Clown Corps is a comic about crime-fighting clowns. " +
-        "It's pronounced \"core.\" Like marine corps."
+    override val name = NAME
+    override val supportsLatest = SUPPORTS_LATEST
 
     override val client = network.client.newBuilder()
         .addInterceptor(TextInterceptor())
@@ -44,12 +38,13 @@ class ClownCorps : ConfigurableSource, HttpSource() {
             listOf(
                 SManga.create().apply {
                     title = name
-                    artist = creator
-                    author = creator
-                    description = synopsis
+                    artist = CREATOR
+                    author = CREATOR
                     status = SManga.ONGOING
-                    // Image from: https://clowncorps.net/about/
+                    // Image and description from: https://clowncorps.net/about/
                     thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
+                    description = "Clown Corps is a comic about crime-fighting clowns.\n" +
+                        "It's pronounced \"core.\" Like marine corps."
                     setUrlWithoutDomain("/comic")
                 },
             ),
@@ -121,7 +116,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
             val ignoreRegex = Regex("""^chapter \d+ page \d+$""", RegexOption.IGNORE_CASE)
             if (ignoreRegex.matches(title)) return pages
 
-            val localURL = TextInterceptorHelper.createUrl("Author's Notes from $creator", title)
+            val localURL = TextInterceptorHelper.createUrl("Author's Notes from $CREATOR", title)
             val textPage = Page(pages.size, "", localURL)
             pages.add(textPage)
         }
@@ -170,6 +165,11 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     }
 
     companion object {
+        private const val NAME = "Clown Corps"
+        private const val SUPPORTS_LATEST = false
+
+        private const val CREATOR = "Joe Chouinard"
+
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
     }
 }
