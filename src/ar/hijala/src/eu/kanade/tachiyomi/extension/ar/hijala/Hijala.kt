@@ -9,4 +9,7 @@ class Hijala : MangaThemesia(
     "https://www.hijala.com",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-)
+) {
+    // Site moved from ZeistManga to MangaThemesia
+    override val versionId get() = 2
+}
