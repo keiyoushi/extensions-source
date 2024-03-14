@@ -185,12 +185,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        if (!page.imageUrl!!.contains("pagerdata.ashx")) {
-            return GET(page.imageUrl!!, headers)
-        }
-
-        val referer = page.imageUrl!!.substringBefore("pagerdata.ashx")
-        val header = headers.newBuilder().add("Referer", referer).build()
+        val header = headers.newBuilder().add("Referer", baseUrl).build()
         return GET(page.imageUrl!!, header)
     }
 
