@@ -20,7 +20,7 @@ class JManga : WPComics(
 ) {
     override fun popularMangaSelector() = "div.items article.item"
 
-    override fun popularMangaNextPageSelector() = "li:nth-last-child(2) a.page-link"
+    override fun popularMangaNextPageSelector() = "li.active + li.page-item a.page-link"
 
     override val searchPath = "search/manga"
 
