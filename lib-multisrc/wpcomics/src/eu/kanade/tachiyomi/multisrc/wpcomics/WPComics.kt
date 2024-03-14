@@ -24,19 +24,18 @@ abstract class WPComics(
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
     private val gmtOffset: String? = "+0500",
 ) : ParsedHttpSource() {
-
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers.Builder()
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
+            .add("Referer", baseUrl)
 
     private fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 
     // Popular
-
     open val popularPath = "hot"
 
     override fun popularMangaRequest(page: Int): Request {
@@ -58,7 +57,6 @@ abstract class WPComics(
     override fun popularMangaNextPageSelector() = "a.next-page, a[rel=next]"
 
     // Latest
-
     override fun latestUpdatesRequest(page: Int): Request {
         return GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
     }
@@ -70,20 +68,15 @@ abstract class WPComics(
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
-
     protected open val searchPath = "tim-truyen"
     protected open val queryParam = "keyword"
 
     protected open fun String.replaceSearchPath() = this
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
-        return if (filterList.isEmpty()) {
-            GET("$baseUrl/?s=$query&post_type=comics&page=$page")
-        } else {
             val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
 
-            filterList.forEach { filter ->
+        filters.forEach { filter ->
                 when (filter) {
                     is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
                     is StatusFilter -> filter.toUriPart()?.let { url.addQueryParameter("status", it) }
@@ -97,8 +90,7 @@ abstract class WPComics(
                 addQueryParameter("sort", "0")
             }
 
-            GET(url.toString().replaceSearchPath(), headers)
-        }
+            return GET(url.toString().replaceSearchPath(), headers)
     }
 
     override fun searchMangaSelector() = "div.items div.item"
@@ -157,7 +149,7 @@ abstract class WPComics(
     private val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
 
     protected fun String?.toDate(): Long {
-        this ?: return 0
+        this ?: return 0L
 
         val secondWords = listOf("second", "giây")
         val minuteWords = listOf("minute", "phút")
@@ -182,10 +174,10 @@ abstract class WPComics(
                 (if (gmtOffset == null) this.substringAfterLast(" ") else "$this $gmtOffset").let {
                     // timestamp has year
                     if (Regex("""\d+/\d+/\d\d""").find(it)?.value != null) {
-                        dateFormat.parse(it)?.time ?: 0
+                        dateFormat.parse(it)?.time ?: 0L
                     } else {
                         // MangaSum - timestamp sometimes doesn't have year (current year implied)
-                        dateFormat.parse("$it/$currentYear")?.time ?: 0
+                        dateFormat.parse("$it/$currentYear")?.time ?: 0L
                     }
                 }
             }
@@ -195,8 +187,6 @@ abstract class WPComics(
     }
 
     // Pages
-
-    // sources sometimes have an image element with an empty attr that isn't really an image
     open fun imageOrNull(element: Element): String? {
         fun Element.hasValidAttr(attr: String): Boolean {
             val regex = Regex("""https?://.*""", RegexOption.IGNORE_CASE)
@@ -207,6 +197,7 @@ abstract class WPComics(
             }
         }
 
+        // sources sometimes have an image element with an empty attr that isn't really an image
         return when {
             element.hasValidAttr("data-original") -> element.attr("abs:data-original")
             element.hasValidAttr("data-src") -> element.attr("abs:data-src")
