@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
@@ -30,7 +31,10 @@ class SlimeRead : HttpSource() {
 
     override val baseUrl = "https://slimeread.com"
 
-    private val apiUrl = "https://old.slimeread.com:8443"
+    private val apiUrl = run {
+        val apiList = arrayOf("free", "beta", "api", "data", "test", "dev", "staging", "prod", "old", "new")
+        "https://${apiList.random()}.slimeread.com:8443"
+    }
 
     override val lang = "pt-BR"
 
@@ -162,7 +166,12 @@ class SlimeRead : HttpSource() {
     override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val pages = response.parseAs<List<PageListDto>>().flatMap { it.pages }
+        val body = response.body.string()
+        val pages = if (body.startsWith("{")) {
+            json.decodeFromString<Map<String, PageListDto>>(body).values.flatMap { it.pages }
+        } else {
+            json.decodeFromString<List<PageListDto>>(body).flatMap { it.pages }
+        }
 
         return pages.mapIndexed { index, item ->
             Page(index, "", item.url)
