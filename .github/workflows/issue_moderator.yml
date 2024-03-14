@@ -61,7 +61,7 @@ jobs:
               },
               {
                 "type": "both",
-                "regex": ".*(kumanga\\.com).*",
+                "regex": "(kumanga\\.com)",
                 "ignoreCase": true,
                 "labels": ["invalid"],
                 "message": "{match} will not be added back as it is too difficult to maintain."
