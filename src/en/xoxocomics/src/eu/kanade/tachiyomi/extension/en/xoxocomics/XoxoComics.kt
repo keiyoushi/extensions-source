@@ -15,11 +15,20 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class XoxoComics : WPComics("XOXO Comics", "https://xoxocomic.com", "en", SimpleDateFormat("MM/dd/yyyy", Locale.US), null) {
+class XoxoComics : WPComics(
+    "XOXO Comics",
+    "https://xoxocomic.com",
+    "en",
+    SimpleDateFormat("MM/dd/yyyy", Locale.US),
+    null,
+) {
     override val searchPath = "search-comic"
     override val popularPath = "hot-comic"
+
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comic-update?page=$page", headers)
+
     override fun latestUpdatesSelector() = "li.row"
+
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
             element.select("h3 a").let {
@@ -84,72 +93,27 @@ class XoxoComics : WPComics("XOXO Comics", "https://xoxocomic.com", "en", Simple
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + "${chapter.url}/all")
 
-    override fun getStatusList(): Array<Pair<String?, String>> = arrayOf(
-        Pair(null, "All"),
-        Pair("ongoing", "Ongoing"),
-        Pair("completed", "Completed"),
-    )
-    override fun getGenreList(): Array<Pair<String?, String>> = arrayOf(
-        null to "All",
-        "marvel-comic" to "Marvel",
-        "dc-comics-comic" to "DC Comics",
-        "dark-horse-comic" to "Dark Horse",
-        "action-comic" to "Action",
-        "adventure-comic" to "Adventure",
-        "anthology-comic" to "Anthology",
-        "anthropomorphic-comic" to "Anthropomorphic",
-        "biography-comic" to "Biography",
-        "children-comic" to "Children",
-        "comedy-comic" to "Comedy",
-        "crime-comic" to "Crime",
-        "drama-comic" to "Drama",
-        "family-comic" to "Family",
-        "fantasy-comic" to "Fantasy",
-        "fighting-comic" to "Fighting",
-        "graphic-novels-comic" to "Graphic Novels",
-        "historical-comic" to "Historical",
-        "horror-comic" to "Horror",
-        "leading-ladies-comic" to "Leading Ladies",
-        "lgbtq-comic" to "LGBTQ",
-        "literature-comic" to "Literature",
-        "manga-comic" to "Manga",
-        "martial-arts-comic" to "Martial Arts",
-        "military-comic" to "Military",
-        "mini-series-comic" to "Mini-Series",
-        "movies-tv-comic" to "Movies &amp; TV",
-        "music-comic" to "Music",
-        "mystery-comic" to "Mystery",
-        "mythology-comic" to "Mythology",
-        "personal-comic" to "Personal",
-        "political-comic" to "Political",
-        "post-apocalyptic-comic" to "Post-Apocalyptic",
-        "psychological-comic" to "Psychological",
-        "pulp-comic" to "Pulp",
-        "religious-comic" to "Religious",
-        "robots-comic" to "Robots",
-        "romance-comic" to "Romance",
-        "school-life-comic" to "School Life",
-        "sci-fi-comic" to "Sci-Fi",
-        "slice-of-life-comic" to "Slice of Life",
-        "sport-comic" to "Sport",
-        "spy-comic" to "Spy",
-        "superhero-comic" to "Superhero",
-        "supernatural-comic" to "Supernatural",
-        "suspense-comic" to "Suspense",
-        "teen-comic" to "Teen",
-        "thriller-comic" to "Thriller",
-        "vampires-comic" to "Vampires",
-        "video-games-comic" to "Video Games",
-        "war-comic" to "War",
-        "western-comic" to "Western",
-        "zombies-comic" to "Zombies",
-    )
+    override fun getStatusList(): List<Pair<String?, String>> =
+        listOf(
+            Pair(null, "All"),
+            Pair("ongoing", "Ongoing"),
+            Pair("completed", "Completed"),
+        )
+
+    override fun genresRequest() = GET("$baseUrl/comic-list", headers)
+
+    override fun genresSelector() = ".genres h2:contains(Genres) + ul.nav li a"
 
     override fun getFilterList(): FilterList {
+        launchIO { fetchGenres() }
         return FilterList(
-            Filter.Header("Search query won't use Genre/Status filter"),
-            StatusFilter(getStatusList()),
-            GenreFilter(getGenreList()),
+            Filter.Header(intl["FILTERS_IGNORE_QUERY"]),
+            StatusFilter(intl["STATUS"], getStatusList()),
+            if (genreList.isEmpty()) {
+                Filter.Header("Tap 'Reset' to load genres")
+            } else {
+                GenreFilter(intl["GENRE"], genreList)
+            },
         )
     }
 }
