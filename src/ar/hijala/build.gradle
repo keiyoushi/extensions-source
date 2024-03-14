@@ -1,8 +1,8 @@
 ext {
     extName = 'Hijala'
     extClass = '.Hijala'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://hijala.blogspot.com'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://www.hijala.com'
     overrideVersionCode = 0
 }
 
