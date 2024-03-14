@@ -38,11 +38,11 @@ abstract class WPComics(
             .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
             .add("Referer", baseUrl)
 
-    private val intl by lazy {
+    open val intl by lazy {
         Intl(
             language = lang,
             baseLanguage = "en",
-            availableLanguages = setOf("en", "vi"),
+            availableLanguages = setOf("en", "vi", "ja"),
             classLoader = this::class.java.classLoader!!,
         )
     }
@@ -122,7 +122,6 @@ abstract class WPComics(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Details
-
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             document.select("article#item-detail").let { info ->
@@ -136,8 +135,8 @@ abstract class WPComics(
     }
 
     open fun String?.toStatus(): Int {
-        val ongoingWords = listOf("Ongoing", "Updating", "Đang tiến hành")
-        val completedWords = listOf("Complete", "Completed", "Hoàn thành")
+        val ongoingWords = listOf("Updating", intl["STATUS_ONGOING"])
+        val completedWords = listOf("Complete", intl["STATUS_COMPLETED"])
         return when {
             this == null -> SManga.UNKNOWN
             ongoingWords.doesInclude(this) -> SManga.ONGOING
@@ -147,7 +146,6 @@ abstract class WPComics(
     }
 
     // Chapters
-
     override fun chapterListSelector() = "div.list-chapter li.row:not(.heading)"
 
     override fun chapterFromElement(element: Element): SChapter {
@@ -266,15 +264,17 @@ abstract class WPComics(
 
     protected open fun genresRequest() = GET("$baseUrl/$searchPath", headers)
 
-    protected open fun genresSelector() = ".genres ul.nav li:not(.active) a"
+    protected open val genresSelector = ".genres ul.nav li:not(.active) a"
+
+    protected open val genresUrlDelimiter = "/"
 
     protected open fun parseGenres(document: Document): List<Pair<String?, String>> {
-        val items = document.select(genresSelector())
+        val items = document.select(genresSelector)
         return buildList(1) {
             add(Pair(null, intl["STATUS_ALL"]))
             items.mapTo(this) {
                 Pair(
-                    it.attr("href").substringAfterLast("/"),
+                    it.attr("href").substringAfterLast(genresUrlDelimiter),
                     it.text(),
                 )
             }

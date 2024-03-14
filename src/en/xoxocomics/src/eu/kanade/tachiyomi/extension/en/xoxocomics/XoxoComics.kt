@@ -102,7 +102,7 @@ class XoxoComics : WPComics(
 
     override fun genresRequest() = GET("$baseUrl/comic-list", headers)
 
-    override fun genresSelector() = ".genres h2:contains(Genres) + ul.nav li a"
+    override val genresSelector = ".genres h2:contains(Genres) + ul.nav li a"
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
