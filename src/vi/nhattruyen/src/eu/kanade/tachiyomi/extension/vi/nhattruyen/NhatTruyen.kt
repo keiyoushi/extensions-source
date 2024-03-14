@@ -6,7 +6,7 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NhatTruyen : WPComics("NhatTruyen", "https://nhattruyento.com", "vi", SimpleDateFormat("dd/MM/yy", Locale.getDefault()), null) {
+class NhatTruyen : WPComics("NhatTruyen", "https://nhattruyenup.com", "vi", SimpleDateFormat("dd/MM/yy", Locale.getDefault()), null) {
     override val searchPath = "the-loai"
 
     /**
