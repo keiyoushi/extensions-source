@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.wpcomics
 
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -36,6 +37,15 @@ abstract class WPComics(
         Headers.Builder()
             .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
             .add("Referer", baseUrl)
+
+    protected val intl by lazy {
+        Intl(
+            language = lang,
+            baseLanguage = "en",
+            availableLanguages = setOf("en", "vi"),
+            classLoader = this::class.java.classLoader!!,
+        )
+    }
 
     private fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 
@@ -221,16 +231,16 @@ abstract class WPComics(
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    protected class StatusFilter(pairs: List<Pair<String?, String>>) : UriPartFilter("Status", pairs)
+    protected class StatusFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
 
-    protected class GenreFilter(pairs: List<Pair<String?, String>>) : UriPartFilter("Genre", pairs)
+    protected class GenreFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
 
     protected open fun getStatusList(): List<Pair<String?, String>> =
         listOf(
-            Pair(null, "Tất cả"),
-            Pair("1", "Đang tiến hành"),
-            Pair("2", "Đã hoàn thành"),
-            Pair("3", "Tạm ngừng"),
+            Pair(null, intl["STATUS_ALL"]),
+            Pair("1", intl["STATUS_ONGOING"]),
+            Pair("2", intl["STATUS_COMPLETED"]),
+            Pair("3", intl["STATUS_SUSPENDED"]),
         )
 
     protected var genreList: List<Pair<String?, String>> = emptyList()
@@ -259,12 +269,10 @@ abstract class WPComics(
 
     protected open fun genresSelector() = ".genres ul.nav li:not(.active) a"
 
-    protected open fun allGenresString() = "Tất cả"
-
     protected open fun parseGenres(document: Document): List<Pair<String?, String>> {
         val items = document.select(genresSelector())
         return buildList(1) {
-            add(Pair(null, allGenresString()))
+            add(Pair(null, intl["STATUS_ALL"]))
             items.mapTo(this) {
                 Pair(
                     it.attr("href").substringAfterLast("/"),
@@ -277,11 +285,11 @@ abstract class WPComics(
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
         return FilterList(
-            StatusFilter(getStatusList()),
+            StatusFilter(intl["STATUS"], getStatusList()),
             if (genreList.isEmpty()) {
-                Filter.Header("Tap 'Reset' to load genres")
+                Filter.Header(intl["GENRES_RESET"])
             } else {
-                GenreFilter(genreList)
+                GenreFilter(intl["GENRE"], genreList)
             },
         )
     }
