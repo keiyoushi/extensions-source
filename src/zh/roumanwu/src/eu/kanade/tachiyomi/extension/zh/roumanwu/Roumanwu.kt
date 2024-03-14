@@ -81,7 +81,7 @@ class Roumanwu : HttpSource(), ConfigurableSource {
     }
 
     private class TagFilter : UriPartFilter("標籤", TAGS) {
-        override fun toUriPart() = if (state == 0) "" else "&tag=${TAGS[state]}"
+        override fun toUriPart() = if (state == 0) "" else "&tag=${values[state]}"
     }
 
     private class StatusFilter : UriPartFilter("狀態", arrayOf("全部", "連載中", "已完結")) {
@@ -116,11 +116,11 @@ class Roumanwu : HttpSource(), ConfigurableSource {
         private const val MIRROR_PREF_SUMMARY = "使用镜像网址。重启软件生效。"
 
         // 地址: https://rou.pub/dizhi
-        private val MIRRORS = arrayOf("https://rouman5.com", "https://roum10.xyz")
-        private val MIRRORS_DESC = arrayOf("主站", "镜像")
+        private val MIRRORS get() = arrayOf("https://rouman5.com", "https://roum12.xyz")
+        private val MIRRORS_DESC get() = arrayOf("主站", "镜像")
         private const val MIRROR_DEFAULT = 1.toString() // use mirror
 
-        private val TAGS = arrayOf("全部", "正妹", "恋爱", "出版漫画", "肉慾", "浪漫", "大尺度", "巨乳", "有夫之婦", "女大生", "狗血劇", "同居", "好友", "調教", "动作", "後宮", "不倫")
+        private val TAGS get() = arrayOf("全部", "\u6B63\u59B9", "\u604B\u7231", "\u51FA\u7248\u6F2B\u753B", "\u8089\u617E", "\u6D6A\u6F2B", "\u5927\u5C3A\u5EA6", "\u5DE8\u4E73", "\u6709\u592B\u4E4B\u5A66", "\u5973\u5927\u751F", "\u72D7\u8840\u5287", "\u540C\u5C45", "\u597D\u53CB", "\u8ABF\u6559", "\u52A8\u4F5C", "\u5F8C\u5BAE", "\u4E0D\u502B")
     }
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromStream(this.body.byteStream())
