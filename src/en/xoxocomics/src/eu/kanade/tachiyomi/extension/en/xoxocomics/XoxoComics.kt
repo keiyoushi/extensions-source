@@ -107,12 +107,12 @@ class XoxoComics : WPComics(
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
         return FilterList(
-            Filter.Header(intl["FILTERS_IGNORE_QUERY"]),
-            StatusFilter(intl["STATUS"], getStatusList()),
+            Filter.Header("Search query won't use Genre/Status filter"),
+            StatusFilter("Status", getStatusList()),
             if (genreList.isEmpty()) {
                 Filter.Header("Tap 'Reset' to load genres")
             } else {
-                GenreFilter(intl["GENRE"], genreList)
+                GenreFilter("Genre", genreList)
             },
         )
     }

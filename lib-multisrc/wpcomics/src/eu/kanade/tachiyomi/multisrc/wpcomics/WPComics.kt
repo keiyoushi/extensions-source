@@ -38,7 +38,7 @@ abstract class WPComics(
             .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
             .add("Referer", baseUrl)
 
-    protected val intl by lazy {
+    private val intl by lazy {
         Intl(
             language = lang,
             baseLanguage = "en",
@@ -240,7 +240,6 @@ abstract class WPComics(
             Pair(null, intl["STATUS_ALL"]),
             Pair("1", intl["STATUS_ONGOING"]),
             Pair("2", intl["STATUS_COMPLETED"]),
-            Pair("3", intl["STATUS_SUSPENDED"]),
         )
 
     protected var genreList: List<Pair<String?, String>> = emptyList()
