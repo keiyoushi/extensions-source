@@ -3,7 +3,7 @@ ext {
     extClass = '.RizzComic'
     themePkg = 'mangathemesia'
     baseUrl = 'https://rizzcomic.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

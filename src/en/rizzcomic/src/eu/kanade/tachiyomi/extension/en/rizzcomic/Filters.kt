@@ -26,53 +26,49 @@ abstract class SelectFilter(
 class SortFilter(defaultOrder: String? = null) : SelectFilter("Sort By", sort, defaultOrder) {
     override val formParameter = "OrderValue"
     companion object {
-        private val sort = listOf(
-            Pair("Default", "all"),
-            Pair("A-Z", "title"),
-            Pair("Z-A", "titlereverse"),
-            Pair("Latest Update", "update"),
-            Pair("Latest Added", "latest"),
-            Pair("Popular", "popular"),
-        )
-
         val POPULAR = FilterList(StatusFilter(), TypeFilter(), SortFilter("popular"))
         val LATEST = FilterList(StatusFilter(), TypeFilter(), SortFilter("update"))
     }
 }
 
+private val sort = listOf(
+    Pair("Default", "all"),
+    Pair("A-Z", "title"),
+    Pair("Z-A", "titlereverse"),
+    Pair("Latest Update", "update"),
+    Pair("Latest Added", "latest"),
+    Pair("Popular", "popular"),
+)
+
 class StatusFilter : SelectFilter("Status", status) {
     override val formParameter = "StatusValue"
-    companion object {
-        private val status = listOf(
-            Pair("All", "all"),
-            Pair("Ongoing", "ongoing"),
-            Pair("Complete", "completed"),
-            Pair("Hiatus", "hiatus"),
-        )
-    }
 }
+
+private val status = listOf(
+    Pair("All", "all"),
+    Pair("Ongoing", "ongoing"),
+    Pair("Complete", "completed"),
+    Pair("Hiatus", "hiatus"),
+)
 
 class TypeFilter : SelectFilter("Type", type) {
     override val formParameter = "TypeValue"
-    companion object {
-        private val type = listOf(
-            Pair("All", "all"),
-            Pair("Manga", "Manga"),
-            Pair("Manhwa", "Manhwa"),
-            Pair("Manhua", "Manhua"),
-            Pair("Comic", "Comic"),
-        )
-    }
 }
+
+private val type = listOf(
+    Pair("All", "all"),
+    Pair("Manga", "Manga"),
+    Pair("Manhwa", "Manhwa"),
+    Pair("Manhua", "Manhua"),
+    Pair("Comic", "Comic"),
+)
 
 class CheckBoxFilter(
     name: String,
     val value: String,
 ) : Filter.CheckBox(name)
 
-class GenreFilter(
-    genres: List<Pair<String, String>>,
-) : FormBodyFilter, Filter.Group<CheckBoxFilter>(
+class GenreFilter : FormBodyFilter, Filter.Group<CheckBoxFilter>(
     "Genre",
     genres.map { CheckBoxFilter(it.first, it.second) },
 ) {
@@ -82,3 +78,34 @@ class GenreFilter(
         }
     }
 }
+
+val genres = listOf(
+    Pair("Abilities", "2"),
+    Pair("Action", "3"),
+    Pair("Adaptation", "4"),
+    Pair("Adventure", "5"),
+    Pair("Another Chance", "6"),
+    Pair("Apocalypse", "7"),
+    Pair("Based On A Novel", "8"),
+    Pair("Cheat", "9"),
+    Pair("Comedy", "10"),
+    Pair("Conspiracy", "11"),
+    Pair("Cultivation", "12"),
+    Pair("Demon", "13"),
+    Pair("Demon King", "14"),
+    Pair("Dragon", "15"),
+    Pair("Drama", "16"),
+    Pair("Drop", "17"),
+    Pair("Dungeon", "18"),
+    Pair("Dungeons", "19"),
+    Pair("Fantasy", "20"),
+    Pair("Game", "21"),
+    Pair("Genius", "22"),
+    Pair("Ghosts", "23"),
+    Pair("Harem", "24"),
+    Pair("Hero", "25"),
+    Pair("Hidden Identity", "26"),
+    Pair("HighFantasy", "27"),
+    Pair("Historical", "28"),
+    Pair("Horror", "29"),
+)
