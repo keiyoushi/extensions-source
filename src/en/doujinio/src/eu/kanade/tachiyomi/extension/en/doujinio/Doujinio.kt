@@ -1,9 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.doujinio
 
-import eu.kanade.tachiyomi.extension.en.doujinio.DoujinioHelper.deserialize
-import eu.kanade.tachiyomi.extension.en.doujinio.DoujinioHelper.getIdFromUrl
-import eu.kanade.tachiyomi.extension.en.doujinio.DoujinioHelper.getIdsFromUrl
-import eu.kanade.tachiyomi.extension.en.doujinio.DoujinioHelper.tags
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -13,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,13 +16,12 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-const val BASE_URL = "https://doujin.io"
 const val LATEST_LIMIT = 20
 
 class Doujinio : HttpSource() {
     override val name = "Doujin.io - J18"
 
-    override val baseUrl = BASE_URL
+    override val baseUrl = "https://doujin.io"
 
     override val lang = "en"
 
@@ -52,10 +46,7 @@ class Doujinio : HttpSource() {
         )
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val latest = deserialize(
-            response.body.string(),
-            ListSerializer(Manga.serializer()),
-        ).data.map { it.toSManga() }
+        val latest = response.parseAs<List<Manga>>().map { it.toSManga() }
 
         return MangasPage(latest, hasNextPage = latest.size >= LATEST_LIMIT)
     }
@@ -65,10 +56,7 @@ class Doujinio : HttpSource() {
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/mangas/popular", headers)
 
     override fun popularMangaParse(response: Response) = MangasPage(
-        deserialize(
-            response.body.string(),
-            ListSerializer(Manga.serializer()),
-        ).data.map { it.toSManga() },
+        response.parseAs<List<Manga>>().map { it.toSManga() },
         hasNextPage = false,
     )
 
@@ -89,9 +77,12 @@ class Doujinio : HttpSource() {
     )
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val result = deserialize(response.body.string(), SearchResponse.serializer()).data
+        val result = response.parseAs<SearchResponse>()
 
-        return MangasPage(result.data.map { it.toSManga() }, hasNextPage = result.to < result.total)
+        return MangasPage(
+            result.data.map { it.toSManga() },
+            hasNextPage = result.to?.let { it < result.total } ?: false,
+        )
     }
 
     // Details
@@ -99,8 +90,7 @@ class Doujinio : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga) =
         GET("https://doujin.io/api/mangas/${getIdFromUrl(manga.url)}", headers)
 
-    override fun mangaDetailsParse(response: Response) =
-        deserialize(response.body.string(), Manga.serializer()).data.toSManga()
+    override fun mangaDetailsParse(response: Response) = response.parseAs<Manga>().toSManga()
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${getIdFromUrl(manga.url)}"
 
@@ -109,11 +99,8 @@ class Doujinio : HttpSource() {
     override fun chapterListRequest(manga: SManga) =
         GET("$baseUrl/api/chapters?manga_id=${getIdFromUrl(manga.url)}", headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterList =
-            deserialize(response.body.string(), ListSerializer(Chapter.serializer())).data
-        return chapterList.map { it.toSChapter() }.reversed()
-    }
+    override fun chapterListParse(response: Response) =
+        response.parseAs<List<Chapter>>().map { it.toSChapter() }.reversed()
 
     // Page List
 
@@ -124,7 +111,7 @@ class Doujinio : HttpSource() {
                 add(
                     "referer",
                     "https://doujin.io/manga/${
-                    getIdsFromUrl(chapter.url).split("/").joinToString("/chapter/")
+                        getIdsFromUrl(chapter.url).split("/").joinToString("/chapter/")
                     }",
                 )
             }.build(),
@@ -153,4 +140,7 @@ class Doujinio : HttpSource() {
     )
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
+
+    private inline fun <reified T> Response.parseAs(): T =
+        json.decodeFromString<PageResponse<T>>(body.string()).data
 }

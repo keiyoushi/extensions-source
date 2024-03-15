@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.doujinio
 
-import eu.kanade.tachiyomi.extension.en.doujinio.DoujinioHelper.parseDate
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -34,7 +33,7 @@ class Manga(
 }
 
 @Serializable
-data class Tag(val id: Int, val name: String)
+class Tag(val id: Int, val name: String)
 
 @Serializable
 class Chapter(
@@ -79,13 +78,13 @@ class ChapterManifest(
 }
 
 @Serializable
-data class LatestRequest(
+class LatestRequest(
     val limit: Int,
     val offset: Int,
 )
 
 @Serializable
-data class SearchRequest(
+class SearchRequest(
     val keyword: String,
     val page: Int,
     val tags: List<Int> = emptyList(),
@@ -93,9 +92,7 @@ data class SearchRequest(
 
 @Serializable
 class SearchResponse(
-    @SerialName("current_page")
-    val currentPage: Int,
     val data: List<Manga>,
-    val to: Int,
+    val to: Int?,
     val total: Int,
 )
