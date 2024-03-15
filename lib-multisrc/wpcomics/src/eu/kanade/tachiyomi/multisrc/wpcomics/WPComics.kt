@@ -26,8 +26,8 @@ abstract class WPComics(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
-    private val gmtOffset: String? = "+0500",
+    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
+    protected val gmtOffset: String? = "+0500",
 ) : ParsedHttpSource() {
     override val supportsLatest = true
 
@@ -158,9 +158,9 @@ abstract class WPComics(
         }
     }
 
-    private val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
+    protected val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
 
-    protected fun String?.toDate(): Long {
+    protected open fun String?.toDate(): Long {
         this ?: return 0L
 
         val secondWords = listOf("second", "giây")
