@@ -110,9 +110,7 @@ class Doujinio : HttpSource() {
             headers.newBuilder().apply {
                 add(
                     "referer",
-                    "https://doujin.io/manga/${
-                        getIdsFromUrl(chapter.url).split("/").joinToString("/chapter/")
-                    }",
+                    "https://doujin.io/manga/${getIdsFromUrl(chapter.url).split("/").joinToString("/chapter/")}",
                 )
             }.build(),
         )
