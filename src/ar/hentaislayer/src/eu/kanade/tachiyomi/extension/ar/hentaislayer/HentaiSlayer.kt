@@ -21,6 +21,7 @@ import uy.kohesive.injekt.api.get
 import java.util.Calendar
 
 class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
+
     override val name = "هنتاي سلاير"
 
     override val baseUrl = "https://hentaislayer.net"
@@ -29,12 +30,13 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder().rateLimit(2).build()
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .build()
 
-    override fun headersBuilder() =
-        super.headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .set("Origin", baseUrl)
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
 
     private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -45,16 +47,15 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaSelector() = "div > div:has(div#card-real)"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("div#card-real a")!!.run {
-                setUrlWithoutDomain(absUrl("href"))
-                title = selectFirst("img.object-cover")?.apply {
-                    thumbnail_url = imgAttr()
-                }?.attr("alt") ?: selectFirst("h2")!!.text()
-                genre = select("span p.drop-shadow-sm").text()
-            }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("div#card-real a")!!.run {
+            setUrlWithoutDomain(absUrl("href"))
+            title = selectFirst("img.object-cover")?.apply {
+                thumbnail_url = imgAttr()
+            }?.attr("alt") ?: selectFirst("h2")!!.text()
+            genre = select("span p.drop-shadow-sm").text()
         }
+    }
 
     override fun popularMangaNextPageSelector() = "ul.pagination > li:last-child:not(.pagination-disabled)"
 
@@ -68,11 +69,7 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Request {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/manga?title=$query".toHttpUrl().newBuilder()
         filters.forEach { filter ->
             when (filter) {
@@ -97,51 +94,48 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            document.selectFirst("main section")!!.run {
-                var desc = "\u061C"
-                title = selectFirst("section > div:nth-child(1) > div:nth-child(2)")!!.apply {
-                    genre = select("a[href*='?genre=']")
-                        .map { it.text() }
-                        .let {
-                            listOf(genre) + it
-                        }
-                        .joinToString()
-                    select("h2").text().takeIf { it.isNotEmpty() }?.let {
-                        desc += "أسماء أُخرى: $it\n"
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.selectFirst("main section")!!.run {
+            var desc = "\u061C"
+            title = selectFirst("section > div:nth-child(1) > div:nth-child(2)")!!.apply {
+                genre = select("a[href*='?genre=']")
+                    .map { it.text() }
+                    .let {
+                        listOf(genre) + it
                     }
-                }.select("h1").text()
-
-                thumbnail_url = selectFirst("img#manga-cover")?.imgAttr()
-                description = desc + select("#description").text()
-                selectFirst("section > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(2)")?.run {
-                    status = parseStatus(select("a[href*='?status=']").text())
-                    genre = select("a[href*='?type=']").text()
-                    author = select("p:has(span:contains(المؤلف)) span:nth-child(2)").text()
-                    artist = select("p:has(span:contains(الرسام)) span:nth-child(2)").text()
+                    .joinToString()
+                select("h2").text().takeIf { it.isNotEmpty() }?.let {
+                    desc += "أسماء أُخرى: $it\n"
                 }
+            }.select("h1").text()
+
+            thumbnail_url = selectFirst("img#manga-cover")?.imgAttr()
+            description = desc + select("#description").text()
+            selectFirst("section > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(2)")?.run {
+                status = parseStatus(select("a[href*='?status=']").text())
+                genre = select("a[href*='?type=']").text()
+                author = select("p:has(span:contains(المؤلف)) span:nth-child(2)").text()
+                artist = select("p:has(span:contains(الرسام)) span:nth-child(2)").text()
             }
         }
+    }
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("مستمر") -> SManga.ONGOING
-            status.contains("متوقف") -> SManga.CANCELLED
-            status.contains("مكتمل") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("مستمر") -> SManga.ONGOING
+        status.contains("متوقف") -> SManga.CANCELLED
+        status.contains("مكتمل") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListSelector() = "main section #chapters-list a#chapter-item"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = "\u061C" + element.select("#item-title").text() // Add unicode ARABIC LETTER MARK to ensure all titles are right to left
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = "\u061C" + element.select("#item-title").text() // Add unicode ARABIC LETTER MARK to ensure all titles are right to left
 
-            date_upload = parseRelativeDate(element.select("#item-title + span").text()) ?: 0L
-        }
+        date_upload = parseRelativeDate(element.select("#item-title + span").text()) ?: 0L
+    }
 
     /**
      * Parses dates in this form:
@@ -158,17 +152,16 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
         val now = Calendar.getInstance()
 
         // Map English unit to Java unit
-        val javaUnit =
-            when (unit) {
-                "year", "yr" -> Calendar.YEAR
-                "month" -> Calendar.MONTH
-                "week", "wk" -> Calendar.WEEK_OF_MONTH
-                "day" -> Calendar.DAY_OF_MONTH
-                "hour", "hr" -> Calendar.HOUR
-                "minute", "min" -> Calendar.MINUTE
-                "second", "sec" -> Calendar.SECOND
-                else -> return null
-            }
+        val javaUnit = when (unit) {
+            "year", "yr" -> Calendar.YEAR
+            "month" -> Calendar.MONTH
+            "week", "wk" -> Calendar.WEEK_OF_MONTH
+            "day" -> Calendar.DAY_OF_MONTH
+            "hour", "hr" -> Calendar.HOUR
+            "minute", "min" -> Calendar.MINUTE
+            "second", "sec" -> Calendar.SECOND
+            else -> return null
+        }
 
         now.add(javaUnit, -number)
 
@@ -182,7 +175,7 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private fun Element.imgAttr(): String? {
         return when {
@@ -194,28 +187,25 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun getFilterList() =
-        FilterList(
-            GenresFilter(),
-            TypeFilter(),
-            StatusFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        GenresFilter(),
+        TypeFilter(),
+        StatusFilter(),
+    )
 
     // ============================== Settings ==============================
     companion object {
         private const val LATEST_PREF = "LatestType"
-        private val LATEST_PREF_ENTRIES get() =
-            arrayOf(
-                "مانجا",
-                "مانهوا",
-                "كوميكس",
-            )
-        private val LATEST_PREF_ENTRY_VALUES get() =
-            arrayOf(
-                "manga",
-                "manhwa",
-                "comics",
-            )
+        private val LATEST_PREF_ENTRIES get() = arrayOf(
+            "مانجا",
+            "مانهوا",
+            "كوميكس",
+        )
+        private val LATEST_PREF_ENTRY_VALUES get() = arrayOf(
+            "manga",
+            "manhwa",
+            "comics",
+        )
         private val LATEST_PREF_DEFAULT = LATEST_PREF_ENTRY_VALUES[0]
     }
 
