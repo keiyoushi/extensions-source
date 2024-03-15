@@ -13,16 +13,24 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class JManga : WPComics(
-    "JManga",
-    "https://jmanga.vip",
-    "ja",
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE),
-    null,
-) {
+class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), null) {
     override fun popularMangaSelector() = "div.items article.item"
 
     override fun popularMangaNextPageSelector() = "li.active + li.page-item a.page-link"
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        return SManga.create().apply {
+            document.select("article#item-detail").let { info ->
+                author = info.select("li.author p.col-xs-8").text()
+                status = info.select("li.status p.col-xs-8").text().toStatus()
+                genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
+                val otherName = info.select("h2.other-name").text()
+                description = info.select("div.detail-content").text() +
+                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
+                thumbnail_url = imageOrNull(info[0].selectFirst("div.col-image img")!!)
+            }
+        }
+    }
 
     override val searchPath = "search/manga"
 
@@ -45,21 +53,6 @@ class JManga : WPComics(
         }
 
         return GET(url.build(), headers)
-    }
-
-    // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            document.select("article#item-detail").let { info ->
-                author = info.select("li.author p.col-xs-8").text()
-                status = info.select("li.status p.col-xs-8").text().toStatus()
-                genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-                val otherName = info.select("h2.other-name").text()
-                description = info.select("div.detail-content").text() +
-                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
-                thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
-            }
-        }
     }
 
     override fun chapterFromElement(element: Element): SChapter {

@@ -29,14 +29,14 @@ abstract class WPComics(
     protected val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
     protected val gmtOffset: String? = "+0500",
 ) : ParsedHttpSource() {
+
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers.Builder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
+        .add("Referer", baseUrl)
 
     open val intl by lazy {
         Intl(
@@ -50,6 +50,7 @@ abstract class WPComics(
     private fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 
     // Popular
+
     open val popularPath = "hot"
 
     override fun popularMangaRequest(page: Int): Request {
@@ -71,6 +72,7 @@ abstract class WPComics(
     override fun popularMangaNextPageSelector() = "a.next-page, a[rel=next]"
 
     // Latest
+
     override fun latestUpdatesRequest(page: Int): Request {
         return GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
     }
@@ -82,6 +84,7 @@ abstract class WPComics(
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
+
     protected open val searchPath = "tim-truyen"
     protected open val queryParam = "keyword"
 
@@ -122,6 +125,7 @@ abstract class WPComics(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Details
+
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             document.select("article#item-detail").let { info ->
@@ -148,6 +152,7 @@ abstract class WPComics(
     }
 
     // Chapters
+
     override fun chapterListSelector() = "div.list-chapter li.row:not(.heading)"
 
     override fun chapterFromElement(element: Element): SChapter {
@@ -201,6 +206,8 @@ abstract class WPComics(
     }
 
     // Pages
+
+    // sources sometimes have an image element with an empty attr that isn't really an image
     open fun imageOrNull(element: Element): String? {
         fun Element.hasValidAttr(attr: String): Boolean {
             val regex = Regex("""https?://.*""", RegexOption.IGNORE_CASE)
@@ -211,7 +218,6 @@ abstract class WPComics(
             }
         }
 
-        // sources sometimes have an image element with an empty attr that isn't really an image
         return when {
             element.hasValidAttr("data-original") -> element.attr("abs:data-original")
             element.hasValidAttr("data-src") -> element.attr("abs:data-src")
@@ -231,6 +237,7 @@ abstract class WPComics(
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
+
     protected class StatusFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
 
     protected class GenreFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
