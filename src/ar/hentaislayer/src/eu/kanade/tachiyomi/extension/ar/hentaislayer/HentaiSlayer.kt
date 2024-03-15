@@ -48,10 +48,10 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
     override fun popularMangaSelector() = "div > div:has(div#card-real)"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("div#card-real a")?.run {
+        with(element.selectFirst("div#card-real a")!!) {
             setUrlWithoutDomain(absUrl("href"))
-            selectFirst("figure")?.run {
-                selectFirst("img.object-cover")?.run {
+            with(selectFirst("figure")!!) {
+                with(selectFirst("img.object-cover")!!) {
                     thumbnail_url = imgAttr()
                     title = attr("alt")
                 }
@@ -98,21 +98,17 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        document.selectFirst("main section")?.run {
-            selectFirst("img#manga-cover")?.run {
-                thumbnail_url = imgAttr()
-                title = attr("alt")
-            }
-            selectFirst("section > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(2)")?.run {
+        with(document.selectFirst("main section")!!) {
+            thumbnail_url = selectFirst("img#manga-cover")!!.imgAttr()
+            with(selectFirst("section > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(2)")!!) {
                 status = parseStatus(select("a[href*='?status=']").text())
                 genre = select("a[href*='?type=']").text()
                 author = select("p:has(span:contains(المؤلف)) span:nth-child(2)").text()
                 artist = select("p:has(span:contains(الرسام)) span:nth-child(2)").text()
             }
-            selectFirst("section > div:nth-child(1) > div:nth-child(2)")?.run {
-                select("h1").text().takeIf { it.isNotEmpty() }?.let {
-                    title = it
-                }
+            var desc = "\u061C"
+            with(selectFirst("section > div:nth-child(1) > div:nth-child(2)")!!) {
+                title = selectFirst("h1")!!.text()
                 genre = select("a[href*='?genre=']")
                     .map { it.text() }
                     .let {
@@ -120,10 +116,10 @@ class HentaiSlayer : ParsedHttpSource(), ConfigurableSource {
                     }
                     .joinToString()
                 select("h2").text().takeIf { it.isNotEmpty() }?.let {
-                    description = "Alternative name: $it\n"
+                    desc += "أسماء أُخرى: $it\n"
                 }
             }
-            description += select("#description").text()
+            description = desc + select("#description").text()
         }
     }
 
