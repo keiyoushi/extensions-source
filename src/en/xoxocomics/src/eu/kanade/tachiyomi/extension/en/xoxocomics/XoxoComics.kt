@@ -93,13 +93,6 @@ class XoxoComics : WPComics(
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + "${chapter.url}/all")
 
-    override fun getStatusList(): List<Pair<String?, String>> =
-        listOf(
-            Pair(null, "All"),
-            Pair("ongoing", "Ongoing"),
-            Pair("completed", "Completed"),
-        )
-
     override fun genresRequest() = GET("$baseUrl/comic-list", headers)
 
     override val genresSelector = ".genres h2:contains(Genres) + ul.nav li a"
