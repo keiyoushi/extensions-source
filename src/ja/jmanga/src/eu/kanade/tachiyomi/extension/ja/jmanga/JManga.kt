@@ -4,8 +4,10 @@ import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -43,6 +45,21 @@ class JManga : WPComics(
         }
 
         return GET(url.build(), headers)
+    }
+
+    // Details
+    override fun mangaDetailsParse(document: Document): SManga {
+        return SManga.create().apply {
+            document.select("article#item-detail").let { info ->
+                author = info.select("li.author p.col-xs-8").text()
+                status = info.select("li.status p.col-xs-8").text().toStatus()
+                genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
+                val otherName = info.select("h2.other-name").text()
+                description = info.select("div.detail-content").text() +
+                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
+                thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
+            }
+        }
     }
 
     override fun chapterFromElement(element: Element): SChapter {

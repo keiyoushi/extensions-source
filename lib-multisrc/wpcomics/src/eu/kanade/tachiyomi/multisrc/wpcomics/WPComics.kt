@@ -128,7 +128,9 @@ abstract class WPComics(
                 author = info.select("li.author p.col-xs-8").text()
                 status = info.select("li.status p.col-xs-8").text().toStatus()
                 genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-                description = info.select("div.detail-content p").text()
+                val otherName = info.select("h2.other-name").text()
+                description = info.select("div.detail-content p").text() +
+                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
                 thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
             }
         }
@@ -270,11 +272,13 @@ abstract class WPComics(
 
     protected open fun parseGenres(document: Document): List<Pair<String?, String>> {
         val items = document.select(genresSelector)
-        return buildList(1) {
+        return buildList(items.size + 1) {
             add(Pair(null, intl["STATUS_ALL"]))
             items.mapTo(this) {
                 Pair(
-                    it.attr("href").substringAfterLast(genresUrlDelimiter),
+                    it.attr("href")
+                        .removeSuffix("/")
+                        .substringAfterLast(genresUrlDelimiter),
                     it.text(),
                 )
             }
