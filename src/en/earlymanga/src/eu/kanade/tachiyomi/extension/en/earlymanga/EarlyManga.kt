@@ -220,7 +220,7 @@ class EarlyManga : HttpSource() {
         val preSlug = if (result.on_disk != 0 && result.on_disk != null) {
             "$baseUrl/storage/uploads/manga"
         } else {
-            "https://images.earlym.org/manga"
+            "https://images.${baseUrl.removePrefix("https://")}/manga"
         }
         return result.images
             .filterNot { it.endsWith(".ico") }
