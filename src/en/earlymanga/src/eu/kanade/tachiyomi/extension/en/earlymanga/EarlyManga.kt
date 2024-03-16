@@ -218,14 +218,14 @@ class EarlyManga : HttpSource() {
         val chapterUrl = response.request.url.toString()
             .replace("/api", "")
         val preSlug = if (result.on_disk != 0 && result.on_disk != null) {
-            "storage/uploads/manga"
+            "$baseUrl/storage/uploads/manga"
         } else {
-            "e-storage/uploads/manga"
+            "https://images.${baseUrl.removePrefix("https://")}/manga"
         }
         return result.images
             .filterNot { it.endsWith(".ico") }
             .mapIndexed { index, img ->
-                Page(index = index, url = chapterUrl, imageUrl = "$baseUrl/$preSlug/manga_${result.manga_id}/chapter_${result.slug}/$img")
+                Page(index = index, url = chapterUrl, imageUrl = "$preSlug/manga_${result.manga_id}/chapter_${result.slug}/$img")
             }
     }
 
