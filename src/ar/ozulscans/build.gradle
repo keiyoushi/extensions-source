@@ -1,9 +1,9 @@
 ext {
-    extName = 'Ozul Scans'
-    extClass = '.OzulScans'
+    extName = 'King Of Manga'
+    extClass = '.KingOfManga'
     themePkg = 'mangathemesia'
     baseUrl = 'https://kingofmanga.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
