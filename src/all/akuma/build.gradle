@@ -1,8 +1,0 @@
-ext {
-    extName = 'Akuma'
-    extClass = '.Akuma'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
