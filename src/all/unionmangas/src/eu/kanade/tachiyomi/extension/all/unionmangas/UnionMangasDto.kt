@@ -43,10 +43,10 @@ data class UnionMangasDto(
 
 @Serializable
 data class ChapterPageDto(
-    val totalRecode: Int,
-    val currentPage: String,
-    val totalPage: Int,
-    @SerialName("data") val chapters: List<ChapterDto>,
+    val totalRecode: Int = 0,
+    val currentPage: String = "0",
+    val totalPage: Int = 0,
+    @SerialName("data") val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toModel(): List<SChapter> =
         chapters.map { chapter ->
@@ -59,6 +59,7 @@ data class ChapterPageDto(
 
     private fun String.toDate(): Long =
         try { UnionMangas.dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+
     private fun ChapterDto.toChapterUrl() = "/${this.slugManga}/${this.id}"
 }
 
@@ -94,8 +95,6 @@ data class PageableMangaListDto(
     val totalPage: Int,
     @SerialName("data") val mangas: List<MangaDto>,
 ) {
-    fun hasNextPage(): Boolean = ((currentPage?.toInt() ?: 0) + 1) < totalPage
-
     fun toModels(siteLang: String) = mangas.map { dto ->
         SManga.create().apply {
             title = dto.title
@@ -152,3 +151,9 @@ private fun statusToModel(status: String) =
         "completed" -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
+
+private fun hasNextPage(currentPage: String?, totalPage: Int) =
+    try { (currentPage!!.toInt() + 1) < totalPage } catch (_: Exception) { false }
+
+fun PageableMangaListDto.hasNextPage() = hasNextPage(currentPage, totalPage)
+fun ChapterPageDto.hasNextPage() = hasNextPage(currentPage, totalPage)

@@ -74,15 +74,15 @@ class UnionMangas(
         var currentPage = 0
         do {
             val chaptersDto = fetchChapterListPageable(manga, currentPage)
-            chapters += chaptersDto?.toModel() ?: emptyList()
+            chapters += chaptersDto.toModel()
             currentPage++
-        } while (currentPage <= (chaptersDto?.totalPage ?: 0))
+        } while (chaptersDto.hasNextPage())
         return Observable.from(listOf(chapters))
     }
 
-    private fun fetchChapterListPageable(manga: SManga, page: Int): ChapterPageDto? {
-        val maxResult = 16
+    private fun fetchChapterListPageable(manga: SManga, page: Int): ChapterPageDto {
         return try {
+            val maxResult = 16
             val url = "$apiUrl/api/v3/po/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
             return client
                 .newCall(GET(url, apiHeaders(url)))
@@ -90,7 +90,7 @@ class UnionMangas(
                 .toChapterPageDto()
         } catch (e: Exception) {
             Log.e("::fetchChapter", e.toString())
-            null
+            ChapterPageDto()
         }
     }
 
@@ -154,7 +154,7 @@ class UnionMangas(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val maxResult = 6
         val pathSearch = when (langOption.lang) {
-            "it" -> "italy"
+            "it" -> langOption.infix
             else -> "v3/po"
         }
         val url = "$apiUrl/api/$pathSearch/searchforms/$maxResult/".toHttpUrl().newBuilder()
