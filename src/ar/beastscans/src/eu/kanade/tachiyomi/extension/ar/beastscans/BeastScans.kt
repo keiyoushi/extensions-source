@@ -4,13 +4,21 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class BeastScans : MangaThemesia(
-    "Beast Scans",
-    "https://beastscans.net",
+    "Umi Manga",
+    "https://www.umimanga.com",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
+    // Beast Scans -> Umi Manga
+    override val id = 6404296554681042513
+
+    override val client = network.cloudflareClient.newBuilder()
+        .readTimeout(3, TimeUnit.MINUTES)
+        .build()
+
     override val seriesArtistSelector =
         ".infox .fmed:contains(الرسام) span, ${super.seriesArtistSelector}"
     override val seriesAuthorSelector =
