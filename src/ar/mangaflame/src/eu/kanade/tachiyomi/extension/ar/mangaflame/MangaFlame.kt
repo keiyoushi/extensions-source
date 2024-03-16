@@ -6,7 +6,7 @@ import java.util.Locale
 
 class MangaFlame : MangaThemesia(
     "Manga Flame",
-    "https://mangaflame.org",
+    "https://arisescans.com",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
