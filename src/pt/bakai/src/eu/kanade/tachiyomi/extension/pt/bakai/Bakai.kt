@@ -54,7 +54,7 @@ class Bakai : ParsedHttpSource() {
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/home1/page/$page/")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/home3/page/$page/")
 
     override fun popularMangaSelector() = "#elCmsPageWrap ul > li > article"
 
@@ -103,7 +103,7 @@ class Bakai : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search1/".toHttpUrl().newBuilder()
+        val url = "$baseUrl/search3/".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .addQueryParameter("type", "cms_records1")
             .addQueryParameter("page", page.toString())
