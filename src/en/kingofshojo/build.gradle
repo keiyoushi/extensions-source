@@ -3,7 +3,7 @@ ext {
     extClass = '.KingofShojo'
     themePkg = 'mangathemesia'
     baseUrl = 'https://kingofshojo.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 0
 }
 
 apply from: "$rootDir/common.gradle"
