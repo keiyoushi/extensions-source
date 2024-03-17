@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class NocturneSummer : Madara(
     "Nocturne Summer",
-    "https://nocsummer.com.br",
+    "https://nocfsb.com",
     "pt-BR",
     SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
 ) {

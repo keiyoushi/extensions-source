@@ -2,8 +2,8 @@ ext {
     extName = 'Nocturne Summer'
     extClass = '.NocturneSummer'
     themePkg = 'madara'
-    baseUrl = 'https://nocsummer.com.br'
-    overrideVersionCode = 0
+    baseUrl = 'https://nocfsb.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
