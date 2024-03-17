@@ -94,9 +94,8 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     }
 
     private fun getChaptersFromCache(): Set<SerializableChapter> {
-        val cachedChaps = preferences.getString(CACHE_KEY_CHAPTERS, null)
-        if (cachedChaps != null) return Json.decodeFromString(cachedChaps)
-        return emptySet()
+        val cachedChaps = preferences.getString(CACHE_KEY_CHAPTERS, null) ?: return emptySet()
+        return Json.decodeFromString(cachedChaps)
     }
 
     private fun fetchWebpageChapters(webpageIndex: Int): List<SerializableChapter> {
