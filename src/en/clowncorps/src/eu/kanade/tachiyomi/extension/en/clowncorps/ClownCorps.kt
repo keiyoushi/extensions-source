@@ -22,6 +22,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -69,13 +70,15 @@ class ClownCorps : ConfigurableSource, HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         // The total number of webpages with chapters on them
-        val currentPageIndicator = response.asJsoup().select("#paginav li.paginav-pages").text()
+        val document = response.asJsoup()
+        val currentPageIndicator = document.select("#paginav li.paginav-pages").text()
         val totalWebpageCount = currentPageIndicator.split(" ").last().toInt()
 
         val allChapters = getChaptersFromCache().toMutableSet()
         // Fetch all the chapters from the website until we reached where the cache left off
         for (webpageIndex in 1..totalWebpageCount) {
-            val anyChaptersWereAdded = allChapters.addAll(fetchWebpageChapters(webpageIndex))
+            val pageDoc = if (webpageIndex == 1) document else fetchChapterWebpage(webpageIndex)
+            val anyChaptersWereAdded = allChapters.addAll(extractChapters(pageDoc))
             if (!anyChaptersWereAdded) break // No new chapters were added from this webpage, so we're done
         }
 
@@ -98,10 +101,13 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         return Json.decodeFromString(cachedChaps)
     }
 
-    private fun fetchWebpageChapters(webpageIndex: Int): List<SerializableChapter> {
+    private fun fetchChapterWebpage(webpageIndex: Int): Document {
         val url = "$baseUrl/comic/page/$webpageIndex/"
-        val resp = client.newCall(GET(url, headers)).execute()
-        val comics = resp.asJsoup().select(".comic")
+        return client.newCall(GET(url, headers)).execute().asJsoup()
+    }
+
+    private fun extractChapters(document: Document): List<SerializableChapter> {
+        val comics = document.select(".comic")
         return comics.mapNotNull {
             val link = it.selectFirst(".post-title a")?.attr("href")
             val title = it.selectFirst(".post-title a")?.text()
