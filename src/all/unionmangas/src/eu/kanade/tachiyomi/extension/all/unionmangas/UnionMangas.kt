@@ -212,7 +212,7 @@ class UnionMangas(
     }
 }
 
-class LanguageOption(val lang: String, val infix: String = lang, val chpSuffix: String, val pageDelimiter: String)
+class LanguageOption(val lang: String, val infix: String = lang, val chpPrefix: String, val pageDelimiter: String)
 
 val languages = listOf(
     LanguageOption("it", "italy", "leer", ","),

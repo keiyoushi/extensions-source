@@ -53,14 +53,14 @@ data class ChapterPageDto(
             SChapter.create().apply {
                 name = chapter.name
                 date_upload = chapter.date.toDate()
-                url = "/${langOption.infix}${chapter.toChapterUrl(langOption.chpSuffix)}"
+                url = "/${langOption.infix}${chapter.toChapterUrl(langOption.chpPrefix)}"
             }
         }
 
     private fun String.toDate(): Long =
         try { UnionMangas.dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
 
-    private fun ChapterDto.toChapterUrl(suffix: String) = "/${this.slugManga}/$suffix-${this.id}"
+    private fun ChapterDto.toChapterUrl(prefix: String) = "/${this.slugManga}/$prefix-${this.id}"
 }
 
 @Serializable
