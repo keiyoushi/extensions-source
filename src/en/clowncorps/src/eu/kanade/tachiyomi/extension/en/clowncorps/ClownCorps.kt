@@ -62,19 +62,9 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         Observable.just(getManga())
 
     @Serializable
-    data class SerializableChapter(val fullLink: String, val name: String, val dateUpload: Long) {
-        override fun hashCode(): Int {
-            return name.hashCode()
-        }
-
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (javaClass != other?.javaClass) return false
-
-            other as SerializableChapter
-
-            return name == other.name
-        }
+    class SerializableChapter(val fullLink: String, val name: String, val dateUpload: Long) {
+        override fun hashCode() = fullLink.hashCode()
+        override fun equals(other: Any?) = other is SerializableChapter && fullLink == other.fullLink
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
