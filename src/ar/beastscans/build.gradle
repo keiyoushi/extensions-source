@@ -1,9 +1,9 @@
 ext {
-    extName = 'Beast Scans'
-    extClass = '.BeastScans'
+    extName = 'Umi Manga'
+    extClass = '.UmiManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://beastscans.net'
-    overrideVersionCode = 1
+    baseUrl = 'https://www.umimanga.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
