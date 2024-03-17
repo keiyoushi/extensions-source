@@ -111,17 +111,13 @@ class ClownCorps : ConfigurableSource, HttpSource() {
 
     private fun extractChapters(document: Document): List<SerializableChapter> {
         val comics = document.select(".comic")
-        return comics.mapNotNull {
-            val link = it.selectFirst(".post-title a")?.attr("href")
-            val title = it.selectFirst(".post-title a")?.text()
-            val postDate = it.selectFirst(".post-date")?.text()
-            val postTime = it.selectFirst(".post-time")?.text()
-            if (link != null && title != null && postDate != null && postTime != null) {
-                val date = parseDate("$postDate $postTime")
-                SerializableChapter(link, title, date)
-            } else {
-                null
-            }
+        return comics.map {
+            val link = it.selectFirst(".post-title a")!!.attr("href")
+            val title = it.selectFirst(".post-title a")!!.text()
+            val postDate = it.selectFirst(".post-date")!!.text()
+            val postTime = it.selectFirst(".post-time")!!.text()
+            val date = parseDate("$postDate $postTime")
+            SerializableChapter(link, title, date)
         }
     }
 
