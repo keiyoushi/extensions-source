@@ -6,7 +6,7 @@ import java.util.Locale
 object AnchiraHelper {
     fun getPathFromUrl(url: String) = "${url.split("/").reversed()[1]}/${url.split("/").last()}"
 
-    fun prepareTags(tags: List<Tag>, group: Boolean) = tags.asSequence().map {
+    fun prepareTags(tags: List<Tag>, group: Boolean) = tags.map {
         if (it.namespace == null) {
             it.namespace = 6
         }
