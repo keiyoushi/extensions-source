@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.unionmangas
 
 import android.util.Log
+import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -74,7 +75,7 @@ class UnionMangas(
         var currentPage = 0
         do {
             val chaptersDto = fetchChapterListPageable(manga, currentPage)
-            chapters += chaptersDto.toModel()
+            chapters += chaptersDto.toModel(langOption)
             currentPage++
         } while (chaptersDto.hasNextPage())
         return Observable.from(listOf(chapters))
@@ -83,7 +84,11 @@ class UnionMangas(
     private fun fetchChapterListPageable(manga: SManga, page: Int): ChapterPageDto {
         return try {
             val maxResult = 16
-            val url = "$apiUrl/api/v3/po/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
+            val pathSearch = when (langOption.lang) {
+                "it" -> langOption.infix
+                else -> "v3/po"
+            }
+            val url = "$apiUrl/api/$pathSearch/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
             return client
                 .newCall(GET(url, apiHeaders(url)))
                 .execute()
@@ -132,7 +137,12 @@ class UnionMangas(
         response.htmlDocumentToDto().toMangaDetailsModel()
 
     override fun pageListParse(document: Document): List<Page> {
-        TODO("Not yet implemented")
+        val pageListData = document.htmlDocumentToDto().props.pageProps.pageListData
+        val decodedData = CryptoAES.decrypt(pageListData!!, "ABC@123#245")
+        val pagesData = json.decodeFromString<PageDataDto>(decodedData)
+        return pagesData.data.getImages(langOption.pageDelimiter).mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
+        }
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -179,6 +189,11 @@ class UnionMangas(
         return json.decodeFromString<UnionMangasDto>(jsonContent)
     }
 
+    private fun Document.htmlDocumentToDto(): UnionMangasDto {
+        val jsonContent = selectFirst("script#__NEXT_DATA__")!!.html()
+        return json.decodeFromString<UnionMangasDto>(jsonContent)
+    }
+
     private fun Response.toMangaPageDto() = json.decodeFromString<PageableMangaListDto>(body.string())
 
     private fun Response.toChapterPageDto() = json.decodeFromString<ChapterPageDto>(body.string())
@@ -197,9 +212,9 @@ class UnionMangas(
     }
 }
 
-class LanguageOption(val lang: String, val infix: String = lang)
+class LanguageOption(val lang: String, val infix: String = lang, val chpSuffix: String, val pageDelimiter: String)
 
 val languages = listOf(
-    LanguageOption("it", "italy"),
-    LanguageOption("pt-BR", "manga-br"),
+    LanguageOption("it", "italy", "leer", ","),
+    LanguageOption("pt-BR", "manga-br", "cap", "#"),
 )
