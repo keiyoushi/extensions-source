@@ -1,6 +1,6 @@
 ext {
     extName = 'Umi Manga'
-    extClass = '.BeastScans'
+    extClass = '.UmiManga'
     themePkg = 'mangathemesia'
     baseUrl = 'https://www.umimanga.com'
     overrideVersionCode = 2

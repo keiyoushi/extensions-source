@@ -6,7 +6,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class BeastScans : MangaThemesia(
+class UmiManga : MangaThemesia(
     "Umi Manga",
     "https://www.umimanga.com",
     "ar",
