@@ -87,13 +87,15 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         preferences.edit().putString(CACHE_KEY_CHAPTERS, fullJsonString).apply()
 
         // Convert the serializable chapters to SChapters
-        return allChapters.map { chapter ->
-            SChapter.create().apply {
-                setUrlWithoutDomain(chapter.fullLink)
-                name = chapter.name
-                date_upload = chapter.dateUpload
+        return allChapters
+            .sortedByDescending { it.dateUpload }
+            .map { chapter ->
+                SChapter.create().apply {
+                    setUrlWithoutDomain(chapter.fullLink)
+                    name = chapter.name
+                    date_upload = chapter.dateUpload
+                }
             }
-        }
     }
 
     private fun getChaptersFromCache(): Set<SerializableChapter> {
