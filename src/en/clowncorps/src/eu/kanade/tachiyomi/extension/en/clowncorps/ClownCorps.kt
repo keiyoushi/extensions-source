@@ -65,7 +65,8 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     @Serializable
     class SerializableChapter(val fullLink: String, val name: String, val dateUpload: Long) {
         override fun hashCode() = fullLink.hashCode()
-        override fun equals(other: Any?) = other is SerializableChapter && fullLink == other.fullLink
+        override fun equals(other: Any?) =
+            other is SerializableChapter && fullLink == other.fullLink
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -84,7 +85,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
 
         // Save the chapters to cache
         val fullJsonString = Json.encodeToString(allChapters)
-        preferences.edit().putString(CACHE_KEY_CHAPTERS, fullJsonString).apply()
+        setChapterCache(fullJsonString)
 
         // Convert the serializable chapters to SChapters
         return allChapters
@@ -99,7 +100,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     }
 
     private fun getChaptersFromCache(): Set<SerializableChapter> {
-        val cachedChaps = preferences.getString(CACHE_KEY_CHAPTERS, null) ?: return emptySet()
+        val cachedChaps = getChapterCache() ?: return emptySet()
         return Json.decodeFromString(cachedChaps)
     }
 
@@ -145,7 +146,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         val url = image.attr("src")
         pages.add(Page(0, "", url))
 
-        if (showAuthorsNotesPref()) {
+        if (getShowAuthorsNotesPref()) {
             val title = image.attr("title")
 
             // Ignore chapters that don't really have author's notes
@@ -188,7 +189,17 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private fun showAuthorsNotesPref() = preferences.getBoolean(SETTING_KEY_SHOW_AUTHORS_NOTES, false)
+    private fun getShowAuthorsNotesPref() =
+        preferences.getBoolean(SETTING_KEY_SHOW_AUTHORS_NOTES, false)
+
+    private fun getChapterCache() =
+        preferences.getString(CACHE_KEY_CHAPTERS, null)
+
+    private fun setChapterCache(json: String) =
+        preferences.edit().putString(CACHE_KEY_CHAPTERS, json).apply()
+
+    private fun clearChapterCache() =
+        preferences.edit().remove(CACHE_KEY_CHAPTERS).apply()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
@@ -214,7 +225,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
             setOnPreferenceChangeListener { _, newValue ->
                 val checkValue = newValue as Set<*>
                 if (checkValue.contains(VALUE_CONFIRM)) {
-                    preferences.edit().remove(CACHE_KEY_CHAPTERS).apply()
+                    clearChapterCache()
                     Toast.makeText(screen.context, "Cleared chapter cache", Toast.LENGTH_SHORT)
                         .show()
                 }
