@@ -120,11 +120,6 @@ class Anchira : HttpSource(), ConfigurableSource {
                 query.substringAfter(SLUG_BUNDLE_PREFIX),
                 filters,
             ).removeAllQueryParameters("page")
-            if (
-                url.build().queryParameter("sort") == "4"
-            ) {
-                url.removeAllQueryParameters("sort")
-            }
             val manga = SManga.create()
                 .apply { this.url = "?${url.build().query}" }
             fetchMangaDetails(manga).map {
@@ -280,7 +275,7 @@ class Anchira : HttpSource(), ConfigurableSource {
             for (page in 1..pages) {
                 results.entries.forEach { data ->
                     chapterList.add(
-                        createChapter(data, response, anchiraData),
+                        createChapter(data, anchiraData),
                     )
                 }
                 if (page < pages) {
@@ -298,7 +293,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         } else {
             val data = json.decodeFromString<Entry>(response.body.string())
             chapterList.add(
-                createChapter(data, response, anchiraData),
+                createChapter(data, anchiraData),
             )
         }
         return chapterList
@@ -468,7 +463,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     companion object {
         const val SLUG_SEARCH_PREFIX = "id:"
-        const val SLUG_BUNDLE_PREFIX = "bundle:"
+        private const val SLUG_BUNDLE_PREFIX = "bundle:"
         private const val IMAGE_QUALITY_PREF = "image_quality"
         private const val OPEN_SOURCE_PREF = "use_manga_source"
         private const val USE_TAG_GROUPING = "use_tag_grouping"
@@ -477,4 +472,5 @@ class Anchira : HttpSource(), ConfigurableSource {
     }
 }
 
-val CHAPTER_SUFFIX_RE = Regex("(?<!20\\d\\d-)\\b[\\d.]{1,4}$")
+val CHAPTER_SUFFIX_RE =
+    Regex("\\W*(?:Ch\\.?|Chapter|Part|Vol\\.?|Volume|#)?\\W?(?<!20\\d{2}-?)\\b[\\d.]{1,4}\\W?")

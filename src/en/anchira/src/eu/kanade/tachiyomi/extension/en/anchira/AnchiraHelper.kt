@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.anchira
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import okhttp3.Response
 import java.util.Locale
 
 object AnchiraHelper {
@@ -13,6 +12,7 @@ object AnchiraHelper {
         }
         it
     }
+        .sortedBy { it.name }
         .sortedBy { it.namespace }
         .map {
             val tag = it.name.lowercase()
@@ -30,30 +30,31 @@ object AnchiraHelper {
         }
         .joinToString(", ") { it }
 
-    fun createChapter(entry: Entry, response: Response, anchiraData: List<EntryKey>) =
+    fun createChapter(entry: Entry, anchiraData: List<EntryKey>) =
         SChapter.create().apply {
-            val ch =
-                CHAPTER_SUFFIX_RE.find(entry.title)?.value?.trim('.') ?: "1"
-            val source = anchiraData.find { it.id == entry.id }?.url
-                ?: response.request.url.toString()
+            val chSuffix = CHAPTER_SUFFIX_RE.find(entry.title)?.value.orEmpty()
+            val chNumber =
+                chSuffix.replace(Regex("[^.\\d]"), "").trim('.').takeUnless { it.isEmpty() } ?: "1"
+            val source = Regex("fakku|irodori").find(
+                anchiraData.find { it.id == entry.id }?.url.orEmpty(),
+            )?.value.orEmpty().titleCase()
             url = "/g/${entry.id}/${entry.key}"
-            name = "$ch. ${entry.title.removeSuffix(" $ch")}"
+            name = "$chNumber. ${entry.title.removeSuffix(chSuffix)}"
             date_upload = entry.publishedAt * 1000
-            chapter_number = ch.toFloat()
+            chapter_number = chNumber.toFloat()
             scanlator = buildString {
-                append(
-                    Regex("fakku|irodori|anchira").find(source)?.value.orEmpty()
-                        .replaceFirstChar {
-                            if (it.isLowerCase()) {
-                                it.titlecase(
-                                    Locale.getDefault(),
-                                )
-                            } else {
-                                it.toString()
-                            }
-                        },
-                )
-                append(" - ${entry.pages} pages")
+                if (source.isNotEmpty()) {
+                    append("$source - ")
+                }
+                append("${entry.pages} pages")
             }
         }
+
+    private fun String.titleCase() = replaceFirstChar {
+        if (it.isLowerCase()) {
+            it.titlecase(Locale.getDefault())
+        } else {
+            it.toString()
+        }
+    }
 }
