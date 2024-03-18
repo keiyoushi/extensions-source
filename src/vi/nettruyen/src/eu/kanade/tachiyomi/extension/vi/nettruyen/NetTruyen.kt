@@ -13,8 +13,6 @@ class NetTruyen : WPComics(
     dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
     gmtOffset = null,
 ) {
-    override fun String.replaceSearchPath() = replace("/$searchPath?status=2&", "/truyen-full?")
-
     /**
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
      * That makes both sites always return un-relevant results when searching should return empty.

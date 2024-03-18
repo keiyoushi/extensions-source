@@ -83,8 +83,6 @@ abstract class WPComics(
     protected open val searchPath = "tim-truyen"
     protected open val queryParam = "keyword"
 
-    protected open fun String.replaceSearchPath() = this
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
 
@@ -102,7 +100,7 @@ abstract class WPComics(
             addQueryParameter("sort", "0")
         }
 
-        return GET(url.toString().replaceSearchPath(), headers)
+        return GET(url.toString(), headers)
     }
 
     override fun searchMangaSelector() = "div.items div.item"
