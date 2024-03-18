@@ -15,7 +15,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class XoxoComics : WPComics("XOXO Comics", "https://xoxocomic.com", "en", SimpleDateFormat("MM/dd/yyyy", Locale.US), null) {
+class XoxoComics : WPComics(
+    name = "XOXO Comics",
+    baseUrl = "https://xoxocomic.com",
+    lang = "en",
+    dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
+    gmtOffset = null,
+) {
     override val searchPath = "search-comic"
     override val popularPath = "hot-comic"
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comic-update?page=$page", headers)

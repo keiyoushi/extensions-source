@@ -7,11 +7,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class NetTruyenX : WPComics(
-    "NetTruyenX (unoriginal)",
-    "https://nettruyenx.com",
-    "vi",
-    SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
-    null,
+    name = "NetTruyenX (unoriginal)",
+    baseUrl = "https://nettruyenx.com",
+    lang = "vi",
+    dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
+    gmtOffset = null,
 ) {
     override val popularPath = "truyen-tranh-hot"
 

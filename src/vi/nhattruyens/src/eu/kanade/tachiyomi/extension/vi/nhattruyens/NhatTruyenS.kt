@@ -10,11 +10,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class NhatTruyenS : WPComics(
-    "NhatTruyenS (unoriginal)",
-    "https://nhattruyens.com",
-    "vi",
-    SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
-    null,
+    name = "NhatTruyenS (unoriginal)",
+    baseUrl = "https://nhattruyens.com",
+    lang = "vi",
+    dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
+    gmtOffset = null,
 ) {
     override val popularPath = "truyen-hot"
 

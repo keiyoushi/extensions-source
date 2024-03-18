@@ -13,7 +13,13 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class JManga : WPComics("JManga", "https://jmanga.vip", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), null) {
+class JManga : WPComics(
+    name = "JManga",
+    baseUrl = "https://jmanga.vip",
+    lang = "ja",
+    dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE),
+    gmtOffset = null,
+) {
     override fun popularMangaSelector() = "div.items article.item"
 
     override fun popularMangaNextPageSelector() = "li.active + li.page-item a.page-link"

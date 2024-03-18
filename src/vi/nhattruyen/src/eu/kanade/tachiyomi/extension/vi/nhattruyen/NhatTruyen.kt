@@ -6,7 +6,13 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NhatTruyen : WPComics("NhatTruyen", "https://nhattruyenup.com", "vi", SimpleDateFormat("dd/MM/yy", Locale.getDefault()), null) {
+class NhatTruyen : WPComics(
+    name = "NhatTruyen",
+    baseUrl = "https://nhattruyenup.com",
+    lang = "vi",
+    dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
+    gmtOffset = null,
+) {
     override val searchPath = "the-loai"
 
     /**
