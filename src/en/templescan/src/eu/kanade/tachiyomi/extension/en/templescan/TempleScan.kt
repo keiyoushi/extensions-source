@@ -17,8 +17,6 @@ class TempleScan : HeanCms(
         .rateLimit(1)
         .build()
 
-    override val useNewQueryEndpoint = true
-    override val coverPath = ""
     override val mangaSubDirectory = "comic"
 
     override fun getGenreList() = listOf(
