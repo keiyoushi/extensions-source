@@ -16,9 +16,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class XoxoComics : WPComics(
-    name = "XOXO Comics",
-    baseUrl = "https://xoxocomic.com",
-    lang = "en",
+    "XOXO Comics",
+    "https://xoxocomic.com",
+    "en",
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
     gmtOffset = null,
 ) {

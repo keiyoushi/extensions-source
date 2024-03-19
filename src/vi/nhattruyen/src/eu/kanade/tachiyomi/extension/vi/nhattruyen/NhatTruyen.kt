@@ -7,9 +7,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class NhatTruyen : WPComics(
-    name = "NhatTruyen",
-    baseUrl = "https://nhattruyenup.com",
-    lang = "vi",
+    "NhatTruyen",
+    "https://nhattruyenup.com",
+    "vi",
     dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
     gmtOffset = null,
 ) {

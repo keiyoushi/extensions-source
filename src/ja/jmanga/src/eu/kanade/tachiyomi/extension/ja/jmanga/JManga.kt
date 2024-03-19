@@ -14,9 +14,9 @@ import java.util.Calendar
 import java.util.Locale
 
 class JManga : WPComics(
-    name = "JManga",
-    baseUrl = "https://jmanga.vip",
-    lang = "ja",
+    "JManga",
+    "https://jmanga.vip",
+    "ja",
     dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE),
     gmtOffset = null,
 ) {
