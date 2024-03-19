@@ -16,12 +16,10 @@ class HeanCmsQuerySearchDto(
 
 @Serializable
 class HeanCmsQuerySearchMetaDto(
-    @SerialName("current_page") val currentPage: Int,
-    @SerialName("last_page") val lastPage: Int,
+    @SerialName("current_page") private val currentPage: Int,
+    @SerialName("last_page") private val lastPage: Int,
 ) {
-
-    val hasNextPage: Boolean
-        get() = currentPage < lastPage
+    fun hasNextPage() = currentPage < lastPage
 }
 
 @Serializable
@@ -55,8 +53,8 @@ class HeanCmsSeriesDto(
     private val author: String? = null,
     private val description: String? = null,
     private val studio: String? = null,
-    val status: String? = null,
-    val thumbnail: String,
+    private val status: String? = null,
+    private val thumbnail: String,
     private val title: String,
     private val tags: List<HeanCmsTagDto>? = emptyList(),
     val seasons: List<HeanCmsSeasonsDto>? = emptyList(),

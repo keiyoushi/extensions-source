@@ -55,6 +55,9 @@ abstract class HeanCms(
 
     protected open val slugStrategy = SlugStrategy.NONE
 
+    /**
+     * Requires SlugStrategy.ID to work correctly.
+     */
     protected open val useNewChapterEndpoint = false
 
     private var seriesSlugMap: Map<String, HeanCmsTitle>? = null
@@ -109,7 +112,7 @@ abstract class HeanCms(
                 it.toSManga(apiUrl, coverPath, mangaSubDirectory, slugStrategy)
             }
 
-            return MangasPage(mangaList, result.meta?.hasNextPage ?: false)
+            return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
         }
 
         val mangaList = json.parseAs<List<HeanCmsSeriesDto>>()
@@ -222,7 +225,7 @@ abstract class HeanCms(
                 it.toSManga(apiUrl, coverPath, mangaSubDirectory, slugStrategy)
             }
 
-            return MangasPage(mangaList, result.meta?.hasNextPage ?: false)
+            return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
         }
 
         val mangaList = json.parseAs<List<HeanCmsSeriesDto>>()
@@ -309,13 +312,11 @@ abstract class HeanCms(
             }
 
             val seriesId = manga.url.substringAfterLast("#")
-            val seriesSlug = manga.url.substringAfterLast("/").substringBefore("#")
 
             val url = "$apiUrl/chapter/query".toHttpUrl().newBuilder()
                 .addQueryParameter("page", "1")
                 .addQueryParameter("perPage", PER_PAGE_CHAPTERS.toString())
                 .addQueryParameter("series_id", seriesId)
-                .fragment(seriesSlug)
 
             return GET(url.build(), headers)
         }
@@ -325,7 +326,17 @@ abstract class HeanCms(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         if (useNewChapterEndpoint) {
-            val seriesSlug = response.request.url.fragment ?: throw Exception(intl.urlChangedError(name))
+            val apiHeaders = headersBuilder()
+                .add("Accept", ACCEPT_JSON)
+                .build()
+
+            val seriesId = response.request.url.queryParameter("series_id")
+
+            val seriesSlug = client.newCall(GET("$apiUrl/series/id/$seriesId", apiHeaders)).execute()
+                .parseAs<HeanCmsSeriesDto>().slug
+
+            preferences.slugMap = preferences.slugMap.toMutableMap()
+                .also { it[seriesSlug.toPermSlugIfNeeded()] = seriesSlug }
 
             var result = response.parseAs<HeanCmsChapterPayloadDto>()
 
