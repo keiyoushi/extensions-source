@@ -11,12 +11,10 @@ class OmegaScans : HeanCms("Omega Scans", "https://omegascans.org", "en") {
         .rateLimitHost(apiUrl.toHttpUrl(), 1)
         .build()
 
-    override val useNewQueryEndpoint = true
-
     // Site changed from MangaThemesia to HeanCms.
     override val versionId = 2
 
-    override val coverPath = ""
+    override val useNewChapterEndpoint = true
 
     override fun getGenreList() = listOf(
         Genre("Romance", 1),
