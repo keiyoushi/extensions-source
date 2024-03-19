@@ -33,7 +33,7 @@ abstract class HeanCms(
     protected val apiUrl: String = baseUrl.replace("://", "://api."),
 ) : ConfigurableSource, HttpSource() {
 
-    private val preferences: SharedPreferences by lazy {
+    protected val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
