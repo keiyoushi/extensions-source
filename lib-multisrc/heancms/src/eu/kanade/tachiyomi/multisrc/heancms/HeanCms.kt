@@ -326,12 +326,8 @@ abstract class HeanCms(
     override fun chapterListParse(response: Response): List<SChapter> {
         if (useNewChapterEndpoint) {
             val seriesSlug = response.request.url.fragment ?: throw Exception(intl.urlChangedError(name))
+            
             var result = response.parseAs<HeanCmsChapterPayloadDto>()
-
-            if (slugStrategy == SlugStrategy.ID) {
-                preferences.slugMap = preferences.slugMap.toMutableMap()
-                    .also { it[seriesSlug.toPermSlugIfNeeded()] = seriesSlug }
-            }
 
             val currentTimestamp = System.currentTimeMillis()
 
