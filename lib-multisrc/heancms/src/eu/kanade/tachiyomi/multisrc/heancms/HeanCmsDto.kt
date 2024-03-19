@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.heancms
 
-import eu.kanade.tachiyomi.multisrc.heancms.HeanCms.SlugStrategy
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -23,30 +22,6 @@ class HeanCmsQuerySearchMetaDto(
 }
 
 @Serializable
-class HeanCmsSearchDto(
-    @SerialName("series_slug") var slug: String,
-    @SerialName("series_type") val type: String,
-    private val title: String,
-    private val thumbnail: String? = null,
-) {
-
-    fun toSManga(
-        apiUrl: String,
-        coverPath: String,
-        mangaSubDirectory: String,
-        slugMap: Map<String, HeanCms.HeanCmsTitle>,
-        slugStrategy: SlugStrategy,
-    ): SManga = SManga.create().apply {
-        val slugOnly = slug.toPermSlugIfNeeded(slugStrategy)
-        val thumbnailFileName = slugMap[slugOnly]?.thumbnailFileName
-        title = this@HeanCmsSearchDto.title
-        thumbnail_url = thumbnail?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
-            ?: thumbnailFileName?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
-        url = "/$mangaSubDirectory/$slugOnly"
-    }
-}
-
-@Serializable
 class HeanCmsSeriesDto(
     val id: Int,
     @SerialName("series_slug") val slug: String,
@@ -64,10 +39,8 @@ class HeanCmsSeriesDto(
         apiUrl: String,
         coverPath: String,
         mangaSubDirectory: String,
-        slugStrategy: SlugStrategy,
     ): SManga = SManga.create().apply {
         val descriptionBody = this@HeanCmsSeriesDto.description?.let(Jsoup::parseBodyFragment)
-        val slugOnly = slug.toPermSlugIfNeeded(slugStrategy)
 
         title = this@HeanCmsSeriesDto.title
         author = this@HeanCmsSeriesDto.author?.trim()
@@ -81,11 +54,7 @@ class HeanCmsSeriesDto(
         thumbnail_url = thumbnail.ifEmpty { null }
             ?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
         status = this@HeanCmsSeriesDto.status?.toStatus() ?: SManga.UNKNOWN
-        url = if (slugStrategy != SlugStrategy.NONE) {
-            "/$mangaSubDirectory/$slugOnly#$id"
-        } else {
-            "/$mangaSubDirectory/$slug"
-        }
+        url = "/$mangaSubDirectory/$slug#$id"
     }
 }
 
@@ -115,9 +84,7 @@ class HeanCmsChapterDto(
         seriesSlug: String,
         mangaSubDirectory: String,
         dateFormat: SimpleDateFormat,
-        slugStrategy: SlugStrategy,
     ): SChapter = SChapter.create().apply {
-        val seriesSlugOnly = seriesSlug.toPermSlugIfNeeded(slugStrategy)
         name = this@HeanCmsChapterDto.name.trim()
 
         if (price != 0) {
@@ -130,9 +97,7 @@ class HeanCmsChapterDto(
             0L
         }
 
-        val paidStatus = if (price != 0 && price != null) "-paid" else ""
-
-        url = "/$mangaSubDirectory/$seriesSlugOnly/$slug#$id$paidStatus"
+        url = "/$mangaSubDirectory/$seriesSlug/$slug#$id"
     }
 }
 
@@ -144,16 +109,27 @@ class HeanCmsChapterMetaDto(
     fun hasNextPage() = currentPage < lastPage
 }
 
-private fun String.toAbsoluteThumbnailUrl(apiUrl: String, coverPath: String): String {
-    return if (startsWith("https://")) this else "$apiUrl/$coverPath$this"
+@Serializable
+class HeanCmsPagePayloadDto(
+    val chapter: HeanCmsPageDto,
+    private val paywall: Boolean = false,
+    val data: List<String>? = emptyList(),
+) {
+    fun isPaywalled() = paywall
 }
 
-private fun String.toPermSlugIfNeeded(slugStrategy: SlugStrategy): String {
-    return if (slugStrategy != SlugStrategy.NONE) {
-        this.replace(HeanCms.TIMESTAMP_REGEX, "")
-    } else {
-        this
-    }
+@Serializable
+class HeanCmsPageDto(
+    @SerialName("chapter_data") val chapterData: HeanCmsPageDataDto?,
+)
+
+@Serializable
+class HeanCmsPageDataDto(
+    val images: List<String>? = emptyList(),
+)
+
+private fun String.toAbsoluteThumbnailUrl(apiUrl: String, coverPath: String): String {
+    return if (startsWith("https://")) this else "$apiUrl/$coverPath$this"
 }
 
 fun String.toStatus(): Int = when (this) {
