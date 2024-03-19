@@ -85,23 +85,7 @@ abstract class HeanCms(
         return GET(url.build(), headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val json = response.body.string()
-
-        if (json.startsWith("{")) {
-            val result = json.parseAs<HeanCmsQuerySearchDto>()
-            val mangaList = result.data.map {
-                it.toSManga(apiUrl, coverPath, mangaSubDirectory)
-            }
-
-            return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
-        }
-
-        val mangaList = json.parseAs<List<HeanCmsSeriesDto>>()
-            .map { it.toSManga(apiUrl, coverPath, mangaSubDirectory) }
-
-        return MangasPage(mangaList, hasNextPage = false)
-    }
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/query".toHttpUrl().newBuilder()
@@ -172,21 +156,12 @@ abstract class HeanCms(
     override fun searchMangaParse(response: Response): MangasPage {
         val json = response.body.string()
 
-        if (json.startsWith("{")) {
-            val result = json.parseAs<HeanCmsQuerySearchDto>()
-            val mangaList = result.data.map {
-                it.toSManga(apiUrl, coverPath, mangaSubDirectory)
-            }
-
-            return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
+        val result = json.parseAs<HeanCmsQuerySearchDto>()
+        val mangaList = result.data.map {
+            it.toSManga(apiUrl, coverPath, mangaSubDirectory)
         }
 
-        val mangaList = json.parseAs<List<HeanCmsSeriesDto>>()
-            .map {
-                it.toSManga(apiUrl, coverPath, mangaSubDirectory)
-            }
-
-        return MangasPage(mangaList, hasNextPage = false)
+        return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -249,6 +224,8 @@ abstract class HeanCms(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val showPaidChapters = preferences.showPaidChapters
+
         if (useNewChapterEndpoint) {
             val apiHeaders = headersBuilder()
                 .add("Accept", ACCEPT_JSON)
@@ -281,7 +258,7 @@ abstract class HeanCms(
             }
 
             return chapterList
-                .filter { it.price == 0 || preferences.showPaidChapters }
+                .filter { it.price == 0 || showPaidChapters }
                 .map { it.toSChapter(seriesSlug, mangaSubDirectory, dateFormat) }
                 .filter { it.date_upload <= currentTimestamp }
         }
@@ -289,8 +266,6 @@ abstract class HeanCms(
         val result = response.parseAs<HeanCmsSeriesDto>()
 
         val currentTimestamp = System.currentTimeMillis()
-
-        val showPaidChapters = preferences.showPaidChapters
 
         return result.seasons.orEmpty()
             .flatMap { it.chapters.orEmpty() }
