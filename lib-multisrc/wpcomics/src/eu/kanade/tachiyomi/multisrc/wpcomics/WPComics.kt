@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.wpcomics
 
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -7,7 +8,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.Headers
+import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -20,23 +24,28 @@ import java.util.Locale
 abstract class WPComics(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
-    private val gmtOffset: String? = "+0500",
+    final override val lang: String,
+    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
+    protected val gmtOffset: String? = "+0500",
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0")
-        .add("Referer", baseUrl)
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
-    private fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
+    open val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "vi", "ja"),
+        classLoader = this::class.java.classLoader!!,
+    )
+
+    protected fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 
     // Popular
-
     open val popularPath = "hot"
 
     override fun popularMangaRequest(page: Int): Request {
@@ -58,7 +67,6 @@ abstract class WPComics(
     override fun popularMangaNextPageSelector() = "a.next-page, a[rel=next]"
 
     // Latest
-
     override fun latestUpdatesRequest(page: Int): Request {
         return GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
     }
@@ -70,35 +78,27 @@ abstract class WPComics(
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
-
     protected open val searchPath = "tim-truyen"
     protected open val queryParam = "keyword"
 
-    protected open fun String.replaceSearchPath() = this
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
-        return if (filterList.isEmpty()) {
-            GET("$baseUrl/?s=$query&post_type=comics&page=$page")
-        } else {
-            val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
+        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
 
-            filterList.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
-                    is StatusFilter -> filter.toUriPart()?.let { url.addQueryParameter("status", it) }
-                    else -> {}
-                }
+        filters.forEach { filter ->
+            when (filter) {
+                is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
+                is StatusFilter -> filter.toUriPart()?.let { url.addQueryParameter("status", it) }
+                else -> {}
             }
-
-            url.apply {
-                addQueryParameter(queryParam, query)
-                addQueryParameter("page", page.toString())
-                addQueryParameter("sort", "0")
-            }
-
-            GET(url.toString().replaceSearchPath(), headers)
         }
+
+        url.apply {
+            addQueryParameter(queryParam, query)
+            addQueryParameter("page", page.toString())
+            addQueryParameter("sort", "0")
+        }
+
+        return GET(url.toString(), headers)
     }
 
     override fun searchMangaSelector() = "div.items div.item"
@@ -116,22 +116,23 @@ abstract class WPComics(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Details
-
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             document.select("article#item-detail").let { info ->
                 author = info.select("li.author p.col-xs-8").text()
                 status = info.select("li.status p.col-xs-8").text().toStatus()
                 genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-                description = info.select("div.detail-content p").text()
+                val otherName = info.select("h2.other-name").text()
+                description = info.select("div.detail-content p").text() +
+                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
                 thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
             }
         }
     }
 
     open fun String?.toStatus(): Int {
-        val ongoingWords = listOf("Ongoing", "Updating", "Đang tiến hành")
-        val completedWords = listOf("Complete", "Completed", "Hoàn thành")
+        val ongoingWords = listOf("Ongoing", "Updating", "Đang tiến hành", "連載中")
+        val completedWords = listOf("Complete", "Completed", "Hoàn thành", "完結済み")
         return when {
             this == null -> SManga.UNKNOWN
             ongoingWords.doesInclude(this) -> SManga.ONGOING
@@ -141,7 +142,6 @@ abstract class WPComics(
     }
 
     // Chapters
-
     override fun chapterListSelector() = "div.list-chapter li.row:not(.heading)"
 
     override fun chapterFromElement(element: Element): SChapter {
@@ -154,10 +154,10 @@ abstract class WPComics(
         }
     }
 
-    private val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
+    protected val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
 
-    protected fun String?.toDate(): Long {
-        this ?: return 0
+    protected open fun String?.toDate(): Long {
+        this ?: return 0L
 
         val secondWords = listOf("second", "giây")
         val minuteWords = listOf("minute", "phút")
@@ -182,10 +182,10 @@ abstract class WPComics(
                 (if (gmtOffset == null) this.substringAfterLast(" ") else "$this $gmtOffset").let {
                     // timestamp has year
                     if (Regex("""\d+/\d+/\d\d""").find(it)?.value != null) {
-                        dateFormat.parse(it)?.time ?: 0
+                        dateFormat.parse(it)?.time ?: 0L
                     } else {
                         // MangaSum - timestamp sometimes doesn't have year (current year implied)
-                        dateFormat.parse("$it/$currentYear")?.time ?: 0
+                        dateFormat.parse("$it/$currentYear")?.time ?: 0L
                     }
                 }
             }
@@ -195,9 +195,8 @@ abstract class WPComics(
     }
 
     // Pages
-
-    // sources sometimes have an image element with an empty attr that isn't really an image
     open fun imageOrNull(element: Element): String? {
+        // sources sometimes have an image element with an empty attr that isn't really an image
         fun Element.hasValidAttr(attr: String): Boolean {
             val regex = Regex("""https?://.*""", RegexOption.IGNORE_CASE)
             return when {
@@ -226,80 +225,74 @@ abstract class WPComics(
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
+    protected class StatusFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
 
-    protected class StatusFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Status", vals)
-    protected class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Genre", vals)
+    protected class GenreFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
 
-    protected open fun getStatusList(): Array<Pair<String?, String>> = arrayOf(
-        Pair(null, "Tất cả"),
-        Pair("1", "Đang tiến hành"),
-        Pair("2", "Đã hoàn thành"),
-        Pair("3", "Tạm ngừng"),
-    )
-    protected open fun getGenreList(): Array<Pair<String?, String>> = arrayOf(
-        null to "Tất cả",
-        "action" to "Action",
-        "adult" to "Adult",
-        "adventure" to "Adventure",
-        "anime" to "Anime",
-        "chuyen-sinh" to "Chuyển Sinh",
-        "comedy" to "Comedy",
-        "comic" to "Comic",
-        "cooking" to "Cooking",
-        "co-dai" to "Cổ Đại",
-        "doujinshi" to "Doujinshi",
-        "drama" to "Drama",
-        "dam-my" to "Đam Mỹ",
-        "ecchi" to "Ecchi",
-        "fantasy" to "Fantasy",
-        "gender-bender" to "Gender Bender",
-        "harem" to "Harem",
-        "historical" to "Historical",
-        "horror" to "Horror",
-        "josei" to "Josei",
-        "live-action" to "Live action",
-        "manga" to "Manga",
-        "manhua" to "Manhua",
-        "manhwa" to "Manhwa",
-        "martial-arts" to "Martial Arts",
-        "mature" to "Mature",
-        "mecha" to "Mecha",
-        "mystery" to "Mystery",
-        "ngon-tinh" to "Ngôn Tình",
-        "one-shot" to "One shot",
-        "psychological" to "Psychological",
-        "romance" to "Romance",
-        "school-life" to "School Life",
-        "sci-fi" to "Sci-fi",
-        "seinen" to "Seinen",
-        "shoujo" to "Shoujo",
-        "shoujo-ai" to "Shoujo Ai",
-        "shounen" to "Shounen",
-        "shounen-ai" to "Shounen Ai",
-        "slice-of-life" to "Slice of Life",
-        "smut" to "Smut",
-        "soft-yaoi" to "Soft Yaoi",
-        "soft-yuri" to "Soft Yuri",
-        "sports" to "Sports",
-        "supernatural" to "Supernatural",
-        "thieu-nhi" to "Thiếu Nhi",
-        "tragedy" to "Tragedy",
-        "trinh-tham" to "Trinh Thám",
-        "truyen-scan" to "Truyện scan",
-        "truyen-mau" to "Truyện Màu",
-        "webtoon" to "Webtoon",
-        "xuyen-khong" to "Xuyên Không",
-    )
+    protected open fun getStatusList(): List<Pair<String?, String>> =
+        listOf(
+            Pair(null, intl["STATUS_ALL"]),
+            Pair("1", intl["STATUS_ONGOING"]),
+            Pair("2", intl["STATUS_COMPLETED"]),
+        )
+
+    protected var genreList: List<Pair<String?, String>> = emptyList()
+
+    private val scope = CoroutineScope(Dispatchers.IO)
+
+    protected fun launchIO(block: () -> Unit) = scope.launch { block() }
+
+    private var fetchGenresAttempts: Int = 0
+
+    protected fun fetchGenres() {
+        if (fetchGenresAttempts < 3 && genreList.isEmpty()) {
+            try {
+                genreList =
+                    client.newCall(genresRequest()).execute()
+                        .asJsoup()
+                        .let(::parseGenres)
+            } catch (_: Exception) {
+            } finally {
+                fetchGenresAttempts++
+            }
+        }
+    }
+
+    protected open fun genresRequest() = GET("$baseUrl/$searchPath", headers)
+
+    protected open val genresSelector = ".genres ul.nav li:not(.active) a"
+
+    protected open val genresUrlDelimiter = "/"
+
+    protected open fun parseGenres(document: Document): List<Pair<String?, String>> {
+        val items = document.select(genresSelector)
+        return buildList(items.size + 1) {
+            add(Pair(null, intl["STATUS_ALL"]))
+            items.mapTo(this) {
+                Pair(
+                    it.attr("href")
+                        .removeSuffix("/")
+                        .substringAfterLast(genresUrlDelimiter),
+                    it.text(),
+                )
+            }
+        }
+    }
 
     override fun getFilterList(): FilterList {
+        launchIO { fetchGenres() }
         return FilterList(
-            StatusFilter(getStatusList()),
-            GenreFilter(getGenreList()),
+            StatusFilter(intl["STATUS"], getStatusList()),
+            if (genreList.isEmpty()) {
+                Filter.Header(intl["GENRES_RESET"])
+            } else {
+                GenreFilter(intl["GENRE"], genreList)
+            },
         )
     }
 
-    protected open class UriPartFilter(displayName: String, val vals: Array<Pair<String?, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
-        fun toUriPart() = vals[state].first
+    protected open class UriPartFilter(displayName: String, private val pairs: List<Pair<String?, String>>) :
+        Filter.Select<String>(displayName, pairs.map { it.second }.toTypedArray()) {
+        fun toUriPart() = pairs[state].first
     }
 }
