@@ -24,7 +24,7 @@ import java.util.Locale
 class Mangalek :
     Madara(
         "مانجا ليك",
-        "https://manga-lek.net",
+        "https://lekmanga.net",
         "ar",
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
