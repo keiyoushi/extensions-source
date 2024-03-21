@@ -6,7 +6,7 @@ import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangabat : MangaBox("Mangabat", "https://m.mangabat.com", "en", SimpleDateFormat("MMM dd,yy", Locale.ENGLISH)) {
+class Mangabat : MangaBox("Mangabat", "https://h.mangabat.com", "en", SimpleDateFormat("MMM dd,yy", Locale.ENGLISH)) {
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga-list-all/$page?type=topview", headers)
     override fun popularMangaSelector() = "div.list-story-item"
     override val latestUrlPath = "manga-list-all/"
