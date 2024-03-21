@@ -9,7 +9,7 @@ import java.io.IOException
 
 class ElarcPage : MangaThemesia(
     "Elarc Toon",
-    "https://elarctoon.com",
+    "https://elarctoons.com",
     "en",
 ) {
     override val id = 5482125641807211052
