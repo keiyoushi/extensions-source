@@ -1,0 +1,10 @@
+ext {
+    extName = 'Jeaz Scans'
+    extClass = '.JeazScans'
+    themePkg = 'madara'
+    baseUrl = 'https://jeazscansv1.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
