@@ -4,7 +4,10 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 
-class ManhwaList : MangaThemesia("ManhwaList", "https://manhwalist.com", "id") {
+class KomikNesia : MangaThemesia("KomikNesia", "https://komiknesia.xyz", "id") {
+
+    // ManhwaList -> KomikNesia
+    override val id = 4039555433611432280
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)

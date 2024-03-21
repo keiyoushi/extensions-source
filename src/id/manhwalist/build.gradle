@@ -1,9 +1,9 @@
 ext {
-    extName = 'ManhwaList'
-    extClass = '.ManhwaList'
+    extName = 'KomikNesia'
+    extClass = '.KomikNesia'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://manhwalist.com'
-    overrideVersionCode = 4
+    baseUrl = 'https://komiknesia.xyz'
+    overrideVersionCode = 5
 }
 
 apply from: "$rootDir/common.gradle"
