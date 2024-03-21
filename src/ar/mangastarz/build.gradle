@@ -2,8 +2,8 @@ ext {
     extName = 'Manga Starz'
     extClass = '.MangaStarz'
     themePkg = 'madara'
-    baseUrl = 'https://mangastarz.org'
-    overrideVersionCode = 6
+    baseUrl = 'https://manga-starz.com'
+    overrideVersionCode = 7
 }
 
 apply from: "$rootDir/common.gradle"
