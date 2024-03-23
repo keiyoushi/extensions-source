@@ -21,10 +21,11 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+private const val mangalekUrl = "https://lekmanga.net"
 class Mangalek :
     Madara(
         "مانجا ليك",
-        "https://lekmanga.net",
+        mangalekUrl,
         "ar",
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
@@ -34,7 +35,7 @@ class Mangalek :
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val chapterUrlSuffix = ""
 
-    private val defaultBaseUrl = "https://manga-lek.net"
+    private val defaultBaseUrl = mangalekUrl
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val preferences: SharedPreferences by lazy {
