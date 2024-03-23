@@ -80,14 +80,14 @@ abstract class HeanCms(
         val builder = headersBuilder()
         if (preferences.loginPref && enableLogin) {
             val token = getToken()
-            if (token.isNotBlank()) {
+            if (token != null) {
                 builder.add("Authorization", "Bearer $token")
             }
         }
         builder.build()
     }
 
-    private fun getToken(): String {
+    private fun getToken(): String? {
         val body = HeanCmsLoginPayloadDto(preferences.user, preferences.password)
             .let { json.encodeToString(listOf(it)) }
             .toRequestBody()
@@ -98,13 +98,12 @@ abstract class HeanCms(
 
         val response = client.newCall(POST("$baseUrl/login", loginHeaders, body)).execute()
 
-        if (!response.isSuccessful) return ""
+        if (!response.isSuccessful) return null
 
         val cookies = response.headers("Set-Cookie")
 
         return cookies.firstOrNull { it.startsWith("_r=") }
             ?.substringAfter("_r=")?.substringBefore(";")
-            ?: ""
     }
 
     override fun popularMangaRequest(page: Int): Request {
