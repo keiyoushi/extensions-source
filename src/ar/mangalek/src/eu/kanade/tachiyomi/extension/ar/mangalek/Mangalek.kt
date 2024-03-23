@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.ar.mangalek
 import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -21,11 +21,10 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val mangalekUrl = "https://lekmanga.net"
 class Mangalek :
     Madara(
         "مانجا ليك",
-        mangalekUrl,
+        "https://lekmanga.net",
         "ar",
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
@@ -35,38 +34,46 @@ class Mangalek :
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val chapterUrlSuffix = ""
 
-    private val defaultBaseUrl = mangalekUrl
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override val baseUrl by lazy { getMirrorPref() }
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    companion object {
-        private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
-        private const val BASE_URL_PREF_TITLE = "تعديل الرابط"
-        private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
-        private const val BASE_URL_PREF_SUMMARY = ".للاستخدام المؤقت. تحديث التطبيق سيؤدي الى حذف الإعدادات"
-    }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
+        val mirrorPref = ListPreference(screen.context).apply {
+            key = MIRROR_PREF_KEY
+            title = MIRROR_PREF_TITLE
+            entries = MIRROR_PREF_ENTRY_VALUES
+            entryValues = MIRROR_PREF_ENTRY_VALUES
+            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
+            summary = "%s"
 
-            setOnPreferenceChangeListener { _, _ ->
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = findIndexOfValue(selected)
+                val entry = entryValues[index] as String
+                preferences.edit().putString(MIRROR_PREF_KEY, entry).apply()
                 Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
                 true
             }
         }
-        screen.addPreference(baseUrlPref)
+        screen.addPreference(mirrorPref)
+    }
+    companion object {
+        private const val MIRROR_PREF_KEY = "MIRROR"
+        private const val MIRROR_PREF_TITLE = "تعديل رابط مانجا ليك"
+        internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
+            "https://lekmanga.net",
+            "https://manga-lek.org",
+            "https://like-manga.net",
+            "https://lekmanga.com",
+        )
+        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
+        private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private fun getMirrorPref(): String = preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         POST(

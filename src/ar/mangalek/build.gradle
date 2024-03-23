@@ -3,7 +3,7 @@ ext {
     extClass = '.Mangalek'
     themePkg = 'madara'
     baseUrl = 'https://lekmanga.net'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
 }
 
 apply from: "$rootDir/common.gradle"
