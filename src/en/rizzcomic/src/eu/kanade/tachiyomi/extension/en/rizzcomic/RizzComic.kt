@@ -41,7 +41,7 @@ class RizzComic : MangaThemesiaAlt(
 
     override val versionId = 2
 
-    override val slugRegex = Regex("""^r\d+-""")
+    override val slugRegex = Regex("""^(r\d+-)""")
 
     // don't allow disabling random part setting
     override fun setupPreferenceScreen(screen: PreferenceScreen) { }

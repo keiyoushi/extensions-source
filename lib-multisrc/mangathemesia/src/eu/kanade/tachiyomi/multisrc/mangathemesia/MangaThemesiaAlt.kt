@@ -48,21 +48,22 @@ abstract class MangaThemesiaAlt(
 
     private fun getRandomUrlPref() = preferences.getBoolean(randomUrlPrefKey, true)
 
-    private var randomPartCache = SuspendLazy(::updateRandomPart)
+    private var randomPartCache = SuspendLazy(::getUpdatedRandomPart)
 
-    protected open fun getRandomPart(response: Response): String {
-        return response.asJsoup()
+    protected open fun parseRandomPartFromResponse(response: Response): String {
+        val slug = response.asJsoup()
             .selectFirst(searchMangaSelector())!!
             .select("a").attr("href")
             .removeSuffix("/")
             .substringAfterLast("/")
-            .substringBefore("-")
+
+        return slugRegex.find(slug)?.groupValues?.get(1) ?: ""
     }
 
-    protected suspend fun updateRandomPart() =
+    protected suspend fun getUpdatedRandomPart() =
         client.newCall(GET("$baseUrl$mangaUrlDirectory/", headers))
             .await()
-            .use(::getRandomPart)
+            .use(::parseRandomPartFromResponse)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val mp = super.searchMangaParse(response)
@@ -87,7 +88,7 @@ abstract class MangaThemesiaAlt(
         return this
     }
 
-    protected open val slugRegex = Regex("""^\d+-""")
+    protected open val slugRegex = Regex("""^(\d+-)""")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (!getRandomUrlPref()) return super.mangaDetailsRequest(manga)
@@ -100,7 +101,7 @@ abstract class MangaThemesiaAlt(
 
         val randomPart = randomPartCache.blockingGet()
 
-        return GET("$baseUrl$mangaUrlDirectory/$randomPart-$slug/", headers)
+        return GET("$baseUrl$mangaUrlDirectory/$randomPart$slug/", headers)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -113,7 +114,7 @@ abstract class MangaThemesiaAlt(
             .replaceFirst(slugRegex, "")
 
         // we don't want to make network calls when user simply opens the entry
-        val randomPart = randomPartCache.peek()?.let { "$it-" } ?: ""
+        val randomPart = randomPartCache.peek() ?: ""
 
         return "$baseUrl$mangaUrlDirectory/$randomPart$slug/"
     }
