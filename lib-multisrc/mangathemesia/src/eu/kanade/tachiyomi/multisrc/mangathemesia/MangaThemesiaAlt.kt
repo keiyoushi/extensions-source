@@ -44,6 +44,15 @@ abstract class MangaThemesiaAlt(
                 "and migrating all manga to the same source"
             setDefaultValue(true)
         }.also(screen::addPreference)
+
+        // TODO remove
+        SwitchPreferenceCompat(screen.context).apply {
+            title = "remove cache"
+            setOnPreferenceChangeListener { _, _ ->
+                preferences.edit().remove("__random_part_cache").commit()
+                false
+            }
+        }.also(screen::addPreference)
     }
 
     private fun getRandomUrlPref() = preferences.getBoolean(randomUrlPrefKey, true)
@@ -81,8 +90,12 @@ abstract class MangaThemesiaAlt(
         if (!getRandomUrlPref()) return mp
 
         // extract random part during browsing to avoid extra call
-        mp.mangas.firstOrNull { it.url.matches(slugRegex) }?.run {
-            randomPartCache.set(getRandomPartFromUrl(url))
+        mp.mangas.firstOrNull()?.run {
+            val randomPart = getRandomPartFromUrl(url)
+
+            if (randomPart.isNotEmpty()) {
+                randomPartCache.set(randomPart)
+            }
         }
 
         val mangas = mp.mangas.toPermanentMangaUrls()
