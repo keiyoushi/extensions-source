@@ -13,6 +13,8 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
@@ -44,15 +46,6 @@ abstract class MangaThemesiaAlt(
                 "and migrating all manga to the same source"
             setDefaultValue(true)
         }.also(screen::addPreference)
-
-        // TODO remove
-        SwitchPreferenceCompat(screen.context).apply {
-            title = "remove cache"
-            setOnPreferenceChangeListener { _, _ ->
-                preferences.edit().remove("__random_part_cache").commit()
-                false
-            }
-        }.also(screen::addPreference)
     }
 
     private fun getRandomUrlPref() = preferences.getBoolean(randomUrlPrefKey, true)
@@ -63,6 +56,22 @@ abstract class MangaThemesiaAlt(
     private var SharedPreferences.randomPartCache: String
         get() = getString("__random_part_cache", "")!!
         set(newValue) = edit().putString("__random_part_cache", newValue).apply()
+
+    // some new titles don't have random part
+    // se we save their slug and when they
+    // finally add it, we remove the slug in the interceptor
+    private var SharedPreferences.titlesWithoutRandomPart: MutableSet<String>
+        get() {
+            val value = getString("titles_without_random_part", null)
+                ?: return mutableSetOf()
+
+            return json.decodeFromString(value)
+        }
+        set(newValue) {
+            val encodedValue = json.encodeToString(newValue)
+
+            edit().putString("titles_without_random_part", encodedValue).apply()
+        }
 
     protected open fun getRandomPartFromUrl(url: String): String {
         val slug = url
@@ -79,7 +88,7 @@ abstract class MangaThemesiaAlt(
             .let(::getRandomPartFromUrl)
     }
 
-    protected suspend fun getUpdatedRandomPart() =
+    protected suspend fun getUpdatedRandomPart(): String =
         client.newCall(GET("$baseUrl$mangaUrlDirectory/", headers))
             .await()
             .use(::getRandomPartFromResponse)
@@ -104,19 +113,70 @@ abstract class MangaThemesiaAlt(
     }
 
     protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> {
+        // some absolutely new titles don't have the random part yet
+        // save them so we know where to not apply it
+        val foundTitlesWithoutRandomPart = mutableSetOf<String>()
+
         for (i in indices) {
-            val permaSlug = this[i].url
+            val slug = this[i].url
                 .removeSuffix("/")
                 .substringAfterLast("/")
+
+            if (slugRegex.find(slug)?.groupValues?.get(1) == null) {
+                foundTitlesWithoutRandomPart.add(slug)
+            }
+
+            val permaSlug = slug
                 .replaceFirst(slugRegex, "")
 
             this[i].url = "$mangaUrlDirectory/$permaSlug/"
+        }
+
+        if (foundTitlesWithoutRandomPart.isNotEmpty()) {
+            foundTitlesWithoutRandomPart.addAll(preferences.titlesWithoutRandomPart)
+
+            preferences.titlesWithoutRandomPart = foundTitlesWithoutRandomPart
         }
 
         return this
     }
 
     protected open val slugRegex = Regex("""^(\d+-)""")
+
+    override val client = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+
+            if (request.url.fragment != "titlesWithoutRandomPart") {
+                return@addInterceptor response
+            }
+
+            if (!response.isSuccessful && response.code == 404) {
+                response.close()
+
+                val slug = request.url.toString()
+                    .substringBefore("#")
+                    .removeSuffix("/")
+                    .substringAfterLast("/")
+
+                preferences.titlesWithoutRandomPart.run {
+                    remove(slug)
+
+                    preferences.titlesWithoutRandomPart = this
+                }
+
+                val randomPart = randomPartCache.blockingGet()
+                val newRequest = request.newBuilder()
+                    .url("$baseUrl$mangaUrlDirectory/$randomPart$slug/")
+                    .build()
+
+                return@addInterceptor chain.proceed(newRequest)
+            }
+
+            return@addInterceptor response
+        }
+        .build()
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (!getRandomUrlPref()) return super.mangaDetailsRequest(manga)
@@ -126,6 +186,10 @@ abstract class MangaThemesiaAlt(
             .removeSuffix("/")
             .substringAfterLast("/")
             .replaceFirst(slugRegex, "")
+
+        if (preferences.titlesWithoutRandomPart.contains(slug)) {
+            return GET("$baseUrl${manga.url}#titlesWithoutRandomPart")
+        }
 
         val randomPart = randomPartCache.blockingGet()
 
@@ -140,6 +204,10 @@ abstract class MangaThemesiaAlt(
             .removeSuffix("/")
             .substringAfterLast("/")
             .replaceFirst(slugRegex, "")
+
+        if (preferences.titlesWithoutRandomPart.contains(slug)) {
+            return "$baseUrl${manga.url}"
+        }
 
         val randomPart = randomPartCache.peek() ?: preferences.randomPartCache
 
