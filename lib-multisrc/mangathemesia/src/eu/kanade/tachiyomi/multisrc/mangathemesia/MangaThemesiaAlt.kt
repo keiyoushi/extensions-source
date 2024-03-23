@@ -39,9 +39,8 @@ abstract class MangaThemesiaAlt(
             key = randomUrlPrefKey
             title = "Automatically update dynamic URLs"
             summary = "Automatically update random numbers in manga URLs.\n" +
-                "Helps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\n\n" +
-                "example: https://example.com/manga/12345-cool-manga -> https://example.com/manga/4567-cool-manga\n\n" +
-                "Note: This setting may require clearing database in advanced settings\n" +
+                "Helps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\n" +
+                "Note: This setting may require clearing database in advanced settings " +
                 "and migrating all manga to the same source"
             setDefaultValue(true)
         }.also(screen::addPreference)
