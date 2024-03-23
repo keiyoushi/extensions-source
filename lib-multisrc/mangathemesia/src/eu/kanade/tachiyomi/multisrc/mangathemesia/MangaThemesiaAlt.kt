@@ -50,25 +50,35 @@ abstract class MangaThemesiaAlt(
 
     private var randomPartCache = SuspendLazy(::getUpdatedRandomPart)
 
-    protected open fun parseRandomPartFromResponse(response: Response): String {
-        val slug = response.asJsoup()
-            .selectFirst(searchMangaSelector())!!
-            .select("a").attr("href")
+    protected open fun getRandomPartFromUrl(url: String): String {
+        val slug = url
             .removeSuffix("/")
             .substringAfterLast("/")
 
         return slugRegex.find(slug)?.groupValues?.get(1) ?: ""
     }
 
+    protected open fun getRandomPartFromResponse(response: Response): String {
+        return response.asJsoup()
+            .selectFirst(searchMangaSelector())!!
+            .select("a").attr("href")
+            .let(::getRandomPartFromUrl)
+    }
+
     protected suspend fun getUpdatedRandomPart() =
         client.newCall(GET("$baseUrl$mangaUrlDirectory/", headers))
             .await()
-            .use(::parseRandomPartFromResponse)
+            .use(::getRandomPartFromResponse)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val mp = super.searchMangaParse(response)
 
         if (!getRandomUrlPref()) return mp
+
+        // extract random part during browsing to avoid extra call
+        mp.mangas.firstOrNull { it.url.matches(slugRegex) }?.run {
+            randomPartCache.set(getRandomPartFromUrl(url))
+        }
 
         val mangas = mp.mangas.toPermanentMangaUrls()
 
@@ -144,12 +154,14 @@ internal class SuspendLazy<T : Any>(
             cachedValue?.get()?.let {
                 return it
             }
-            val result = initializer()
-            cachedValue = SoftReference(result)
-            fetchTime = System.currentTimeMillis()
 
-            result
+            initializer().also { set(it) }
         }
+    }
+
+    fun set(newVal: T) {
+        cachedValue = SoftReference(newVal)
+        fetchTime = System.currentTimeMillis()
     }
 
     fun peek(): T? {
