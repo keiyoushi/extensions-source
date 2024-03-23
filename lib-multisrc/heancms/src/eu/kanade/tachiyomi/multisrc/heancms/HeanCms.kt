@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.multisrc.heancms
 
 import android.app.Application
 import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,11 +16,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -42,6 +46,8 @@ abstract class HeanCms(
     override val client: OkHttpClient = network.cloudflareClient
 
     protected open val useNewChapterEndpoint = false
+
+    protected open val enableLogin = false
 
     /**
      * Custom Json instance to make usage of `encodeDefaults`,
@@ -69,6 +75,37 @@ abstract class HeanCms(
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
+
+    private val authHeaders: Headers by lazy {
+        val builder = headersBuilder()
+        if (preferences.loginPref && enableLogin) {
+            val token = getToken()
+            if (token.isNotBlank()) {
+                builder.add("Authorization", "Bearer $token")
+            }
+        }
+        builder.build()
+    }
+
+    private fun getToken(): String {
+        val body = HeanCmsLoginPayloadDto(preferences.user, preferences.password)
+            .let { json.encodeToString(listOf(it)) }
+            .toRequestBody()
+
+        val loginHeaders = headersBuilder()
+            .add("Next-Action", "cecce9cf69dc6eb35c5b01f633f6b1032d38c61b")
+            .build()
+
+        val response = client.newCall(POST("$baseUrl/login", loginHeaders, body)).execute()
+
+        if (!response.isSuccessful) return ""
+
+        val cookies = response.headers("Set-Cookie")
+
+        return cookies.firstOrNull { it.startsWith("_r=") }
+            ?.substringAfter("_r=")?.substringBefore(";")
+            ?: ""
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/query".toHttpUrl().newBuilder()
@@ -277,12 +314,14 @@ abstract class HeanCms(
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast("#")
 
     override fun pageListRequest(chapter: SChapter) =
-        GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), headers)
+        GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), authHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<HeanCmsPagePayloadDto>()
 
-        if (result.isPaywalled()) throw Exception(intl["paid_chapter_error"])
+        if (result.isPaywalled() && result.chapter.chapterData == null) {
+            throw Exception(intl["paid_chapter_error"])
+        }
 
         return if (useNewChapterEndpoint) {
             result.chapter.chapterData?.images.orEmpty().mapIndexed { i, img ->
@@ -300,7 +339,7 @@ abstract class HeanCms(
     override fun imageUrlParse(response: Response): String = ""
 
     override fun imageRequest(page: Page): Request {
-        val imageHeaders = headersBuilder()
+        val imageHeaders = authHeaders.newBuilder()
             .add("Accept", ACCEPT_IMAGE)
             .build()
 
@@ -343,6 +382,27 @@ abstract class HeanCms(
             summaryOff = intl["pref_show_paid_chapter_summary_off"]
             setDefaultValue(SHOW_PAID_CHAPTERS_DEFAULT)
         }.also(screen::addPreference)
+
+        if (enableLogin) {
+            SwitchPreferenceCompat(screen.context).apply {
+                key = LOGIN_PREF
+                title = intl["pref_login_title"]
+                summary = intl["pref_login_summary"]
+                setDefaultValue(LOGIN_PREF_DEFAULT)
+            }.also(screen::addPreference)
+
+            EditTextPreference(screen.context).apply {
+                key = USER_PREF
+                title = intl["pref_username_title"]
+                setDefaultValue("")
+            }.also(screen::addPreference)
+
+            EditTextPreference(screen.context).apply {
+                key = PASSWORD_PREF
+                title = intl["pref_password_title"]
+                setDefaultValue("")
+            }.also(screen::addPreference)
+        }
     }
 
     protected inline fun <reified T> Response.parseAs(): T = use {
@@ -357,6 +417,15 @@ abstract class HeanCms(
     private val SharedPreferences.showPaidChapters: Boolean
         get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)
 
+    private val SharedPreferences.loginPref: Boolean
+        get() = getBoolean(LOGIN_PREF, LOGIN_PREF_DEFAULT)
+
+    private val SharedPreferences.user: String
+        get() = getString(USER_PREF, "") ?: ""
+
+    private val SharedPreferences.password: String
+        get() = getString(PASSWORD_PREF, "") ?: ""
+
     companion object {
         private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
@@ -367,5 +436,10 @@ abstract class HeanCms(
 
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
+
+        private const val LOGIN_PREF = "pref_login"
+        private const val LOGIN_PREF_DEFAULT = false
+        private const val USER_PREF = "pref_user"
+        private const val PASSWORD_PREF = "pref_password"
     }
 }

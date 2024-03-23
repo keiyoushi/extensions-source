@@ -8,6 +8,12 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 
 @Serializable
+class HeanCmsLoginPayloadDto(
+    val email: String,
+    val password: String,
+)
+
+@Serializable
 class HeanCmsQuerySearchDto(
     val data: List<HeanCmsSeriesDto> = emptyList(),
     val meta: HeanCmsQuerySearchMetaDto? = null,
