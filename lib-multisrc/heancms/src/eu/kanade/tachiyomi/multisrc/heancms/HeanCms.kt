@@ -339,7 +339,7 @@ abstract class HeanCms(
     override fun imageUrlParse(response: Response): String = ""
 
     override fun imageRequest(page: Page): Request {
-        val imageHeaders = authHeaders.newBuilder()
+        val imageHeaders = headersBuilder()
             .add("Accept", ACCEPT_IMAGE)
             .build()
 
