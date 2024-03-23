@@ -26,6 +26,8 @@ class Manhastro : Madara(
 
     override val mangaDetailsSelectorTitle = "div.summary_content h2"
 
+    override val mangaDetailsSelectorStatus = "div.post-status .post-content_item:nth-child(2) > .summary-content"
+
     override fun pageListParse(document: Document): List<Page> {
         return document.selectFirst("script:containsData(imageLinks)")?.data()
             ?.let { imageLinksPattern.find(it)?.groups?.get(1)?.value }
