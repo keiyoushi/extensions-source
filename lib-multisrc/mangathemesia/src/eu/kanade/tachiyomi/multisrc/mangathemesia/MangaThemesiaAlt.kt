@@ -48,7 +48,12 @@ abstract class MangaThemesiaAlt(
 
     private fun getRandomUrlPref() = preferences.getBoolean(randomUrlPrefKey, true)
 
-    private var randomPartCache = SuspendLazy(::getUpdatedRandomPart)
+    private var randomPartCache = SuspendLazy(::getUpdatedRandomPart) { preferences.randomPartCache = it }
+
+    // cache in preference for webview urls
+    private var SharedPreferences.randomPartCache: String
+        get() = getString("__random_part_cache", "")!!
+        set(newValue) = edit().putString("__random_part_cache", newValue).apply()
 
     protected open fun getRandomPartFromUrl(url: String): String {
         val slug = url
@@ -123,8 +128,7 @@ abstract class MangaThemesiaAlt(
             .substringAfterLast("/")
             .replaceFirst(slugRegex, "")
 
-        // we don't want to make network calls when user simply opens the entry
-        val randomPart = randomPartCache.peek() ?: ""
+        val randomPart = randomPartCache.peek() ?: preferences.randomPartCache
 
         return "$baseUrl$mangaUrlDirectory/$randomPart$slug/"
     }
@@ -132,15 +136,16 @@ abstract class MangaThemesiaAlt(
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 }
 
-internal class SuspendLazy<T : Any>(
-    private val initializer: suspend () -> T,
+internal class SuspendLazy(
+    private val initializer: suspend () -> String,
+    private val saveCache: (String) -> Unit,
 ) {
 
     private val mutex = Mutex()
-    private var cachedValue: SoftReference<T>? = null
+    private var cachedValue: SoftReference<String>? = null
     private var fetchTime = 0L
 
-    suspend fun get(): T {
+    suspend fun get(): String {
         if (fetchTime + 3600000 < System.currentTimeMillis()) {
             // reset cache
             cachedValue = null
@@ -159,16 +164,18 @@ internal class SuspendLazy<T : Any>(
         }
     }
 
-    fun set(newVal: T) {
+    fun set(newVal: String) {
         cachedValue = SoftReference(newVal)
         fetchTime = System.currentTimeMillis()
+
+        saveCache(newVal)
     }
 
-    fun peek(): T? {
+    fun peek(): String? {
         return cachedValue?.get()
     }
 
-    fun blockingGet(): T {
+    fun blockingGet(): String {
         return runBlocking { get() }
     }
 }
