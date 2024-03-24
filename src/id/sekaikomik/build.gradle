@@ -2,8 +2,8 @@ ext {
     extName = 'Sekaikomik'
     extClass = '.Sekaikomik'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://sekaikomik.bio'
-    overrideVersionCode = 11
+    baseUrl = 'https://sekaikomik.guru'
+    overrideVersionCode = 12
     isNsfw = true
 }
 
