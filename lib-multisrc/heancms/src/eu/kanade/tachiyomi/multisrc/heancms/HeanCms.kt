@@ -78,7 +78,7 @@ abstract class HeanCms(
 
     private fun authHeaders(): Headers {
         val builder = headersBuilder()
-        if (preferences.loginPref && enableLogin) {
+        if (enableLogin && preferences.user.isNotEmpty() && preferences.password.isNotEmpty()) {
             val tokenData = preferences.tokenData
             val token = if (tokenData.isExpired(tokenExpiredAtDateFormat)) {
                 getToken()
@@ -386,23 +386,28 @@ abstract class HeanCms(
         }.also(screen::addPreference)
 
         if (enableLogin) {
-            SwitchPreferenceCompat(screen.context).apply {
-                key = LOGIN_PREF
-                title = intl["pref_login_title"]
-                summary = intl["pref_login_summary"]
-                setDefaultValue(LOGIN_PREF_DEFAULT)
-            }.also(screen::addPreference)
-
             EditTextPreference(screen.context).apply {
                 key = USER_PREF
                 title = intl["pref_username_title"]
+                summary = intl["pref_credentials_summary"]
                 setDefaultValue("")
+
+                setOnPreferenceChangeListener { _, _ ->
+                    preferences.tokenData = HeanCmsTokenPayloadDto()
+                    true
+                }
             }.also(screen::addPreference)
 
             EditTextPreference(screen.context).apply {
                 key = PASSWORD_PREF
                 title = intl["pref_password_title"]
+                summary = intl["pref_credentials_summary"]
                 setDefaultValue("")
+
+                setOnPreferenceChangeListener { _, _ ->
+                    preferences.tokenData = HeanCmsTokenPayloadDto()
+                    true
+                }
             }.also(screen::addPreference)
         }
     }
@@ -418,9 +423,6 @@ abstract class HeanCms(
 
     private val SharedPreferences.showPaidChapters: Boolean
         get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)
-
-    private val SharedPreferences.loginPref: Boolean
-        get() = getBoolean(LOGIN_PREF, LOGIN_PREF_DEFAULT)
 
     private val SharedPreferences.user: String
         get() = getString(USER_PREF, "") ?: ""
@@ -448,8 +450,6 @@ abstract class HeanCms(
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
 
-        private const val LOGIN_PREF = "pref_login"
-        private const val LOGIN_PREF_DEFAULT = false
         private const val USER_PREF = "pref_user"
         private const val PASSWORD_PREF = "pref_password"
 
