@@ -15,7 +15,7 @@ class HeanCmsTokenPayloadDto(
     fun isExpired(dateFormat: SimpleDateFormat): Boolean {
         val expiredTime = try {
             // Reduce one day to prevent timezone issues
-            expiresAt?.let { dateFormat.parse(it)?.time?.minus((1000 * 60 * 60 * 24)) } ?: 0L
+            expiresAt?.let { dateFormat.parse(it)?.time?.minus(1000 * 60 * 60 * 24) } ?: 0L
         } catch (_: Exception) {
             0L
         }
