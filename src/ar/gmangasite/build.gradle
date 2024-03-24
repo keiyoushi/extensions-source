@@ -1,0 +1,9 @@
+ext {
+    extName = 'GMANGA (unoriginal)'
+    extClass = '.GmangaSite'
+    themePkg = 'madara'
+    baseUrl = 'https://gmanga.site'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
