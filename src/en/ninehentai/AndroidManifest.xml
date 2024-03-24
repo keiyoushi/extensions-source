@@ -14,7 +14,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="9hentai.to"
+                    android:host="9hentai.com"
                     android:pathPattern="/g/..*"
                     android:scheme="https" />
             </intent-filter>
