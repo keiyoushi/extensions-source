@@ -28,7 +28,7 @@ class Manhuagold : MangaReader() {
 
     override val lang = "en"
 
-    override val baseUrl = "https://manhuagold.com"
+    override val baseUrl = "https://manhuagold.top"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
