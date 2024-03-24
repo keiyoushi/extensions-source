@@ -48,19 +48,19 @@ data class ChapterPageDto(
     val totalPage: Int = 0,
     @SerialName("data") val chapters: List<ChapterDto> = emptyList(),
 ) {
-    fun toModel(): List<SChapter> =
+    fun toModel(langOption: LanguageOption): List<SChapter> =
         chapters.map { chapter ->
             SChapter.create().apply {
                 name = chapter.name
                 date_upload = chapter.date.toDate()
-                url = chapter.toChapterUrl()
+                url = "/${langOption.infix}${chapter.toChapterUrl(langOption.chpPrefix)}"
             }
         }
 
     private fun String.toDate(): Long =
         try { UnionMangas.dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
 
-    private fun ChapterDto.toChapterUrl() = "/${this.slugManga}/${this.id}"
+    private fun ChapterDto.toChapterUrl(prefix: String) = "/${this.slugManga}/$prefix-${this.id}"
 }
 
 @Serializable
@@ -68,11 +68,9 @@ data class ChapterDto(
     val date: String,
     val slug: String,
     @SerialName("idDoc") val slugManga: String,
-    @SerialName("idDetail") private val _id: String,
+    @SerialName("idDetail") val id: String,
     @SerialName("nameChapter") val name: String,
-) {
-    val id get() = "cap-$_id"
-}
+)
 
 @Serializable
 data class QueryDto(
@@ -87,6 +85,7 @@ data class PageProps(
     @SerialName("data_lastuppdate") val latestUpdateDto: PageableMangaListDto?,
     @SerialName("data_popular") val popularMangaDto: List<PopularMangaDto>?,
     @SerialName("dataManga") val mangaDetailsDto: MangaDetailsDto?,
+    @SerialName("data") val pageListData: String?,
 )
 
 @Serializable
@@ -141,6 +140,18 @@ data class MangaDetailsDto(
     data class Prop(
         val name: String,
     )
+}
+
+@Serializable
+data class PageDataDto(
+    @SerialName("dataManga") val data: PageDto,
+)
+
+@Serializable
+data class PageDto(
+    @SerialName("source") private val imgData: String,
+) {
+    fun getImages(delimiter: String): List<String> = imgData.split(delimiter)
 }
 
 private fun mangaUrlParse(slug: String, pathSegment: String) = "/$pathSegment/$slug"
