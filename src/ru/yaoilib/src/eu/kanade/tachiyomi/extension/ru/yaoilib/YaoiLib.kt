@@ -12,7 +12,7 @@ import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class YaoiLib : LibGroup("YaoiLib", "https://v1.slashlib.me", "ru") {
+class YaoiLib : LibGroup("YaoiLib", "https://v2.slashlib.me", "ru") {
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -192,6 +192,6 @@ class YaoiLib : LibGroup("YaoiLib", "https://v1.slashlib.me", "ru") {
         const val PREFIX_SLUG_SEARCH = "slug:"
 
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://v1.slashlib.me"
+        private const val DOMAIN_DEFAULT = "https://v2.slashlib.me"
     }
 }
