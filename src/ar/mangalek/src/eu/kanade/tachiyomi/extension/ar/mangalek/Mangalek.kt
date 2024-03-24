@@ -21,10 +21,21 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+private const val MIRROR_PREF_KEY = "MIRROR"
+private const val MIRROR_PREF_TITLE = "تعديل رابط مانجا ليك"
+internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
+    "https://lekmanga.net",
+    "https://manga-lek.org",
+    "https://like-manga.net",
+    "https://lekmanga.com",
+)
+private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
+private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
+
 class Mangalek :
     Madara(
         "مانجا ليك",
-        "https://lekmanga.net",
+        MIRROR_PREF_DEFAULT_VALUE,
         "ar",
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
@@ -49,28 +60,12 @@ class Mangalek :
             setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
             summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(MIRROR_PREF_KEY, entry).apply()
+            setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
                 true
             }
         }
         screen.addPreference(mirrorPref)
-    }
-    companion object {
-        private const val MIRROR_PREF_KEY = "MIRROR"
-        private const val MIRROR_PREF_TITLE = "تعديل رابط مانجا ليك"
-        internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
-            "https://lekmanga.net",
-            "https://manga-lek.org",
-            "https://like-manga.net",
-            "https://lekmanga.com",
-        )
-        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
-        private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
     }
 
     private fun getMirrorPref(): String = preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
