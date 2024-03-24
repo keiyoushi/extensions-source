@@ -29,7 +29,6 @@ import java.util.TimeZone
 class UnionMangas(
     private val langOption: LanguageOption,
 ) : ParsedHttpSource() {
-
     override val lang = langOption.lang
 
     override val name: String = "Union Mangas"
@@ -40,8 +39,6 @@ class UnionMangas(
 
     private val json: Json by injectLazy()
 
-    private fun authorization(payload: String): String = payload.md5()
-
     private fun apiHeaders(url: String): Headers {
         val date = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
             .apply { timeZone = TimeZone.getTimeZone("GMT") }
@@ -49,8 +46,8 @@ class UnionMangas(
         val path = url.toUrlWithoutDomain()
 
         return headersBuilder()
-            .add("_hash", authorization(apiSeed + domain + date))
-            .add("_tranId", authorization(apiSeed + domain + date + path))
+            .add("_hash", authorization(apiSeed, domain, date))
+            .add("_tranId", authorization(apiSeed, domain, date, path))
             .add("_date", date)
             .add("_domain", domain)
             .add("_path", path)
@@ -60,16 +57,6 @@ class UnionMangas(
             .build()
     }
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
-
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapters = mutableListOf<SChapter>()
         var currentPage = 0
@@ -78,7 +65,7 @@ class UnionMangas(
             chapters += chaptersDto.toModel(langOption)
             currentPage++
         } while (chaptersDto.hasNextPage())
-        return Observable.from(listOf(chapters))
+        return Observable.from(listOf(chapters.reversed()))
     }
 
     private fun fetchChapterListPageable(manga: SManga, page: Int): ChapterPageDto {
@@ -98,21 +85,11 @@ class UnionMangas(
             ChapterPageDto()
         }
     }
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    private fun String.md5(): String {
-        val md = MessageDigest.getInstance("MD5")
-        val bytes = trim().toByteArray()
-        val digest = md.digest(bytes)
-        return digest
-            .fold("") { str, byte -> str + "%02x".format(byte) }
-            .padStart(32, '0')
-    }
+    override fun chapterListSelector() = ""
 
-    override fun chapterListSelector(): String = ""
-
-    override fun imageUrlParse(document: Document): String {
-        TODO("Not yet implemented")
-    }
+    override fun imageUrlParse(document: Document) = ""
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.htmlDocumentToDto()
@@ -121,6 +98,8 @@ class UnionMangas(
             hasNextPage = dto.hasNextPageToLatestUpdates(),
         )
     }
+
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun latestUpdatesNextPageSelector() = "#next-prev a:nth-child(2):not(.line-through)"
 
@@ -136,6 +115,8 @@ class UnionMangas(
     override fun mangaDetailsParse(response: Response) =
         response.htmlDocumentToDto().toMangaDetailsModel()
 
+    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
+
     override fun pageListParse(document: Document): List<Page> {
         val pageListData = document.htmlDocumentToDto().props.pageProps.pageListData
         val decodedData = CryptoAES.decrypt(pageListData!!, "ABC@123#245")
@@ -144,6 +125,8 @@ class UnionMangas(
             Page(index, imageUrl = imageUrl)
         }
     }
+
+    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.htmlDocumentToDto()
@@ -159,7 +142,9 @@ class UnionMangas(
 
     override fun popularMangaSelector() = "main > div.pt-1 > a"
 
-    override fun searchMangaNextPageSelector(): String? = null
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+
+    override fun searchMangaNextPageSelector() = ""
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val maxResult = 6
@@ -182,7 +167,7 @@ class UnionMangas(
         )
     }
 
-    override fun searchMangaSelector(): String = ""
+    override fun searchMangaSelector() = ""
 
     private fun Response.htmlDocumentToDto(): UnionMangasDto {
         val jsonContent = asJsoup().selectFirst("script#__NEXT_DATA__")!!.html()
@@ -203,6 +188,15 @@ class UnionMangas(
     private fun SManga.slug() = this.url.split("/").last()
 
     private fun String.toUrlWithoutDomain() = trim().replace(apiUrl, "")
+
+    private fun authorization(vararg payloads: String): String {
+        val md = MessageDigest.getInstance("MD5")
+        val bytes = payloads.joinToString("").toByteArray()
+        val digest = md.digest(bytes)
+        return digest
+            .fold("") { str, byte -> str + "%02x".format(byte) }
+            .padStart(32, '0')
+    }
 
     companion object {
         val apiUrl = "https://api.unionmanga.xyz"
