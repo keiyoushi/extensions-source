@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.unionmangas
 import android.util.Log
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -57,6 +58,15 @@ class UnionMangas(
             .build()
     }
 
+    private fun authorization(vararg payloads: String): String {
+        val md = MessageDigest.getInstance("MD5")
+        val bytes = payloads.joinToString("").toByteArray()
+        val digest = md.digest(bytes)
+        return digest
+            .fold("") { str, byte -> str + "%02x".format(byte) }
+            .padStart(32, '0')
+    }
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapters = mutableListOf<SChapter>()
         var currentPage = 0
@@ -85,6 +95,7 @@ class UnionMangas(
             ChapterPageDto()
         }
     }
+
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun chapterListSelector() = ""
@@ -159,6 +170,20 @@ class UnionMangas(
         return GET(url, apiHeaders(url.toString()))
     }
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(slugPrefix)) {
+            val mangaUrl = query.substringAfter(slugPrefix)
+            return client.newCall(GET("$baseUrl/${langOption.infix}/$mangaUrl", headers))
+                .asObservableSuccess().map { response ->
+                    val manga = mangaDetailsParse(response).apply {
+                        url = mangaUrl
+                    }
+                    MangasPage(listOf(manga), false)
+                }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaParse(response: Response): MangasPage {
         val mangasDto = response.toMangaPageDto()
         return MangasPage(
@@ -189,20 +214,12 @@ class UnionMangas(
 
     private fun String.toUrlWithoutDomain() = trim().replace(apiUrl, "")
 
-    private fun authorization(vararg payloads: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        val bytes = payloads.joinToString("").toByteArray()
-        val digest = md.digest(bytes)
-        return digest
-            .fold("") { str, byte -> str + "%02x".format(byte) }
-            .padStart(32, '0')
-    }
-
     companion object {
         val apiUrl = "https://api.unionmanga.xyz"
         val apiSeed = "8e0550790c94d6abc71d738959a88d209690dc86"
         val domain = "yaoi-chan.xyz"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val slugPrefix = "slug:"
     }
 }
 

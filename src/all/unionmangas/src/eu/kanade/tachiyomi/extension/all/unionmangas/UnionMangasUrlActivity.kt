@@ -15,22 +15,14 @@ class UnionMangasUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
 
         if (host != null && pathSegments != null) {
-            val query = null
-
-            if (query == null) {
-                Log.e("UnionMangasUrlActivity", "Unable to parse URI from intent $intent")
-                finish()
-                exitProcess(1)
-            }
-
-            val mainIntent = Intent().apply {
+            val intent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-//                putExtra("query", query)
+                putExtra("query", slug(pathSegments))
                 putExtra("filter", packageName)
             }
 
             try {
-                startActivity(mainIntent)
+                startActivity(intent)
             } catch (e: ActivityNotFoundException) {
                 Log.e("UnionMangasUrlActivity", e.toString())
             }
@@ -39,4 +31,6 @@ class UnionMangasUrlActivity : Activity() {
         finish()
         exitProcess(0)
     }
+
+    private fun slug(pathSegments: List<String>) = "${UnionMangas.slugPrefix}${pathSegments.last()}"
 }
