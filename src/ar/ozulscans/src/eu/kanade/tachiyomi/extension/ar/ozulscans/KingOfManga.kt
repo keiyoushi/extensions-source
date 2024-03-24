@@ -6,7 +6,7 @@ import java.util.Locale
 
 class KingOfManga : MangaThemesiaAlt(
     "King Of Manga",
-    "https://kingofmanga.com",
+    "https://king-ofmanga.com",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
