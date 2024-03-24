@@ -1,0 +1,10 @@
+ext {
+    extName = 'Ler Mangas'
+    extClass = '.LerMangas'
+    themePkg = 'madara'
+    baseUrl = 'https://lermangas.me'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
