@@ -156,7 +156,7 @@ class HeanCmsPageDataDto(
 )
 
 private fun String.toAbsoluteThumbnailUrl(apiUrl: String, coverPath: String): String {
-    return if (startsWith("https://")) this else "$apiUrl/$coverPath$this"
+    return if (startsWith("https://") || startsWith("http://")) this else "$apiUrl/$coverPath$this"
 }
 
 fun String.toStatus(): Int = when (this) {

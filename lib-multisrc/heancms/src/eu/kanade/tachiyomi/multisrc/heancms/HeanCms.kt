@@ -332,13 +332,17 @@ abstract class HeanCms(
 
         return if (useNewChapterEndpoint) {
             result.chapter.chapterData?.images.orEmpty().mapIndexed { i, img ->
-                Page(i, imageUrl = img)
+                Page(i, imageUrl = img.toAbsoluteUrl())
             }
         } else {
             result.data.orEmpty().mapIndexed { i, img ->
-                Page(i, imageUrl = img)
+                Page(i, imageUrl = img.toAbsoluteUrl())
             }
         }
+    }
+
+    private fun String.toAbsoluteUrl(): String {
+        return if (startsWith("https://") || startsWith("http://")) this else "$apiUrl/$this"
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
