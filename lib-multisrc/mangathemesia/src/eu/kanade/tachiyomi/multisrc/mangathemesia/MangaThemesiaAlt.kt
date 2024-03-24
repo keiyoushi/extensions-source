@@ -39,11 +39,8 @@ abstract class MangaThemesiaAlt(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = randomUrlPrefKey
-            title = "Automatically update dynamic URLs"
-            summary = "Automatically update random numbers in manga URLs.\n" +
-                "Helps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\n" +
-                "Note: This setting may require clearing database in advanced settings " +
-                "and migrating all manga to the same source"
+            title = intl["pref_dynamic_url_title"]
+            summary = intl["pref_dynamic_url_summary"]
             setDefaultValue(true)
         }.also(screen::addPreference)
     }
