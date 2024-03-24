@@ -8,7 +8,7 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 /**
- * Springboard that accepts https://9hentai.to/g/xxxxxx intents and redirects them to
+ * Springboard that accepts https://9hentai.com/g/xxxxxx intents and redirects them to
  * the main Tachiyomi process.
  */
 class NineHentaiUrlActivity : Activity() {

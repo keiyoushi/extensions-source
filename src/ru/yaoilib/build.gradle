@@ -2,8 +2,8 @@ ext {
     extName = 'YaoiLib'
     extClass = '.YaoiLib'
     themePkg = 'libgroup'
-    baseUrl = 'https://v1.slashlib.me'
-    overrideVersionCode = 2
+    baseUrl = 'https://v2.slashlib.me'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
