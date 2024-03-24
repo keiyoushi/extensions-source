@@ -33,21 +33,7 @@ class NetTruyen : WPComics(
 
     // Advanced search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val advancedGenreFilter = filters.filterIsInstance<AdvancedGenreFilter>().firstOrNull()
-        val advancedStatusFilter = filters.filterIsInstance<AdvancedStatusFilter>().firstOrNull()
-        val chaptersNumFilter = filters.filterIsInstance<ChaptersNumFilter>().firstOrNull()
-        val genderFilter = filters.filterIsInstance<GenderFilter>().firstOrNull()
-        val orderFilter = filters.filterIsInstance<OrderFilter>().firstOrNull()
-
-        if (query.isBlank() &&
-            (
-                advancedGenreFilter?.state?.any { it.isIncluded() || it.isExcluded() } == true ||
-                    advancedStatusFilter != null && advancedStatusFilter.state > 0 ||
-                    chaptersNumFilter != null && chaptersNumFilter.state > 0 ||
-                    genderFilter != null && genderFilter.state > 0 ||
-                    orderFilter != null && orderFilter.state > 0
-                )
-        ) {
+        if (query.isBlank()) {
             val url = "$baseUrl/tim-truyen-nang-cao".toHttpUrl().newBuilder()
 
             filters.forEach { filter ->
@@ -167,21 +153,26 @@ class NetTruyen : WPComics(
 
     override fun getFilterList(): FilterList {
         launchIO { fetchAdvancedGenres() }
+        launchIO { fetchGenres() }
         return FilterList(
-            super.getFilterList().list +
-                listOf(
-                    Filter.Separator(),
-                    Filter.Header("Tìm truyện nâng cao\n(Không sử dụng cùng với hộp tìm kiếm)"),
-                    if (advancedGenresList.isEmpty()) {
-                        Filter.Header(intl["GENRES_RESET"])
-                    } else {
-                        AdvancedGenreFilter(intl["GENRE"], advancedGenresList)
-                    },
-                    AdvancedStatusFilter(intl["STATUS"], getAdvancedStatusList()),
-                    ChaptersNumFilter(),
-                    GenderFilter(),
-                    OrderFilter(),
-                ),
+            Filter.Header("Filter cho hộp tìm kiếm"),
+            StatusFilter(intl["STATUS"], getStatusList()),
+            if (genreList.isEmpty()) {
+                Filter.Header(intl["GENRES_RESET"])
+            } else {
+                GenreFilter(intl["GENRE"], genreList)
+            },
+            Filter.Separator(),
+            Filter.Header("Tìm truyện nâng cao\n(Không sử dụng cùng với hộp tìm kiếm)"),
+            if (advancedGenresList.isEmpty()) {
+                Filter.Header(intl["GENRES_RESET"])
+            } else {
+                AdvancedGenreFilter(intl["GENRE"], advancedGenresList)
+            },
+            AdvancedStatusFilter(intl["STATUS"], getAdvancedStatusList()),
+            ChaptersNumFilter(),
+            GenderFilter(),
+            OrderFilter(),
         )
     }
 }
