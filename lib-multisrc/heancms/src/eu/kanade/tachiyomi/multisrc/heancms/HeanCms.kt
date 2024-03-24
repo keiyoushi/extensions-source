@@ -100,7 +100,7 @@ abstract class HeanCms(
 
         val response = client.newCall(POST("$apiUrl/login", headers, body)).execute()
 
-        if (!response.isSuccessful) return null
+        if (!response.isSuccessful) throw Exception(intl["invalid_credentials_error"])
 
         val result = response.parseAs<HeanCmsTokenPayloadDto>()
 
