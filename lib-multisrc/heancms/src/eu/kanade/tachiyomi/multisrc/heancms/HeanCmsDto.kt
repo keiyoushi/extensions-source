@@ -24,6 +24,16 @@ class HeanCmsTokenPayloadDto(
 }
 
 @Serializable
+class HeanCmsErrorsDto(
+    val errors: List<HeanCmsErrorMessageDto>? = emptyList(),
+)
+
+@Serializable
+class HeanCmsErrorMessageDto(
+    val message: String,
+)
+
+@Serializable
 class HeanCmsQuerySearchDto(
     val data: List<HeanCmsSeriesDto> = emptyList(),
     val meta: HeanCmsQuerySearchMetaDto? = null,
