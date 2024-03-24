@@ -8,7 +8,7 @@ import java.util.Locale
 
 class Sekaikomik : MangaThemesia(
     "Sekaikomik",
-    "https://sekaikomik.bio",
+    "https://sekaikomik.guru",
     "id",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
 ) {
