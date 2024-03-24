@@ -18,11 +18,11 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -76,34 +76,37 @@ abstract class HeanCms(
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
-    private val authHeaders: Headers by lazy {
+    private fun authHeaders(): Headers {
         val builder = headersBuilder()
         if (preferences.loginPref && enableLogin) {
-            val token = getToken()
+            val tokenData = preferences.tokenData
+            val token = if (tokenData.isExpired(tokenExpiredAtDateFormat)) {
+                getToken()
+            } else {
+                tokenData.token
+            }
             if (token != null) {
                 builder.add("Authorization", "Bearer $token")
             }
         }
-        builder.build()
+        return builder.build()
     }
 
     private fun getToken(): String? {
-        val body = HeanCmsLoginPayloadDto(preferences.user, preferences.password)
-            .let { json.encodeToString(listOf(it)) }
-            .toRequestBody()
-
-        val loginHeaders = headersBuilder()
-            .add("Next-Action", "cecce9cf69dc6eb35c5b01f633f6b1032d38c61b")
+        val body = FormBody.Builder()
+            .add("email", preferences.user)
+            .add("password", preferences.password)
             .build()
 
-        val response = client.newCall(POST("$baseUrl/login", loginHeaders, body)).execute()
+        val response = client.newCall(POST("$apiUrl/login", headers, body)).execute()
 
         if (!response.isSuccessful) return null
 
-        val cookies = response.headers("Set-Cookie")
+        val result = response.parseAs<HeanCmsTokenPayloadDto>()
 
-        return cookies.firstOrNull { it.startsWith("_r=") }
-            ?.substringAfter("_r=")?.substringBefore(";")
+        preferences.tokenData = result
+
+        return result.token
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -313,7 +316,7 @@ abstract class HeanCms(
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast("#")
 
     override fun pageListRequest(chapter: SChapter) =
-        GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), authHeaders)
+        GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), authHeaders())
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<HeanCmsPagePayloadDto>()
@@ -425,6 +428,15 @@ abstract class HeanCms(
     private val SharedPreferences.password: String
         get() = getString(PASSWORD_PREF, "") ?: ""
 
+    private var SharedPreferences.tokenData: HeanCmsTokenPayloadDto
+        get() {
+            val jsonString = getString(TOKEN_PREF, "{}")!!
+            return json.decodeFromString(jsonString)
+        }
+        set(data) {
+            edit().putString(TOKEN_PREF, json.encodeToString(data)).apply()
+        }
+
     companion object {
         private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
@@ -440,5 +452,9 @@ abstract class HeanCms(
         private const val LOGIN_PREF_DEFAULT = false
         private const val USER_PREF = "pref_user"
         private const val PASSWORD_PREF = "pref_password"
+
+        private const val TOKEN_PREF = "pref_token"
+
+        private val tokenExpiredAtDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     }
 }

@@ -8,10 +8,20 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 
 @Serializable
-class HeanCmsLoginPayloadDto(
-    val email: String,
-    val password: String,
-)
+class HeanCmsTokenPayloadDto(
+    val token: String? = null,
+    private val expiresAt: String? = null,
+) {
+    fun isExpired(dateFormat: SimpleDateFormat): Boolean {
+        val expiredTime = try {
+            expiresAt?.let { dateFormat.parse(it)?.time } ?: 0L
+        } catch (_: Exception) {
+            0L
+        }
+
+        return System.currentTimeMillis() > expiredTime
+    }
+}
 
 @Serializable
 class HeanCmsQuerySearchDto(
