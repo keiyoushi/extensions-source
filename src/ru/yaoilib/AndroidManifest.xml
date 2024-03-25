@@ -15,7 +15,7 @@
 
                 <!-- LibUrlActivity sites can be added here. -->
                 <data
-                    android:host="v1.slashlib.me"
+                    android:host="v2.slashlib.me"
                     android:pathPattern="/..*/v..*"
                     android:scheme="https" />
             </intent-filter>
