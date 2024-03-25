@@ -15,6 +15,7 @@ class OmegaScans : HeanCms("Omega Scans", "https://omegascans.org", "en") {
     override val versionId = 2
 
     override val useNewChapterEndpoint = true
+    override val enableLogin = true
 
     override fun getGenreList() = listOf(
         Genre("Romance", 1),
