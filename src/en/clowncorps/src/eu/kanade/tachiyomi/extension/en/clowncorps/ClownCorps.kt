@@ -90,11 +90,13 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         // Convert the serializable chapters to SChapters
         return allChapters
             .sortedByDescending { it.dateUpload }
-            .map { chapter ->
+            .mapIndexed { i, chapter ->
+                val index = allChapters.size - i
                 SChapter.create().apply {
                     setUrlWithoutDomain(chapter.fullLink)
                     name = chapter.name
                     date_upload = chapter.dateUpload
+                    chapter_number = index.toFloat()
                 }
             }
     }
