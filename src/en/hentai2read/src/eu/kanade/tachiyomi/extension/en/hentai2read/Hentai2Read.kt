@@ -57,7 +57,7 @@ class Hentai2Read : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            thumbnail_url = element.select("img").attr("abs:data-src")
+            thumbnail_url = element.select("img").attr("abs:src")
             element.select("div.overlay-title a").let {
                 title = it.text()
                 setUrlWithoutDomain(it.attr("href"))

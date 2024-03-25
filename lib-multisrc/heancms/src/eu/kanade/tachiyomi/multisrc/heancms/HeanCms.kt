@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.multisrc.heancms
 
 import android.app.Application
 import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,7 +16,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -43,6 +47,8 @@ abstract class HeanCms(
 
     protected open val useNewChapterEndpoint = false
 
+    protected open val enableLogin = false
+
     /**
      * Custom Json instance to make usage of `encodeDefaults`,
      * which is not enabled on the injected instance of the app.
@@ -69,6 +75,44 @@ abstract class HeanCms(
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
+
+    private fun authHeaders(): Headers {
+        val builder = headersBuilder()
+        if (enableLogin && preferences.user.isNotEmpty() && preferences.password.isNotEmpty()) {
+            val tokenData = preferences.tokenData
+            val token = if (tokenData.isExpired(tokenExpiredAtDateFormat)) {
+                getToken()
+            } else {
+                tokenData.token
+            }
+            if (token != null) {
+                builder.add("Authorization", "Bearer $token")
+            }
+        }
+        return builder.build()
+    }
+
+    private fun getToken(): String? {
+        val body = FormBody.Builder()
+            .add("email", preferences.user)
+            .add("password", preferences.password)
+            .build()
+
+        val response = client.newCall(POST("$apiUrl/login", headers, body)).execute()
+
+        if (!response.isSuccessful) {
+            val result = response.parseAs<HeanCmsErrorsDto>()
+            val message = result.errors?.firstOrNull()?.message ?: intl["login_failed_unknown_error"]
+
+            throw Exception(message)
+        }
+
+        val result = response.parseAs<HeanCmsTokenPayloadDto>()
+
+        preferences.tokenData = result
+
+        return result.token
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/query".toHttpUrl().newBuilder()
@@ -277,22 +321,28 @@ abstract class HeanCms(
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast("#")
 
     override fun pageListRequest(chapter: SChapter) =
-        GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), headers)
+        GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), authHeaders())
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<HeanCmsPagePayloadDto>()
 
-        if (result.isPaywalled()) throw Exception(intl["paid_chapter_error"])
+        if (result.isPaywalled() && result.chapter.chapterData == null) {
+            throw Exception(intl["paid_chapter_error"])
+        }
 
         return if (useNewChapterEndpoint) {
             result.chapter.chapterData?.images.orEmpty().mapIndexed { i, img ->
-                Page(i, imageUrl = img)
+                Page(i, imageUrl = img.toAbsoluteUrl())
             }
         } else {
             result.data.orEmpty().mapIndexed { i, img ->
-                Page(i, imageUrl = img)
+                Page(i, imageUrl = img.toAbsoluteUrl())
             }
         }
+    }
+
+    private fun String.toAbsoluteUrl(): String {
+        return if (startsWith("https://") || startsWith("http://")) this else "$apiUrl/$this"
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
@@ -343,6 +393,32 @@ abstract class HeanCms(
             summaryOff = intl["pref_show_paid_chapter_summary_off"]
             setDefaultValue(SHOW_PAID_CHAPTERS_DEFAULT)
         }.also(screen::addPreference)
+
+        if (enableLogin) {
+            EditTextPreference(screen.context).apply {
+                key = USER_PREF
+                title = intl["pref_username_title"]
+                summary = intl["pref_credentials_summary"]
+                setDefaultValue("")
+
+                setOnPreferenceChangeListener { _, _ ->
+                    preferences.tokenData = HeanCmsTokenPayloadDto()
+                    true
+                }
+            }.also(screen::addPreference)
+
+            EditTextPreference(screen.context).apply {
+                key = PASSWORD_PREF
+                title = intl["pref_password_title"]
+                summary = intl["pref_credentials_summary"]
+                setDefaultValue("")
+
+                setOnPreferenceChangeListener { _, _ ->
+                    preferences.tokenData = HeanCmsTokenPayloadDto()
+                    true
+                }
+            }.also(screen::addPreference)
+        }
     }
 
     protected inline fun <reified T> Response.parseAs(): T = use {
@@ -357,6 +433,21 @@ abstract class HeanCms(
     private val SharedPreferences.showPaidChapters: Boolean
         get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)
 
+    private val SharedPreferences.user: String
+        get() = getString(USER_PREF, "") ?: ""
+
+    private val SharedPreferences.password: String
+        get() = getString(PASSWORD_PREF, "") ?: ""
+
+    private var SharedPreferences.tokenData: HeanCmsTokenPayloadDto
+        get() {
+            val jsonString = getString(TOKEN_PREF, "{}")!!
+            return json.decodeFromString(jsonString)
+        }
+        set(data) {
+            edit().putString(TOKEN_PREF, json.encodeToString(data)).apply()
+        }
+
     companion object {
         private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
@@ -367,5 +458,12 @@ abstract class HeanCms(
 
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
+
+        private const val USER_PREF = "pref_user"
+        private const val PASSWORD_PREF = "pref_password"
+
+        private const val TOKEN_PREF = "pref_token"
+
+        private val tokenExpiredAtDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     }
 }
