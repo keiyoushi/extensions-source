@@ -1,7 +1,0 @@
-ext {
-    extName = 'WayManga'
-    extClass = '.WayManga'
-    extVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"
