@@ -1,9 +1,0 @@
-ext {
-    extName = 'Colored Manga'
-    extClass = '.ColoredManga'
-    themePkg = 'madara'
-    baseUrl = 'https://coloredmanga.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
