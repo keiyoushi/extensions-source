@@ -41,7 +41,9 @@ open class Mangahub : ParsedHttpSource() {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        if (request.method != "GET") {
+        if (request.method != "GET" ||
+            response.header("Content-Type")?.contains("text/html") != true
+        ) {
             return response
         }
 
