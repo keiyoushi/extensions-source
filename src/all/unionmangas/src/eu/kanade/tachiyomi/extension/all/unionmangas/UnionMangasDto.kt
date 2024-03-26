@@ -6,7 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class UnionMangasDto(
+class UnionMangasDto(
     val props: Props,
     val query: QueryDto,
 ) {
@@ -20,11 +20,11 @@ data class UnionMangasDto(
 
     fun hasNextPageToPopularMangas() = false
 
-    fun toPopularMangaModel(): List<SManga> = popularMangaDto?.map(::mangaModelParse) ?: emptyList()
+    fun toPopularSManga(): List<SManga> = popularMangaDto?.map(::sMangaParse) ?: emptyList()
 
-    fun toLatestUpdatesModel(): List<SManga> = latestUpdateDto?.map(::mangaModelParse) ?: emptyList()
+    fun toSMangaLatestUpdates(): List<SManga> = latestUpdateDto?.map(::sMangaParse) ?: emptyList()
 
-    fun toMangaDetailsModel() = SManga.create().apply {
+    fun toSMangaDetails() = SManga.create().apply {
         title = mangaDetailsDto!!.title
         genre = mangaDetailsDto!!.genres
         thumbnail_url = mangaDetailsDto!!.thumbnailUrl
@@ -32,7 +32,7 @@ data class UnionMangasDto(
         status = mangaDetailsDto!!.status
     }
 
-    private fun mangaModelParse(dto: MangaDto): SManga = SManga.create().apply {
+    private fun sMangaParse(dto: MangaDto): SManga = SManga.create().apply {
         title = dto.title
         thumbnail_url = dto.thumbnailUrl
         status = dto.status
@@ -48,7 +48,7 @@ data class ChapterPageDto(
     val totalPage: Int = 0,
     @SerialName("data") val chapters: List<ChapterDto> = emptyList(),
 ) {
-    fun toModel(langOption: LanguageOption): List<SChapter> =
+    fun toSChapter(langOption: LanguageOption): List<SChapter> =
         chapters.map { chapter ->
             SChapter.create().apply {
                 name = chapter.name
@@ -94,7 +94,7 @@ data class PageableMangaListDto(
     val totalPage: Int,
     @SerialName("data") val mangas: List<MangaDto>,
 ) {
-    fun toModels(siteLang: String) = mangas.map { dto ->
+    fun toSManga(siteLang: String) = mangas.map { dto ->
         SManga.create().apply {
             title = dto.title
             thumbnail_url = dto.thumbnailUrl
@@ -120,7 +120,7 @@ data class MangaDto(
 ) {
     val thumbnailUrl get() = "${UnionMangas.apiUrl}$_thumbnailUrl"
     val genres get() = _genres.split(",").joinToString { it.trim() }
-    val status get() = statusToModel(_status)
+    val status get() = toSMangaStatus(_status)
 }
 
 @Serializable
@@ -134,7 +134,7 @@ data class MangaDetailsDto(
 
     val thumbnailUrl get() = "${UnionMangas.apiUrl}$_thumbnailUrl"
     val genres get() = _genres.joinToString { it.name }
-    val status get() = statusToModel(_status.first().name)
+    val status get() = toSMangaStatus(_status.first().name)
 
     @Serializable
     data class Prop(
@@ -156,7 +156,7 @@ data class PageDto(
 
 private fun mangaUrlParse(slug: String, pathSegment: String) = "/$pathSegment/$slug"
 
-private fun statusToModel(status: String) =
+private fun toSMangaStatus(status: String) =
     when (status.lowercase()) {
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
