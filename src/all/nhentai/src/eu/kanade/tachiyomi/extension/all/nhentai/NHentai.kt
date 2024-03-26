@@ -42,11 +42,10 @@ open class NHentai(
     private val nhLang: String,
 ) : ConfigurableSource, ParsedHttpSource() {
 
-    final override val baseUrl = "https://nhentai.net"
-
     override val id by lazy { if (lang == "all") 7309872737163460316 else super.id }
 
     override val name = "NHentai"
+    override val baseUrl: String = getMirrorPref()!!
 
     override val supportsLatest = true
 
@@ -75,8 +74,8 @@ open class NHentai(
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
-            key = TITLE_PREF
-            title = TITLE_PREF
+            key = "${MIRROR_PREF_KEY}_$lang"
+            title = MIRROR_PREF_TITLE
             entries = arrayOf("Full Title", "Short Title")
             entryValues = arrayOf("full", "short")
             summary = "%s"
@@ -93,6 +92,8 @@ open class NHentai(
 
         addRandomUAPreferenceToScreen(screen)
     }
+
+    private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
 
     override fun latestUpdatesRequest(page: Int) = GET(if (nhLang.isBlank()) "$baseUrl/?page=$page" else "$baseUrl/language/$nhLang/?page=$page", headers)
 
@@ -319,5 +320,16 @@ open class NHentai(
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
         private const val TITLE_PREF = "Display manga title as:"
+
+        private const val MIRROR_PREF_KEY = "MIRROR"
+        private const val MIRROR_PREF_TITLE = "Mirror"
+        private val MIRROR_PREF_ENTRIES = arrayOf(
+            "nhentai.net",
+            "nhentai.to",
+            "nhentai.xxx",
+        )
+        private val MIRROR_PREF_ENTRY_VALUES =
+            MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
+        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
     }
 }

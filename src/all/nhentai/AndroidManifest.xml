@@ -13,8 +13,10 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
+                <data android:host="nhentai.net"/>
+                <data android:host="nhentai.xxx"/>
+                <data android:host="nhentai.to"/>
                 <data
-                    android:host="nhentai.net"
                     android:pathPattern="/g/..*"
                     android:scheme="https" />
             </intent-filter>
