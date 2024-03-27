@@ -89,7 +89,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
                 .newCall(GET(url, apiHeaders(url)))
                 .execute()
                 .parseAs<ChapterPageDto>()
-        } catch (e: Exception) {
+        } catch (e: RuntimeException) {
             Log.e("::fetchChapter", e.toString())
             ChapterPageDto()
         }
@@ -133,7 +133,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
                 .first { regxPaswdUrl.find(it) != null }
             val jsDecrypt = client.newCall(GET(jsDecryptUrl, headers)).execute().asJsoup().html()
             regxFindPaswd.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
-        } catch (e: Exception) {
+        } catch (e: RuntimeException) {
             throw RuntimeException("Password not found")
         }
     }
