@@ -20,6 +20,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.lang.RuntimeException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -113,11 +114,27 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         response.asJsoup().htmlDocumentToDto().toSMangaDetails()
 
     override fun pageListParse(response: Response): List<Page> {
-        val pageListData = response.asJsoup().htmlDocumentToDto().props.pageProps.pageListData
-        val decodedData = CryptoAES.decrypt(pageListData!!, "ABC@123#245")
+        val document = response.asJsoup()
+        val password = findChapterPassword(document)
+        val pageListData = document.htmlDocumentToDto().props.pageProps.pageListData
+        val decodedData = CryptoAES.decrypt(pageListData!!, password)
         val pagesData = json.decodeFromString<PageDataDto>(decodedData)
         return pagesData.data.getImages(langOption.pageDelimiter).mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    private fun findChapterPassword(document: Document): String {
+        return try {
+            val regxPaswdUrl = """\/pages\/%5Btype%5D\/%5Bidmanga%5D\/%5Biddetail%5D-.+\.js""".toRegex()
+            val regxFindPaswd = """AES\.decrypt\(\w+,"(?<password>[^"]+)"\)""".toRegex(RegexOption.MULTILINE)
+            val jsDecryptUrl = document.select("script")
+                .map { it.absUrl("src") }
+                .first { regxPaswdUrl.find(it) != null }
+            val jsDecrypt = client.newCall(GET(jsDecryptUrl, headers)).execute().asJsoup().html()
+            regxFindPaswd.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
+        } catch (e: Exception) {
+            throw RuntimeException("Password not found")
         }
     }
 
