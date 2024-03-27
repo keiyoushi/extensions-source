@@ -25,7 +25,7 @@ private const val MIRROR_PREF_KEY = "MIRROR"
 private const val MIRROR_PREF_TITLE = "تعديل رابط مانجا ليك"
 internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
     "https://lekmanga.net",
-    "https://manga-lek.org",
+    "https://lekmanga.org",
     "https://like-manga.net",
     "https://lekmanga.com",
 )
@@ -45,7 +45,12 @@ class Mangalek :
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val chapterUrlSuffix = ""
 
-    override val baseUrl by lazy { getMirrorPref() }
+    override val baseUrl by lazy {
+        when {
+            System.getenv("AR") == "true" -> MIRROR_PREF_ENTRY_VALUES.joinToString("#, ")
+            else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
+        }
+    }
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -67,8 +72,6 @@ class Mangalek :
         }
         screen.addPreference(mirrorPref)
     }
-
-    private fun getMirrorPref(): String = preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         POST(
