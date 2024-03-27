@@ -47,7 +47,7 @@ class Mangalek :
 
     override val baseUrl by lazy {
         when {
-            System.getenv("AR") == "true" -> MIRROR_PREF_ENTRY_VALUES.joinToString("#, ")
+            System.getenv("CI") == "true" -> MIRROR_PREF_ENTRY_VALUES.joinToString("#, ")
             else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
         }
     }
