@@ -2,8 +2,8 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 3
+baseVersionCode = 4
 
 dependencies {
-    compileOnly("com.github.tachiyomiorg:image-decoder:398d3c074f")
+    compileOnly("com.github.tachiyomiorg:image-decoder:e08e9be535")
 }

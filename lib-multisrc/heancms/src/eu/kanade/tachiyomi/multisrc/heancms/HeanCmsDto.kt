@@ -8,6 +8,33 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 
 @Serializable
+class HeanCmsTokenPayloadDto(
+    val token: String? = null,
+    private val expiresAt: String? = null,
+) {
+    fun isExpired(dateFormat: SimpleDateFormat): Boolean {
+        val expiredTime = try {
+            // Reduce one day to prevent timezone issues
+            expiresAt?.let { dateFormat.parse(it)?.time?.minus(1000 * 60 * 60 * 24) } ?: 0L
+        } catch (_: Exception) {
+            0L
+        }
+
+        return System.currentTimeMillis() > expiredTime
+    }
+}
+
+@Serializable
+class HeanCmsErrorsDto(
+    val errors: List<HeanCmsErrorMessageDto>? = emptyList(),
+)
+
+@Serializable
+class HeanCmsErrorMessageDto(
+    val message: String,
+)
+
+@Serializable
 class HeanCmsQuerySearchDto(
     val data: List<HeanCmsSeriesDto> = emptyList(),
     val meta: HeanCmsQuerySearchMetaDto? = null,
@@ -129,7 +156,7 @@ class HeanCmsPageDataDto(
 )
 
 private fun String.toAbsoluteThumbnailUrl(apiUrl: String, coverPath: String): String {
-    return if (startsWith("https://")) this else "$apiUrl/$coverPath$this"
+    return if (startsWith("https://") || startsWith("http://")) this else "$apiUrl/$coverPath$this"
 }
 
 fun String.toStatus(): Int = when (this) {
