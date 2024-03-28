@@ -42,12 +42,20 @@ class UnionMangasDto(
 }
 
 @Serializable
-data class ChapterPageDto(
+abstract class Pageable {
+    abstract val currentPage: String
+    abstract val totalPage: Int
+    fun hasNextPage() =
+        try { (currentPage!!.toInt() + 1) < totalPage } catch (_: Exception) { false }
+}
+
+@Serializable
+class ChapterPageDto(
     val totalRecode: Int = 0,
-    val currentPage: String = "0",
-    val totalPage: Int = 0,
+    override val currentPage: String,
+    override val totalPage: Int,
     @SerialName("data") val chapters: List<ChapterDto> = emptyList(),
-) {
+) : Pageable() {
     fun toSChapter(langOption: LanguageOption): List<SChapter> =
         chapters.map { chapter ->
             SChapter.create().apply {
@@ -82,18 +90,18 @@ data class Props(val pageProps: PageProps)
 
 @Serializable
 data class PageProps(
-    @SerialName("data_lastuppdate") val latestUpdateDto: PageableMangaListDto?,
+    @SerialName("data_lastuppdate") val latestUpdateDto: MangaListDto?,
     @SerialName("data_popular") val popularMangaDto: List<PopularMangaDto>?,
     @SerialName("dataManga") val mangaDetailsDto: MangaDetailsDto?,
     @SerialName("data") val pageListData: String?,
 )
 
 @Serializable
-data class PageableMangaListDto(
-    val currentPage: String?,
-    val totalPage: Int,
+class MangaListDto(
+    override val currentPage: String,
+    override val totalPage: Int,
     @SerialName("data") val mangas: List<MangaDto>,
-) {
+) : Pageable() {
     fun toSManga(siteLang: String) = mangas.map { dto ->
         SManga.create().apply {
             title = dto.title
@@ -162,9 +170,3 @@ private fun toSMangaStatus(status: String) =
         "completed" -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
-
-private fun hasNextPage(currentPage: String?, totalPage: Int) =
-    try { (currentPage!!.toInt() + 1) < totalPage } catch (_: Exception) { false }
-
-fun PageableMangaListDto.hasNextPage() = hasNextPage(currentPage, totalPage)
-fun ChapterPageDto.hasNextPage() = hasNextPage(currentPage, totalPage)
