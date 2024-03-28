@@ -153,7 +153,7 @@ class ComicExtra : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        document.select("img.chapter_img").forEachIndexed { i, img ->
+        document.select("div.chapter-container img").forEachIndexed { i, img ->
             pages.add(Page(i, "", img.attr("abs:src")))
         }
         return pages
