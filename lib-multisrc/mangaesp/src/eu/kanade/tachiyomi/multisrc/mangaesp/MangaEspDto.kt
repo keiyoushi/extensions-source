@@ -1,10 +1,11 @@
-package eu.kanade.tachiyomi.extension.es.mangaesp
+package eu.kanade.tachiyomi.multisrc.mangaesp
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Serializable
 class TopSeriesDto(
@@ -101,18 +102,22 @@ class ChapterDto(
     private val slug: String,
     @SerialName("created_at") private val date: String,
 ) {
-    fun toSChapter(seriesSlug: String, dateFormat: SimpleDateFormat): SChapter {
+    fun toSChapter(seriesSlug: String): SChapter {
         return SChapter.create().apply {
             name = "Capítulo ${number.toString().removeSuffix(".0")}"
             if (!this@ChapterDto.name.isNullOrBlank()) {
                 name += " - ${this@ChapterDto.name}"
             }
             date_upload = try {
-                dateFormat.parse(date)?.time ?: 0L
+                DATE_FORMATTER.parse(date)?.time ?: 0L
             } catch (e: Exception) {
                 0L
             }
             url = "/ver/$seriesSlug/$slug"
         }
+    }
+
+    companion object {
+        private val DATE_FORMATTER by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US) }
     }
 }
