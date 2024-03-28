@@ -175,10 +175,10 @@ abstract class MangaEsp(
 
     override fun getFilterList() = FilterList(
         SortByFilter("Ordenar por", getSortProperties()),
-        StatusFilter(),
+        StatusFilter("Estado", getStatusList()),
     )
 
-    private fun getSortProperties(): List<SortProperty> = listOf(
+    protected open fun getSortProperties(): List<SortProperty> = listOf(
         SortProperty("Nombre", "name"),
         SortProperty("Visitas", "views"),
         SortProperty("Actualización", "updated_at"),
@@ -198,14 +198,16 @@ abstract class MangaEsp(
             get() = sortProperties[state!!.index].value
     }
 
-    private class StatusFilter : UriPartFilter(
-        "Estado",
-        arrayOf(
-            Pair("En emisión", 1),
-            Pair("En pausa", 2),
-            Pair("Abandonado", 3),
-            Pair("Finalizado", 4),
-        ),
+    private class StatusFilter(title: String, statusList: Array<Pair<String, Int>>) : UriPartFilter(
+        title,
+        statusList,
+    )
+
+    protected open fun getStatusList() = arrayOf(
+        Pair("En emisión", 1),
+        Pair("En pausa", 2),
+        Pair("Abandonado", 3),
+        Pair("Finalizado", 4),
     )
 
     private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, Int>>) :
