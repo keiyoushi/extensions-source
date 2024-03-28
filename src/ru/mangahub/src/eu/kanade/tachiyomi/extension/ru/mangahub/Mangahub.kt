@@ -7,16 +7,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.absoluteValue
@@ -33,8 +33,38 @@ open class Mangahub : ParsedHttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(::confirmAgeInterceptor)
         .rateLimit(2)
         .build()
+
+    private fun confirmAgeInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        if (request.method != "GET" ||
+            response.header("Content-Type")?.contains("text/html") != true
+        ) {
+            return response
+        }
+
+        val document = Jsoup.parse(
+            response.peekBody(Long.MAX_VALUE).string(),
+            request.url.toString(),
+        )
+
+        val formElement = document.selectFirst("#confirm_age__token")
+            ?: return response
+
+        val formBody = FormBody.Builder()
+            .addEncoded(formElement.attr("name"), formElement.attr("value"))
+            .build()
+
+        val confirmAgeRequest = request.newBuilder()
+            .method("POST", formBody)
+            .build()
+
+        return client.newCall(confirmAgeRequest).execute()
+    }
 
     private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
 
@@ -43,13 +73,15 @@ open class Mangahub : ParsedHttpSource() {
         add("Referer", baseUrl)
     }
 
-    private val json: Json by injectLazy()
+    override fun popularMangaRequest(page: Int): Request {
+        val pageStr = if (page > 1) "?page=$page" else ""
+        return GET("$baseUrl/explore/sort-is-rating$pageStr", headers)
+    }
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/explore?filter[sort]=rating&filter[dateStart][left_number]=1900&filter[dateStart][right_number]=2099&page=$page", headers)
-
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/explore?filter[sort]=update&filter[dateStart][left_number]=1900&filter[dateStart][right_number]=2099&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val pageStr = if (page > 1) "?page=$page" else ""
+        return GET("$baseUrl/explore/sort-is-update$pageStr", headers)
+    }
 
     override fun popularMangaSelector() = "div.comic-grid-col-xl"
 
@@ -71,7 +103,11 @@ open class Mangahub : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search/manga?query=$query&sort=rating_short&page=$page")
+        val url = "$baseUrl/search/manga".toHttpUrl().newBuilder().apply {
+            addQueryParameter("query", query)
+            if (page > 1) addQueryParameter("page", page.toString())
+        }
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -87,7 +123,7 @@ open class Mangahub : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
-        manga.author = document.select("div.detail-attr:contains(Автор) div:gt(0)").text() // TODO: Add "Сценарист" and "Художник"
+        manga.author = document.select(".attr-name:contains(Автор) + .attr-value").text() // TODO: Add "Сценарист" and "Художник"
         manga.genre = document.select(".tags a").joinToString { it.text() }
         manga.description = document.select("div.markdown-style").text()
         manga.status = parseStatus(document.select("div.detail-attr:contains(перевод):eq(0)").toString())
@@ -125,14 +161,10 @@ open class Mangahub : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val chapInfo = document.select("reader")
-            .attr("data-store")
-            .replace("&quot;", "\"")
-            .replace("\\/", "/")
-        val chapter = json.parseToJsonElement(chapInfo).jsonObject
-
-        return chapter["scans"]!!.jsonArray.mapIndexed { i, jsonEl ->
-            Page(i, "", "https:" + jsonEl.jsonObject["src"]!!.jsonPrimitive.content)
+        val images = document.select("img.reader-viewer-img")
+        return images.mapIndexed { i, img ->
+            val url = img.attr("data-src").let { if (it.startsWith("//")) "https:$it" else it }
+            Page(i, document.location(), url)
         }
     }
 
