@@ -154,6 +154,13 @@ class Happymh : HttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    override fun imageRequest(page: Page): Request {
+        val header = headersBuilder()
+            .set("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, header)
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context
 
