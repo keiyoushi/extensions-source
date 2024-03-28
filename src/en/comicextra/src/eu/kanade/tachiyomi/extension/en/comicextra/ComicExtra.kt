@@ -40,7 +40,7 @@ class ComicExtra : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/comic-search?key=$query", headers)
+            GET("$baseUrl/search?keyword=$query", headers)
         } else {
             var url = baseUrl
             filters.forEach { filter ->
