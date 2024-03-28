@@ -21,8 +21,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.math.min
 
 class EternalMangas : HttpSource() {
@@ -38,8 +36,6 @@ class EternalMangas : HttpSource() {
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
@@ -170,7 +166,7 @@ class EternalMangas : HttpSource() {
             ?: throw Exception("No se pudo encontrar la lista de capítulos")
         val unescapedJson = mangaDetailsJson.unescape()
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
-        return series.chapters.map { it.toSChapter(series.slug, dateFormat) }
+        return series.chapters.map { it.toSChapter(series.slug) }
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -239,7 +235,7 @@ class EternalMangas : HttpSource() {
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         private val MANGA_LIST_REGEX = """self\.__next_f\.push\(.*data\\":(\[.*trending.*])\}""".toRegex()
-        private val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*numFollow""".toRegex()
+        private val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*\\"numFollow""".toRegex()
         private const val MANGAS_PER_PAGE = 15
     }
 }
