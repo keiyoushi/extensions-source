@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -22,7 +23,7 @@ class ComicExtra : ParsedHttpSource() {
 
     override val name = "ComicExtra"
 
-    override val baseUrl = "https://comicextra.me"
+    override val baseUrl = "https://comicextra.org"
 
     override val lang = "en"
 
@@ -40,7 +41,11 @@ class ComicExtra : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/comic-search?key=$query", headers)
+            val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+                addQueryParameter("keyword", query)
+                if (page > 1) addQueryParameter("page", page.toString())
+            }.build()
+            GET(url, headers)
         } else {
             var url = baseUrl
             filters.forEach { filter ->
@@ -153,7 +158,7 @@ class ComicExtra : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        document.select("img.chapter_img").forEachIndexed { i, img ->
+        document.select("div.chapter-container img").forEachIndexed { i, img ->
             pages.add(Page(i, "", img.attr("abs:src")))
         }
         return pages
