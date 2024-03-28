@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -28,6 +29,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 
 class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override val lang = langOption.lang
@@ -51,6 +53,10 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         availableLanguages = setOf("en", "it", "pt-BR"),
         classLoader = this::class.java.classLoader!!,
     )
+
+    override val client = network.client.newBuilder()
+        .rateLimit(5, 2, TimeUnit.SECONDS)
+        .build()
 
     private fun apiHeaders(url: String): Headers {
         val date = apiDateFormat.format(Date())
