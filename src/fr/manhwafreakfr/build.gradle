@@ -1,9 +1,0 @@
-ext {
-    extName = 'ManhwaFreak'
-    extClass = '.ManhwaFreakFR'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://manhwafreak.fr'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
