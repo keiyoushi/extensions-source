@@ -151,9 +151,12 @@ data class MangaDetailsDto(
 }
 
 @Serializable
-data class PageDataDto(
+data class ChaptersDto(
     @SerialName("dataManga") val data: PageDto,
-)
+    private var delimiter: String = "",
+) {
+    val images get() = data.getImages(delimiter)
+}
 
 @Serializable
 data class PageDto(

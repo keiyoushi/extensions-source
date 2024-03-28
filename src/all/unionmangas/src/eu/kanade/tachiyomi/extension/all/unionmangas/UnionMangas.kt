@@ -133,14 +133,20 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         response.asJsoup().htmlDocumentToDto().toSMangaDetails()
 
     override fun pageListParse(response: Response): List<Page> {
+        val chaptersDto = decryptChapters(response)
+        return chaptersDto.images.mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    private fun decryptChapters(response: Response): ChaptersDto {
         val document = response.asJsoup()
         val password = findChapterPassword(document)
         val pageListData = document.htmlDocumentToDto().props.pageProps.pageListData
         val decodedData = CryptoAES.decrypt(pageListData!!, password)
-        val pagesData = json.decodeFromString<PageDataDto>(decodedData)
-        return pagesData.data.getImages(langOption.pageDelimiter).mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
-        }
+        return json
+            .decodeFromString<ChaptersDto>(decodedData)
+            .copy(delimiter = langOption.pageDelimiter)
     }
 
     private fun findChapterPassword(document: Document): String {
