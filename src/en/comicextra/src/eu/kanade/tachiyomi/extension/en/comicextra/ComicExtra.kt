@@ -19,8 +19,6 @@ import java.util.ArrayList
 import java.util.Date
 import java.util.Locale
 
-
-
 class ComicExtra : ParsedHttpSource() {
 
     override val name = "ComicExtra"
