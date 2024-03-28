@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mangaesp
 
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -32,7 +33,14 @@ abstract class MangaEsp(
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    protected val json: Json by injectLazy()
+
+    protected val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "es"),
+        classLoader = this::class.java.classLoader!!,
+    )
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
@@ -89,7 +97,7 @@ abstract class MangaEsp(
         val document = response.asJsoup()
         val script = document.select("script:containsData(self.__next_f.push)").joinToString { it.data() }
         val jsonString = MANGA_LIST_REGEX.find(script)?.groupValues?.get(1)
-            ?: throw Exception("No se pudo encontrar la lista de comics")
+            ?: throw Exception(intl["comics_list_error"])
         val unescapedJson = jsonString.unescape()
         comicsList = json.decodeFromString<List<SeriesDto>>(unescapedJson).toMutableList()
         return parseComicsList(page, query, filters)
@@ -102,7 +110,7 @@ abstract class MangaEsp(
             filteredList.clear()
 
             if (query.isNotBlank()) {
-                if (query.length < 2) throw Exception("La búsqueda debe tener al menos 2 caracteres")
+                if (query.length < 2) throw Exception(intl["search_length_error"])
                 filteredList.addAll(
                     comicsList.filter {
                         it.name.contains(query, ignoreCase = true) || it.alternativeName?.contains(query, ignoreCase = true) == true
@@ -151,7 +159,7 @@ abstract class MangaEsp(
     override fun mangaDetailsParse(response: Response): SManga {
         val responseBody = response.body.string()
         val mangaDetailsJson = MANGA_DETAILS_REGEX.find(responseBody)?.groupValues?.get(1)
-            ?: throw Exception("No se pudo encontrar los detalles del manga")
+            ?: throw Exception(intl["comic_data_error"])
         val unescapedJson = mangaDetailsJson.unescape()
 
         return json.decodeFromString<SeriesDto>(unescapedJson).toSMangaDetails()
@@ -160,7 +168,7 @@ abstract class MangaEsp(
     override fun chapterListParse(response: Response): List<SChapter> {
         val responseBody = response.body.string()
         val mangaDetailsJson = MANGA_DETAILS_REGEX.find(responseBody)?.groupValues?.get(1)
-            ?: throw Exception("No se pudo encontrar la lista de capítulos")
+            ?: throw Exception(intl["comic_data_error"])
         val unescapedJson = mangaDetailsJson.unescape()
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
         return series.chapters.map { it.toSChapter(series.slug) }
@@ -174,15 +182,15 @@ abstract class MangaEsp(
     }
 
     override fun getFilterList() = FilterList(
-        SortByFilter("Ordenar por", getSortProperties()),
-        StatusFilter("Estado", getStatusList()),
+        SortByFilter(intl["sort_by_filter_title"], getSortProperties()),
+        StatusFilter(intl["status_filter_title"], getStatusList()),
     )
 
     protected open fun getSortProperties(): List<SortProperty> = listOf(
-        SortProperty("Nombre", "name"),
-        SortProperty("Visitas", "views"),
-        SortProperty("Actualización", "updated_at"),
-        SortProperty("Agregado", "created_at"),
+        SortProperty(intl["sort_by_filter_name"], "name"),
+        SortProperty(intl["sort_by_filter_views"], "views"),
+        SortProperty(intl["sort_by_filter_updated"], "updated_at"),
+        SortProperty(intl["sort_by_filter_added"], "created_at"),
     )
 
     data class SortProperty(val name: String, val value: String) {
@@ -204,10 +212,10 @@ abstract class MangaEsp(
     )
 
     protected open fun getStatusList() = arrayOf(
-        Pair("En emisión", 1),
-        Pair("En pausa", 2),
-        Pair("Abandonado", 3),
-        Pair("Finalizado", 4),
+        Pair(intl["status_filter_ongoing"], 1),
+        Pair(intl["status_filter_hiatus"], 2),
+        Pair(intl["status_filter_dropped"], 3),
+        Pair(intl["status_filter_completed"], 4),
     )
 
     private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, Int>>) :
