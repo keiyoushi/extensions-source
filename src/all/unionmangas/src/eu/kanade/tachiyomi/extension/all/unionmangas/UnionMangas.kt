@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.unionmangas
 
 import android.util.Log
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -20,7 +22,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.lang.RuntimeException
+import java.io.IOException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -42,6 +44,13 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         "it" -> langOption.infix
         else -> "v3/po"
     }
+
+    private val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "it", "pt-BR"),
+        classLoader = this::class.java.classLoader!!,
+    )
 
     private fun apiHeaders(url: String): Headers {
         val date = apiDateFormat.format(Date())
@@ -85,13 +94,17 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         return try {
             val maxResult = 16
             val url = "$apiUrl/api/$langApiInfix/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
-            return client
-                .newCall(GET(url, apiHeaders(url)))
+            client.newCall(GET(url, apiHeaders(url)))
                 .execute()
                 .parseAs<ChapterPageDto>()
-        } catch (e: RuntimeException) {
+        } catch (e: Exception) {
+            val message = when (e) {
+                is SerializationException -> intl["chapters_cannot_be_processed"]
+                is IOException -> intl["unable_to_get_chapters"]
+                else -> intl["chapter_not_found"]
+            }
             Log.e("::fetchChapter", e.toString())
-            ChapterPageDto()
+            throw Exception(message)
         }
     }
 
@@ -133,8 +146,9 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
                 .first { regxPaswdUrl.find(it) != null }
             val jsDecrypt = client.newCall(GET(jsDecryptUrl, headers)).execute().asJsoup().html()
             regxFindPaswd.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
-        } catch (e: RuntimeException) {
-            throw RuntimeException("Password not found")
+        } catch (e: Exception) {
+            Log.e("::findChapterPassword", e.toString())
+            throw Exception(intl["password_not_found"])
         }
     }
 
@@ -174,7 +188,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override fun imageUrlParse(response: Response): String = ""
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val mangasDto = response.parseAs<PageableMangaListDto>()
+        val mangasDto = response.parseAs<MangaListDto>()
         return MangasPage(
             mangas = mangasDto.toSManga(langOption.infix),
             hasNextPage = mangasDto.hasNextPage(),

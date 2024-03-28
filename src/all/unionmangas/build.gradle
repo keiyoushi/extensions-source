@@ -9,4 +9,5 @@ apply from: "$rootDir/common.gradle"
 
 dependencies {
     implementation(project(':lib:cryptoaes'))
+    implementation(project(":lib:i18n"))
 }
