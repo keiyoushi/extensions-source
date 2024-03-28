@@ -2,8 +2,9 @@ ext {
     extName = 'Zinmanga'
     extClass = '.Zinmanga'
     themePkg = 'madara'
-    baseUrl = 'https://zinmanga.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://mangazin.org'
+    overrideVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
