@@ -161,6 +161,7 @@ class VyvyManga : ParsedHttpSource() {
     }
 
     override fun getFilterList(): FilterList {
+        launchIO { fetchGenres(baseUrl, headers, client) }
         return FilterList(
             SearchType(),
             SearchDescription(),
@@ -169,7 +170,7 @@ class VyvyManga : ParsedHttpSource() {
             StatusFilter(),
             SortFilter(),
             SortType(),
-            GenreFilter(genrePairs),
+            GenreFilter(),
         )
     }
 }
