@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaEsp'
     themePkg = 'mangaesp'
     baseUrl = 'https://mangaesp.net'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
