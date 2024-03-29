@@ -18,7 +18,7 @@ import java.util.Locale
 class VyvyManga : ParsedHttpSource() {
     override val name = "VyvyManga"
 
-    override val baseUrl = "https://vyvymanga.net"
+    override val baseUrl = "https://vymanga.net"
 
     override val lang = "en"
 
