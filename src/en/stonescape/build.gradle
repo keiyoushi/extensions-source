@@ -3,7 +3,8 @@ ext {
     extClass = '.StoneScape'
     themePkg = 'madara'
     baseUrl = 'https://stonescape.xyz'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
