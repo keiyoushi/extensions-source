@@ -115,10 +115,14 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val dto = response.asJsoup().htmlDocumentToDto()
+        val nextData = response.parseNextData<LatestUpdateProps>()
+        val dto = nextData.data.latestUpdateDto
+        val mangas = dto.mangas.map { mangaParse(it, nextData.query) }
+
+
         return MangasPage(
-            mangas = dto.toSMangaLatestUpdates(),
-            hasNextPage = dto.hasNextPageToLatestUpdates(),
+            mangas = mangas,
+            hasNextPage = dto.hasNextPage(),
         )
     }
 
@@ -129,8 +133,17 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        response.asJsoup().htmlDocumentToDto().toSMangaDetails()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val nextData = response.parseNextData<MangaDetailsProps>()
+        val dto = nextData.data.mangaDetailsDto
+        return SManga.create().apply {
+            title = dto.title
+            genre = dto.genres
+            thumbnail_url = dto.thumbnailUrl
+            url = mangaUrlParse(dto.slug, nextData.query.type)
+            status = dto.status
+        }
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val chaptersDto = decryptChapters(response)
@@ -142,8 +155,8 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     private fun decryptChapters(response: Response): ChaptersDto {
         val document = response.asJsoup()
         val password = findChapterPassword(document)
-        val pageListData = document.htmlDocumentToDto().props.pageProps.pageListData
-        val decodedData = CryptoAES.decrypt(pageListData!!, password)
+        val pageListData = document.parseNextData<ChaptersProps>().data.pageListData
+        val decodedData = CryptoAES.decrypt(pageListData, password)
         return json
             .decodeFromString<ChaptersDto>(decodedData)
             .copy(delimiter = langOption.pageDelimiter)
@@ -165,10 +178,11 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.asJsoup().htmlDocumentToDto()
+        val dto = response.parseNextData<PopularMangaProps>()
+        val mangas = dto.data.mangas.map { it.details }.map { mangaParse(it, dto.query) }
         return MangasPage(
-            mangas = dto.toPopularSManga(),
-            hasNextPage = dto.hasNextPageToPopularMangas(),
+            mangas = mangas,
+            hasNextPage = false,
         )
     }
 
@@ -207,9 +221,11 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         )
     }
 
-    private fun Document.htmlDocumentToDto(): UnionMangasDto {
+    private inline fun <reified T> Response.parseNextData() = asJsoup().parseNextData<T>()
+
+    private inline fun <reified T> Document.parseNextData(): NextData<T> {
         val jsonContent = selectFirst("script#__NEXT_DATA__")!!.html()
-        return json.decodeFromString<UnionMangasDto>(jsonContent)
+        return json.decodeFromString<NextData<T>>(jsonContent)
     }
 
     private inline fun <reified T> Response.parseAs(): T {
@@ -221,6 +237,18 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     private fun SManga.slug() = this.url.split("/").last()
 
     private fun String.toUrlWithoutDomain() = trim().replace(apiUrl, "")
+
+    private fun mangaParse(dto: MangaDto, query: QueryDto): SManga {
+        return SManga.create().apply {
+            title = dto.title
+            thumbnail_url = dto.thumbnailUrl
+            status = dto.status
+            url = mangaUrlParse(dto.slug, query.type)
+            genre = dto.genres
+        }
+    }
+
+    private fun mangaUrlParse(slug: String, pathSegment: String) = "/$pathSegment/$slug"
 
     companion object {
         val apiUrl = "https://api.unionmanga.xyz"

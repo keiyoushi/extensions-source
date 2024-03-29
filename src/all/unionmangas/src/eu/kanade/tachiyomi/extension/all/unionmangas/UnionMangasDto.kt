@@ -6,40 +6,24 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class UnionMangasDto(
-    val props: Props,
-    val query: QueryDto,
-) {
-    private val latestUpdateRawContent get() = props.pageProps.latestUpdateDto
-    private val popularMangaRawContent get() = props.pageProps.popularMangaDto
-    private val latestUpdateDto get() = latestUpdateRawContent?.mangas
-    private val popularMangaDto get() = popularMangaRawContent?.map { it.details }
-    private val mangaDetailsDto get() = props.pageProps.mangaDetailsDto
-
-    fun hasNextPageToLatestUpdates() = latestUpdateRawContent?.hasNextPage() ?: false
-
-    fun hasNextPageToPopularMangas() = false
-
-    fun toPopularSManga(): List<SManga> = popularMangaDto?.map(::sMangaParse) ?: emptyList()
-
-    fun toSMangaLatestUpdates(): List<SManga> = latestUpdateDto?.map(::sMangaParse) ?: emptyList()
-
-    fun toSMangaDetails() = SManga.create().apply {
-        title = mangaDetailsDto!!.title
-        genre = mangaDetailsDto!!.genres
-        thumbnail_url = mangaDetailsDto!!.thumbnailUrl
-        url = mangaUrlParse(mangaDetailsDto!!.slug, query.type)
-        status = mangaDetailsDto!!.status
-    }
-
-    private fun sMangaParse(dto: MangaDto): SManga = SManga.create().apply {
-        title = dto.title
-        thumbnail_url = dto.thumbnailUrl
-        status = dto.status
-        url = mangaUrlParse(dto.slug, query.type)
-        genre = dto.genres
-    }
+class NextData<T>(val props: Props<T>, val query: QueryDto) {
+    val data get() = props.pageProps
 }
+
+@Serializable
+data class Props<T>(val pageProps: T)
+
+@Serializable
+data class PopularMangaProps(@SerialName("data_popular") val mangas: List<PopularMangaDto>)
+
+@Serializable
+data class LatestUpdateProps(@SerialName("data_lastuppdate") val latestUpdateDto: MangaListDto)
+
+@Serializable
+data class MangaDetailsProps(@SerialName("dataManga") val mangaDetailsDto: MangaDetailsDto)
+
+@Serializable
+data class ChaptersProps(@SerialName("data") val pageListData: String)
 
 @Serializable
 abstract class Pageable {
@@ -83,17 +67,6 @@ data class ChapterDto(
 @Serializable
 data class QueryDto(
     val type: String,
-)
-
-@Serializable
-data class Props(val pageProps: PageProps)
-
-@Serializable
-data class PageProps(
-    @SerialName("data_lastuppdate") val latestUpdateDto: MangaListDto?,
-    @SerialName("data_popular") val popularMangaDto: List<PopularMangaDto>?,
-    @SerialName("dataManga") val mangaDetailsDto: MangaDetailsDto?,
-    @SerialName("data") val pageListData: String?,
 )
 
 @Serializable
