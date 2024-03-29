@@ -27,8 +27,9 @@ class ChaptersProps(@SerialName("data") val pageListData: String)
 
 @Serializable
 abstract class Pageable {
-    abstract val currentPage: String
-    abstract val totalPage: Int
+    abstract var currentPage: String?
+    abstract var totalPage: Int
+
     fun hasNextPage() =
         try { (currentPage!!.toInt() + 1) < totalPage } catch (_: Exception) { false }
 }
@@ -36,8 +37,8 @@ abstract class Pageable {
 @Serializable
 class ChapterPageDto(
     val totalRecode: Int = 0,
-    override val currentPage: String,
-    override val totalPage: Int,
+    override var currentPage: String?,
+    override var totalPage: Int,
     @SerialName("data") val chapters: List<ChapterDto> = emptyList(),
 ) : Pageable() {
     fun toSChapter(langOption: LanguageOption): List<SChapter> =
@@ -71,8 +72,8 @@ class QueryDto(
 
 @Serializable
 class MangaListDto(
-    override val currentPage: String,
-    override val totalPage: Int,
+    override var currentPage: String?,
+    override var totalPage: Int,
     @SerialName("data") val mangas: List<MangaDto>,
 ) : Pageable() {
     fun toSManga(siteLang: String) = mangas.map { dto ->
