@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.unionmangas
 
-import android.util.Log
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -13,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -23,7 +20,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.io.IOException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -46,13 +42,6 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         "it" -> langOption.infix
         else -> "v3/po"
     }
-
-    private val intl = Intl(
-        language = lang,
-        baseLanguage = "en",
-        availableLanguages = setOf("en", "it", "pt-BR"),
-        classLoader = this::class.java.classLoader!!,
-    )
 
     override val client = network.client.newBuilder()
         .rateLimit(5, 2, TimeUnit.SECONDS)
@@ -97,28 +86,16 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     private fun fetchChapterListPageable(manga: SManga, page: Int): ChapterPageDto {
-        return try {
-            val maxResult = 16
-            val url = "$apiUrl/api/$langApiInfix/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
-            client.newCall(GET(url, apiHeaders(url)))
-                .execute()
-                .parseAs<ChapterPageDto>()
-        } catch (e: Exception) {
-            val message = when (e) {
-                is SerializationException -> intl["chapters_cannot_be_processed"]
-                is IOException -> intl["unable_to_get_chapters"]
-                else -> intl["chapter_not_found"]
-            }
-            Log.e("::fetchChapter", e.toString())
-            throw Exception(message)
-        }
+        val maxResult = 16
+        val url = "$apiUrl/api/$langApiInfix/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
+        return client.newCall(GET(url, apiHeaders(url))).execute()
+            .parseAs<ChapterPageDto>()
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val nextData = response.parseNextData<LatestUpdateProps>()
         val dto = nextData.data.latestUpdateDto
         val mangas = dto.mangas.map { mangaParse(it, nextData.query) }
-
 
         return MangasPage(
             mangas = mangas,
@@ -159,23 +136,18 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         val decodedData = CryptoAES.decrypt(pageListData, password)
         return ChaptersDto(
             data = json.decodeFromString<ChaptersDto>(decodedData).data,
-            delimiter = langOption.pageDelimiter
+            delimiter = langOption.pageDelimiter,
         )
     }
 
     private fun findChapterPassword(document: Document): String {
-        return try {
-            val regxPasswordUrl = """\/pages\/%5Btype%5D\/%5Bidmanga%5D\/%5Biddetail%5D-.+\.js""".toRegex()
-            val regxFindPassword = """AES\.decrypt\(\w+,"(?<password>[^"]+)"\)""".toRegex(RegexOption.MULTILINE)
-            val jsDecryptUrl = document.select("script")
-                .map { it.absUrl("src") }
-                .first { regxPasswordUrl.find(it) != null }
-            val jsDecrypt = client.newCall(GET(jsDecryptUrl, headers)).execute().asJsoup().html()
-            regxFindPassword.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
-        } catch (e: Exception) {
-            Log.e("::findChapterPassword", e.toString())
-            throw Exception(intl["password_not_found"])
-        }
+        val regxPasswordUrl = """\/pages\/%5Btype%5D\/%5Bidmanga%5D\/%5Biddetail%5D-.+\.js""".toRegex()
+        val regxFindPassword = """AES\.decrypt\(\w+,"(?<password>[^"]+)"\)""".toRegex(RegexOption.MULTILINE)
+        val jsDecryptUrl = document.select("script")
+            .map { it.absUrl("src") }
+            .first { regxPasswordUrl.find(it) != null }
+        val jsDecrypt = client.newCall(GET(jsDecryptUrl, headers)).execute().asJsoup().html()
+        return regxFindPassword.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
