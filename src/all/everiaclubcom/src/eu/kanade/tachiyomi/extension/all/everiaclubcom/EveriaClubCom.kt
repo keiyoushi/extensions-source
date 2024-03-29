@@ -16,7 +16,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class EveriaClubCom() : HttpSource() {
-    override val baseUrl = "https://everiaclub.com"
+    override val baseUrl = "https://www.everiaclub.com"
     override val lang = "all"
     override val name = "EveriaClub (unoriginal)"
     override val supportsLatest = true
@@ -31,7 +31,7 @@ class EveriaClubCom() : HttpSource() {
             .ifEmpty { attr("src") }
 
     private fun mangaFromElement(it: Element) = SManga.create().apply {
-        setUrlWithoutDomain(it.attr("abs:href"))
+        setUrlWithoutDomain(it.attr("abs:href").removePrefix(baseUrl))
         with(it.selectFirst("img")!!) {
             thumbnail_url = imgSrc
             title = attr("title")
