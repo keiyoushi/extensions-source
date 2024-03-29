@@ -18,7 +18,7 @@ import java.util.Locale
 class VyvyManga : ParsedHttpSource() {
     override val name = "VyvyManga"
 
-    override val baseUrl = "https://vyvymanga.net"
+    override val baseUrl = "https://vymanga.net"
 
     override val lang = "en"
 
@@ -44,7 +44,23 @@ class VyvyManga : ParsedHttpSource() {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
-
+        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            when (filter) {
+                is SearchType -> url.addQueryParameter("search_po", filter.selected)
+                is SearchDescription -> if (filter.state) url.addQueryParameter("check_search_desc", "1")
+                is AuthorSearchType -> url.addQueryParameter("author_po", filter.selected)
+                is AuthorFilter -> url.addQueryParameter("author", filter.state)
+                is StatusFilter -> url.addQueryParameter("completed", filter.selected)
+                is SortFilter -> url.addQueryParameter("sort", filter.selected)
+                is SortType -> url.addQueryParameter("sort_type", filter.selected)
+                is GenreFilter -> {
+                    filter.state.forEach {
+                        if (!it.isIgnored()) url.addQueryParameter(if (it.isIncluded()) "genre[]" else "exclude_genre[]", it.id)
+                    }
+                }
+                else -> {}
+            }
+        }
         return GET(url.build(), headers)
     }
 
@@ -68,7 +84,7 @@ class VyvyManga : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga =
         searchMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector(): String? =
+    override fun latestUpdatesNextPageSelector() =
         searchMangaNextPageSelector()
 
     // Details
@@ -142,5 +158,19 @@ class VyvyManga : ParsedHttpSource() {
             date.contains("second") -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
             else -> 0
         }
+    }
+
+    override fun getFilterList(): FilterList {
+        launchIO { fetchGenres(baseUrl, headers, client) }
+        return FilterList(
+            SearchType(),
+            SearchDescription(),
+            AuthorSearchType(),
+            AuthorFilter(),
+            StatusFilter(),
+            SortFilter(),
+            SortType(),
+            GenreFilter(),
+        )
     }
 }
