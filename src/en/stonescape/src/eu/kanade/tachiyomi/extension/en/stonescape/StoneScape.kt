@@ -8,8 +8,13 @@ class StoneScape : Madara(
     "StoneScape",
     "https://stonescape.xyz",
     "en",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("en")),
+    SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH),
 ) {
     override val mangaSubString = "series"
-    override val chapterUrlSelector = "div + a"
+
+    override val chapterUrlSelector = "li > a"
+
+    override val mangaDetailsSelectorAuthor = ".post-content .manga-authors a"
+
+    override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)"
 }
