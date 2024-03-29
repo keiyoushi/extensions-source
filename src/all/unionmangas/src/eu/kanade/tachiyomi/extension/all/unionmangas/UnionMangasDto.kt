@@ -11,19 +11,19 @@ class NextData<T>(val props: Props<T>, val query: QueryDto) {
 }
 
 @Serializable
-data class Props<T>(val pageProps: T)
+class Props<T>(val pageProps: T)
 
 @Serializable
-data class PopularMangaProps(@SerialName("data_popular") val mangas: List<PopularMangaDto>)
+class PopularMangaProps(@SerialName("data_popular") val mangas: List<PopularMangaDto>)
 
 @Serializable
-data class LatestUpdateProps(@SerialName("data_lastuppdate") val latestUpdateDto: MangaListDto)
+class LatestUpdateProps(@SerialName("data_lastuppdate") val latestUpdateDto: MangaListDto)
 
 @Serializable
-data class MangaDetailsProps(@SerialName("dataManga") val mangaDetailsDto: MangaDetailsDto)
+class MangaDetailsProps(@SerialName("dataManga") val mangaDetailsDto: MangaDetailsDto)
 
 @Serializable
-data class ChaptersProps(@SerialName("data") val pageListData: String)
+class ChaptersProps(@SerialName("data") val pageListData: String)
 
 @Serializable
 abstract class Pageable {
@@ -56,7 +56,7 @@ class ChapterPageDto(
 }
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val date: String,
     val slug: String,
     @SerialName("idDoc") val slugManga: String,
@@ -65,7 +65,7 @@ data class ChapterDto(
 )
 
 @Serializable
-data class QueryDto(
+class QueryDto(
     val type: String,
 )
 
@@ -87,12 +87,12 @@ class MangaListDto(
 }
 
 @Serializable
-data class PopularMangaDto(
+class PopularMangaDto(
     @SerialName("document") val details: MangaDto,
 )
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     @SerialName("name") val title: String,
     @SerialName("image") private val _thumbnailUrl: String,
     @SerialName("idDoc") val slug: String,
@@ -105,7 +105,7 @@ data class MangaDto(
 }
 
 @Serializable
-data class MangaDetailsDto(
+class MangaDetailsDto(
     @SerialName("name") val title: String,
     @SerialName("image") private val _thumbnailUrl: String,
     @SerialName("idDoc") val slug: String,
@@ -118,13 +118,13 @@ data class MangaDetailsDto(
     val status get() = toSMangaStatus(_status.first().name)
 
     @Serializable
-    data class Prop(
+    class Prop(
         val name: String,
     )
 }
 
 @Serializable
-data class ChaptersDto(
+class ChaptersDto(
     @SerialName("dataManga") val data: PageDto,
     private var delimiter: String = "",
 ) {
@@ -132,7 +132,7 @@ data class ChaptersDto(
 }
 
 @Serializable
-data class PageDto(
+class PageDto(
     @SerialName("source") private val imgData: String,
 ) {
     fun getImages(delimiter: String): List<String> = imgData.split(delimiter)

@@ -157,9 +157,10 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         val password = findChapterPassword(document)
         val pageListData = document.parseNextData<ChaptersProps>().data.pageListData
         val decodedData = CryptoAES.decrypt(pageListData, password)
-        return json
-            .decodeFromString<ChaptersDto>(decodedData)
-            .copy(delimiter = langOption.pageDelimiter)
+        return ChaptersDto(
+            data = json.decodeFromString<ChaptersDto>(decodedData).data,
+            delimiter = langOption.pageDelimiter
+        )
     }
 
     private fun findChapterPassword(document: Document): String {
