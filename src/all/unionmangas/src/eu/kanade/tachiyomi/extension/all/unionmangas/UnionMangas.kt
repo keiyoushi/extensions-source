@@ -164,13 +164,13 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     private fun findChapterPassword(document: Document): String {
         return try {
-            val regxPaswdUrl = """\/pages\/%5Btype%5D\/%5Bidmanga%5D\/%5Biddetail%5D-.+\.js""".toRegex()
-            val regxFindPaswd = """AES\.decrypt\(\w+,"(?<password>[^"]+)"\)""".toRegex(RegexOption.MULTILINE)
+            val regxPasswordUrl = """\/pages\/%5Btype%5D\/%5Bidmanga%5D\/%5Biddetail%5D-.+\.js""".toRegex()
+            val regxFindPassword = """AES\.decrypt\(\w+,"(?<password>[^"]+)"\)""".toRegex(RegexOption.MULTILINE)
             val jsDecryptUrl = document.select("script")
                 .map { it.absUrl("src") }
-                .first { regxPaswdUrl.find(it) != null }
+                .first { regxPasswordUrl.find(it) != null }
             val jsDecrypt = client.newCall(GET(jsDecryptUrl, headers)).execute().asJsoup().html()
-            regxFindPaswd.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
+            regxFindPassword.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
         } catch (e: Exception) {
             Log.e("::findChapterPassword", e.toString())
             throw Exception(intl["password_not_found"])
