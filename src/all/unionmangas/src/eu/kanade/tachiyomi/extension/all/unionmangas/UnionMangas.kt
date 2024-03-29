@@ -187,9 +187,9 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override fun imageUrlParse(response: Response): String = ""
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val currentPage = response.request.url.pathSegments.last()
-        val mangasDto = response.parseAs<MangaListDto>()
-        mangasDto.currentPage = currentPage
+        val mangasDto = response.parseAs<MangaListDto>().apply {
+            currentPage = response.request.url.pathSegments.last()
+        }
 
         return MangasPage(
             mangas = mangasDto.toSManga(langOption.infix),
