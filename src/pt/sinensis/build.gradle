@@ -1,7 +1,7 @@
 ext {
     extName = 'Sinensis Scan'
     extClass = '.SinensisScan'
-    themePkg = 'PeachScan'
+    themePkg = 'peachscan'
     baseUrl = 'https://sinensistoon.com'
     overrideVersionCode = 7
 }
