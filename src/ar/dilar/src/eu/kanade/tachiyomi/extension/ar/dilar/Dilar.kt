@@ -7,9 +7,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 import okhttp3.Response
 
+private const val MIRROR_PREF_KEY = "MIRROR"
+private const val MIRROR_PREF_TITLE = "Dilar : Mirror Urls"
+private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://dilar.tube", "https://golden.rest")
+private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
+private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
+
 class Dilar : Gmanga(
     "Dilar",
-    "https://dilar.tube",
+    MIRROR_PREF_DEFAULT_VALUE,
     "ar",
 ) {
     override fun chaptersRequest(manga: SManga): Request {
@@ -22,5 +28,29 @@ class Dilar : Gmanga(
             .filterNot { it.isMonetized }
 
         return releases.map { it.toSChapter() }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val mirrorPref = ListPreference(screen.context).apply {
+            key = MIRROR_PREF_KEY
+            title = MIRROR_PREF_TITLE
+            entries = MIRROR_PREF_ENTRY_VALUES
+            entryValues = MIRROR_PREF_ENTRY_VALUES
+            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
+            summary = "%s"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+        screen.addPreference(mirrorPref)
+    }
+
+    override val baseUrl by lazy {
+        when {
+            System.getenv("CI") == "true" -> MIRROR_PREF_ENTRY_VALUES.joinToString("#, ")
+            else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
+        }
     }
 }
