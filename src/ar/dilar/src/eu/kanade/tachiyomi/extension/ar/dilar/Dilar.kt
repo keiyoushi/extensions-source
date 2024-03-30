@@ -21,7 +21,6 @@ private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://dilar.tube", "https://go
 private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
 
-
 class Dilar :
     ConfigurableSource, Gmanga(
     "Dilar",
