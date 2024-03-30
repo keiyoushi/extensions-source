@@ -104,14 +104,16 @@ class IkigaiMangas : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("#")
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val slug = response.request.url
-            .toString()
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url
             .substringAfter("/series/comic-")
             .substringBefore("#")
-        val apiUrl = "$apiBaseUrl/api/swf/series/$slug".toHttpUrl()
-        val newResponse = client.newCall(GET(url = apiUrl, headers = headers)).execute()
-        val result = json.decodeFromString<PayloadSeriesDetailsDto>(newResponse.body.string())
+
+        return GET("$apiBaseUrl/api/swf/series/$slug", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val result = json.decodeFromString<PayloadSeriesDetailsDto>(response.body.string())
         return result.series.toSMangaDetails()
     }
 
