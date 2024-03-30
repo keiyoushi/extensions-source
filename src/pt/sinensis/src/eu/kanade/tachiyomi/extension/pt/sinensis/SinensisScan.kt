@@ -9,8 +9,4 @@ class SinensisScan : PeachScan(
     "https://sinensistoon.com",
     "pt-BR",
     SimpleDateFormat("dd 'de' MMMM 'de' yyyy 'às' HH:mm", Locale("pt", "BR")),
-) {
-
-    // Name changed from Sinensis to Sinensis Scan
-    override val id: Long = 3891513807564817914
-}
+)
