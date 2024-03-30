@@ -1,9 +1,10 @@
 ext {
-    extName = 'MonarcaManga'
-    extClass = '.MonarcaManga'
+    extName = 'Visormonarca'
+    extClass = '.Visormonarca'
     themePkg = 'madara'
-    baseUrl = 'https://monarcamanga.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://visormonarca.com'
+    overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
