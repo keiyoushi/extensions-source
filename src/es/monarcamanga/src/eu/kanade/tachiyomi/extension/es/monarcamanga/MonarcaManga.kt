@@ -6,7 +6,7 @@ import java.util.Locale
 
 class MonarcaManga : Madara(
     "MonarcaManga",
-    "https://monarcamanga.com",
+    "https://visormonarca.com",
     "es",
     SimpleDateFormat("MMM d, yyy", Locale("es")),
 ) {
