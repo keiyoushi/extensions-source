@@ -1,0 +1,7 @@
+ext {
+    extName = 'ReadComic'
+    extClass = '.ReadComic'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
