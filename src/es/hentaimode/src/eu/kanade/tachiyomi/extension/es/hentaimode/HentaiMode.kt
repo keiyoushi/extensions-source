@@ -35,7 +35,7 @@ class HentaiMode : ParsedHttpSource() {
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
-    override fun popularMangaSelector() = "div.row div.book-list > a"
+    override fun popularMangaSelector() = "div.row div[class*=\"book-list\"] > a"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
