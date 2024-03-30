@@ -47,7 +47,7 @@ class PlotTwistNoFansub : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaSelector(): String = "div.last-updates > div.item"
+    override fun popularMangaSelector(): String = "div.item"
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -120,7 +120,7 @@ class PlotTwistNoFansub : ParsedHttpSource() {
         val mangaId = document.selectFirst("div.td-ss-main-content > article[id^=post-]")!!.id().substringAfter("-")
         val url = "$baseUrl/wp-admin/admin-ajax.php"
         val formBody = FormBody.Builder()
-            .add("action", "lcap")
+            .add("action", "lcapl")
             .add("manga_id", mangaId)
 
         var page = 1
