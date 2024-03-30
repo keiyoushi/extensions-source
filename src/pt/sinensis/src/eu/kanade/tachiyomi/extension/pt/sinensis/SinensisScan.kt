@@ -13,5 +13,4 @@ class SinensisScan : PeachScan(
 
     // Name changed from Sinensis to Sinensis Scan
     override val id: Long = 3891513807564817914
-
 }
