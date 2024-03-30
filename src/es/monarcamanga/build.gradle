@@ -1,6 +1,6 @@
 ext {
-    extName = 'MonarcaManga'
-    extClass = '.MonarcaManga'
+    extName = 'Visormonarca'
+    extClass = '.Visormonarca'
     themePkg = 'madara'
     baseUrl = 'https://visormonarca.com'
     overrideVersionCode = 1
