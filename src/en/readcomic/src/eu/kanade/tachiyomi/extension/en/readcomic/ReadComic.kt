@@ -50,7 +50,10 @@ class ReadComic : ParsedHttpSource() {
             addQueryParameter("key", query)
             filters.forEach { filter ->
                 when (filter) {
-                    is GenreFilter -> addQueryParameter("wg", filter.toUriPart())
+                    is GenreFilter -> {
+                        addQueryParameter("wg", filter.included.joinToString("%2C"))
+                        addQueryParameter("wog", filter.excluded.joinToString("%2C"))
+                    }
                     is StatusFilter -> if (filter.toUriPart().isNotBlank()) {
                         addQueryParameter("status", filter.toUriPart())
                     }
@@ -151,7 +154,15 @@ class ReadComic : ParsedHttpSource() {
         StatusFilter(getStatusList),
     )
 
-    private class GenreFilter(genrePairs: Array<Pair<String, String>>) : UriPartFilter("Category", genrePairs)
+    // private class GenreFilter(genrePairs: Array<Pair<String, String>>) : UriPartFilter("Category", genrePairs)
+    private class Genre(name: String, val toUriPart: String) : Filter.TriState(name)
+    private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
+        val included: List<String>
+            get() = state.filter { it.isIncluded() }.map { it.toUriPart }
+
+        val excluded: List<String>
+            get() = state.filter { it.isExcluded() }.map { it.toUriPart }
+    }
     private class StatusFilter(statusPairs: Array<Pair<String, String>>) : UriPartFilter("Status", statusPairs)
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
@@ -163,62 +174,62 @@ class ReadComic : ParsedHttpSource() {
         Pair("Ongoing", "ONG"),
         Pair("Completed", "CMP"),
     )
-    private val getGenreList = arrayOf(
-        Pair("Any", ""),
-        Pair("Marvel", "Marvel"),
-        Pair("DC Comics", "DC%20Comics"),
-        Pair("Action", "Action"),
-        Pair("Adventure", "Adventure"),
-        Pair("Anthology", "Anthology"),
-        Pair("Anthropomorphic", "Anthropomorphic"),
-        Pair("Biography", "Biography"),
-        Pair("Children", "Children"),
-        Pair("Comedy", "Comedy"),
-        Pair("Crime", "Crime"),
-        Pair("Cyborgs", "Cyborgs"),
-        Pair("Dark Horse", "Dark%20Horse"),
-        Pair("Demons", "Demons"),
-        Pair("Drama", "Drama"),
-        Pair("Fantasy", "Fantasy"),
-        Pair("Family", "Family"),
-        Pair("Fighting", "Fighting"),
-        Pair("Gore", "Gore"),
-        Pair("Graphic Novels", "Graphic%20Novels"),
-        Pair("Historical", "Historical"),
-        Pair("Horror", "Horror"),
-        Pair("Leading Ladies", "Leading%20Ladies"),
-        Pair("Literature", "Literature"),
-        Pair("Magic", "Magic"),
-        Pair("Manga", "Manga"),
-        Pair("Martial Arts", "Martial%20Arts"),
-        Pair("Mature", "Mature"),
-        Pair("Mecha", "Mecha"),
-        Pair("Military", "Military"),
-        Pair("Movie Cinematic Link", "Movie%20Cinematic%20Link"),
-        Pair("Mystery", "Mystery"),
-        Pair("Mythology", "Mythology"),
-        Pair("Psychological", "Psychological"),
-        Pair("Personal", "Personal"),
-        Pair("Political", "Political"),
-        Pair("Post-Apocalyptic", "Post-Apocalyptic"),
-        Pair("Pulp", "Pulp"),
-        Pair("Robots", "Robots"),
-        Pair("Romance", "Romance"),
-        Pair("Sci-Fi", "Sci-Fi"),
-        Pair("Slice of Life", "Slice%20of%20Life"),
-        Pair("Science Fiction", "Science%20Fiction"),
-        Pair("Sports", "Sports"),
-        Pair("Spy", "Spy"),
-        Pair("Superhero", "Superhero"),
-        Pair("Supernatural", "Supernatural"),
-        Pair("Suspense", "Suspense"),
-        Pair("Thriller", "Thriller"),
-        Pair("Tragedy", "Tragedy"),
-        Pair("Vampires", "Vampires"),
-        Pair("Vertigo", "Vertigo"),
-        Pair("Video Games", "Video%20Games"),
-        Pair("War", "War"),
-        Pair("Western", "Western"),
-        Pair("Zombies", "Zombies"),
+    private val getGenreList = listOf(
+        Genre("Any", ""),
+        Genre("Marvel", "Marvel"),
+        Genre("DC Comics", "DC%20Comics"),
+        Genre("Action", "Action"),
+        Genre("Adventure", "Adventure"),
+        Genre("Anthology", "Anthology"),
+        Genre("Anthropomorphic", "Anthropomorphic"),
+        Genre("Biography", "Biography"),
+        Genre("Children", "Children"),
+        Genre("Comedy", "Comedy"),
+        Genre("Crime", "Crime"),
+        Genre("Cyborgs", "Cyborgs"),
+        Genre("Dark Horse", "Dark%20Horse"),
+        Genre("Demons", "Demons"),
+        Genre("Drama", "Drama"),
+        Genre("Fantasy", "Fantasy"),
+        Genre("Family", "Family"),
+        Genre("Fighting", "Fighting"),
+        Genre("Gore", "Gore"),
+        Genre("Graphic Novels", "Graphic%20Novels"),
+        Genre("Historical", "Historical"),
+        Genre("Horror", "Horror"),
+        Genre("Leading Ladies", "Leading%20Ladies"),
+        Genre("Literature", "Literature"),
+        Genre("Magic", "Magic"),
+        Genre("Manga", "Manga"),
+        Genre("Martial Arts", "Martial%20Arts"),
+        Genre("Mature", "Mature"),
+        Genre("Mecha", "Mecha"),
+        Genre("Military", "Military"),
+        Genre("Movie Cinematic Link", "Movie%20Cinematic%20Link"),
+        Genre("Mystery", "Mystery"),
+        Genre("Mythology", "Mythology"),
+        Genre("Psychological", "Psychological"),
+        Genre("Personal", "Personal"),
+        Genre("Political", "Political"),
+        Genre("Post-Apocalyptic", "Post-Apocalyptic"),
+        Genre("Pulp", "Pulp"),
+        Genre("Robots", "Robots"),
+        Genre("Romance", "Romance"),
+        Genre("Sci-Fi", "Sci-Fi"),
+        Genre("Slice of Life", "Slice%20of%20Life"),
+        Genre("Science Fiction", "Science%20Fiction"),
+        Genre("Sports", "Sports"),
+        Genre("Spy", "Spy"),
+        Genre("Superhero", "Superhero"),
+        Genre("Supernatural", "Supernatural"),
+        Genre("Suspense", "Suspense"),
+        Genre("Thriller", "Thriller"),
+        Genre("Tragedy", "Tragedy"),
+        Genre("Vampires", "Vampires"),
+        Genre("Vertigo", "Vertigo"),
+        Genre("Video Games", "Video%20Games"),
+        Genre("War", "War"),
+        Genre("Western", "Western"),
+        Genre("Zombies", "Zombies"),
     )
 }
