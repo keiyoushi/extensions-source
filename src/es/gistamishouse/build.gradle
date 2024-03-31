@@ -1,0 +1,9 @@
+ext {
+    extName = 'Gistamis House'
+    extClass = '.GistamisHouse'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://gistamishousefansub.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
