@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class MangaWT : Madara(
     "MangaWT",
-    "https://mangawt.com",
+    "https://mangawt.net",
     "tr",
 ) {
     override val useNewChapterEndpoint = true
