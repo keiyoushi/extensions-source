@@ -18,6 +18,7 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -71,6 +72,23 @@ class Mangalek :
             }
         }
         screen.addPreference(mirrorPref)
+    }
+
+    private val formatOne = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
+    private val formatTwo = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+    override fun parseChapterDate(date: String?): Long {
+        date ?: return 0L
+
+        return try {
+            formatOne.parse(date)!!.time
+        } catch (_: ParseException) {
+            try {
+                formatTwo.parse(date)!!.time
+            } catch (_: ParseException) {
+                0L
+            }
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
