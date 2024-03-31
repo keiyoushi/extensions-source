@@ -11,7 +11,6 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
 class Yokai : ZeistManga("Yokai", "https://yokai-team.blogspot.com", "ar") {
-    private val json: Json by injectLazy()
 
     // ============================== Chapters ==============================
     override fun chapterListParse(response: Response): List<SChapter> {
