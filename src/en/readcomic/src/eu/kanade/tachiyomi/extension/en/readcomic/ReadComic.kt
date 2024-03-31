@@ -7,16 +7,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
-import java.util.ArrayList
-import java.util.Date
 import java.util.Locale
 
 class ReadComic : ParsedHttpSource() {
@@ -39,14 +35,14 @@ class ReadComic : ParsedHttpSource() {
         val url = "$baseUrl/popular-comics".toHttpUrl().newBuilder().apply {
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
-        return GET(url.toString(), headers)
+        return GET(url, headers)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/comic-updates".toHttpUrl().newBuilder().apply {
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
-        return GET(url.toString(), headers)
+        return GET(url, headers)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -70,19 +66,19 @@ class ReadComic : ParsedHttpSource() {
     }
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        val selector = "ul.line-list > li > a.big-link"
-        setUrlWithoutDomain(element.select(selector).attr("href"))
-        title = element.select(selector).text()
-        thumbnail_url = fetchThumbnailURL(element.select(selector).attr("href"))
+        with(element.select("ul.line-list > li > a.big-link")) {
+            setUrlWithoutDomain(attr("href"))
+            title = text()
+        }
+        thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover&font_size=62"
     }
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("div.dlb-right > a.dlb-title").attr("href"))
-        title = element.select("div.dlb-right > a.dlb-title").text()
+        with(element.select("div.dlb-right > a.dlb-title")) {
+            setUrlWithoutDomain(attr("href"))
+            title = text()
+        }
         thumbnail_url = element.select("a.dlb-image > img").attr("src")
     }
-    private fun fetchThumbnailURL(url: String) = client.newCall(GET(url, headers)).execute().asJsoup().select("div.anime-image > img").attr("src")
-
-    // private fun fetchPagesFromNav(url: String) = client.newCall(GET(url, headers)).execute().asJsoup()
 
     override fun popularMangaNextPageSelector() = "div.general-nav > a:contains(Next)"
 
@@ -109,31 +105,26 @@ class ReadComic : ParsedHttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = ArrayList<SChapter>()
-
-        document.select(chapterListSelector()).forEach {
-            chapters.add(chapterFromElement(it))
-        }
-
-        return chapters
-    }
-
     override fun chapterListSelector() = "ul.basic-list > li"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(element.select("a.ch-name").attr("href"))
-        chapter.name = element.select("a.ch-name").text()
-        chapter.date_upload = dateParse(element.select("span").text())
-        return chapter
+        return SChapter.create().apply {
+            with(element.select("a.ch-name")) {
+                setUrlWithoutDomain(attr("href"))
+                name = text()
+            }
+            date_upload = dateParse(element.select("span").text())
+        }
     }
 
-    private fun dateParse(dateAsString: String): Long {
-        val date: Date? = SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH).parse(dateAsString)
+    private val dateFormat by lazy { SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH) }
 
-        return date?.time ?: 0L
+    private fun dateParse(dateStr: String): Long {
+        return try {
+            dateFormat.parse(dateStr)!!.time
+        } catch (_: Exception) {
+            0L
+        }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -141,11 +132,9 @@ class ReadComic : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        document.select("div.chapter-container img").forEachIndexed { i, img ->
-            pages.add(Page(i, "", img.attr("abs:src")))
+        return document.select("div.chapter-container img").mapIndexed { index, img ->
+            Page(index, "", img.attr("abs:src"))
         }
-        return pages
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -153,8 +142,6 @@ class ReadComic : ParsedHttpSource() {
     // Filters
 
     override fun getFilterList() = FilterList(
-        // Filter.Header("Note: can't combine search types"),
-        Filter.Separator(),
         GenreFilter(getGenreList),
     )
 
