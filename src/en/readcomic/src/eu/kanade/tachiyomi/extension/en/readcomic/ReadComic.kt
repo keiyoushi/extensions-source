@@ -51,6 +51,9 @@ class ReadComic : ParsedHttpSource() {
             filters.forEach { filter ->
                 when (filter) {
                     is GenreFilter -> addQueryParameter("wg", filter.toUriPart())
+                    is StatusFilter -> if (filter.toUriPart().isNotBlank()) {
+                        addQueryParameter("status", filter.toUriPart())
+                    }
                     else -> {}
                 }
             }
@@ -142,18 +145,26 @@ class ReadComic : ParsedHttpSource() {
     // Filters
 
     override fun getFilterList() = FilterList(
+        Filter.Header("Note: can't leave both filters as Any with a blank search string"),
+        Filter.Separator(),
         GenreFilter(getGenreList),
+        StatusFilter(getStatusList),
     )
 
     private class GenreFilter(genrePairs: Array<Pair<String, String>>) : UriPartFilter("Category", genrePairs)
+    private class StatusFilter(statusPairs: Array<Pair<String, String>>) : UriPartFilter("Status", statusPairs)
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
-
+    private val getStatusList = arrayOf(
+        Pair("Any", ""), // You might want an option for any status
+        Pair("Ongoing", "ONG"),
+        Pair("Completed", "CMP"),
+    )
     private val getGenreList = arrayOf(
-        Pair("None", ""),
+        Pair("Any", ""),
         Pair("Marvel", "Marvel"),
         Pair("DC Comics", "DC%20Comics"),
         Pair("Action", "Action"),
