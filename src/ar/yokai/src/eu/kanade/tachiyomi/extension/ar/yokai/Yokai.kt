@@ -5,10 +5,8 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
 class Yokai : ZeistManga("Yokai", "https://yokai-team.blogspot.com", "ar") {
 
