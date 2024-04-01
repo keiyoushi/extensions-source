@@ -61,10 +61,11 @@ class Dilar :
         else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
     }
 
-    override val baseUrl = mirrorPref()
+    override val baseUrl by lazy { mirrorPref() }
 
-    private val preferences: SharedPreferences =
+    override val cdnUrl by lazy { baseUrl }
+
+    private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-
-    override val cdnUrl = baseUrl
+    }
 }
