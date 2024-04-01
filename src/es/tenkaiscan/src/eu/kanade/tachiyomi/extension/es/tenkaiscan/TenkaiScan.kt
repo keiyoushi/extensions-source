@@ -120,7 +120,7 @@ class TenkaiScan : ParsedHttpSource() {
     )
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        document.selectFirst("div.page-content div.text-details")?.let { element ->
+        document.selectFirst("div.page-content div.text-details")!!.let { element ->
             title = element.selectFirst("div.name-rating")!!.text()
             description = element.select("p.sec:not(div.soft-details p)").text()
             element.selectFirst("div.soft-details")?.let { details ->
