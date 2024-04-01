@@ -28,7 +28,7 @@ abstract class Gmanga(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
-    protected val cdnUrl: String = baseUrl,
+    protected open val cdnUrl: String = baseUrl,
 ) : HttpSource() {
 
     override val supportsLatest = true
