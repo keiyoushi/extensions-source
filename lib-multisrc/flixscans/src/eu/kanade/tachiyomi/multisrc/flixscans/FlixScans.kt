@@ -162,7 +162,12 @@ abstract class FlixScans(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            return GET("$apiUrl/search/serie/${query.trim()}?page=$page")
+            val url = "$apiUrl/search/serie".toHttpUrl().newBuilder()
+                .addPathSegment(query.trim())
+                .addQueryParameter("page", page.toString())
+                .build()
+
+            return GET(url, headers)
         }
 
         val advSearchUrl = apiUrl.toHttpUrl().newBuilder().apply {
@@ -205,11 +210,7 @@ abstract class FlixScans(
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val (prefix, id) = with(manga.url.substringAfterLast("/")) {
-            val split = split("-")
-
-            split[0] to split[1]
-        }
+        val (prefix, id) = getPrefixIdFromUrl(manga.url)
 
         return GET("$apiUrl/webtoon/series/$id/$prefix", headers)
     }
@@ -223,11 +224,7 @@ abstract class FlixScans(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val (prefix, id) = with(manga.url.substringAfterLast("/")) {
-            val split = split("-")
-
-            split[0] to split[1]
-        }
+        val (prefix, id) = getPrefixIdFromUrl(manga.url)
 
         return GET("$apiUrl/webtoon/chapters/$id-desc#$prefix", headers)
     }
@@ -240,13 +237,17 @@ abstract class FlixScans(
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val (prefix, id) = with(chapter.url.substringAfterLast("/")) {
+        val (prefix, id) = getPrefixIdFromUrl(chapter.url)
+
+        return GET("$apiUrl/webtoon/chapters/chapter/$id/$prefix", headers)
+    }
+
+    protected fun getPrefixIdFromUrl(url: String): Pair<String, String> {
+        return with(url.substringAfterLast("/")) {
             val split = split("-")
 
             split[0] to split[1]
         }
-
-        return GET("$apiUrl/webtoon/chapters/chapter/$id/$prefix", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
