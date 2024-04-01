@@ -27,7 +27,7 @@ abstract class ZeistManga(
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    protected val json: Json by injectLazy()
 
     private val intl by lazy { ZeistMangaIntl(lang) }
 
@@ -63,23 +63,7 @@ abstract class ZeistManga(
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val jsonString = response.body.string()
-        val result = json.decodeFromString<ZeistMangaDto>(jsonString)
-
-        val mangas = result.feed?.entry.orEmpty()
-            .filter { it.category.orEmpty().any { category -> category.term == "Series" } }
-            .filter { !it.category.orEmpty().any { category -> category.term == "Anime" } }
-            .map { it.toSManga(baseUrl) }
-
-        val mangalist = mangas.toMutableList()
-        if (mangas.size == maxMangaResults + 1) {
-            mangalist.removeLast()
-            return MangasPage(mangalist, true)
-        }
-
-        return MangasPage(mangalist, false)
-    }
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val startIndex = maxMangaResults * (page - 1) + 1
@@ -123,7 +107,25 @@ abstract class ZeistManga(
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+    protected open val excludedCategories: List<String> = listOf("Anime")
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val jsonString = response.body.string()
+        val result = json.decodeFromString<ZeistMangaDto>(jsonString)
+
+        val mangas = result.feed?.entry.orEmpty()
+            .filter { it.category.orEmpty().any { category -> category.term == "Series" } } // Default category for all series
+            .filterNot { it.category.orEmpty().any { category -> excludedCategories.contains(category.term) } }
+            .map { it.toSManga(baseUrl) }
+
+        val mangalist = mangas.toMutableList()
+        if (mangas.size == maxMangaResults + 1) {
+            mangalist.removeLast()
+            return MangasPage(mangalist, true)
+        }
+
+        return MangasPage(mangalist, false)
+    }
 
     protected open val statusSelectorList = listOf(
         "Status",
@@ -199,13 +201,9 @@ abstract class ZeistManga(
         val document = response.asJsoup()
 
         val url = getChapterFeedUrl(document)
+        val res = client.newCall(GET(url, headers)).execute()
 
-        val req = GET(url, headers)
-        val res = client.newCall(req).execute()
-
-        val jsonString = res.body.string()
-        val result = json.decodeFromString<ZeistMangaDto>(jsonString)
-
+        val result = json.decodeFromString<ZeistMangaDto>(res.body.string())
         return result.feed?.entry?.filter { it.category.orEmpty().any { category -> category.term == chapterCategory } }
             ?.map { it.toSChapter(baseUrl) }
             ?: throw Exception("Failed to parse from chapter API")
@@ -392,6 +390,7 @@ abstract class ZeistManga(
         "ongoing",
         "en curso",
         "en emisión",
+        "activo",
         "ativo",
         "lançando",
         "مستمر",
@@ -400,10 +399,12 @@ abstract class ZeistManga(
     protected open val statusCompletedList = listOf(
         "completed",
         "completo",
+        "finalizado",
     )
 
     protected open val statusHiatusList = listOf(
         "hiatus",
+        "pausado",
     )
 
     protected open val statusCancelledList = listOf(
