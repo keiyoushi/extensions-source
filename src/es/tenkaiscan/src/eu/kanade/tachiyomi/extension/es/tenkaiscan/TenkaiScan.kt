@@ -19,7 +19,7 @@ import java.util.Locale
 class TenkaiScan : ParsedHttpSource() {
 
     // Site change theme from Madara to custom theme
-    override val versionId = 2
+    override val versionId = 3
 
     override val name = "TenkaiScan"
 
