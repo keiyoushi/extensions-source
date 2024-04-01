@@ -13,19 +13,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
 
 class KomikRealm : ZeistManga(
     "KomikRealm",
     "https://www.komikrealm.my.id",
     "id",
 ) {
-    private val json: Json by injectLazy()
-
     override val hasFilters = true
 
     override val hasLanguageFilter = false
