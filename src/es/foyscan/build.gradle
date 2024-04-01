@@ -1,0 +1,9 @@
+ext {
+    extName = 'Foy Scan'
+    extClass = '.FoyScan'
+    themePkg = 'mangaesp'
+    baseUrl = 'https://foyscan.xyz'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
