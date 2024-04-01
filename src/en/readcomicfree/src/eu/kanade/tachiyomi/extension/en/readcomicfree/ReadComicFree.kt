@@ -173,7 +173,7 @@ class ReadComicFree : ParsedHttpSource() {
     // Filters
 
     override fun getFilterList() = FilterList(
-        Filter.Header("Note: can't leave both filters as Any with a blank search string"),
+        Filter.Header("Can search either for a name or using filters, not both"),
         Filter.Separator(),
         GenreFilter(getGenreList),
         StatusFilter(getStatusList),
