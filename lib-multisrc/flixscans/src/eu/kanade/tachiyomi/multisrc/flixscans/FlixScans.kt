@@ -17,8 +17,8 @@ import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 
 abstract class FlixScans(
     override val name: String,
@@ -37,13 +37,7 @@ abstract class FlixScans(
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        runCatching { fetchGenre() }
-
-        return super.fetchPopularManga(page)
-    }
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         return GET("$apiUrl/webtoon/pages/home/romance", headers)
@@ -57,12 +51,6 @@ abstract class FlixScans(
             .map { it.toSManga(cdnUrl) }
 
         return MangasPage(entries, false)
-    }
-
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        runCatching { fetchGenre() }
-
-        return super.fetchLatestUpdates(page)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -93,7 +81,7 @@ abstract class FlixScans(
     }
 
     private val fetchGenreCallback = object : Callback {
-        override fun onFailure(call: Call, e: okio.IOException) {
+        override fun onFailure(call: Call, e: IOException) {
             fetchGenreAttempt++
             fetchGenreFailed = true
             fetchGenreCallOngoing = false
@@ -133,6 +121,8 @@ abstract class FlixScans(
     }
 
     override fun getFilterList(): FilterList {
+        fetchGenre()
+
         val filters: MutableList<Filter<*>> = mutableListOf(
             Filter.Header("Ignored when using Text Search"),
             MainGenreFilter(),
@@ -152,12 +142,6 @@ abstract class FlixScans(
         }
 
         return FilterList(filters)
-    }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        runCatching { fetchGenre() }
-
-        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
