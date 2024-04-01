@@ -123,6 +123,7 @@ class TenkaiScan : ParsedHttpSource() {
         document.selectFirst("div.page-content div.text-details")!!.let { element ->
             title = element.selectFirst("div.name-rating")!!.text()
             description = element.select("p.sec:not(div.soft-details p)").text()
+            thumbnail_url = element.selectFirst("img.img-details")!!.imgAttr()
             element.selectFirst("div.soft-details")?.let { details ->
                 author = details.selectFirst("p:has(span:contains(Autor))")!!.ownText()
                 artist = details.selectFirst("p:has(span:contains(Artista))")!!.ownText()
