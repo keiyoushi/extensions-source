@@ -1,6 +1,6 @@
 ext {
-    extName = 'ReadComic'
-    extClass = '.ReadComic'
+    extName = 'ReadComic.Top'
+    extClass = '.ReadComicTop'
     extVersionCode = 1
     isNsfw = true
 }

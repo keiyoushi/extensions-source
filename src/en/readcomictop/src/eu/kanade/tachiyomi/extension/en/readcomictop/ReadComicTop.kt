@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.readcomic
+package eu.kanade.tachiyomi.extension.en.readcomictop
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -15,9 +15,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ReadComic : ParsedHttpSource() {
+class ReadComicTop : ParsedHttpSource() {
 
-    override val name = "ReadComic"
+    override val name = "ReadComic.Top"
 
     override val baseUrl = "https://readcomic.top"
 
@@ -154,7 +154,6 @@ class ReadComic : ParsedHttpSource() {
         StatusFilter(getStatusList),
     )
 
-    // private class GenreFilter(genrePairs: Array<Pair<String, String>>) : UriPartFilter("Category", genrePairs)
     private class Genre(name: String, val toUriPart: String) : Filter.TriState(name)
     private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
         val included: List<String>
