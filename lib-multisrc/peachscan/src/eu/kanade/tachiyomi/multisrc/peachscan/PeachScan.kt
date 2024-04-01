@@ -32,7 +32,6 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -183,7 +182,7 @@ abstract class PeachScan(
         val zis = ZipInputStream(response.body.byteStream())
 
         val images = generateSequence { zis.nextEntry }
-            .map {
+            .mapNotNull {
                 val entryName = it.name
                 val splitEntryName = entryName.split('.')
                 val entryIndex = splitEntryName.first().toInt()
@@ -195,7 +194,7 @@ abstract class PeachScan(
                     val svgBytes = zis.readBytes()
                     val svgContent = svgBytes.toString(Charsets.UTF_8)
                     val b64 = dataUriRegex.find(svgContent)?.groupValues?.get(1)
-                        ?: throw IOException("Não foi possível corresponder a imagem no conteúdo SVG")
+                        ?: return@mapNotNull null
 
                     Base64.decode(b64, Base64.DEFAULT)
                 }

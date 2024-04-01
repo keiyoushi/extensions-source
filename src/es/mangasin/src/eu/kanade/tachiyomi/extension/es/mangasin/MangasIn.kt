@@ -89,20 +89,27 @@ class MangasIn : MMRCMS(
     private var key = ""
 
     private fun getKey(): String {
-        val script = client.newCall(GET("$baseUrl/js/datachs.js")).execute().body.string()
+        val script = client.newCall(GET("$baseUrl/js/ads2.js")).execute().body.string()
         val deobfuscatedScript = Deobfuscator.deobfuscateScript(script)
             ?: throw Exception("No se pudo desofuscar el script")
 
-        return KEY_REGEX.find(deobfuscatedScript)?.groupValues?.get(1)
+        val variable = KEY_REGEX.find(deobfuscatedScript)?.groupValues?.get(1)
+            ?: throw Exception("No se pudo encontrar la clave")
+
+        if (variable.startsWith("'")) return variable.removeSurrounding("'")
+        if (variable.startsWith("\"")) return variable.removeSurrounding("\"")
+
+        val varRegex = """(?:let|var|const)\s+$variable\s*=\s*['|"](.*)['|"]""".toRegex()
+        return varRegex.find(deobfuscatedScript)?.groupValues?.get(1)
             ?: throw Exception("No se pudo encontrar la clave")
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val mangaUrl = document.location().removeSuffix("/")
-        val receivedData = RECEIVED_DATA_REGEX.find(document.html())?.groupValues?.get(1) ?: throw Exception("No se pudo encontrar la lista de capítulos")
-        val unescapedReceivedData = receivedData.unescape()
-        val chapterData = json.decodeFromString<CDT>(unescapedReceivedData)
+        val encodeChapterData = CHAPTER_DATA_REGEX.find(document.html())?.value ?: throw Exception("No se pudo encontrar la lista de capítulos")
+        val unescapedChapterData = encodeChapterData.unescape()
+        val chapterData = json.decodeFromString<CDT>(unescapedChapterData)
         val salt = chapterData.s.decodeHex()
 
         val unsaltedCipherText = Base64.decode(chapterData.ct, Base64.DEFAULT)
@@ -111,7 +118,7 @@ class MangasIn : MMRCMS(
         val decrypted = CryptoAES.decrypt(Base64.encodeToString(cipherText, Base64.DEFAULT), key).ifEmpty {
             key = getKey()
             CryptoAES.decrypt(Base64.encodeToString(cipherText, Base64.DEFAULT), key)
-        }
+        }.ifEmpty { throw Exception("No se pudo desencriptar los capítulos") }
 
         val unescaped = decrypted.unescapeJava().removeSurrounding("\"").unescape()
 
@@ -158,10 +165,6 @@ class MangasIn : MMRCMS(
         return builder.toString()
     }
 
-    private fun String.parseDate(): Long {
-        return dateFormat.parse(this)?.time ?: 0L
-    }
-
     private fun String.decodeHex(): ByteArray {
         check(length % 2 == 0) { "Must have an even length" }
 
@@ -172,6 +175,6 @@ class MangasIn : MMRCMS(
 }
 
 private val UNESCAPE_REGEX = """\\(.)""".toRegex()
-private val RECEIVED_DATA_REGEX = """receivedData\s*=\s*["'](.*)["']\s*;""".toRegex()
-private val KEY_REGEX = """decrypt\(.*'(.*)'.*\)""".toRegex()
+private val CHAPTER_DATA_REGEX = """\{(?=.*\\"ct\\")(?=.*\\"iv\\")(?=.*\\"s\\").*?\}""".toRegex()
+private val KEY_REGEX = """decrypt\(.*?,\s*(.*?)\s*,.*\)""".toRegex()
 private val SALTED = "Salted__".toByteArray(Charsets.UTF_8)

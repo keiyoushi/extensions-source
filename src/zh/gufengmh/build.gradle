@@ -2,8 +2,8 @@ ext {
     extName = 'Gufeng Manhua'
     extClass = '.Gufengmh'
     themePkg = 'sinmh'
-    baseUrl = 'https://www.gufengmh.com'
-    overrideVersionCode = 6
+    baseUrl = 'https://www.gufengmh9.com'
+    overrideVersionCode = 7
 }
 
 apply from: "$rootDir/common.gradle"

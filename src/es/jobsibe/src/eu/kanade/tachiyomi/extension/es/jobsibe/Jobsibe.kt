@@ -15,6 +15,8 @@ class Jobsibe : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 
+    override val filterNonMangaItems = false
+
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)
         .build()

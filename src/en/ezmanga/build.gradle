@@ -1,9 +1,9 @@
 ext {
     extName = 'EZmanga'
     extClass = '.EZmanga'
-    themePkg = 'madara'
+    themePkg = 'keyoapp'
     baseUrl = 'https://ezmanga.net'
-    overrideVersionCode = 0
+    overrideVersionCode = 34
 }
 
 apply from: "$rootDir/common.gradle"

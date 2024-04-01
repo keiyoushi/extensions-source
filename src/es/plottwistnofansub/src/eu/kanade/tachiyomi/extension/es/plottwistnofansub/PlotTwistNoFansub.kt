@@ -47,7 +47,7 @@ class PlotTwistNoFansub : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaSelector(): String = "div.last-updates > div.item"
+    override fun popularMangaSelector(): String = "div.item"
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -118,9 +118,11 @@ class PlotTwistNoFansub : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val mangaId = document.selectFirst("div.td-ss-main-content > article[id^=post-]")!!.id().substringAfter("-")
+
+        val key = getKey(document)
         val url = "$baseUrl/wp-admin/admin-ajax.php"
         val formBody = FormBody.Builder()
-            .add("action", "lcap")
+            .add("action", key)
             .add("manga_id", mangaId)
 
         var page = 1
@@ -191,9 +193,49 @@ class PlotTwistNoFansub : ParsedHttpSource() {
         return UNESCAPE_REGEX.replace(this, "$1")
     }
 
+    private fun getKey(document: Document): String {
+        val customPriorityWant = listOf("custom")
+        val customPriorityJunk = listOf("bootstrap", "pagi", "reader", "jquery")
+
+        document.select("script[src*=\"wp-content/plugins/\"]")
+            .asSequence()
+            .map { it.attr("src") }
+            .filterNot { it.contains("wp-content/plugins/multilanguage-") }
+            .filterNot { it.contains("wp-content/plugins/ad-") }
+            .filterNot { it.contains("wp-content/plugins/td-") }
+            .filterNot { it.contains("wp-content/plugins/bj-") }
+            .filterNot { it.contains("wp-content/plugins/html-") }
+            .filterNot { it.contains("wp-content/plugins/gd-") }
+            .sortedWith(
+                compareBy<String> { url ->
+                    when {
+                        customPriorityWant.any { url.contains(it) } -> 0
+                        customPriorityJunk.any { url.contains(it) } -> 2
+                        else -> 1
+                    }
+                },
+            ).forEach { url ->
+                val script = client.newCall(GET(url, headers)).execute().body.string()
+                val actions = ACTION_REGEX.findAll(script)
+                    .groupBy { it.groupValues[2] }
+                    .map { it.key to it.value.size }
+                    .sortedBy { it.second }
+                    .map { it.first }
+                    .filterNot { it == "set_readed" }
+                if (actions.size > 1) {
+                    throw Exception("Couldn't find action key, found ${actions.size}")
+                } else if (actions.size == 1) {
+                    return actions[0]
+                }
+            }
+
+        throw Exception("Couldn't find action key")
+    }
+
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         private val CHAPTER_PAGES_REGEX = """obj\s*=\s*(.*)\s*;""".toRegex()
+        private val ACTION_REGEX = """action:\s*?(['"])([^\r\n]+?)\1""".toRegex()
         private const val MAX_MANGA_RESULTS = 1000
     }
 }
