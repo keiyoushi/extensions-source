@@ -1,0 +1,8 @@
+ext {
+    extName = 'ReadComicFree'
+    extClass = '.ReadComicFree'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
