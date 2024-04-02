@@ -160,7 +160,7 @@ class ReadComicFree : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("div.page-chapter img").mapIndexed { index, img ->
-            Page(index, "", img.attr("abs:src"))
+            Page(index, "", img.attr("data-original"))
         }
     }
 
