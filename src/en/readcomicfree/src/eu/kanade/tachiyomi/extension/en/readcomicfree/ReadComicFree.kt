@@ -46,45 +46,41 @@ class ReadComicFree : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
-
-        if (query.isNotBlank()) {
-            urlBuilder.addPathSegment("search")
-            urlBuilder.addQueryParameter("keyword", query)
-        } else {
-            var genreSegment: String? = null
-            var statusSegment: String? = null
-            var sortSegment: String? = null
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> {
-                        genreSegment = if (filter.toUriPart().isNullOrBlank()) "" else "genre/${filter.toUriPart()}"
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) {
+                addPathSegment("search")
+                addQueryParameter("keyword", query)
+            } else {
+                var genreSegment = ""
+                var statusSegment = ""
+                var sortSegment = ""
+                filters.forEach { filter ->
+                    when (filter) {
+                        is GenreFilter -> genreSegment = if (filter.toUriPart().isNullOrBlank()) "" else "genre/${filter.toUriPart()}"
+                        is StatusFilter -> statusSegment = if (filter.toUriPart().isNullOrBlank()) "" else filter.toUriPart()
+                        is SortFilter -> sortSegment = if (filter.toUriPart().isNullOrBlank()) "" else filter.toUriPart()
+                        else -> {}
                     }
-                    is StatusFilter -> {
-                        statusSegment = if (filter.toUriPart().isNullOrBlank()) "" else filter.toUriPart()
-                    }
-                    is SortFilter -> {
-                        sortSegment = if (filter.toUriPart().isNullOrBlank()) "" else filter.toUriPart()
-                    }
-                    else -> {}
                 }
+                val pathSegment = when {
+                    !genreSegment.isNullOrBlank() -> {
+                        when {
+                            !statusSegment.isNullOrBlank() -> if (!sortSegment.isNullOrBlank()) "$genreSegment/$statusSegment/$sortSegment" else "$genreSegment/$statusSegment"
+                            !sortSegment.isNullOrBlank() -> "$genreSegment/$sortSegment"
+                            else -> genreSegment
+                        }
+                    }
+
+                    !statusSegment.isNullOrBlank() -> if (!sortSegment.isNullOrBlank()) "status/$statusSegment/$sortSegment" else "status/$statusSegment"
+                    !sortSegment.isNullOrBlank() -> "genre/$sortSegment"
+                    else -> "genre"
+                }
+                addPathSegments(pathSegment)
             }
-            // Incredibly ugly, but works
-            val pathSegment = when {
-                genreSegment.isNullOrBlank() && statusSegment.isNullOrBlank() && !sortSegment.isNullOrBlank() -> "genre/$sortSegment"
-                genreSegment.isNullOrBlank() && !statusSegment.isNullOrBlank() && !sortSegment.isNullOrBlank() -> "status/$statusSegment/$sortSegment"
-                !genreSegment.isNullOrBlank() && !statusSegment.isNullOrBlank() && !sortSegment.isNullOrBlank() -> "$genreSegment/$statusSegment/$sortSegment"
-                !genreSegment.isNullOrBlank() && statusSegment.isNullOrBlank() && sortSegment.isNullOrBlank() -> "$genreSegment"
-                !genreSegment.isNullOrBlank() && !statusSegment.isNullOrBlank() && sortSegment.isNullOrBlank() -> "$genreSegment/$statusSegment"
-                !genreSegment.isNullOrBlank() && statusSegment.isNullOrBlank() && !sortSegment.isNullOrBlank() -> "$genreSegment/$sortSegment"
-                else -> "genre"
+            if (page > 1) {
+                addQueryParameter("page", page.toString())
             }
-            urlBuilder.addPathSegments(pathSegment)
-        }
-        if (page > 1) {
-            urlBuilder.addQueryParameter("page", page.toString())
-        }
-        val url = urlBuilder.build()
+        }.build()
         return GET(url, headers)
     }
 
