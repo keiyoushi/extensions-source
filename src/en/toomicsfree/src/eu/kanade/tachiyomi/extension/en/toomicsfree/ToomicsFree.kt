@@ -1,11 +1,11 @@
-package eu.kanade.tachiyomi.extension.en.hotcomics
+package eu.kanade.tachiyomi.extension.en.toomicsfree
 
 import eu.kanade.tachiyomi.multisrc.hotcomics.HotComics
 
-class HotComics : HotComics(
-    "HotComics",
+class ToomicsFree : HotComics(
+    "ToomicsFree.com",
     "en",
-    "https://hotcomics.me",
+    "https://toomicsfree.com",
 ) {
     override val browseList = listOf(
         Pair("Home", "en"),
