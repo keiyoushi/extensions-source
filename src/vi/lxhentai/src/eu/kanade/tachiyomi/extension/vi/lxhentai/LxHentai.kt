@@ -23,7 +23,7 @@ class LxHentai : ParsedHttpSource() {
 
     override val name = "LXHentai"
 
-    override val baseUrl = "https://lxmanga88.com"
+    override val baseUrl = "https://lxmanga.cc"
 
     override val lang = "vi"
 
