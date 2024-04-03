@@ -5,5 +5,5 @@ plugins {
 baseVersionCode = 1
 
 dependencies {
-    implementation(project(":lib:cookieinterceptor"))
+    api(project(":lib:cookieinterceptor"))
 }
