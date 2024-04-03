@@ -1,9 +1,7 @@
 ext {
     extName = 'TenkaiScan'
     extClass = '.TenkaiScan'
-    themePkg = 'madara'
-    baseUrl = 'https://tenkaiscan.net'
-    overrideVersionCode = 0
+    extVersionCode = 36
     isNsfw = true
 }
 
