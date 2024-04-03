@@ -11,13 +11,8 @@ import java.util.Locale
 @Serializable
 data class ApiResponse<T>(
     val data: List<T>,
-    val meta: PageInfo,
-)
-
-@Serializable
-data class PageInfo(
-    @SerialName("last_page") val lastPage: Int,
     @SerialName("current_page") val currentPage: Int,
+    @SerialName("last_page") val lastPage: Int,
 )
 
 @Serializable
@@ -120,8 +115,8 @@ data class Chapter(
     val slug: String,
     val createdAt: String? = null,
 ) {
-    fun toSChapter() = SChapter.create().apply {
-        url = "/read/webtoon/$id-$slug"
+    fun toSChapter(prefix: String) = SChapter.create().apply {
+        url = "/read/webtoon/$prefix-$id-$slug"
         name = this@Chapter.name
         date_upload = runCatching { dateFormat.parse(createdAt!!)!!.time }.getOrDefault(0L)
     }

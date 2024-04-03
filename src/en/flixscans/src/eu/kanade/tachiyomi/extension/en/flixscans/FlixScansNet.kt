@@ -2,4 +2,9 @@ package eu.kanade.tachiyomi.extension.en.flixscans
 
 import eu.kanade.tachiyomi.multisrc.flixscans.FlixScans
 
-class FlixScansNet : FlixScans("Flix Scans", "https://flixscans.org", "en")
+class FlixScansNet : FlixScans(
+    "Flix Scans",
+    "https://flixscans.org",
+    "en",
+    "https://flixscans.site/api/v1",
+)
