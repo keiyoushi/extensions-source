@@ -36,40 +36,43 @@ class HotComics : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/en/genres?page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/en", headers)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/en/new", headers)
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (query.isNotEmpty()) {
+                addEncodedPathSegments("en/search")
+                addQueryParameter("keyword", query.trim())
+            } else {
+                val filter = filters.filterIsInstance<BrowseFilter>().first()
+                addEncodedPathSegments(filter.selected)
+                addQueryParameter("page", page.toString())
+            }
+        }.build()
+
+        return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    override fun getFilterList() = getFilters()
+
+    override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val entries = document.select("li[itemtype*=ComicSeries] > a").map { element ->
+        val entries = document.select("li[itemtype*=ComicSeries]:not(.no-comic) > a").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 thumbnail_url = element.selectFirst("div.visual img")?.imgAttr()
                 title = element.selectFirst("div.main-text > h4.title")!!.text()
             }
         }.distinctBy { it.url }
-        val hasNextPage = document.selectFirst("div.pagination a.vnext") != null
+        val hasNextPage = document.selectFirst("div.pagination a.vnext:not(.disabled)") != null
 
         return MangasPage(entries, hasNextPage)
     }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/en/new", headers)
-    }
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/en/search".toHttpUrl().newBuilder()
-            .addQueryParameter("keyword", query.trim())
-            .build()
-
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
