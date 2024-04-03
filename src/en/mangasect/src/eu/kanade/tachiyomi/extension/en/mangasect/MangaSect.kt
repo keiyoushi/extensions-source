@@ -10,13 +10,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
@@ -25,13 +23,11 @@ class MangaSect : ParsedHttpSource() {
 
     override val name = "Manga Sect"
 
-    override val baseUrl = "https://mangasect.com"
+    override val baseUrl = "https://mangasect.net"
 
     override val lang = "en"
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1)
@@ -42,14 +38,19 @@ class MangaSect : ParsedHttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking/week/$page", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        return "$baseUrl/all-manga/$page/".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "views_week")
+            .build()
+            .let { GET(it, headers) }
+    }
 
-    override fun popularMangaSelector(): String = "div#main div.grid > div"
+    override fun popularMangaSelector(): String = "div.row div.item div.image"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.selectFirst("img")?.imgAttr()
-        element.selectFirst(".text-center a")!!.run {
-            title = text().trim()
+        element.selectFirst("a")!!.run {
+            title = (attr("title"))
             setUrlWithoutDomain(attr("href"))
         }
     }
@@ -137,20 +138,13 @@ class MangaSect : ParsedHttpSource() {
         SortFilter(),
     )
 
-    // Details
-
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        description = document.selectFirst("div#syn-target")?.text()
-        thumbnail_url = document.selectFirst(".a1 > figure img")?.imgAttr()
-        title = document.selectFirst(".a2 header h1")?.text()?.trim() ?: "N/A"
-        genre = document.select(".a2 div > a[rel='tag'].label").joinToString(", ") { it.text() }
-
-        document.selectFirst(".a1 > aside")?.run {
-            author = select("div:contains(Authors) > span a")
-                .joinToString(", ") { it.text().trim() }
-                .takeUnless { it.isBlank() || it.equals("Updating", true) }
-            status = selectFirst("div:contains(Status) > span")?.text().let(::parseStatus)
-        }
+        description = document.selectFirst("div.detail-content > p")?.text()
+        thumbnail_url = document.selectFirst(".col-image img")?.attr("src")
+        title = document.selectFirst("h1.title-detail")?.text()?.trim() ?: "N/A"
+        genre = document.select(".kind .col-xs-8 a").joinToString(", ") { it.text().trim() }
+        author = document.select(".author .col-xs-8 a").joinToString(", ") { it.text().trim() }
+        status = parseStatus(document.select(".status .col-xs-8").text().trim())
     }
 
     private fun parseStatus(status: String?): Int = when {
@@ -163,16 +157,15 @@ class MangaSect : ParsedHttpSource() {
 
     // Chapters
 
-    override fun chapterListSelector() = "ul > li.chapter"
+    override fun chapterListSelector() = "div.list-chapter ul > li.row"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.selectFirst("time[datetime]")?.also {
-            date_upload = it.attr("datetime").toLongOrNull()?.let { it * 1000L } ?: 0L
-        }
-        element.selectFirst("a")!!.run {
+        val date = element.selectFirst("div.col-xs-4.text-center.no-wrap.small")?.text().orEmpty()
+        date_upload = parseRelativeDate(date)
+        element.selectFirst("div.col-xs-5.chapter a")?.run {
             text().trim().also {
                 name = it
-                chapter_number = it.substringAfter("hapter ").toFloatOrNull() ?: 0F
+                chapter_number = it.substringAfter("Chapter ").toFloatOrNull() ?: 0F
             }
             setUrlWithoutDomain(attr("href"))
         }
@@ -180,41 +173,21 @@ class MangaSect : ParsedHttpSource() {
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val pageHeaders = headersBuilder().apply {
-            add("Accept", "application/json, text/javascript, */*; q=0.01")
-            add("Host", baseUrl.toHttpUrl().host)
-            add("Referer", baseUrl + chapter.url)
-            add("X-Requested-With", "XMLHttpRequest")
-        }.build()
-
-        val id = chapter.url.split("/").last()
-        return GET("$baseUrl/ajax/image/list/chap/$id", pageHeaders)
-    }
-
-    @Serializable
-    data class PageListResponseDto(val html: String)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<PageListResponseDto>().html
-        return pageListParse(
-            Jsoup.parseBodyFragment(
-                data,
-                response.request.header("Referer")!!,
-            ),
-        )
-    }
-
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.separator").map { page ->
-            val index = page.attr("data-index").toInt()
-            val url = page.selectFirst("a")!!.attr("abs:href")
-            Page(index, document.location(), url)
-        }.sortedBy { it.index }
+        return document.select("div.page-chapter > img").mapIndexed { index, img ->
+            val url = img.attr("abs:data-original")
+            Page(index, "", url)
+        }
     }
 
     override fun imageUrlParse(document: Document) = ""
+    fun parseRelativeDate(dateText: String): Long {
+        val currentTime = System.currentTimeMillis()
+        val matchResult = Regex("(\\d+)h ago").find(dateText)
+        val hoursAgo = matchResult?.groups?.get(1)?.value?.toLongOrNull() ?: return 0L
 
+        return currentTime - hoursAgo * 3600 * 1000
+    }
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
             add("Accept", "image/avif,image/webp,*/*")
@@ -223,16 +196,10 @@ class MangaSect : ParsedHttpSource() {
         return GET(page.imageUrl!!, imgHeaders)
     }
 
-    // Utilities
-
     // From mangathemesia
     private fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
-    }
-
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
     }
 }
