@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 import eu.kanade.tachiyomi.source.model.SChapter
 import org.jsoup.nodes.Element
 
-class ReadAttackOnTitanShingekiNoKyojinManga : MangaCatalog("Read Attack on Titan Shingeki no Kyojin Manga", "https://ww8.readsnk.com", "en") {
+class ReadAttackOnTitanShingekiNoKyojinManga : MangaCatalog("Read Attack on Titan Shingeki no Kyojin Manga", "https://ww9.readsnk.com", "en") {
     override val sourceList = listOf(
         Pair("Shingeki No Kyojin", "$baseUrl/manga/shingeki-no-kyojin/"),
         Pair("Colored", "$baseUrl/manga/shingeki-no-kyojin-colored/"),
@@ -20,7 +20,7 @@ class ReadAttackOnTitanShingekiNoKyojinManga : MangaCatalog("Read Attack on Tita
         Pair("No Regrets Colored", "$baseUrl/manga/attack-on-titan-no-regrets-colored/"),
     ).sortedBy { it.first }.distinctBy { it.second }
 
-    override fun chapterListSelector(): String = "div.w-full div.grid div.col-span-3"
+    override fun chapterListSelector(): String = "div.w-full div.grid div.col-span-4"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val urlElement = element.selectFirst("a")!!
