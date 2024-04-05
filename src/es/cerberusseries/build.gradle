@@ -1,7 +1,9 @@
 ext {
     extName = 'Cerberus Series'
     extClass = '.CerberusSeries'
-    extVersionCode = 1
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://cerberuseries.xyz'
+    overrideVersionCode = 0
     isNsfw = false
 }
 
