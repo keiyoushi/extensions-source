@@ -4,7 +4,6 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://leitordemanga.com'
     overrideVersionCode = 0
-    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
