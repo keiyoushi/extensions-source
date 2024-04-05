@@ -1,0 +1,9 @@
+ext {
+    extName = 'Soft Epsilon Scan'
+    extClass = '.SoftEpsilonScan'
+    themePkg = 'madara'
+    baseUrl = 'https://soft.epsilonscan.fr'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
