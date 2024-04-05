@@ -16,4 +16,6 @@ class SoftEpsilonScan : Madara(
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
+
+    override val useNewChapterEndpoint = true
 }
