@@ -1,8 +1,8 @@
 ext {
     extName = 'YuraManga'
     extClass = '.YuraManga'
-    themePkg = 'makaru'
-    baseUrl = 'https://www.yuramanga.my.id'
+    themePkg = 'madara'
+    baseUrl = 'https://yuramanga.my.id'
     overrideVersionCode = 0
 }
 
