@@ -1,7 +1,8 @@
 ext {
     extName = 'Hentai Slayer'
     extClass = '.HentaiSlayer'
-    extVersionCode = 2
+    themePkg = 'cloudrecess'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
