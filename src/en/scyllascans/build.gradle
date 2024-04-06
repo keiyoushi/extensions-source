@@ -2,7 +2,6 @@ ext {
     extName = 'Scylla Scans'
     extClass = '.ScyllaScans'
     themePkg = 'cloudrecess'
-    baseUrl = 'https://scyllascans.org'
     overrideVersionCode = 9
 }
 

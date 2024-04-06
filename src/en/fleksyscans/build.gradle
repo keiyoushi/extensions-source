@@ -2,8 +2,8 @@ ext {
     extName = 'FleksyScans'
     extClass = '.FleksyScans'
     themePkg = 'cloudrecess'
-    baseUrl = 'https://flexscans.com'
     overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
