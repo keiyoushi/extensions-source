@@ -35,7 +35,6 @@ body:
           required: true
         - label: I have updated the app to version **[0.15.3](https://github.com/mihonapp/mihon/releases/latest)**.
           required: true
-        - label: I have admitted that I am a clown by having checked this box, as I have not read these acknowledgements.
         - label: I have updated all installed extensions.
           required: true
         - label: I will fill out all of the requested information in this form.

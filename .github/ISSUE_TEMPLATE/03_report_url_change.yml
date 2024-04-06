@@ -53,6 +53,5 @@ body:
           required: true
         - label: I have written a short but informative title.
           required: true
-        - label: I have admitted that I am a clown by having checked this box, as I have not read these acknowledgements.
         - label: I will fill out all of the requested information in this form.
           required: true
