@@ -48,7 +48,7 @@ class BlackoutComics : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        thumbnail_url = element.selectFirst("img.custom-image:not(.hidden)")?.absUrl("src")
+        thumbnail_url = element.selectFirst("img.custom-image:not(.hidden), img.img-comics")?.absUrl("src")
         title = element.selectFirst("p.image-name:not(.hidden), span.text-comic")!!.text()
     }
 
@@ -96,9 +96,11 @@ class BlackoutComics : ParsedHttpSource() {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val row = document.selectFirst(".row")!!
-        thumbnail_url = row.selectFirst("img:not(.tachiyomikappa)")?.absUrl("src")
-        title = row.selectFirst("h2:not(.tachiyomikappa)")!!.text()
+        val row = document.selectFirst("div.special-edition")!!
+        thumbnail_url = row.selectFirst("img:last-child")?.absUrl("src")
+        title = row.select("h2")
+            .first { it.classNames().isEmpty() }!!
+            .text()
 
         with(row.selectFirst("div.trailer-content:has(h3:containsOwn(Detalhes))")!!) {
             println(outerHtml())
