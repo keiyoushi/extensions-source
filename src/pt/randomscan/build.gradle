@@ -1,9 +1,9 @@
 ext {
     extName = 'Lura Toon'
     extClass = '.LuraToon'
-    themePkg = 'madara'
+    themePkg = 'peachscan'
     baseUrl = 'https://luratoon.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 39
 }
 
 apply from: "$rootDir/common.gradle"
