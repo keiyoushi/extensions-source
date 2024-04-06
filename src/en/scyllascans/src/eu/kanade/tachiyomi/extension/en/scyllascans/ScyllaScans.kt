@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.scyllascans
 
-import eu.kanade.tachiyomi.multisrc.readerfront.ReaderFront
+import eu.kanade.tachiyomi.multisrc.cloudrecess.CloudRecess
 
-class ScyllaScans : ReaderFront("Scylla Scans", "https://scyllascans.org", "en") {
-    override fun getImageCDN(path: String, width: Int) =
-        "https://i${(0..2).random()}.wp.com/api.scyllascans.org" +
-            "$path?strip=all&quality=100&w=$width"
+class ScyllaScans : CloudRecess("Scylla Scans", "https://scyllascans.org", "en") {
+
+    // readerfront -> cloudrecess
+    override val versionId = 2
+
+    override val latestFromHomePage = true
 }

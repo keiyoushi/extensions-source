@@ -1,9 +1,9 @@
 ext {
     extName = 'Scylla Scans'
     extClass = '.ScyllaScans'
-    themePkg = 'readerfront'
+    themePkg = 'cloudrecess'
     baseUrl = 'https://scyllascans.org'
-    overrideVersionCode = 1
+    overrideVersionCode = 9
 }
 
 apply from: "$rootDir/common.gradle"
