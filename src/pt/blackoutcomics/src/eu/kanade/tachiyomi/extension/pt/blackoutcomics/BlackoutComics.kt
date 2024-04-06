@@ -96,9 +96,9 @@ class BlackoutComics : ParsedHttpSource() {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val row = document.selectFirst("section > div.container > div.row")!!
-        thumbnail_url = row.selectFirst("img.img-recen-add2")?.absUrl("src")
-        title = row.selectFirst("div.trailer-content > h2:not(.tachiyomikappa)")!!.text()
+        val row = document.selectFirst(".row")!!
+        thumbnail_url = row.selectFirst("img:not(.tachiyomikappa)")?.absUrl("src")
+        title = row.selectFirst("h2:not(.tachiyomikappa)")!!.text()
 
         with(row.selectFirst("div.trailer-content:has(h3:containsOwn(Detalhes))")!!) {
             println(outerHtml())
