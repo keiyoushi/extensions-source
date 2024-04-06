@@ -89,14 +89,15 @@ abstract class CloudRecess(
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
-    override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // filters
     protected var typeList = listOf<Pair<String, String>>()
     protected var statusList = listOf<Pair<String, String>>()
     protected var genreList = listOf<Pair<String, String>>()
     private var fetchFilterAttempts = 0
+
     protected suspend fun fetchFilters() {
         if (fetchFilterAttempts < 3 && (typeList.isEmpty() || statusList.isEmpty() || genreList.isEmpty())) {
             try {

@@ -24,7 +24,7 @@ class HentaiSlayer : CloudRecess("هنتاي سلاير", "https://hentaislayer.
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest-${getLatestTypes()}?page=$page", headers)
+    override fun latestPageRequest(page: Int) = GET("$baseUrl/latest-${getLatestTypes()}?page=$page", headers)
 
     companion object {
         private const val LATEST_PREF = "LatestType"
