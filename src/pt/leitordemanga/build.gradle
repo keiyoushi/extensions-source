@@ -1,5 +1,5 @@
 ext {
-    extName = 'Leitor de mangá'
+    extName = 'Leitor de Mangá'
     extClass = '.LeitorDeManga'
     themePkg = 'madara'
     baseUrl = 'https://leitordemanga.com'

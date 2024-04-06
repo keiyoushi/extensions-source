@@ -8,7 +8,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class LeitorDeManga : Madara(
-    "Leitor de mangá",
+    "Leitor de Mangá",
     "https://leitordemanga.com",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
