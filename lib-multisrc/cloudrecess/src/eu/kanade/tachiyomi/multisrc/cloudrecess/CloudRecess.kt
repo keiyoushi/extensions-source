@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -37,26 +36,8 @@ abstract class CloudRecess(
 
     // Popular
     override fun popularMangaRequest(page: Int) =
-        when (page) {
-            1 -> GET("$baseUrl#1", headers) // actual popular
-            else -> GET("$baseUrl/manga?page=${page - 1}", headers) // rest of list
-        }
+        GET("$baseUrl/manga?page=$page", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return if (response.request.url.fragment == "1") {
-            val document = response.asJsoup()
-
-            val entries = document.select(popularMangaHomeSelector())
-                .map(::popularMangaFromElement).distinctBy { it.url }
-            val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
-
-            MangasPage(entries, hasNextPage)
-        } else {
-            super.popularMangaParse(response)
-        }
-    }
-
-    protected open fun popularMangaHomeSelector() = "swiper-container#popular-cards div#card-real, div#topTabsContent section > div > div.flex"
     override fun popularMangaSelector() = "div#card-real"
     override fun popularMangaNextPageSelector() = "ul.pagination > li:last-child:not(.pagination-disabled)"
 
