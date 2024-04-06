@@ -1,11 +1,10 @@
 ext {
     extName = 'Hunters Scans'
     extClass = '.HuntersScans'
-    extVersionCode = 36
+    themePkg = 'madara'
+    baseUrl = 'https://huntersscan.xyz'
+    overrideVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(':lib:randomua'))
-}
