@@ -202,8 +202,8 @@ abstract class FuzzyDoodle(
         }
         document.selectFirst("div#buttons + div.hidden, div:has(> div#buttons) + div.flex")?.run {
             status = getInfo("Status").parseStatus()
-            artist = getInfo("Artist") ?: getInfo("المؤلف")
-            author = getInfo("Author") ?: getInfo("الرسام")
+            artist = (getInfo("Artist") ?: getInfo("المؤلف")).removePlaceHolder()
+            author = (getInfo("Author") ?: getInfo("الرسام")).removePlaceHolder()
             (getInfo("Type") ?: getInfo("النوع"))?.also { genres.add(0, it) }
         }
         genre = genres.joinToString()
@@ -226,6 +226,9 @@ abstract class FuzzyDoodle(
         selectFirst("p:has(span:containsOwn($text)) span.capitalize")
             ?.ownText()
             ?.trim()
+
+    protected fun String?.removePlaceHolder(): String? =
+        takeUnless { it == "-" }
 
     // chapters
     override fun chapterListParse(response: Response): List<SChapter> {
