@@ -81,7 +81,8 @@ abstract class FuzzyDoodle(
 
     override fun latestUpdatesSelector() =
         if (latestFromHomePage) {
-            "section:has(h2:containsOwn(Recent Chapters)) div#card-real"
+            "section:has(h2:containsOwn(Recent Chapters)) div#card-real," +
+                " section:has(h2:containsOwn(Chapitres récents)) div#card-real"
         } else {
             popularMangaSelector()
         }
@@ -201,9 +202,9 @@ abstract class FuzzyDoodle(
             }.trim()
         }
         document.selectFirst("div#buttons + div.hidden, div:has(> div#buttons) + div.flex")?.run {
-            status = getInfo("Status").parseStatus()
-            artist = (getInfo("Artist") ?: getInfo("المؤلف")).removePlaceHolder()
-            author = (getInfo("Author") ?: getInfo("الرسام")).removePlaceHolder()
+            status = (getInfo("Status") ?: getInfo("Statut")).parseStatus()
+            artist = (getInfo("Artist") ?: getInfo("المؤلف") ?: getInfo("Artiste")).removePlaceHolder()
+            author = (getInfo("Author") ?: getInfo("الرسام") ?: getInfo("Auteur")).removePlaceHolder()
             (getInfo("Type") ?: getInfo("النوع"))?.also { genres.add(0, it) }
         }
         genre = genres.joinToString()
@@ -213,11 +214,10 @@ abstract class FuzzyDoodle(
         this ?: return SManga.UNKNOWN
 
         return when {
-            listOf("ongoing", "مستمر").any { contains(it, true) } -> SManga.ONGOING
-            listOf("cancelled", "متوقف").any { contains(it, true) } -> SManga.CANCELLED
-            listOf("completed", "مكتمل").any { contains(it, true) } -> SManga.COMPLETED
+            listOf("ongoing", "مستمر", "en cours").any { contains(it, true) } -> SManga.ONGOING
+            listOf("dropped", "cancelled", "متوقف").any { contains(it, true) } -> SManga.CANCELLED
+            listOf("completed", "مكتمل", "terminé").any { contains(it, true) } -> SManga.COMPLETED
             listOf("hiatus").any { contains(it, true) } -> SManga.ON_HIATUS
-            listOf("dropped").any { contains(it, true) } -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
     }
@@ -261,55 +261,37 @@ abstract class FuzzyDoodle(
         date_upload = element.selectFirst("span.text-gray-500")?.text().parseRelativeDate()
     }
 
+    // from madara
     protected open fun String?.parseRelativeDate(): Long {
         this ?: return 0L
 
-        val now = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        val number = Regex("""(\d+)""").find(this)?.value?.toIntOrNull() ?: return 0L
+        val cal = Calendar.getInstance()
 
-        var parsedDate = 0L
-
-        val relativeDate = try {
-            this.split(" ")[0].trim().toInt()
-        } catch (_: NumberFormatException) {
-            return 0L
+        return when {
+            listOf("detik", "segundo", "second", "วินาที").any { contains(it, true) } -> {
+                cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
+            }
+            listOf("menit", "dakika", "min", "minute", "minuto", "นาที", "دقائق").any { contains(it, true) } -> {
+                cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            }
+            listOf("jam", "saat", "heure", "hora", "hour", "ชั่วโมง", "giờ", "ore", "ساعة", "小时").any { contains(it, true) } -> {
+                cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            }
+            listOf("hari", "gün", "jour", "día", "dia", "day", "วัน", "ngày", "giorni", "أيام", "天").any { contains(it, true) } -> {
+                cal.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
+            }
+            listOf("week", "sema").any { contains(it, true) } -> {
+                cal.apply { add(Calendar.WEEK_OF_YEAR, -number) }.timeInMillis
+            }
+            listOf("month", "mes").any { it in this } -> {
+                cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
+            }
+            listOf("year", "año").any { it in this } -> {
+                cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
+            }
+            else -> 0L
         }
-
-        when {
-            // parse: 30 seconds ago
-            "second" in this -> {
-                parsedDate = now.apply { add(Calendar.SECOND, -relativeDate) }.timeInMillis
-            }
-            // parses: "42 minutes ago"
-            "minute" in this -> {
-                parsedDate = now.apply { add(Calendar.MINUTE, -relativeDate) }.timeInMillis
-            }
-            // parses: "1 hour ago" and "2 hours ago"
-            "hour" in this -> {
-                parsedDate = now.apply { add(Calendar.HOUR, -relativeDate) }.timeInMillis
-            }
-            // parses: "2 days ago"
-            "day" in this -> {
-                parsedDate = now.apply { add(Calendar.DAY_OF_YEAR, -relativeDate) }.timeInMillis
-            }
-            // parses: "2 weeks ago"
-            "week" in this -> {
-                parsedDate = now.apply { add(Calendar.WEEK_OF_YEAR, -relativeDate) }.timeInMillis
-            }
-            // parses: "2 months ago"
-            "month" in this -> {
-                parsedDate = now.apply { add(Calendar.MONTH, -relativeDate) }.timeInMillis
-            }
-            // parse: "2 years ago"
-            "year" in this -> {
-                parsedDate = now.apply { add(Calendar.YEAR, -relativeDate) }.timeInMillis
-            }
-        }
-        return parsedDate
     }
 
     // pages
