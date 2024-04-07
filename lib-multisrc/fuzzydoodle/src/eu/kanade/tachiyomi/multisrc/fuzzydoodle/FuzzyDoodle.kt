@@ -64,7 +64,7 @@ abstract class FuzzyDoodle(
         GET("$baseUrl/?page=$page", headers)
 
     protected open fun latestPageRequest(page: Int) =
-        GET("$baseUrl/latest?page=$page")
+        GET("$baseUrl/latest?page=$page", headers)
 
     override fun latestUpdatesSelector() =
         if (latestFromHomePage) {
@@ -180,7 +180,7 @@ abstract class FuzzyDoodle(
         return when {
             listOf("ongoing", "مستمر").any { contains(it, true) } -> SManga.ONGOING
             listOf("cancelled", "متوقف").any { contains(it, true) } -> SManga.CANCELLED
-            listOf("Completed", "مكتمل").any { contains(it, true) } -> SManga.COMPLETED
+            listOf("completed", "مكتمل").any { contains(it, true) } -> SManga.COMPLETED
             listOf("hiatus").any { contains(it, true) } -> SManga.ON_HIATUS
             listOf("dropped").any { contains(it, true) } -> SManga.CANCELLED
             else -> SManga.UNKNOWN
