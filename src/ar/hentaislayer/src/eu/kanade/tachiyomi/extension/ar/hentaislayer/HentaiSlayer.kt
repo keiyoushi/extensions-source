@@ -4,14 +4,14 @@ import android.app.Application
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.cloudrecess.CloudRecess
+import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class HentaiSlayer : CloudRecess("هنتاي سلاير", "https://hentaislayer.net", "ar"), ConfigurableSource {
+class HentaiSlayer : FuzzyDoodle("هنتاي سلاير", "https://hentaislayer.net", "ar"), ConfigurableSource {
 
     override val client = super.client.newBuilder()
         .rateLimit(2)

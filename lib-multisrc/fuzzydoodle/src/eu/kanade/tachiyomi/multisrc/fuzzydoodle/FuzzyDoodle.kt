@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.cloudrecess
+package eu.kanade.tachiyomi.multisrc.fuzzydoodle
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
@@ -21,7 +21,10 @@ import org.jsoup.nodes.Element
 import java.lang.Exception
 import java.util.Calendar
 
-abstract class CloudRecess(
+/*
+ * https://github.com/jhin1m/fuzzy-doodle
+ */
+abstract class FuzzyDoodle(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,

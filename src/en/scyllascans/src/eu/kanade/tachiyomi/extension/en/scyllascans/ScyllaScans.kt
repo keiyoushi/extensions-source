@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.scyllascans
 
-import eu.kanade.tachiyomi.multisrc.cloudrecess.CloudRecess
+import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
 
-class ScyllaScans : CloudRecess("Scylla Scans", "https://scyllascans.org", "en") {
+class ScyllaScans : FuzzyDoodle("Scylla Scans", "https://scyllascans.org", "en") {
 
-    // readerfront -> cloudrecess
+    // readerfront -> fuzzydoodle
     override val versionId = 2
 
     override val latestFromHomePage = true

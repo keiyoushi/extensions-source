@@ -1,7 +1,7 @@
 ext {
     extName = 'Scylla Scans'
     extClass = '.ScyllaScans'
-    themePkg = 'cloudrecess'
+    themePkg = 'fuzzydoodle'
     overrideVersionCode = 9
 }
 

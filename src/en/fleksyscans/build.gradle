@@ -1,7 +1,7 @@
 ext {
     extName = 'FleksyScans'
     extClass = '.FleksyScans'
-    themePkg = 'cloudrecess'
+    themePkg = 'fuzzydoodle'
     overrideVersionCode = 0
     isNsfw = true
 }
