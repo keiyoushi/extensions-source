@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -44,6 +45,18 @@ abstract class FuzzyDoodle(
     override fun popularMangaSelector() = "div#card-real"
     override fun popularMangaNextPageSelector() = "ul.pagination > li:last-child:not(.pagination-disabled)"
 
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        launchIO { fetchFilters(document) }
+
+        val entries = document.select(popularMangaSelector())
+            .map(::popularMangaFromElement)
+        val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
+
+        return MangasPage(entries, hasNextPage)
+    }
+
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.selectFirst("h2.text-sm")!!.text()
@@ -76,6 +89,12 @@ abstract class FuzzyDoodle(
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        launchIO { fetchFilters() }
+
+        return super.latestUpdatesParse(response)
+    }
+
     // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/manga".toHttpUrl().newBuilder().apply {
@@ -91,6 +110,7 @@ abstract class FuzzyDoodle(
         return GET(url, headers)
     }
 
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
@@ -101,10 +121,14 @@ abstract class FuzzyDoodle(
     protected var genreList = listOf<Pair<String, String>>()
     private var fetchFilterAttempts = 0
 
-    protected suspend fun fetchFilters() {
+    protected suspend fun fetchFilters(document: Document? = null) {
         if (fetchFilterAttempts < 3 && (typeList.isEmpty() || statusList.isEmpty() || genreList.isEmpty())) {
             try {
-                parseFilters(client.newCall(filtersRequest()).await())
+                val doc = document ?: client.newCall(filtersRequest())
+                    .await()
+                    .asJsoup()
+
+                parseFilters(doc)
             } catch (e: Exception) {
                 Log.e("$name: Filters", e.stackTraceToString())
             }
@@ -114,8 +138,7 @@ abstract class FuzzyDoodle(
 
     protected open fun filtersRequest() = GET("$baseUrl/manga", headers)
 
-    protected open fun parseFilters(response: Response) {
-        val document = response.asJsoup()
+    protected open fun parseFilters(document: Document) {
         typeList = document.select("select[name=type] > option").map {
             it.ownText() to it.attr("value")
         }
@@ -133,8 +156,6 @@ abstract class FuzzyDoodle(
     }
 
     override fun getFilterList(): FilterList {
-        CoroutineScope(Dispatchers.IO).launch { fetchFilters() }
-
         val filters = mutableListOf<Filter<*>>()
 
         if (typeList.isNotEmpty()) {
@@ -152,6 +173,10 @@ abstract class FuzzyDoodle(
 
         return FilterList(filters)
     }
+
+    private val scope = CoroutineScope(Dispatchers.IO)
+
+    protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
 
     // details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
