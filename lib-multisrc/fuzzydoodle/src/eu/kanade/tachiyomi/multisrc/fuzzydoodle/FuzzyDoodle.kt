@@ -160,10 +160,20 @@ abstract class FuzzyDoodle(
             thumbnail_url = selectFirst("div.relative img")?.imgAttr()
             title = selectFirst("div.flex > h1, div.flex > h2")!!.ownText()
             genres.addAll(select("div.flex > a.inline-block").eachText())
-            selectFirst("div:has(> p#description)")?.run {
-                select("#show-more").remove()
-                description = text()
-            }
+            description = buildString {
+                selectFirst("div:has(> p#description)")?.let {
+                    it.selectFirst("span.font-semibold")?.remove()
+                    it.select("#show-more").remove()
+                    append(it.text())
+                }
+                selectFirst("div.flex > h1 + div > span.text-sm, div.flex > h2 + div > span.text-sm")?.text()?.let {
+                    if (it.isNotEmpty()) {
+                        append("\n\n")
+                        append("Alternative Title: ")
+                        append(it.trim())
+                    }
+                }
+            }.trim()
         }
         document.selectFirst("div#buttons + div.hidden, div:has(> div#buttons) + div.flex")?.run {
             status = getInfo("Status").parseStatus()
