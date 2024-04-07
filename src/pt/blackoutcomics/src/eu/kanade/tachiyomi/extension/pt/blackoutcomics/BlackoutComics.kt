@@ -48,8 +48,8 @@ class BlackoutComics : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        thumbnail_url = element.selectFirst("img:not(.hidden)")?.absUrl("src")
-        title = element.selectFirst("p:not(.hidden), span.text-comic")!!.text()
+        thumbnail_url = element.selectFirst("img.custom-image:not(.hidden), img.img-comics")?.absUrl("src")
+        title = element.selectFirst("p.image-name:not(.hidden), span.text-comic")!!.text()
     }
 
     override fun popularMangaNextPageSelector() = null
@@ -96,9 +96,11 @@ class BlackoutComics : ParsedHttpSource() {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val row = document.selectFirst("section > div.container > div.row")!!
-        thumbnail_url = row.selectFirst("img:not(.hidden)")?.absUrl("src")
-        title = row.selectFirst("div.trailer-content > h2:not(.hidden)")!!.text()
+        val row = document.selectFirst("div.special-edition")!!
+        thumbnail_url = row.selectFirst("img:last-child")?.absUrl("src")
+        title = row.select("h2")
+            .first { it.classNames().isEmpty() }!!
+            .text()
 
         with(row.selectFirst("div.trailer-content:has(h3:containsOwn(Detalhes))")!!) {
             println(outerHtml())
@@ -153,7 +155,7 @@ class BlackoutComics : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.chapter-image-ofc canvas").mapIndexed { index, item ->
+        return document.select("div.chapter-image canvas").mapIndexed { index, item ->
             Page(index, "", item.absUrl("data-src"))
         }
     }
