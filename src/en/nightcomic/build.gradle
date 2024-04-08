@@ -2,8 +2,8 @@ ext {
     extName = 'Night Comic'
     extClass = '.NightComic'
     themePkg = 'madara'
-    baseUrl = 'https://www.nightcomic.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://nightcomic.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
