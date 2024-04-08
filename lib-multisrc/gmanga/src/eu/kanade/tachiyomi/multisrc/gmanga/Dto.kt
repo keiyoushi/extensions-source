@@ -84,7 +84,7 @@ class Manga(
             else -> SManga.UNKNOWN
         }
         genre = buildList {
-            add(type.title)
+            add(type.title ?: "")
             add(type.name)
             categories.forEach { add(it.name) }
         }.joinToString()
