@@ -1,9 +1,8 @@
 ext {
     extName = 'Lelscan-VF'
     extClass = '.LelscanVF'
-    themePkg = 'mmrcms'
-    baseUrl = 'https://lelscanvf.cc'
-    overrideVersionCode = 2
+    themePkg = 'fuzzydoodle'
+    overrideVersionCode = 13
 }
 
 apply from: "$rootDir/common.gradle"
