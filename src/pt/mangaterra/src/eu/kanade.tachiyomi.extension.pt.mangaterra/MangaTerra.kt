@@ -13,12 +13,16 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -32,6 +36,8 @@ class MangaTerra : ParsedHttpSource() {
     override val client = network.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
+
+    private val json: Json by injectLazy()
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst("h5")!!.ownText()
@@ -85,12 +91,19 @@ class MangaTerra : ParsedHttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }
+        val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
         return MangasPage(
             mangas = mangas,
             hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null,
+        )
+    }
+
+    private fun searchByQueryMangaParse(response: Response): MangasPage {
+        val fragment = Jsoup.parse(json.decodeFromString<String>(response.body.string()))
+        val mangas = fragment.select(".grid-item-series").map(::searchMangaFromElement)
+        return MangasPage(
+            mangas = mangas,
+            hasNextPage = false,
         )
     }
 
@@ -99,7 +112,7 @@ class MangaTerra : ParsedHttpSource() {
         val response = client.newCall(request).execute()
         val pathSegments = response.request.url.pathSegments
         if (pathSegments.contains("search")) {
-            Observable.just(MangasPage(mangas = emptyList(), false))
+            return Observable.just(searchByQueryMangaParse(response))
         }
         return Observable.just(searchMangaParse(response))
     }
@@ -107,12 +120,12 @@ class MangaTerra : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl".toHttpUrl().newBuilder()
+        val url = baseUrl.toHttpUrl().newBuilder()
 
         if (query.isNotBlank()) {
             url.addPathSegment("search")
-            url.addQueryParameter("q", query)
-            return GET(url.build())
+                .addQueryParameter("q", query)
+            return GET(url.build(), headers)
         }
 
         url.addPathSegment("manga")
