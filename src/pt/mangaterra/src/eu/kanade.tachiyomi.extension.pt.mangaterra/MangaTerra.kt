@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.mangaterra
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -22,7 +21,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -99,12 +97,11 @@ class MangaTerra : ParsedHttpSource() {
         )
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val request = searchMangaRequest(page, query, filters)
-        if (!request.url.pathSegments.contains("search")) {
-            return super.fetchSearchManga(page, query, filters)
+    override fun searchMangaParse(response: Response): MangasPage {
+        if (response.request.url.pathSegments.contains("search")) {
+            return searchByQueryMangaParse(response)
         }
-        return client.newCall(request).asObservableSuccess().map(::searchByQueryMangaParse)
+        return super.searchMangaParse(response)
     }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
