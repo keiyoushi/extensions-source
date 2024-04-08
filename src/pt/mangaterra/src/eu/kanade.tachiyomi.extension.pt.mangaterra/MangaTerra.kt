@@ -41,7 +41,7 @@ class MangaTerra : ParsedHttpSource() {
 
     override fun chapterListSelector() = ".card-list-chapter a"
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(document: Document) = document.selectFirst("img")!!.absUrl("src")
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
@@ -63,7 +63,7 @@ class MangaTerra : ParsedHttpSource() {
         var page = 1
         do {
             val dom = client.newCall(GET("${document.location()}/${page++}", headers)).execute().asJsoup()
-            pages += Page(index = page, imageUrl = dom.selectFirst("img")?.absUrl("src"))
+            pages += Page(index = page, imageUrl = imageUrlParse(dom))
         } while (dom.selectFirst(".btn-next") != null)
 
         return pages
