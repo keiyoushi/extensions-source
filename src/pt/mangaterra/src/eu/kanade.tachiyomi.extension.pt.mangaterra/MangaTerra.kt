@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.mangaterra
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -89,18 +90,9 @@ class MangaTerra : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
-        return MangasPage(
-            mangas = mangas,
-            hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null,
-        )
-    }
-
     private fun searchByQueryMangaParse(response: Response): MangasPage {
         val fragment = Jsoup.parse(json.decodeFromString<String>(response.body.string()))
-        val mangas = fragment.select(".grid-item-series").map(::searchMangaFromElement)
+        val mangas = fragment.select("div.grid-item").map(::searchMangaFromElement)
         return MangasPage(
             mangas = mangas,
             hasNextPage = false,
@@ -109,12 +101,10 @@ class MangaTerra : ParsedHttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         val request = searchMangaRequest(page, query, filters)
-        val response = client.newCall(request).execute()
-        val pathSegments = response.request.url.pathSegments
-        if (pathSegments.contains("search")) {
-            return Observable.just(searchByQueryMangaParse(response))
+        if (!request.url.pathSegments.contains("search")) {
+            return super.fetchSearchManga(page, query, filters)
         }
-        return Observable.just(searchMangaParse(response))
+        return client.newCall(request).asObservableSuccess().map(::searchByQueryMangaParse)
     }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
