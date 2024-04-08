@@ -14,9 +14,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -32,6 +30,7 @@ class ComicFans : HttpSource() {
     override val baseUrl = "https://comicfans.io"
     private val apiUrl = "https://api.comicfans.io/comic-backend/api/v1/content"
     private val cdnUrl = "https://static.comicfans.io"
+    private val siteDomain = "www.comicfans.io"
 
     override val lang = "en"
 
@@ -45,10 +44,10 @@ class ComicFans : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     private fun apiHeadersBuilder() = headersBuilder().apply {
-        add("Accept", "application/json")
+        add("Accept", "*/*")
         add("Host", apiUrl.toHttpUrl().host)
         add("Origin", baseUrl)
-        add("site-domain", "www.comicfans.io")
+        add("site-domain", siteDomain)
     }
 
     private val apiHeaders by lazy { apiHeadersBuilder().build() }
@@ -64,11 +63,15 @@ class ComicFans : HttpSource() {
             put("pageSize", 30)
         }.let(json::encodeToString).toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
 
-        return POST("$apiUrl/books/custom/MostPopularLocal#$page", apiHeaders, body)
+        val popularHeaders = apiHeadersBuilder().apply {
+            set("Accept", "application/json")
+        }.build()
+
+        return POST("$apiUrl/books/custom/MostPopularLocal#$page", popularHeaders, body)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<PopularDto>().data
+        val data = response.parseAs<ListDataDto<MangaDto>>().data
         val hasNextPage = response.request.url.fragment!!.toInt() < data.totalPages
 
         return MangasPage(data.list.map { it.toSManga(cdnUrl) }, hasNextPage)
@@ -120,11 +123,7 @@ class ComicFans : HttpSource() {
             }
         }.build()
 
-        val searchHeaders = apiHeadersBuilder()
-            .set("Accept", "*/*")
-            .build()
-
-        return GET(url, searchHeaders)
+        return GET(url, apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage =
@@ -142,33 +141,43 @@ class ComicFans : HttpSource() {
 
     // =========================== Manga Details ============================
 
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val bookId = manga.url.substringAfter("/comic/")
+            .substringBefore("-")
+
+        return GET("$apiUrl/books/$bookId", apiHeaders)
+    }
+
     override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseData<MangaDto>().toSManga(cdnUrl)
+        return response.parseAs<SingleDataDto<MangaDto>>().data.toSManga(cdnUrl)
     }
 
     // ============================== Chapters ==============================
 
     override fun chapterListRequest(manga: SManga): Request {
-        val chapterHeaders = apiHeadersBuilder()
-            .set("Accept", "*/*")
-            .build()
-
         val bookId = manga.url.substringAfter("/comic/")
             .substringBefore("-")
 
-        return GET("$apiUrl/chapters/page?sortDirection=ASC&bookId=$bookId&pageNumber=1&pageSize=9999", chapterHeaders)
+        return GET("$apiUrl/chapters/page?sortDirection=ASC&bookId=$bookId&pageNumber=1&pageSize=9999", apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<ChapterListDto>().data.list.mapIndexed { index, chapterDto ->
+        return response.parseAs<ListDataDto<ChapterDto>>().data.list.mapIndexed { index, chapterDto ->
             chapterDto.toSChapter(index + 1)
         }.reversed()
     }
 
     // =============================== Pages ================================
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = chapter.url.substringAfter("/episode/")
+            .substringBefore("-")
+
+        return GET("$apiUrl/chapters/$chapterId", apiHeaders)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        return response.parseData<Data2Dto>().comicImageList.map {
+        return response.parseAs<SingleDataDto<PageDataDto>>().data.comicImageList.map {
             Page(it.sortNum, imageUrl = "$cdnUrl/${it.imageUrl}")
         }
     }
@@ -189,14 +198,5 @@ class ComicFans : HttpSource() {
 
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString(body.string())
-    }
-
-    private inline fun <reified T> Response.parseData(): T {
-        val document = this.asJsoup()
-        val rawData = document.selectFirst("script#__NUXT_DATA__")?.data()
-            ?: throw Exception("Unable to extract data")
-        val raw = json.decodeFromString<JsonArray>(rawData)
-        val data = json.decodeFromJsonElement<JsonArray>(Parser(raw).parse().first())[1]
-        return json.decodeFromJsonElement<ReactiveDto<T>>(data).data.values.first().data
     }
 }

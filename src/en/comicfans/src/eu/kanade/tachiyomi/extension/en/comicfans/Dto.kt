@@ -5,15 +5,20 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
 @Serializable
-class PopularDto(
-    val data: DataDto,
+class ListDataDto<T>(
+    val data: DataDto<T>,
 ) {
     @Serializable
-    class DataDto(
+    class DataDto<T>(
         val totalPages: Int,
-        val list: List<MangaDto>,
+        val list: List<T>,
     )
 }
+
+@Serializable
+class SingleDataDto<T>(
+    val data: T,
+)
 
 @Serializable
 class MangaDto(
@@ -44,44 +49,24 @@ class MangaDto(
 }
 
 @Serializable
-class ChapterListDto(
-    val data: DataDto,
+class ChapterDto(
+    val id: Int,
+    val title: String,
+    val updateTime: Long? = null,
 ) {
-    @Serializable
-    class DataDto(
-        val list: List<ChapterDto>,
-    ) {
-        @Serializable
-        class ChapterDto(
-            val id: Int,
-            val title: String,
-            val updateTime: Long? = null,
-        ) {
-            fun toSChapter(index: Int): SChapter = SChapter.create().apply {
-                name = "Ch. $index - $title"
-                chapter_number = index.toFloat()
-                date_upload = updateTime ?: 0L
-                url = buildString {
-                    append("/episode/")
-                    append(slugify(id, title))
-                }
-            }
+    fun toSChapter(index: Int): SChapter = SChapter.create().apply {
+        name = "Ch. $index - $title"
+        chapter_number = index.toFloat()
+        date_upload = updateTime ?: 0L
+        url = buildString {
+            append("/episode/")
+            append(slugify(id, title))
         }
     }
 }
 
 @Serializable
-data class ReactiveDto<T>(
-    val data: Map<String, DataDto<T>>,
-) {
-    @Serializable
-    class DataDto<T>(
-        val data: T,
-    )
-}
-
-@Serializable
-class Data2Dto(
+class PageDataDto(
     val comicImageList: List<PageDto>,
 ) {
     @Serializable
