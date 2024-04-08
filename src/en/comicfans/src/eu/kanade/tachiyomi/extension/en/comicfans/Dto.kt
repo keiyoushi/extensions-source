@@ -4,19 +4,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
-@Serializable
-class ListDataDto<T>(
-    val data: DataDto<T>,
-) {
-    @Serializable
-    class DataDto<T>(
-        val totalPages: Int,
-        val list: List<T>,
-    )
-}
+typealias ListDataDto<T> = DataDto<ListDto<T>>
 
 @Serializable
-class SingleDataDto<T>(
+class ListDto<T>(
+    val totalPages: Int,
+    val list: List<T>,
+)
+
+@Serializable
+class DataDto<T>(
     val data: T,
 )
 

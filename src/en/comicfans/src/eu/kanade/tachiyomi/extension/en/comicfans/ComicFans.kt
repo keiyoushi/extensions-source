@@ -30,7 +30,6 @@ class ComicFans : HttpSource() {
     override val baseUrl = "https://comicfans.io"
     private val apiUrl = "https://api.comicfans.io/comic-backend/api/v1/content"
     private val cdnUrl = "https://static.comicfans.io"
-    private val siteDomain = "www.comicfans.io"
 
     override val lang = "en"
 
@@ -47,7 +46,7 @@ class ComicFans : HttpSource() {
         add("Accept", "*/*")
         add("Host", apiUrl.toHttpUrl().host)
         add("Origin", baseUrl)
-        add("site-domain", siteDomain)
+        add("site-domain", "www.${baseUrl.toHttpUrl().host}")
     }
 
     private val apiHeaders by lazy { apiHeadersBuilder().build() }
@@ -141,6 +140,8 @@ class ComicFans : HttpSource() {
 
     // =========================== Manga Details ============================
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         val bookId = manga.url.substringAfter("/comic/")
             .substringBefore("-")
@@ -149,10 +150,12 @@ class ComicFans : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<SingleDataDto<MangaDto>>().data.toSManga(cdnUrl)
+        return response.parseAs<DataDto<MangaDto>>().data.toSManga(cdnUrl)
     }
 
     // ============================== Chapters ==============================
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun chapterListRequest(manga: SManga): Request {
         val bookId = manga.url.substringAfter("/comic/")
@@ -177,7 +180,7 @@ class ComicFans : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<SingleDataDto<PageDataDto>>().data.comicImageList.map {
+        return response.parseAs<DataDto<PageDataDto>>().data.comicImageList.map {
             Page(it.sortNum, imageUrl = "$cdnUrl/${it.imageUrl}")
         }
     }
