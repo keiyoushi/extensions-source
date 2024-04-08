@@ -30,6 +30,7 @@ class BrowseManga(
     private val id: Int,
     private val title: String,
     private val cover: String? = null,
+    @SerialName("is_novel") val isNovel: Boolean,
 ) {
     fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
         url = "/mangas/$id"
@@ -83,7 +84,7 @@ class Manga(
             else -> SManga.UNKNOWN
         }
         genre = buildList {
-            add(type.title)
+            type.title?.let { add(it) }
             add(type.name)
             categories.forEach { add(it.name) }
         }.joinToString()
@@ -123,7 +124,7 @@ class NameDto(val name: String)
 @Serializable
 class TypeDto(
     val name: String,
-    val title: String,
+    val title: String?,
 )
 
 @Serializable

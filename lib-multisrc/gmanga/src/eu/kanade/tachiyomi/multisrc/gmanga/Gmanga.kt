@@ -49,6 +49,7 @@ abstract class Gmanga(
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val releases = response.parseAs<LatestChaptersDto>().releases
+            .filterNot { it.manga.isNovel }
 
         val entries = releases.map { it.manga.toSManga(::createThumbnail) }
             .distinctBy { it.url }
