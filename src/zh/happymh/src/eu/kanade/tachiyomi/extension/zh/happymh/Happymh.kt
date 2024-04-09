@@ -95,9 +95,16 @@ class Happymh : HttpSource(), ConfigurableSource {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val body = FormBody.Builder().addEncoded("searchkey", query).build()
-        val header = headersBuilder().add("referer", "$baseUrl/sssearch").build()
-        return POST("$baseUrl/apis/m/ssearch", header, body)
+        val body = FormBody.Builder()
+            .addEncoded("searchkey", query)
+            .add("v", "v2.13")
+            .build()
+
+        val header = headersBuilder()
+            .add("referer", "$baseUrl/sssearch")
+            .build()
+
+        return POST("$baseUrl/v2.0/apis/manga/ssearch", header, body)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
