@@ -1,5 +1,5 @@
 ext {
-    extName = 'SereinScan'
+    extName = 'Serein Scan'
     extClass = '.SereinScan'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sereinscan.com/'
