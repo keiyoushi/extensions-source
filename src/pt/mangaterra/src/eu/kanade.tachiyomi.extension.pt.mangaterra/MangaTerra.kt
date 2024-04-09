@@ -21,6 +21,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -89,10 +90,14 @@ class MangaTerra : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     private fun searchByQueryMangaParse(response: Response): MangasPage {
-        val fragment = Jsoup.parse(json.decodeFromString<String>(response.body.string()))
-        val mangas = fragment.select("div.grid-item").map(::searchMangaFromElement)
+        val fragment = Jsoup.parse(
+            json.decodeFromString<String>(response.body.string()),
+            baseUrl,
+            Parser.htmlParser(),
+        )
+
         return MangasPage(
-            mangas = mangas,
+            mangas = fragment.select("div.grid-item-series").map(::searchMangaFromElement),
             hasNextPage = false,
         )
     }
