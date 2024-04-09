@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.mangaterra
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -40,6 +39,10 @@ class MangaTerra : ParsedHttpSource() {
         .build()
 
     private val json: Json by injectLazy()
+
+    private var fetchGenresAttempts: Int = 0
+
+    private var genresList: List<Genre> = emptyList()
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst("h5")!!.ownText()
@@ -173,8 +176,6 @@ class MangaTerra : ParsedHttpSource() {
 
     private fun String.toDate() = try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
 
-    private var fetchGenresAttempts: Int = 0
-
     private fun fetchGenres() {
         if (fetchGenresAttempts < 3 && genresList.isEmpty()) {
             try {
@@ -204,9 +205,3 @@ class MangaTerra : ParsedHttpSource() {
         val slugPrefix = "slug:"
     }
 }
-
-class GenreFilter(title: String, genres: List<Genre>) :
-    Filter.Group<Genre>(title, genres)
-
-class Genre(name: String, val query: String, val value: String) : Filter.CheckBox(name)
-var genresList: List<Genre> = emptyList()
