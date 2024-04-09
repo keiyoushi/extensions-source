@@ -1,0 +1,9 @@
+ext {
+    extName = 'Serein Scan'
+    extClass = '.SereinScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://sereinscan.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
