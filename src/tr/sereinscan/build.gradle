@@ -3,7 +3,7 @@ ext {
     extClass = '.SereinScan'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sereinscan.com/'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
 }
 
 apply from: "$rootDir/common.gradle"
