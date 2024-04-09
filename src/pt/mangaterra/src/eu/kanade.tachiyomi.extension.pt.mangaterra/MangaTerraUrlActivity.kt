@@ -35,5 +35,4 @@ class MangaTerraUrlActivity : Activity() {
     }
 
     private fun slug(pathSegments: List<String>) = "${MangaTerra.slugPrefix}${pathSegments.last()}"
-
 }
