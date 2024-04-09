@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import android.util.Log
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
@@ -87,14 +86,12 @@ class ManhuaKey : Madara("ManhuaKey", "https://www.manhuakey.com", "th") {
                 pos[2].toInt() + scramblingData.blockWidth,
                 pos[3].toInt() + scramblingData.blockHeight,
             )
-            Log.d("$name - src: ", "$srcRect")
             val destRect = Rect(
                 pos[0].toInt(),
                 pos[1].toInt(),
                 pos[0].toInt() + scramblingData.blockWidth,
                 pos[1].toInt() + scramblingData.blockHeight,
             )
-            Log.d("$name - dest: ", "$destRect")
             canvas.drawBitmap(scrambledImg, srcRect, destRect, null)
         }
 
