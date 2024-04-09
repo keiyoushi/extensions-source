@@ -173,9 +173,9 @@ class MangaTerra : ParsedHttpSource() {
 
     private fun String.toDate() = try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
 
-    var fetchGenresAttempts: Int = 0
+    private var fetchGenresAttempts: Int = 0
 
-    fun fetchGenres() {
+    private fun fetchGenres() {
         if (fetchGenresAttempts < 3 && genresList.isEmpty()) {
             try {
                 genresList = client.newCall(GET("$baseUrl/manga")).execute()
@@ -187,7 +187,7 @@ class MangaTerra : ParsedHttpSource() {
         }
     }
 
-    fun parseGenres(document: Document): List<Genre> {
+    private fun parseGenres(document: Document): List<Genre> {
         return document.select(".form-filters .custom-checkbox")
             .map { element ->
                 val input = element.selectFirst("input")!!
