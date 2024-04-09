@@ -49,7 +49,7 @@ class MangaTerra : ParsedHttpSource() {
 
     override fun chapterListSelector() = ".card-list-chapter a"
 
-    override fun imageUrlParse(document: Document) = document.selectFirst("img")!!.absUrl("src")
+    override fun imageUrlParse(document: Document) = document.selectFirst("img")!!.srcAttr()
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
@@ -62,7 +62,7 @@ class MangaTerra : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(".card-body h1")!!.ownText()
         description = document.selectFirst(".card-body p")?.ownText()
-        thumbnail_url = document.selectFirst(".card-body img")?.absUrl("src")
+        thumbnail_url = document.selectFirst(".card-body img")?.srcAttr()
         genre = document.select(".card-series-about a").joinToString { it.ownText() }
     }
 
