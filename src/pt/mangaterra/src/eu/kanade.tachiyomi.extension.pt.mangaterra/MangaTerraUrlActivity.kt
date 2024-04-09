@@ -17,6 +17,7 @@ class MangaTerraUrlActivity : Activity() {
         if (pathSegments != null && pathSegments.size > 1) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
+                putExtra("query", slug(pathSegments))
                 putExtra("filter", packageName)
             }
 
@@ -32,4 +33,7 @@ class MangaTerraUrlActivity : Activity() {
         finish()
         exitProcess(0)
     }
+
+    private fun slug(pathSegments: List<String>) = "${MangaTerra.slugPrefix}${pathSegments.last()}"
+
 }

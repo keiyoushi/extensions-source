@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.mangaterra
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -22,6 +23,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -111,6 +113,17 @@ class MangaTerra : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(slugPrefix)) {
+            val slug = query.substringAfter(slugPrefix)
+            return client.newCall(GET("$baseUrl/manga/$slug", headers))
+                .asObservableSuccess().map { response ->
+                    MangasPage(listOf(mangaDetailsParse(response)), false)
+                }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
 
@@ -188,6 +201,7 @@ class MangaTerra : ParsedHttpSource() {
 
     companion object {
         val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale("pt", "BR"))
+        val slugPrefix = "slug:"
     }
 }
 
