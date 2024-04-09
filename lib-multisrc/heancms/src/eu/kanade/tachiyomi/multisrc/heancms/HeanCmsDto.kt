@@ -155,6 +155,12 @@ class HeanCmsPageDataDto(
     val images: List<String>? = emptyList(),
 )
 
+@Serializable
+class HeanCmsGenreDto(
+    val id: Int,
+    val name: String,
+)
+
 private fun String.toAbsoluteThumbnailUrl(apiUrl: String, coverPath: String): String {
     return if (startsWith("https://") || startsWith("http://")) this else "$apiUrl/$coverPath$this"
 }

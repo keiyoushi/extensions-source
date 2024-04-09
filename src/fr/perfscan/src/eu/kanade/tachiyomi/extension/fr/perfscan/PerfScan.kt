@@ -19,5 +19,6 @@ class PerfScan : HeanCms("Perf Scan", "https://perf-scan.fr", "fr") {
         }
     }
 
+    override val useNewQueryEndpoint = true
     override val useNewChapterEndpoint = true
 }
