@@ -26,7 +26,7 @@ class MeowMeowComics : Madara(
     override fun chapterListParse(response: Response): List<SChapter> {
         return response.asJsoup()
             .select("ul.main > li.parent,ul.main:not(:has(>li.parent))")
-            .sortedByDescending { it.selectFirst("a.has-child")!!.text().toInt() }
+            .sortedByDescending { it.selectFirst("a.has-child")?.text()?.toIntOrNull() ?: 0 }
             .flatMap { season ->
                 season.select(chapterListSelector()).map(::chapterFromElement)
             }
