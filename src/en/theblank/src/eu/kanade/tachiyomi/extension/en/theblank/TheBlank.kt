@@ -18,4 +18,5 @@ class TheBlank : Madara(
 
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override fun chapterListSelector() = "li.wp-manga-chapter:not(.vip-permission)"
 }
