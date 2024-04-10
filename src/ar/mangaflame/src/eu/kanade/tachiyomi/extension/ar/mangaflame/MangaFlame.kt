@@ -8,13 +8,9 @@ import java.util.concurrent.TimeUnit
 
 class MangaFlame : MangaThemesia(
     "Manga Flame",
-    "https://arisescans.com",
+    "https://mangaflame.org",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
     override val id = 1501237443119573205
-
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .readTimeout(3, TimeUnit.MINUTES)
-        .build()
 }
