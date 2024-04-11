@@ -125,10 +125,9 @@ class MangaTerra : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     private fun searchByQueryMangaParse(response: Response): MangasPage {
-        val fragment = Jsoup.parse(
+        val fragment = Jsoup.parseBodyFragment(
             json.decodeFromString<String>(response.body.string()),
             baseUrl,
-            Parser.htmlParser(),
         )
 
         return MangasPage(
