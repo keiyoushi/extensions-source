@@ -1,0 +1,9 @@
+ext {
+    extName = 'Tủ sách xinh xinh'
+    extClass = '.Tusachxinhxinh'
+    themePkg = 'a3manga'
+    baseUrl = 'https://tusachxinh.online'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
