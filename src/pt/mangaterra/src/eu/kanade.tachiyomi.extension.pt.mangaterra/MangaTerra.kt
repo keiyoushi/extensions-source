@@ -108,7 +108,7 @@ class MangaTerra : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val mangaChapterUrl = document.location()
         val maxPage = findPageCount(mangaChapterUrl)
-        return (1..maxPage).map { page -> Page(page, "$mangaChapterUrl/$page") }
+        return (1..maxPage).map { page -> Page(page - 1, "$mangaChapterUrl/$page") }
     }
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
