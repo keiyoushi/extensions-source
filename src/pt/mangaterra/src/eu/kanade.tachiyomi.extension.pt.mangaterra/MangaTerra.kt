@@ -35,6 +35,7 @@ class MangaTerra : ParsedHttpSource() {
     override val baseUrl: String = "https://manga-terra.com"
 
     override val client = network.client.newBuilder()
+        .followRedirects(false)
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
@@ -73,12 +74,6 @@ class MangaTerra : ParsedHttpSource() {
     private fun findPageCount(pageUrl: String): Int {
         var lowerBound = 1
         var upperBound = 100
-
-        val client = network.client.newBuilder().apply {
-            followRedirects(false)
-            followSslRedirects(false)
-            rateLimit(1, 2, TimeUnit.SECONDS)
-        }.build()
 
         while (lowerBound <= upperBound) {
             val midpoint = lowerBound + (upperBound - lowerBound) / 2
