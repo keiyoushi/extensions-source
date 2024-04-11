@@ -2,8 +2,8 @@ ext {
     extName = 'Manga Flame'
     extClass = '.MangaFlame'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://arisescans.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://mangaflame.org'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
