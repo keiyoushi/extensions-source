@@ -1,9 +1,0 @@
-ext {
-    extName = 'Arven Scans'
-    extClass = '.ArvenScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://arvenscans.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
