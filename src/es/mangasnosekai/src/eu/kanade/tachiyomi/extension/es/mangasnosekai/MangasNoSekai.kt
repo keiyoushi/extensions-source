@@ -202,6 +202,8 @@ class MangasNoSekai : Madara(
 
         val mangaId = document.selectFirst("script#wp-manga-js-extra")?.data()
             ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
+            ?: document.selectFirst("script#manga_disqus_embed-js-extra")?.data()
+                ?.let { POST_ID_REGEX.find(it)?.groupValues?.get(1) }
             ?: throw Exception("No se pudo obtener el id del manga")
 
         val chapterElements = mutableListOf<Element>()
@@ -228,5 +230,6 @@ class MangasNoSekai : Madara(
     companion object {
         val ACTION_REGEX = """function\s+loadMoreChapters[\s\S]*?\$.ajax[\s\S]*?data[\s\S]*?action:\s*(?:["'](.*?)["'])""".toRegex()
         val MANGA_ID_REGEX = """\"manga_id"\s*:\s*"(.*)\"""".toRegex()
+        val POST_ID_REGEX = """\"postId"\s*:\s*"(.*)\"""".toRegex()
     }
 }
