@@ -2,7 +2,7 @@ ext {
     extName = 'Blazescans'
     extClass = '.Blazescans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://blazescans.com/'
+    baseUrl = 'https://blazescans.com'
     overrideVersionCode = 0
 }
 
