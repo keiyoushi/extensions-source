@@ -69,15 +69,45 @@ class MangaTerra : ParsedHttpSource() {
         genre = document.select(".card-series-about a").joinToString { it.ownText() }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        var page = 1
-        do {
-            val dom = client.newCall(GET("${document.location()}/${page++}", headers)).execute().asJsoup()
-            pages += Page(index = page, imageUrl = imageUrlParse(dom))
-        } while (dom.selectFirst(".btn-next") != null)
+    private fun findPageCount(pageUrl: String): Int {
+        var lowerBound = 1
+        var upperBound = 100
 
-        return pages
+        while (lowerBound <= upperBound) {
+            val midpoint = lowerBound + (upperBound - lowerBound) / 2
+
+            val request = Request.Builder().apply {
+                url("$pageUrl/$midpoint")
+                headers(headers)
+                head()
+            }.build()
+
+            val client = network.client.newBuilder().apply {
+                followRedirects(false)
+                followSslRedirects(false)
+                rateLimit(1, 2, TimeUnit.SECONDS)
+            }.build()
+
+            val response = try {
+                client.newCall(request).execute()
+            } catch (e: Exception) {
+                throw Exception("Failed to fetch $pageUrl")
+            }
+
+            if (response.code == 302) {
+                upperBound = midpoint - 1
+            } else {
+                lowerBound = midpoint + 1
+            }
+        }
+
+        return lowerBound - 1
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        val mangaChapterUrl = document.location()
+        val maxPage = findPageCount(mangaChapterUrl)
+        return (1..maxPage).map { page -> Page(page, "$mangaChapterUrl/$page") }
     }
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
