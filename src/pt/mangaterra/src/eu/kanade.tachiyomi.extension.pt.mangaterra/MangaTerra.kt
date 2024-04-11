@@ -67,6 +67,7 @@ class MangaTerra : ParsedHttpSource() {
         description = document.selectFirst(".card-body p")?.ownText()
         thumbnail_url = document.selectFirst(".card-body img")?.srcAttr()
         genre = document.select(".card-series-about a").joinToString { it.ownText() }
+        setUrlWithoutDomain(document.location())
     }
 
     private fun findPageCount(pageUrl: String): Int {
