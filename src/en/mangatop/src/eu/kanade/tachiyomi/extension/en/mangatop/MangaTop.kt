@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -64,7 +65,7 @@ class MangaTop : ParsedHttpSource() {
                     .build(),
             )
 
-            if (!response.isSuccessful && response.code == 419) {
+            if (response.code == 419) {
                 response.close()
                 storedToken = null // reset the token
                 val newToken = getToken()
@@ -87,14 +88,7 @@ class MangaTop : ParsedHttpSource() {
             val response = client.newCall(request).execute()
 
             val document = response.asJsoup()
-            val token = document.select("head meta[name*=csrf-token]")
-                .attr("content")
-
-            if (token.isEmpty()) {
-                throw IOException("Unable to find CSRF token")
-            }
-
-            storedToken = token
+            document.updateToken()
         }
 
         return storedToken!!
@@ -103,6 +97,16 @@ class MangaTop : ParsedHttpSource() {
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        document.updateToken()
+
+        val mangaList = document.select(popularMangaSelector())
+            .map(::popularMangaFromElement)
+
+        return MangasPage(mangaList, false)
+    }
 
     override fun popularMangaSelector(): String = "aside div > article"
 
@@ -119,6 +123,18 @@ class MangaTop : ParsedHttpSource() {
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest?page=$page", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        document.updateToken()
+
+        val mangaList = document.select(latestUpdatesSelector())
+            .map(::latestUpdatesFromElement)
+
+        val hasNextPage = document.selectFirst(latestUpdatesNextPageSelector()) != null
+
+        return MangasPage(mangaList, hasNextPage)
+    }
 
     override fun latestUpdatesSelector(): String = "div > article.manga-item"
 
@@ -142,14 +158,17 @@ class MangaTop : ParsedHttpSource() {
         return GET(url, headers)
     }
 
+    override fun searchMangaParse(response: Response): MangasPage =
+        latestUpdatesParse(response)
+
     override fun searchMangaSelector(): String =
-        latestUpdatesSelector()
+        throw UnsupportedOperationException()
 
     override fun searchMangaFromElement(element: Element): SManga =
-        latestUpdatesFromElement(element)
+        throw UnsupportedOperationException()
 
     override fun searchMangaNextPageSelector(): String =
-        latestUpdatesNextPageSelector()
+        throw UnsupportedOperationException()
 
     // =============================== Filters ==============================
 
@@ -186,6 +205,8 @@ class MangaTop : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
+        document.updateToken()
+
         val mangaName = document.selectFirst("script:containsData(mangaName)")
             ?.data()
             ?.substringAfter("mangaName")
@@ -309,6 +330,12 @@ class MangaTop : ParsedHttpSource() {
     }
 
     // ============================= Utilities ==============================
+
+    private fun Document.updateToken() {
+        storedToken = this.selectFirst("head meta[name*=csrf-token]")
+            ?.attr("content")
+            ?: throw IOException("Failed to update token")
+    }
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream(it.body.byteStream())
