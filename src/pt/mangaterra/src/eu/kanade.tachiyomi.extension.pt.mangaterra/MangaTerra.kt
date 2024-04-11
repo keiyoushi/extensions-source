@@ -21,7 +21,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.parser.Parser
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
@@ -70,40 +69,6 @@ class MangaTerra : ParsedHttpSource() {
         setUrlWithoutDomain(document.location())
     }
 
-    private fun findPageCount(pageUrl: String): Int {
-        var lowerBound = 1
-        var upperBound = 100
-
-        val client = network.client.newBuilder()
-            .followRedirects(false)
-            .rateLimit(1, 2, TimeUnit.SECONDS)
-            .build()
-
-        while (lowerBound <= upperBound) {
-            val midpoint = lowerBound + (upperBound - lowerBound) / 2
-
-            val request = Request.Builder().apply {
-                url("$pageUrl/$midpoint")
-                headers(headers)
-                head()
-            }.build()
-
-            val response = try {
-                client.newCall(request).execute()
-            } catch (e: Exception) {
-                throw Exception("Failed to fetch $pageUrl")
-            }
-
-            if (response.code == 302) {
-                upperBound = midpoint - 1
-            } else {
-                lowerBound = midpoint + 1
-            }
-        }
-
-        return lowerBound
-    }
-
     override fun pageListParse(document: Document): List<Page> {
         val mangaChapterUrl = document.location()
         val maxPage = findPageCount(mangaChapterUrl)
@@ -123,18 +88,6 @@ class MangaTerra : ParsedHttpSource() {
     override fun popularMangaSelector(): String = ".card-body .row > div"
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    private fun searchByQueryMangaParse(response: Response): MangasPage {
-        val fragment = Jsoup.parseBodyFragment(
-            json.decodeFromString<String>(response.body.string()),
-            baseUrl,
-        )
-
-        return MangasPage(
-            mangas = fragment.select("div.grid-item-series").map(::searchMangaFromElement),
-            hasNextPage = false,
-        )
-    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.pathSegments.contains("search")) {
@@ -196,6 +149,52 @@ class MangaTerra : ParsedHttpSource() {
             ),
         )
         return FilterList(filters)
+    }
+
+    private fun searchByQueryMangaParse(response: Response): MangasPage {
+        val fragment = Jsoup.parseBodyFragment(
+            json.decodeFromString<String>(response.body.string()),
+            baseUrl,
+        )
+
+        return MangasPage(
+            mangas = fragment.select("div.grid-item-series").map(::searchMangaFromElement),
+            hasNextPage = false,
+        )
+    }
+
+    private fun findPageCount(pageUrl: String): Int {
+        var lowerBound = 1
+        var upperBound = 100
+
+        val client = network.client.newBuilder()
+            .followRedirects(false)
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
+
+        while (lowerBound <= upperBound) {
+            val midpoint = lowerBound + (upperBound - lowerBound) / 2
+
+            val request = Request.Builder().apply {
+                url("$pageUrl/$midpoint")
+                headers(headers)
+                head()
+            }.build()
+
+            val response = try {
+                client.newCall(request).execute()
+            } catch (e: Exception) {
+                throw Exception("Failed to fetch $pageUrl")
+            }
+
+            if (response.code == 302) {
+                upperBound = midpoint - 1
+            } else {
+                lowerBound = midpoint + 1
+            }
+        }
+
+        return lowerBound
     }
 
     private fun Element.srcAttr(): String = when {
