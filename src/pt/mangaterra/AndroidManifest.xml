@@ -14,7 +14,7 @@
 
                 <data
                     android:scheme="https"
-                    android:host="manga-terra.com/"
+                    android:host="manga-terra.com"
                     android:pathPattern="/manga/..*" />
             </intent-filter>
         </activity>
