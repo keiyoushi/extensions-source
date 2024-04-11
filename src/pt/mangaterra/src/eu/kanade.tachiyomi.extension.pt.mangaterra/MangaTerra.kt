@@ -73,6 +73,12 @@ class MangaTerra : ParsedHttpSource() {
         var lowerBound = 1
         var upperBound = 100
 
+        val client = network.client.newBuilder().apply {
+            followRedirects(false)
+            followSslRedirects(false)
+            rateLimit(1, 2, TimeUnit.SECONDS)
+        }.build()
+
         while (lowerBound <= upperBound) {
             val midpoint = lowerBound + (upperBound - lowerBound) / 2
 
@@ -80,12 +86,6 @@ class MangaTerra : ParsedHttpSource() {
                 url("$pageUrl/$midpoint")
                 headers(headers)
                 head()
-            }.build()
-
-            val client = network.client.newBuilder().apply {
-                followRedirects(false)
-                followSslRedirects(false)
-                rateLimit(1, 2, TimeUnit.SECONDS)
             }.build()
 
             val response = try {
