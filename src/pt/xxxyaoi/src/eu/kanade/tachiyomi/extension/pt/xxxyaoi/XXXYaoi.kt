@@ -7,7 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class XXXYasooi : Madara(
+class XXXYaoi : Madara(
     "XXX Yaoi",
     "https://3xyaoi.com",
     "pt-BR",
