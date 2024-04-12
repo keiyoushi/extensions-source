@@ -100,8 +100,7 @@ class CosplayTele : ParsedHttpSource() {
         val manga = SManga.create()
         manga.title = document.select(".entry-title").text()
         manga.description = document.select(".entry-title").text()
-        val genres = getTags(document)
-        manga.genre = genres.joinToString(", ")
+        manga.genre = getTags(document).joinToString(", ")
         manga.status = SManga.COMPLETED
         return manga
     }
