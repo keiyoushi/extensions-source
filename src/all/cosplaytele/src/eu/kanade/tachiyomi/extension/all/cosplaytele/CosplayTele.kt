@@ -70,12 +70,11 @@ class CosplayTele : ParsedHttpSource() {
         val jsonObject = json.decodeFromString<JsonArray>(response.body.string())
         val mangas = jsonObject.map { item ->
             val head = item.jsonObject["yoast_head_json"]!!.jsonObject
-            val manga = SManga.create().apply {
+            SManga.create().apply {
                 title = head["og_title"]!!.jsonPrimitive.content
                 thumbnail_url = head["og_image"]!!.jsonArray[0].jsonObject["url"]!!.jsonPrimitive.content
+                setUrlWithoutDomain(head["og_url"]!!.jsonPrimitive.content)
             }
-            manga.setUrlWithoutDomain(head["og_url"]!!.jsonPrimitive.content)
-            manga
         }
         return MangasPage(mangas, mangas.size >= popularPageLimit)
     }
