@@ -180,7 +180,7 @@ class CosplayTele : ParsedHttpSource() {
     }
 
 //
-    private suspend fun fetchFilters() {
+    private fun fetchFilters() {
         if (filtersState == FilterState.Unfetched && filterAttempts < 3) {
             filtersState = FilterState.Fetching
             filterAttempts++
