@@ -179,8 +179,7 @@ class MangaTerra : ParsedHttpSource() {
     private fun findPageCount(pageUrl: String): Int {
         var lowerBound = 1
         var upperBound = 100
-
-
+        
         while (lowerBound <= upperBound) {
             val midpoint = lowerBound + (upperBound - lowerBound) / 2
 
