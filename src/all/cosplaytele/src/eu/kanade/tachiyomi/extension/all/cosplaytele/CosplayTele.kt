@@ -120,7 +120,6 @@ class CosplayTele : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.select("link[rel=\"canonical\"]").attr("href"))
-        chapter.chapter_number = -2f
         chapter.name = "Gallery"
         chapter.date_upload = getDate(element.select("time.updated").attr("datetime"))
         return chapter
