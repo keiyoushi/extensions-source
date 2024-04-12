@@ -12,6 +12,8 @@ class MaidSecret : Madara(
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
+    override val useNewChapterEndpoint = true
+
     override val client = network.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
