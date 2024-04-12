@@ -38,37 +38,28 @@ class CosplayTele : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val Element.imgSrc: String
-        get() = attr("data-lazy-src")
-            .ifEmpty { attr("data-src") }
-            .ifEmpty { attr("src") }
-
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = element.selectFirst("img")!!.imgSrc
+        manga.thumbnail_url = element.selectFirst("img")!!.attr("src")
         val linkEl = element.selectFirst("h5 a")!!
-        manga.title = linkEl.text() + " "
+        manga.title = linkEl.text()
         manga.setUrlWithoutDomain(linkEl.attr("abs:href"))
         return manga
     }
 
     override fun latestUpdatesNextPageSelector() = ".next.page-number"
-    override fun latestUpdatesRequest(page: Int): Request {
-        launchIO { fetchFilters() }
-        return GET("$baseUrl/page/$page/")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page/")
 
     override fun latestUpdatesSelector() = "div.box"
 
     // Popular
     override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        return manga
+        throw UnsupportedOperationException()
     }
 
     override fun popularMangaNextPageSelector(): String? {
-        TODO("Not yet implemented")
+        throw UnsupportedOperationException()
     }
 
     private val popularPageLimit = 20
@@ -76,7 +67,6 @@ class CosplayTele : ParsedHttpSource() {
     override fun popularMangaSelector(): String = ""
 
     override fun popularMangaParse(response: Response): MangasPage {
-        launchIO { fetchFilters() }
         val jsonObject = json.decodeFromString<JsonArray>(response.body.string())
         val mangas = jsonObject.map { item ->
             val head = item.jsonObject["yoast_head_json"]!!.jsonObject
@@ -122,7 +112,6 @@ class CosplayTele : ParsedHttpSource() {
         return document.select("#main a").filter { a -> pattern.matches(a.attr("href")) }.map { a ->
             val link = a.attr("href").split(".com/")[1]
             val tag = a.text()
-            Log.d("app.mihon.debug", "here $tag/$link")
             if (tag.isNotEmpty()) {
                 this.categories[tag] = link
             }
@@ -144,10 +133,9 @@ class CosplayTele : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        document.select("noscript").remove()
         document.select(".gallery-item img").forEachIndexed { i, it ->
-            val itUrl = it.imgSrc
-            pages.add(Page(i, itUrl, itUrl))
+            val itUrl = it.attr("src")
+            pages.add(Page(i, imageUrl = itUrl))
         }
         return pages
     }
@@ -157,6 +145,7 @@ class CosplayTele : ParsedHttpSource() {
 
     // Filters
     override fun getFilterList(): FilterList {
+        CoroutineScope(Dispatchers.IO).launch { fetchFilters() }
         val filters = mutableListOf<Filter<*>>(
             Filter.Header("NOTE: Only one filter will be applied!"),
             Filter.Separator(),
@@ -190,10 +179,6 @@ class CosplayTele : ParsedHttpSource() {
         Fetching, Fetched, Unfetched
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO)
-
-    protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
-
 //
     private suspend fun fetchFilters() {
         if (filtersState == FilterState.Unfetched && filterAttempts < 3) {
@@ -215,8 +200,12 @@ class CosplayTele : ParsedHttpSource() {
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
     private fun getDate(str: String): Long {
-        val format = str.split("T")[0]
-        return runCatching { DATE_FORMAT.parse(format)?.time }.getOrNull() ?: 0L
+        try {
+            val format = str.split("T")[0]
+            return DATE_FORMAT.parse(format)?.time ?: 0L
+        } catch (e: Exception) {
+            return 0L
+        }
     }
 
     companion object {
