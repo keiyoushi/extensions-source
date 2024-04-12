@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.cosplaytele
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -85,20 +86,24 @@ class CosplayTele : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val categoryFilter = filterList.findInstance<UriPartFilter>()!!
+
+        val categoryFilter = filterList.findInstance<UriPartFilter>()
         return when {
-            categoryFilter.state != 0 -> GET(
+            categoryFilter?.state != 0 -> GET(
                 baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment(categoryFilter.toUriPart())
+                    addPathSegments(categoryFilter!!.toUriPart())
                     addPathSegment("page")
                     addPathSegment(page.toString())
-                    addPathSegment("/")
                     query.isNotEmpty().also {
                         addQueryParameter("s", query)
                     }
                 }.build(),
             )
-            query.isNotEmpty() -> GET("$baseUrl/page/$page/".toHttpUrl().newBuilder().apply { addQueryParameter("s", query) }.build())
+            query.isNotEmpty() -> GET(
+                "$baseUrl/page/$page/".toHttpUrl().newBuilder().apply {
+                    addQueryParameter("s", query)
+                }.build(),
+            )
             else -> latestUpdatesRequest(page)
         }
     }
@@ -186,14 +191,14 @@ class CosplayTele : ParsedHttpSource() {
         Fetching, Fetched, Unfetched
     }
 
-    private fun fetchFilters() {
+    private suspend fun fetchFilters() {
         if (filtersState == FilterState.Unfetched && filterAttempts < 3) {
             filtersState = FilterState.Fetching
             filterAttempts++
 
             try {
                 client.newCall(GET("$baseUrl/explore-categories/", headers))
-                    .execute()
+                    .await()
                     .asJsoup().let { document -> getTags(document) }
                 filtersState = FilterState.Fetched
             } catch (e: Exception) {
