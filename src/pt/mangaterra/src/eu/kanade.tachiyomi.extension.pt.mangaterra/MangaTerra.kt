@@ -37,6 +37,11 @@ class MangaTerra : ParsedHttpSource() {
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
+    private val noRedirectClient = network.client.newBuilder()
+        .followRedirects(false)
+        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .build()
+
     private val json: Json by injectLazy()
 
     private var fetchGenresAttempts: Int = 0
@@ -167,10 +172,6 @@ class MangaTerra : ParsedHttpSource() {
         var lowerBound = 1
         var upperBound = 100
 
-        val client = network.client.newBuilder()
-            .followRedirects(false)
-            .rateLimit(1, 2, TimeUnit.SECONDS)
-            .build()
 
         while (lowerBound <= upperBound) {
             val midpoint = lowerBound + (upperBound - lowerBound) / 2
@@ -182,7 +183,7 @@ class MangaTerra : ParsedHttpSource() {
             }.build()
 
             val response = try {
-                client.newCall(request).execute()
+                noRedirectClient.newCall(request).execute()
             } catch (e: Exception) {
                 throw Exception("Failed to fetch $pageUrl")
             }
