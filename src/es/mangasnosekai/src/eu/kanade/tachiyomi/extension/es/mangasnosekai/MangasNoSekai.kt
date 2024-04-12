@@ -8,10 +8,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -178,7 +180,7 @@ class MangasNoSekai : Madara(
         intl["order_by_filter_new"] to "new-manga",
     )
 
-    private fun altChapterRequest(mangaId: String, page: Int, objects: List<Pair<String, String>>): Request {
+    private fun altChapterRequest(url: String, mangaId: String, page: Int, objects: List<Pair<String, String>>): Request {
         val form = FormBody.Builder()
             .add("mangaid", mangaId)
             .add("page", page.toString())
@@ -187,7 +189,7 @@ class MangasNoSekai : Madara(
             form.add(key, value)
         }
 
-        return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form.build())
+        return POST(baseUrl + url, xhrHeaders, form.build())
     }
 
     private val altChapterListSelector = "body > div > div"
@@ -196,8 +198,12 @@ class MangasNoSekai : Madara(
         val document = response.asJsoup()
         launchIO { countViews(document) }
 
+        val mangaSlug = response.request.url.toString().substringAfter(baseUrl).removeSuffix("/")
         val coreScript = document.selectFirst("script#wp-manga-js")!!.attr("abs:src")
         val coreScriptBody = client.newCall(GET(coreScript, headers)).execute().body.string()
+
+        val url = URL_REGEX.find(coreScriptBody)?.groupValues?.get(1)
+            ?: throw Exception("No se pudo obtener la url del capítulo")
 
         val data = DATA_REGEX.find(coreScriptBody)?.groupValues?.get(1)?.trim()
             ?: throw Exception("No se pudo obtener la data del capítulo")
@@ -218,9 +224,13 @@ class MangasNoSekai : Madara(
         val chapterElements = mutableListOf<Element>()
         var page = 1
         do {
-            val xhrRequest = altChapterRequest(mangaId, page, objects)
+            val xhrRequest = altChapterRequest(url, mangaId, page, objects)
             val xhrResponse = client.newCall(xhrRequest).execute()
-            val xhrDocument = xhrResponse.asJsoup()
+            val xhrBody = xhrResponse.body.string()
+            if (xhrBody.startsWith("{")) {
+                return chaptersFromJson(xhrBody, mangaSlug)
+            }
+            val xhrDocument = Jsoup.parse(xhrBody)
             chapterElements.addAll(xhrDocument.select(altChapterListSelector))
             page++
         } while (xhrDocument.select(altChapterListSelector).isNotEmpty())
@@ -236,8 +246,14 @@ class MangasNoSekai : Madara(
         } ?: 0
     }
 
+    private fun chaptersFromJson(jsonString: String, mangaSlug: String): List<SChapter> {
+        val result = json.decodeFromString<PayloadDto>(jsonString)
+        return result.manga.first().chapters.map { it.toSChapter(mangaSlug) }
+    }
+
     companion object {
         val DATA_REGEX = """function\s+loadMoreChapters[\s\S]*?\$.ajax[\s\S]*?data:\s*\{([\s\S]*?)\},?""".toRegex()
+        val URL_REGEX = """function\s+loadMoreChapters[\s\S]*?\$.ajax[\s\S]*?url:\s*'(.*?)'""".toRegex()
         val DATA_OBJECTS_REGEX = """\s*(\w+)\s*:\s*(?:(?:'([^']*)'|([^,\r\n]+))\s*,?\s*)""".toRegex()
         val MANGA_ID_REGEX = """\"manga_id"\s*:\s*"(.*)\"""".toRegex()
         val POST_ID_REGEX = """\"postId"\s*:\s*"(.*)\"""".toRegex()
