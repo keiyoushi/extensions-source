@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -86,9 +87,18 @@ class CosplayTele : ParsedHttpSource() {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val categoryFilter = filterList.findInstance<UriPartFilter>()!!
         return when {
-            query.isEmpty() && categoryFilter.state != 0 -> GET("$baseUrl/${categoryFilter.toUriPart()}/page/$page/")
-            query.isNotEmpty() && categoryFilter.state != 0 -> GET("$baseUrl/${categoryFilter.toUriPart()}/page/$page/?s=$query")
-            query.isNotEmpty() -> GET("$baseUrl/page/$page/?s=$query")
+            categoryFilter.state != 0 -> GET(
+                baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment(categoryFilter.toUriPart())
+                    addPathSegment("page")
+                    addPathSegment(page.toString())
+                    addPathSegment("/")
+                    query.isNotEmpty().also {
+                        addQueryParameter("s", query)
+                    }
+                }.build(),
+            )
+            query.isNotEmpty() -> GET("$baseUrl/page/$page/".toHttpUrl().newBuilder().apply { addQueryParameter("s", query) }.build())
             else -> latestUpdatesRequest(page)
         }
     }
