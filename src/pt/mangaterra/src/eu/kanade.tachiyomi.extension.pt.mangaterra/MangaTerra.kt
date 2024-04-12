@@ -34,13 +34,12 @@ class MangaTerra : ParsedHttpSource() {
     override val name: String = "Manga Terra"
     override val baseUrl: String = "https://manga-terra.com"
 
-    override val client = network.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(5, 2, TimeUnit.SECONDS)
         .build()
 
-    private val noRedirectClient = network.client.newBuilder()
+    private val noRedirectClient = network.cloudflareClient.newBuilder()
         .followRedirects(false)
-        .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
     private val json: Json by injectLazy()
