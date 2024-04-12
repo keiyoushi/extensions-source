@@ -111,7 +111,7 @@ class CosplayTele : ParsedHttpSource() {
             val link = a.attr("href").split(".com/")[1]
             val tag = a.text()
             if (tag.isNotEmpty()) {
-                this.categories[tag] = link
+                categories[tag] = link
             }
             tag
         }
