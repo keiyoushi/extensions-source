@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.mangaterra
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -147,12 +148,19 @@ class MangaTerra : ParsedHttpSource() {
 
     override fun getFilterList(): FilterList {
         CoroutineScope(Dispatchers.IO).launch { fetchGenres() }
-        val filters = mutableListOf(
-            GenreFilter(
-                title = "Categorias",
+        val filters = mutableListOf<Filter<out Any>>()
+
+        if (genresList.isNotEmpty()) {
+            filters += GenreFilter(
+                title = "Gêneros",
                 genres = genresList,
-            ),
-        )
+            )
+        } else {
+            filters += listOf(
+                Filter.Separator(),
+                Filter.Header("Aperte 'Redefinir' mostrar os gêneros disponíveis"),
+            )
+        }
         return FilterList(filters)
     }
 
