@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.scyllascans
 
 import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
 
-class ScyllaScans : FuzzyDoodle("Scylla Scans", "https://scyllascans.org", "en") {
+class ScyllaComics : FuzzyDoodle("Scylla Comics", "https://scyllacomics.xyz", "en") {
 
     // readerfront -> fuzzydoodle
     override val versionId = 2
