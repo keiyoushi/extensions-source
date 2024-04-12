@@ -26,6 +26,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -214,7 +215,7 @@ class CosplayTele : ParsedHttpSource() {
         try {
             val format = str.split("T")[0]
             return DATE_FORMAT.parse(format)?.time ?: 0L
-        } catch (e: Exception) {
+        } catch (e: ParseException) {
             return 0L
         }
     }
