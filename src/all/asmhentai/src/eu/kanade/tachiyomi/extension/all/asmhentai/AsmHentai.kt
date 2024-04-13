@@ -1,32 +1,34 @@
 package eu.kanade.tachiyomi.extension.all.asmhentai
 
-import androidx.preference.ListPreference
+import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.FormBody
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class AsmHentai(
     lang: String = "all",
     override val mangaLang: String = "",
 ) : GalleryAdults("AsmHentai", "https://asmhentai.com", lang) {
-    protected open val displayFullTitle: Boolean
-        get() = when (preferences.getString(TITLE_PREF, "full")) {
-            "full" -> true
-            else -> false
-        }
+    private val SharedPreferences.shortTitle
+        get() = getBoolean(PREF_SHORT_TITLE, false)
 
-    protected open val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
 
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = TITLE_PREF
-            title = TITLE_PREF
-            entries = arrayOf("Full Title", "Short Title")
-            entryValues = arrayOf("full", "short")
-            summary = "Requires restart\n%s"
-            setDefaultValue("full")
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHORT_TITLE
+            title = "Display Short Titles"
+            summaryOff = "Showing Long Titles"
+            summaryOn = "Showing short Titles"
+            setDefaultValue(false)
         }.also(screen::addPreference)
 
         super.setupPreferenceScreen(screen)
@@ -34,7 +36,7 @@ class AsmHentai(
 
     override fun Element.mangaTitle(selector: String) =
         mangaFullTitle(selector).let {
-            if (displayFullTitle) it else it?.shortenTitle()
+            if (preferences.shortTitle) it?.shortenTitle() else it
         }
 
     private fun Element.mangaFullTitle(selector: String) =
@@ -74,7 +76,7 @@ class AsmHentai(
             )
             .joinToString("\n")
             .plus(
-                if (!displayFullTitle) {
+                if (preferences.shortTitle) {
                     "\nFull title: ${mangaFullTitle("h1")}"
                 } else {
                     ""
@@ -127,6 +129,6 @@ class AsmHentai(
     }
 
     companion object {
-        private const val TITLE_PREF = "Display manga title as:"
+        private const val PREF_SHORT_TITLE = "pref_short_title"
     }
 }
