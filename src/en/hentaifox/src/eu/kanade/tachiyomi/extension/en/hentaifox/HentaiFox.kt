@@ -21,6 +21,7 @@ class HentaiFox(
     override fun Element.mangaLang() = attr("data-languages")
         .split(' ').let {
             when {
+                it.contains("11") -> "korean"
                 it.contains("6") -> "chinese"
                 it.contains("5") -> "japanese"
                 else -> "english"

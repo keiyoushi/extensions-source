@@ -8,6 +8,7 @@ class HentaiFoxFactory : SourceFactory {
         HentaiFox("en", "english"),
         HentaiFox("ja", "japanese"),
         HentaiFox("zh", "chinese"),
+        HentaiFox("ko", "korean"),
         HentaiFox("all", ""),
     )
 }
