@@ -75,7 +75,7 @@ abstract class GalleryAdults(
     protected open fun Element.mangaThumbnail() =
         selectFirst(".inner_thumb img")?.imgAttr()
 
-    // Use this to filter manga's language from search result
+    // Overwrite this to filter other languages' manga from search result. Default to [mangaLang] won't filter anything
     protected open fun Element.mangaLang() = mangaLang
 
     /* Popular */
@@ -132,7 +132,7 @@ abstract class GalleryAdults(
     protected open fun searchMangaByIdRequest(id: String): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment(PREFIX_ID)
-            addPathSegment("$id/")
+            addPathSegments("$id/")
         }
         return GET(url.build(), headers)
     }
@@ -143,20 +143,13 @@ abstract class GalleryAdults(
         return MangasPage(listOf(details), false)
     }
 
-    protected open val favoritePath = "user"
-
-    protected open fun tagPageUri(url: HttpUrl.Builder, page: Int) =
-        url.apply {
-            addQueryParameter("page", page.toString())
-        }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
         val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
         return when {
             query.isNotBlank() -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("search/")
+                    addPathSegments("search/")
                     addQueryParameter("q", query.trim())
                     addQueryParameter("sort", "popular")
                     if (page > 1) addQueryParameter("page", page.toString())
@@ -181,6 +174,13 @@ abstract class GalleryAdults(
         }
     }
 
+    protected open val favoritePath = "user"
+
+    protected open fun tagPageUri(url: HttpUrl.Builder, page: Int) =
+        url.apply {
+            addQueryParameter("page", page.toString())
+        }
+
     protected class SMangaDto(
         val title: String,
         val url: String,
@@ -188,17 +188,16 @@ abstract class GalleryAdults(
         val lang: String,
     )
 
-    protected open fun loginRequired(response: Response): Boolean {
-        val document = response.asJsoup()
+    protected open fun loginRequired(document: Document, url: String): Boolean {
         return (
-            response.request.url.toString().contains("/login/") &&
+            url.contains("/login/") &&
                 document.select("input[value=Login]").isNotEmpty()
             )
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        if (loginRequired(response)) {
+        if (loginRequired(document, response.request.url.toString())) {
             throw Exception("Log in via WebView to view favorites")
         } else {
             val mangas = document.select(searchMangaSelector())
