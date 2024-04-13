@@ -95,7 +95,7 @@ class CosplayTele : ParsedHttpSource() {
                     addPathSegments(categoryFilter!!.toUriPart())
                     addPathSegment("page")
                     addPathSegment(page.toString())
-                    query.isNotEmpty().also {
+                    if (query.isNotEmpty()) {
                         addQueryParameter("s", query)
                     }
                 }.build(),
