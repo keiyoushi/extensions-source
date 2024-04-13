@@ -12,9 +12,4 @@ class ScarManga : MangaThemesia(
     dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
 ) {
     override val id = 1046935749022479891
-
-    override val seriesAuthorSelector = ".imptdt:contains(المؤلف) i"
-    override val seriesArtistSelector = ".imptdt:contains(الرسام) i"
-    override val seriesTypeSelector = ".imptdt:contains(النوع) i"
-    override val seriesStatusSelector = ".imptdt:contains(الحالة) i"
 }
