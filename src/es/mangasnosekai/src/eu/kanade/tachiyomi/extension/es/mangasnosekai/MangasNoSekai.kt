@@ -198,27 +198,30 @@ class MangasNoSekai : Madara(
         val document = response.asJsoup()
         launchIO { countViews(document) }
 
+        val txtUrl = "https://raw.githubusercontent.com/bapeey/extensions-tools/main/keiyoushi/mns/values.txt"
+        val values = client.newCall(GET(txtUrl)).execute().body.string().split("\n")
+
         val mangaSlug = response.request.url.toString().substringAfter(baseUrl).removeSuffix("/")
-        val coreScript = document.selectFirst("script#wp-manga-js")!!.attr("abs:src")
+        val coreScript = document.selectFirst(values[0])!!.attr("abs:src")
         val coreScriptBody = client.newCall(GET(coreScript, headers)).execute().body.string()
 
-        val url = URL_REGEX.find(coreScriptBody)?.groupValues?.get(1)
+        val url = values[5].toRegex().find(coreScriptBody)?.groupValues?.get(1)
             ?: throw Exception("No se pudo obtener la url del capítulo")
 
-        val data = DATA_REGEX.find(coreScriptBody)?.groupValues?.get(1)?.trim()
+        val data = values[5].toRegex().find(coreScriptBody)?.groupValues?.get(2)?.trim()
             ?: throw Exception("No se pudo obtener la data del capítulo")
 
-        val objects = DATA_OBJECTS_REGEX.findAll(data)
+        val objects = values[6].toRegex().findAll(data)
             .mapNotNull { matchResult ->
                 val key = matchResult.groupValues[1]
                 val value = matchResult.groupValues.getOrNull(2)
                 if (!value.isNullOrEmpty()) key to value else null
             }.toList()
 
-        val mangaId = document.selectFirst("script#wp-manga-js-extra")?.data()
-            ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
-            ?: document.selectFirst("script#manga_disqus_embed-js-extra")?.data()
-                ?.let { POST_ID_REGEX.find(it)?.groupValues?.get(1) }
+        val mangaId = document.selectFirst(values[1])?.data()
+            ?.let { values[7].toRegex().find(it)?.groupValues?.get(1) }
+            ?: document.selectFirst(values[2])?.data()
+                ?.let { values[8].toRegex().find(it)?.groupValues?.get(1) }
             ?: throw Exception("No se pudo obtener el id del manga")
 
         val chapterElements = mutableListOf<Element>()
@@ -249,13 +252,5 @@ class MangasNoSekai : Madara(
     private fun chaptersFromJson(jsonString: String, mangaSlug: String): List<SChapter> {
         val result = json.decodeFromString<PayloadDto>(jsonString)
         return result.manga.first().chapters.map { it.toSChapter(mangaSlug) }
-    }
-
-    companion object {
-        val DATA_REGEX = """function\s+loadMoreChapters[\s\S]*?\$.ajax[\s\S]*?data:\s*\{([\s\S]*?)\},?""".toRegex()
-        val URL_REGEX = """function\s+loadMoreChapters[\s\S]*?\$.ajax[\s\S]*?url:\s*'(.*?)'""".toRegex()
-        val DATA_OBJECTS_REGEX = """\s*(\w+)\s*:\s*(?:(?:'([^']*)'|([^,\r\n]+))\s*,?\s*)""".toRegex()
-        val MANGA_ID_REGEX = """\"manga_id"\s*:\s*"(.*)\"""".toRegex()
-        val POST_ID_REGEX = """\"postId"\s*:\s*"(.*)\"""".toRegex()
     }
 }
