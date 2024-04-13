@@ -1,9 +1,9 @@
 ext {
-    extName = 'ARESNOV'
-    extClass = '.ARESNOV'
+    extName = 'SCARManga'
+    extClass = '.ScarManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://manhuascarlet.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://scarmanga.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
