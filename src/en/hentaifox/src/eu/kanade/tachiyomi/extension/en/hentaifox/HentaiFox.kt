@@ -1,124 +1,70 @@
 package eu.kanade.tachiyomi.extension.en.hentaifox
 
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import okhttp3.HttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class HentaiFox : ParsedHttpSource() {
+open class HentaiFox(
+    lang: String = "all",
+    final override val mangaLang: String = "",
+) : GalleryAdults("HentaiFox", "https://hentaifox.com", lang) {
 
-    override val name = "HentaiFox"
+    //    override val id since we might change its lang
+    override val supportsLatest = mangaLang.isNotBlank()
 
-    override val baseUrl = "https://hentaifox.com"
+    override fun Element.mangaLang() = attr("data-languages")
+        .split(' ').let {
+            when {
+                it.contains("6") -> "chinese"
+                it.contains("5") -> "japanese"
+                else -> "english"
+            }
+        }
 
-    override val lang = "en"
+    /* Popular */
+    override fun popularMangaRequest(page: Int) =
+        when {
+            supportsLatest -> GET("$baseUrl/language/$mangaLang/popular/pag/$page/")
+            page == 2 -> GET("$baseUrl/page/$page/", headers)
+            else -> GET("$baseUrl/pag/$page/", headers)
+        }
 
-    override val supportsLatest = false
-
-    override val client: OkHttpClient = network.cloudflareClient
-
-    // Popular
-
-    override fun popularMangaRequest(page: Int): Request {
-        return if (page == 2) {
-            GET("$baseUrl/page/$page/", headers)
+    /* Latest */
+    override fun latestUpdatesRequest(page: Int) =
+        if (supportsLatest) {
+            GET("$baseUrl/language/$mangaLang/pag/$page/")
         } else {
-            GET("$baseUrl/pag/$page/", headers)
+            throw UnsupportedOperationException()
         }
-    }
 
-    override fun popularMangaSelector() = "div.thumb"
+    /* Search */
+    override val favoritePath = "profile"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("h2 a").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.selectFirst("img")!!.imgAttr()
+    override fun tagPageUri(url: HttpUrl.Builder, page: Int) =
+        url.apply {
+            addPathSegments("pag/$page/")
         }
-    }
 
-    override fun popularMangaNextPageSelector() = "li.page-item:last-of-type:not(.disabled)"
-
-    // Latest
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-
-    // Search
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotEmpty()) {
-            GET("$baseUrl/search/?q=$query&page=$page", headers)
-        } else {
-            var url = "$baseUrl/tag/"
-
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> {
-                        url += "${filter.toUriPart()}/pag/$page/"
-                    }
-                    else -> {}
-                }
-            }
-            GET(url, headers)
-        }
-    }
-
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    // Details
-
-    override fun mangaDetailsParse(document: Document): SManga {
-        return document.select("div.gallery_top").let { info ->
-            SManga.create().apply {
-                title = info.select("h1").text()
-                genre = info.select("ul.tags a").joinToString { it.ownText() }
-                artist = info.select("ul.artists a").joinToString { it.ownText() }
-                thumbnail_url = info.select("img").first()!!.imgAttr()
-                description = info.select("ul.parodies a")
-                    .let { e -> if (e.isNotEmpty()) "Parodies: ${e.joinToString { it.ownText() }}\n\n" else "" }
-                description += info.select("ul.characters a")
-                    .let { e -> if (e.isNotEmpty()) "Characters: ${e.joinToString { it.ownText() }}\n\n" else "" }
-                description += info.select("ul.groups a")
-                    .let { e -> if (e.isNotEmpty()) "Groups: ${e.joinToString { it.ownText() }}\n\n" else "" }
-            }
-        }
-    }
-
-    // Chapters
-
+    /* Chapters */
     override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
+                scanlator = document.selectFirst(mangaDetailInfoSelector)?.getTag("Groups")
                 // page path with a marker at the end
                 url = "${response.request.url.toString().replace("/gallery/", "/g/")}#"
                 // number of pages
-                url += response.asJsoup().select("[id=load_pages]").attr("value")
+                url += document.select("[id=load_pages]").attr("value")
             },
         )
     }
@@ -137,7 +83,7 @@ class HentaiFox : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String {
-        return document.selectFirst("img#gimg")!!.imgAttr()
+        return document.selectFirst("img#gimg")?.imgAttr()!!
     }
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
@@ -211,13 +157,5 @@ class HentaiFox : ParsedHttpSource() {
     private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
-    }
-
-    private fun Element.imgAttr() = when {
-        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
-        hasAttr("data-src") -> absUrl("data-src")
-        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-        hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
-        else -> absUrl("src")
     }
 }
