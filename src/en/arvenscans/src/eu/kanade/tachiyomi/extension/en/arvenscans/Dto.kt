@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.vortexscans
+package eu.kanade.tachiyomi.extension.en.arvenscans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -17,8 +17,8 @@ class SearchResponse(
 
 @Serializable
 class Manga(
-    private val id: Int,
-    private val slug: String,
+    val id: Int,
+    val slug: String,
     private val postTitle: String,
     private val postContent: String? = null,
     val isNovel: Boolean,
@@ -48,15 +48,7 @@ class Manga(
                 append(altName)
             }
         }.trim()
-        genre = buildList {
-            when (seriesType) {
-                "MANGA" -> add("Manga")
-                "MANHUA" -> add("Manhua")
-                "MANHWA" -> add("Manhwa")
-                else -> {}
-            }
-            genres?.forEach { add(it.name) }
-        }.distinct().joinToString()
+        genre = getGenres()
         status = when (seriesStatus) {
             "ONGOING", "COMING_SOON" -> SManga.ONGOING
             "COMPLETED" -> SManga.COMPLETED
@@ -65,6 +57,16 @@ class Manga(
         }
         initialized = true
     }
+
+    fun getGenres() = buildList {
+        when (seriesType) {
+            "MANGA" -> add("Manga")
+            "MANHUA" -> add("Manhua")
+            "MANHWA" -> add("Manhwa")
+            else -> {}
+        }
+        genres?.forEach { add(it.name) }
+    }.distinct().joinToString()
 }
 
 @Serializable

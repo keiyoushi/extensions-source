@@ -1,7 +1,6 @@
-package eu.kanade.tachiyomi.extension.en.vortexscans
+package eu.kanade.tachiyomi.extension.en.arvenscans
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,7 +13,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 class VortexScans : HttpSource() {
@@ -25,7 +23,7 @@ class VortexScans : HttpSource() {
 
     override val lang = "en"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val client = network.cloudflareClient
 
@@ -34,14 +32,31 @@ class VortexScans : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    private val titleCache by lazy {
+        val response = client.newCall(GET("$baseUrl/api/query?perPage=9999", headers)).execute()
+        val data = response.parseAs<SearchResponse>()
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+        data.posts
+            .filterNot { it.isNovel }
+            .associateBy { it.slug }
+    }
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val slugs = document.select("div:contains(Popular) + div.swiper div.manga-swipe > a")
+            .map { it.absUrl("href").substringAfterLast("/series/") }
+
+        val entries = slugs.mapNotNull {
+            titleCache[it]?.toSManga()
+        }
+
+        return MangasPage(entries, false)
+    }
+
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/api/query".toHttpUrl().newBuilder().apply {
@@ -75,12 +90,6 @@ class VortexScans : HttpSource() {
         GenreFilter(),
     )
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { mangaDetailsParse(it, manga) }
-    }
-
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("#")
         val url = "$baseUrl/api/chapters?postId=$id&skip=0&take=1000&order=desc&userid="
@@ -94,7 +103,7 @@ class VortexScans : HttpSource() {
         return "$baseUrl/series/$slug"
     }
 
-    private fun mangaDetailsParse(response: Response, manga: SManga): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<Post<Manga>>()
 
         assert(!data.post.isNovel) { "Novels are unsupported" }
@@ -102,18 +111,9 @@ class VortexScans : HttpSource() {
         // genres are only returned in search call
         // and not when fetching details
         return data.post.toSManga().apply {
-            if (manga.genre != null) {
-                val newGenre = buildSet {
-                    addAll(manga.genre!!.split(", "))
-                    addAll(genre!!.split(", "))
-                }
-                genre = newGenre.joinToString()
-            }
+            genre = titleCache[data.post.slug]?.getGenres()
         }
     }
-
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 

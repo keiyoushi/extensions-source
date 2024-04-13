@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.vortexscans
+package eu.kanade.tachiyomi.extension.en.arvenscans
 
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
