@@ -2,18 +2,17 @@ package eu.kanade.tachiyomi.extension.en.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.FormBody
 import okhttp3.HttpUrl
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 
-open class HentaiFox(
+class HentaiFox(
     lang: String = "all",
-    final override val mangaLang: String = "",
+    override val mangaLang: String = "",
 ) : GalleryAdults("HentaiFox", "https://hentaifox.com", lang) {
 
     //    override val id since we might change its lang
@@ -52,32 +51,39 @@ open class HentaiFox(
             addPathSegments("pag/$page/")
         }
 
-    /* Chapters */
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return listOf(
-            SChapter.create().apply {
-                name = "Chapter"
-                scanlator = document.selectFirst(mangaDetailInfoSelector)?.getTag("Groups")
-                // page path with a marker at the end
-                url = "${response.request.url.toString().replace("/gallery/", "/g/")}#"
-                // number of pages
-                url += document.select("[id=load_pages]").attr("value")
-            },
-        )
-    }
-
     /* Pages */
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        // split the "url" to get the page path and number of pages
-        return chapter.url.split("#").let { list ->
-            Observable.just(listOf(1..list[1].toInt()).flatten().map { Page(it, list[0] + "$it/") })
+    override fun pageListRequest(document: Document): List<Page> {
+        val pageUrls = document.select("$pageSelector a")
+            .map { it.absUrl("href") }
+            .toMutableList()
+
+        // input only exists if pages > 10 and have to make a request to get the other thumbnails
+        val totalPages = document.inputIdValueOf(totalPagesSelector)
+
+        if (totalPages.isNotEmpty()) {
+            val form = FormBody.Builder()
+                .add("u_id", document.inputIdValueOf(galleryIdSelector))
+                .add("g_id", document.inputIdValueOf(loadIdSelector))
+                .add("img_dir", document.inputIdValueOf(loadDirSelector))
+                .add("visible_pages", "10")
+                .add("total_pages", totalPages)
+                .add("type", "2") // 1 would be "more", 2 is "all remaining"
+                .build()
+
+            val xhrHeaders = headers.newBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .build()
+
+            client.newCall(POST("$baseUrl/includes/thumbs_loader.php", xhrHeaders, form))
+                .execute()
+                .asJsoup()
+                .select("a")
+                .mapTo(pageUrls) { it.absUrl("href") }
         }
+        return pageUrls.mapIndexed { i, url -> Page(i, url) }
     }
 
     override fun imageUrlParse(document: Document): String {
         return document.selectFirst("img#gimg")?.imgAttr()!!
     }
-
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 }

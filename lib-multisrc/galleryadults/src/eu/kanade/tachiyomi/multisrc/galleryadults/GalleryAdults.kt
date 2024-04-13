@@ -3,12 +3,12 @@ package eu.kanade.tachiyomi.multisrc.galleryadults
 import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -21,7 +21,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -51,7 +50,18 @@ abstract class GalleryAdults(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
+    private val SharedPreferences.parseImages
+        get() = getBoolean(PREF_PARSE_IMAGES, false)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_PARSE_IMAGES
+            title = "Parse for images' URL one by one (Might help if chapter failed to load some pages)"
+            summaryOff = "Fast images' URL generator"
+            summaryOn = "Slowly parsing images' URL"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
         addRandomUAPreferenceToScreen(screen)
     }
 
@@ -286,50 +296,38 @@ abstract class GalleryAdults(
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     /* Pages */
-    // convert thumbnail URLs to full image URLs
-    protected open fun String.full(): String {
-        val fType = substringAfterLast("t")
-        return replace("t$fType", fType)
-    }
-
     protected open fun Document.inputIdValueOf(string: String): String {
         return select("input[id=$string]").attr("value")
     }
 
+    protected open val galleryIdSelector = "gallery_id"
+    protected open val loadIdSelector = "load_id"
+    protected open val loadDirSelector = "load_dir"
+    protected open val totalPagesSelector = "load_pages"
+    protected open val pageUri = "g"
+    protected open val pageSelector = ".gallery_thumb"
+
     override fun pageListParse(document: Document): List<Page> {
-        val thumbUrls = document.select(".preview_thumb img")
-            .map { it.imgAttr() }
-            .toMutableList()
-
-        // input only exists if pages > 10 and have to make a request to get the other thumbnails
-        val totalPages = document.inputIdValueOf("t_pages")
-
-        if (totalPages.isNotEmpty()) {
-            val token = document.select("[name=csrf-token]").attr("content")
-
-            val form = FormBody.Builder()
-                .add("_token", token)
-                .add("id", document.inputIdValueOf("load_id"))
-                .add("dir", document.inputIdValueOf("load_dir"))
-                .add("visible_pages", "10")
-                .add("t_pages", totalPages)
-                .add("type", "2") // 1 would be "more", 2 is "all remaining"
-                .build()
-
-            val xhrHeaders = headers.newBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .build()
-
-            client.newCall(POST("$baseUrl/inc/thumbs_loader.php", xhrHeaders, form))
-                .execute()
-                .asJsoup()
-                .select("img")
-                .mapTo(thumbUrls) { it.imgAttr() }
+        return if (preferences.parseImages) {
+            pageListRequest(document)
+        } else {
+            val galleryId = document.inputIdValueOf(galleryIdSelector)
+            val totalPages = document.inputIdValueOf(totalPagesSelector)
+            val pageUrl = "$baseUrl/$pageUri/$galleryId"
+            val imageUrl = document.selectFirst("$pageSelector img")?.imgAttr()!!
+            val imageUrlPrefix = imageUrl.substringBeforeLast('/')
+            val imageUrlSuffix = imageUrl.substringAfterLast('.')
+            return listOf(1..totalPages.toInt()).flatten().map {
+                Page(
+                    index = it,
+                    imageUrl = "$imageUrlPrefix/$it.$imageUrlSuffix",
+                    url = "$pageUrl/$it/",
+                )
+            }
         }
-        return thumbUrls.mapIndexed { i, url -> Page(i, "", url?.full()) }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    abstract fun pageListRequest(document: Document): List<Page>
 
     /* Filters */
     override fun getFilterList() = FilterList(
@@ -415,5 +413,6 @@ abstract class GalleryAdults(
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
         const val PREFIX_ID = "g"
+        private const val PREF_PARSE_IMAGES = "pref_parse_images"
     }
 }
