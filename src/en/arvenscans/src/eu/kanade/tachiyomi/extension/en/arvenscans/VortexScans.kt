@@ -49,7 +49,7 @@ class VortexScans : HttpSource() {
             .map { it.absUrl("href").substringAfterLast("/series/") }
 
         val entries = slugs.mapNotNull {
-            titleCache[it]?.toSManga()
+            titleCache[it]?.toSManga(baseUrl)
         }
 
         return MangasPage(entries, false)
@@ -77,7 +77,7 @@ class VortexScans : HttpSource() {
 
         val entries = data.posts
             .filterNot { it.isNovel }
-            .map { it.toSManga() }
+            .map { it.toSManga(baseUrl) }
 
         val hasNextPage = data.totalCount > (page * perPage)
 
@@ -110,7 +110,7 @@ class VortexScans : HttpSource() {
 
         // genres are only returned in search call
         // and not when fetching details
-        return data.post.toSManga().apply {
+        return data.post.toSManga(baseUrl).apply {
             genre = titleCache[data.post.slug]?.getGenres()
         }
     }

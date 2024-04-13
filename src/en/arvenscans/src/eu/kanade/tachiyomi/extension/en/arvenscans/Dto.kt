@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -30,10 +31,14 @@ class Manga(
     private val seriesStatus: String? = null,
     private val genres: List<Name>? = emptyList(),
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         url = "$slug#$id"
         title = postTitle
-        thumbnail_url = featuredImage
+        thumbnail_url = "$baseUrl/_next/image".toHttpUrl().newBuilder().apply {
+            addQueryParameter("url", featuredImage)
+            addQueryParameter("w", "828")
+            addQueryParameter("q", "75")
+        }.toString()
         author = this@Manga.author?.takeUnless { it.isEmpty() }
         artist = this@Manga.artist?.takeUnless { it.isEmpty() }
         description = buildString {
