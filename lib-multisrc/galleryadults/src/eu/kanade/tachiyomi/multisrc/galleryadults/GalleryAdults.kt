@@ -44,8 +44,6 @@ abstract class GalleryAdults(
 
     override val supportsLatest = false
 
-    protected open val utils: GalleryAdultsUtils = GalleryAdultsUtils()
-
     protected open val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
@@ -285,7 +283,7 @@ abstract class GalleryAdults(
                 name = "Chapter"
                 scanlator = document.selectFirst(mangaDetailInfoSelector)
                     ?.getTag("Groups")
-                date_upload = utils.getTime(document, dateFormat)
+                // date_upload = utils.getTime(document, dateFormat)
                 setUrlWithoutDomain(response.request.url.encodedPath)
             },
         )
