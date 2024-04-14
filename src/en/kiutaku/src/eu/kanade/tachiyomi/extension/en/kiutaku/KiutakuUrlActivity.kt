@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.kiutaku
+package eu.kanade.tachiyomi.extension.all.kiutaku
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
