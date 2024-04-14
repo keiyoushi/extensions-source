@@ -151,6 +151,9 @@ abstract class GalleryAdults(
         return MangasPage(listOf(details), false)
     }
 
+    // any space except after a comma (we're going to replace spaces only between words)
+    private val spaceRegex = Regex("""(?<!,)\s+""")
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
         val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
@@ -158,7 +161,7 @@ abstract class GalleryAdults(
             query.isNotBlank() -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegments("search/")
-                    addQueryParameter("q", query.trim())
+                    addEncodedQueryParameter("q", query.replace(spaceRegex, "+").trim())
                     addQueryParameter("sort", "popular")
                     if (page > 1) addQueryParameter("page", page.toString())
                 }
