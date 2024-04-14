@@ -2,7 +2,7 @@ ext {
     extName = 'Coven Scan'
     extClass = '.CovenScan'
     themePkg = 'madara'
-    baseUrl = 'https://cvnscan.com/'
+    baseUrl = 'https://cvnscan.com'
     overrideVersionCode = 0
     isNsfw = true
 }
