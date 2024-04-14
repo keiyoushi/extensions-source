@@ -3,7 +3,7 @@ ext {
     extClass = '.ManhuaOnline'
     themePkg = 'madara'
     baseUrl = 'https://manhuaonline.org'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
