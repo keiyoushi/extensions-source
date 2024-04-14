@@ -1,7 +1,7 @@
 ext {
     extName = 'Mode Scanlator'
     extClass = '.ModeScanlator'
-    themePkg = 'peachscan'
+    themePkg = 'heancms'
     baseUrl = 'https://modescanlator.com'
     overrideVersionCode = 0
 }

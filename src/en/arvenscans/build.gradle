@@ -1,9 +1,7 @@
 ext {
-    extName = 'Arven Scans'
-    extClass = '.ArvenScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://arvenscans.com'
-    overrideVersionCode = 0
+    extName = 'Vortex Scans'
+    extClass = '.VortexScans'
+    extVersionCode = 31
 }
 
 apply from: "$rootDir/common.gradle"
