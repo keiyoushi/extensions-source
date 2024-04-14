@@ -4,7 +4,6 @@ import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -39,9 +38,7 @@ abstract class Liliana(
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .build()
+    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -50,25 +47,13 @@ abstract class Liliana(
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking/week/$page", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        launchIO { fetchFilters() }
-
-        val entries = document.select(popularMangaSelector())
-            .map(::popularMangaFromElement)
-        val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
-
-        return MangasPage(entries, hasNextPage)
-    }
-
     override fun popularMangaSelector(): String = "div#main div.grid > div"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.selectFirst("img")?.imgAttr()
-        element.selectFirst(".text-center a")!!.run {
-            title = text().trim()
-            setUrlWithoutDomain(attr("href"))
+        with(element.selectFirst(".text-center a")!!) {
+            title = text()
+            setUrlWithoutDomain(attr("abs:href"))
         }
     }
 
@@ -227,6 +212,8 @@ abstract class Liliana(
     }
 
     override fun getFilterList(): FilterList {
+        launchIO { fetchFilters() }
+
         val filters = mutableListOf<Filter<*>>()
 
         if (genreData.isNotEmpty()) {
@@ -263,7 +250,7 @@ abstract class Liliana(
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         description = document.selectFirst("div#syn-target")?.text()
         thumbnail_url = document.selectFirst(".a1 > figure img")?.imgAttr()
-        title = document.selectFirst(".a2 header h1")?.text()?.trim() ?: "N/A"
+        title = document.selectFirst(".a2 header h1")!!.text()
         genre = document.select(".a2 div > a[rel='tag'].label").joinToString { it.text() }
         author = document.selectFirst("div.y6x11p i.fas.fa-user + span.dt")?.text()?.takeUnless {
             it.equals("updating", true)
@@ -295,24 +282,6 @@ abstract class Liliana(
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val document = client.newCall(GET(baseUrl + chapter.url, headers)).execute().asJsoup()
-
-        val script = document.selectFirst("script:containsData(const CHAPTER_ID)")?.data()
-            ?: throw Exception("Failed to get chapter id")
-
-        val chapterId = script.substringAfter("const CHAPTER_ID = ").substringBefore(";")
-
-        val pageHeaders = headersBuilder().apply {
-            add("Accept", "application/json, text/javascript, *//*; q=0.01")
-            add("Host", baseUrl.toHttpUrl().host)
-            set("Referer", baseUrl + chapter.url)
-            add("X-Requested-With", "XMLHttpRequest")
-        }.build()
-
-        return GET("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders)
-    }
-
     @Serializable
     class PageListResponseDto(
         val status: Boolean = false,
@@ -321,7 +290,24 @@ abstract class Liliana(
     )
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<PageListResponseDto>()
+        val document = response.asJsoup()
+        val script = document.selectFirst("script:containsData(const CHAPTER_ID)")?.data()
+            ?: throw Exception("Failed to get chapter id")
+
+        val chapterId = script.substringAfter("const CHAPTER_ID = ").substringBefore(";")
+
+        val pageHeaders = headersBuilder().apply {
+            add("Accept", "application/json, text/javascript, *//*; q=0.01")
+            add("Host", baseUrl.toHttpUrl().host)
+            set("Referer", response.request.url.toString())
+            add("X-Requested-With", "XMLHttpRequest")
+        }.build()
+
+        val ajaxResponse = client.newCall(
+            GET("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders),
+        ).execute()
+
+        val data = ajaxResponse.parseAs<PageListResponseDto>()
 
         if (!data.status) {
             throw Exception(data.msg)
@@ -330,7 +316,7 @@ abstract class Liliana(
         return pageListParse(
             Jsoup.parseBodyFragment(
                 data.html,
-                response.request.header("Referer")!!,
+                response.request.url.toString(),
             ),
         )
     }
