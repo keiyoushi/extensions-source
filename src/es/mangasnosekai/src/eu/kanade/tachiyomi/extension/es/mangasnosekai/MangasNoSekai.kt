@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.mangasnosekai
 
+import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -203,7 +204,8 @@ class MangasNoSekai : Madara(
 
         val mangaSlug = response.request.url.toString().substringAfter(baseUrl).removeSuffix("/")
         val coreScript = document.selectFirst(values[0])!!.attr("abs:src")
-        val coreScriptBody = client.newCall(GET(coreScript, headers)).execute().body.string()
+        val coreScriptBody = Deobfuscator.deobfuscateScript(client.newCall(GET(coreScript, headers)).execute().body.string())
+            ?: throw Exception("No se pudo deobfuscar el script")
 
         val url = values[5].toRegex().find(coreScriptBody)?.groupValues?.get(1)
             ?: throw Exception("No se pudo obtener la url del capítulo")
