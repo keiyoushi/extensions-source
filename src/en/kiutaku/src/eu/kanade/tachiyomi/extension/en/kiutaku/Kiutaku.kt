@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.kiutaku
+package eu.kanade.tachiyomi.extension.all.kiutaku
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -24,7 +24,7 @@ class Kiutaku : ParsedHttpSource() {
 
     override val baseUrl = "https://kiutaku.com"
 
-    override val lang = "en"
+    override val lang = "all"
 
     override val supportsLatest = true
 
