@@ -1,5 +1,5 @@
 ext {
-    extName = 'King of Manga'
+    extName = 'King Of Manga'
     extClass = '.KingOfManga'
     themePkg = 'mangathemesia'
     baseUrl = 'https://king-ofmanga.com'
