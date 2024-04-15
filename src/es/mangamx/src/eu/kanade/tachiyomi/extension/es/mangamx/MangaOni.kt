@@ -188,7 +188,7 @@ open class MangaOni : ConfigurableSource, ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val encoded = document.select("script:containsData(unicap)").firstOrNull()
-            ?.data()?.substringAfter("'")?.substringBefore("'")?.reversed()
+            ?.data()?.substringAfter("'")?.substringBefore("'")
             ?: throw Exception("unicap not found")
         val drop = encoded.length % 4
         val decoded = Base64.decode(encoded.dropLast(drop), Base64.DEFAULT).toString(Charset.defaultCharset())
