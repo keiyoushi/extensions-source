@@ -1,8 +1,8 @@
 ext {
-    extName = 'Scylla Scans'
-    extClass = '.ScyllaScans'
+    extName = 'Scylla Comics'
+    extClass = '.ScyllaComics'
     themePkg = 'fuzzydoodle'
-    overrideVersionCode = 9
+    overrideVersionCode = 11
 }
 
 apply from: "$rootDir/common.gradle"

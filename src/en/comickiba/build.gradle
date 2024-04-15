@@ -1,9 +1,9 @@
 ext {
     extName = 'Manhuagold'
     extClass = '.Manhuagold'
-    themePkg = 'mangareader'
-    baseUrl = 'https://manhuagold.com'
-    overrideVersionCode = 33
+    themePkg = 'liliana'
+    baseUrl = 'https://manhuagold.top'
+    overrideVersionCode = 34
     isNsfw = true
 }
 

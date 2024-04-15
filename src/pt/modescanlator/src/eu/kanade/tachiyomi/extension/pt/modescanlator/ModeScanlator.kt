@@ -1,5 +1,11 @@
 package eu.kanade.tachiyomi.extension.pt.modescanlator
 
-import eu.kanade.tachiyomi.multisrc.peachscan.PeachScan
+import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 
-class ModeScanlator : PeachScan("Mode Scanlator", "https://modescanlator.com", "pt-BR")
+class ModeScanlator : HeanCms("Mode Scanlator", "https://modescanlator.com", "pt-BR") {
+
+    // PeachScan -> HeanCms
+    override val versionId = 2
+
+    override val useNewChapterEndpoint = true
+}
