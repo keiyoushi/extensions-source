@@ -45,8 +45,6 @@ class HentaiFox(
         }
 
     /* Search */
-    override val favoritePath = "profile"
-
     override fun tagPageUri(url: HttpUrl.Builder, page: Int) =
         url.apply {
             addPathSegments("pag/$page/")

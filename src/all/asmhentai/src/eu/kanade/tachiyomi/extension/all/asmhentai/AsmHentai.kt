@@ -87,6 +87,8 @@ class AsmHentai(
             )
     }
 
+    override val favoritePath = "inc/user.php?act=favs"
+
     override val mangaDetailInfoSelector = ".book_page"
 
     override val galleryIdSelector = "load_id"
@@ -148,7 +150,7 @@ class AsmHentai(
 
     override fun getFilterList() = FilterList(
         listOf(
-            Filter.Header("HINT: Separate search term with comma (,)")
+            Filter.Header("HINT: Separate search term with comma (,)"),
         ) + super.getFilterList().list,
     )
 

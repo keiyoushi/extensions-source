@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -27,6 +28,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -112,7 +114,7 @@ abstract class GalleryAdults(
     }
 
     override fun popularMangaNextPageSelector() =
-        "li.active + li:not(.disabled), li.page-item:last-of-type:not(.disabled)" // ".pagination .next"
+        "li.active + li:not(.disabled)"
 
     /* Latest */
     override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
@@ -174,9 +176,16 @@ abstract class GalleryAdults(
             }
             favoriteFilter?.state == true -> {
                 val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
-//                    .addQueryParameter("page", page.toString())
-
-                return GET(url.build(), headers)
+                val headerBuilder = headers.newBuilder()
+                    .add("X-Requested-With", "XMLHttpRequest")
+                    .build()
+                return POST(
+                    url.build().toString(),
+                    headerBuilder,
+                    FormBody.Builder()
+                        .add("page", page.toString())
+                        .build(),
+                )
             }
             query.isNotBlank() -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -191,7 +200,7 @@ abstract class GalleryAdults(
         }
     }
 
-    protected open val favoritePath = "user"
+    protected open val favoritePath = "includes/user_favs.php"
 
     protected open fun tagPageUri(url: HttpUrl.Builder, page: Int) =
         url.apply {
@@ -409,7 +418,7 @@ abstract class GalleryAdults(
         ) + genres,
     )
 
-    private class FavoriteFilter : Filter.CheckBox("Show favorites only", false)
+    private class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
 
     protected open class UriPartFilter(displayName: String, private val pairs: List<Pair<String, String>>) :
         Filter.Select<String>(displayName, pairs.map { it.first }.toTypedArray()) {
