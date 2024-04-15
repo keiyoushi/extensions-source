@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.onepieceteca
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class OnePieceTeca : Madara(
     "One Piece TECA",
