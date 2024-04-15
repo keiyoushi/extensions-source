@@ -15,7 +15,7 @@ class ManhuaOnline : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
-    override val mangaDetailsSelectorTitle = "div.summary-content span.rate-title"
+    override val mangaSubString = "l"
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
