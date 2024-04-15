@@ -17,8 +17,4 @@ class OnePieceTeca : Madara(
     override val useNewChapterEndpoint = true
 
     override val mangaSubString = "ler-online"
-
-    override val client = network.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
 }
