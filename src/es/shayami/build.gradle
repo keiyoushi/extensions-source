@@ -1,9 +1,0 @@
-ext {
-    extName = 'Shayami'
-    extClass = '.Shayami'
-    themePkg = 'madara'
-    baseUrl = 'https://shayami.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
