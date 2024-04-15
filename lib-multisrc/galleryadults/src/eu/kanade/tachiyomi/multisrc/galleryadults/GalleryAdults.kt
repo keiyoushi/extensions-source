@@ -21,6 +21,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -155,9 +161,23 @@ abstract class GalleryAdults(
     private val spaceRegex = Regex("""(?<!,)\s+""")
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
+        val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
         val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
         return when {
+            genreFilter!!.state > 0 -> {
+                val url = baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("tag")
+                    addPathSegment(genreFilter.toUriPart())
+                    addPathSegment("") // add ending slash (/)
+                }
+                GET(tagPageUri(url, page).build(), headers)
+            }
+            favoriteFilter?.state == true -> {
+                val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
+//                    .addQueryParameter("page", page.toString())
+
+                return GET(url.build(), headers)
+            }
             query.isNotBlank() -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegments("search/")
@@ -166,20 +186,6 @@ abstract class GalleryAdults(
                     if (page > 1) addQueryParameter("page", page.toString())
                 }
                 GET(url.build(), headers)
-            }
-            favoriteFilter?.state == true -> {
-                val url = "$baseUrl/$favoritePath/".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", page.toString())
-
-                return GET(url.build(), headers)
-            }
-            tagFilter!!.state > 0 -> {
-                val url = baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("tag")
-                    addPathSegment(tagFilter.toUriPart())
-                    addPathSegment("") // add ending slash (/)
-                }
-                GET(tagPageUri(url, page).build(), headers)
             }
             else -> popularMangaRequest(page)
         }
@@ -331,74 +337,81 @@ abstract class GalleryAdults(
     abstract fun pageListRequest(document: Document): List<Page>
 
     /* Filters */
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        TagFilter(),
-        FavoriteFilter(),
-    )
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+    private var tagsFetchAttempt = 0
+    private var genres = emptyList<Pair<String, String>>()
+
+    protected open fun tagsRequest(page: Int) =
+        GET("$baseUrl/tags/popular/pag/$page/", headers)
+
+    protected open fun tagsParser(document: Document): List<Pair<String, String>> {
+        return document.select(".list_tags .tag_item")
+            .mapNotNull {
+                Pair(
+                    it.selectFirst("h3.list_tag")?.ownText() ?: "",
+                    it.select("a").attr("href")
+                        .removeSuffix("/").substringAfterLast('/'),
+                )
+            }
+    }
+
+    protected open fun getGenres() {
+        if (genres.isEmpty() && tagsFetchAttempt < 3) {
+            launchIO {
+                val tags = mutableListOf<Pair<String, String>>()
+                runBlocking {
+                    val jobsPool = mutableListOf<Job>()
+                    // Get first 3 pages
+                    (1..3).forEach { page ->
+                        jobsPool.add(
+                            launchIO {
+                                runCatching {
+                                    tags.addAll(
+                                        client.newCall(tagsRequest(page))
+                                            .execute().asJsoup().let { tagsParser(it) },
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    jobsPool.joinAll()
+                    genres = tags.sortedWith(compareBy { it.first })
+                }
+
+                tagsFetchAttempt++
+            }
+        }
+    }
+
+    override fun getFilterList(): FilterList {
+        getGenres()
+        return FilterList(
+            Filter.Header("Use search to look for title, tag, artist, group"),
+            Filter.Separator(),
+
+            if (genres.isEmpty()) {
+                Filter.Header("Press 'reset' to attempt to load tags")
+            } else {
+                GenreFilter(genres)
+            },
+            Filter.Header("Note: will ignore search"),
+
+            FavoriteFilter(),
+        )
+    }
 
     // Top 50 tags
-    private class TagFilter : UriPartFilter(
-        "Tag",
-        arrayOf(
+    private class GenreFilter(genres: List<Pair<String, String>>) : UriPartFilter(
+        "Browse tag",
+        listOf(
             Pair("<select>", "---"),
-            Pair("Big breasts", "big-breasts"),
-            Pair("Sole female", "sole-female"),
-            Pair("Sole male", "sole-male"),
-            Pair("Anal", "anal"),
-            Pair("Nakadashi", "nakadashi"),
-            Pair("Group", "group"),
-            Pair("Stockings", "stockings"),
-            Pair("Blowjob", "blowjob"),
-            Pair("Schoolgirl uniform", "schoolgirl-uniform"),
-            Pair("Rape", "rape"),
-            Pair("Lolicon", "lolicon"),
-            Pair("Glasses", "glasses"),
-            Pair("Defloration", "defloration"),
-            Pair("Ahegao", "ahegao"),
-            Pair("Incest", "incest"),
-            Pair("Shotacon", "shotacon"),
-            Pair("X-ray", "x-ray"),
-            Pair("Bondage", "bondage"),
-            Pair("Full color", "full-color"),
-            Pair("Double penetration", "double-penetration"),
-            Pair("Femdom", "femdom"),
-            Pair("Milf", "milf"),
-            Pair("Yaoi", "yaoi"),
-            Pair("Multi-work series", "multi-work-series"),
-            Pair("Schoolgirl", "schoolgirl"),
-            Pair("Mind break", "mind-break"),
-            Pair("Paizuri", "paizuri"),
-            Pair("Mosaic censorship", "mosaic-censorship"),
-            Pair("Impregnation", "impregnation"),
-            Pair("Males only", "males-only"),
-            Pair("Sex toys", "sex-toys"),
-            Pair("Sister", "sister"),
-            Pair("Dark skin", "dark-skin"),
-            Pair("Ffm threesome", "ffm-threesome"),
-            Pair("Hairy", "hairy"),
-            Pair("Cheating", "cheating"),
-            Pair("Sweating", "sweating"),
-            Pair("Yuri", "yuri"),
-            Pair("Netorare", "netorare"),
-            Pair("Full censorship", "full-censorship"),
-            Pair("Schoolboy uniform", "schoolboy-uniform"),
-            Pair("Dilf", "dilf"),
-            Pair("Big penis", "big-penis"),
-            Pair("Futanari", "futanari"),
-            Pair("Swimsuit", "swimsuit"),
-            Pair("Collar", "collar"),
-            Pair("Uncensored", "uncensored"),
-            Pair("Big ass", "big-ass"),
-            Pair("Story arc", "story-arc"),
-            Pair("Teacher", "teacher"),
-        ),
+        ) + genres,
     )
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only", false)
 
-    protected open class UriPartFilter(displayName: String, private val pairs: Array<Pair<String, String>>) :
+    protected open class UriPartFilter(displayName: String, private val pairs: List<Pair<String, String>>) :
         Filter.Select<String>(displayName, pairs.map { it.first }.toTypedArray()) {
         fun toUriPart() = pairs[state].second
     }

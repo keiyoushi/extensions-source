@@ -4,7 +4,10 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
@@ -127,6 +130,27 @@ class AsmHentai(
     override fun imageUrlParse(document: Document): String {
         return document.selectFirst("img#fimg")?.imgAttr()!!
     }
+
+    /* Filters */
+    override fun tagsRequest(page: Int) =
+        GET("$baseUrl/tags/popular/?page=$page", headers)
+
+    override fun tagsParser(document: Document): List<Pair<String, String>> {
+        return document.select(".tags_page ul.tags li")
+            .mapNotNull {
+                Pair(
+                    it.selectFirst("a.tag")?.ownText() ?: "",
+                    it.select("a.tag").attr("href")
+                        .removeSuffix("/").substringAfterLast('/'),
+                )
+            }
+    }
+
+    override fun getFilterList() = FilterList(
+        listOf(
+            Filter.Header("HINT: Separate search term with comma (,)")
+        ) + super.getFilterList().list,
+    )
 
     companion object {
         private const val PREF_SHORT_TITLE = "pref_short_title"
