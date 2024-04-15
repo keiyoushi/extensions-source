@@ -2,7 +2,7 @@ ext {
     extName = 'Manga Weebs'
     extClass = '.MangaWeebs'
     themePkg = 'madara'
-    baseUrl = 'https://mangaweebs.in'
+    baseUrl = 'https://mangaweebs.org'
     overrideVersionCode = 9
 }
 
