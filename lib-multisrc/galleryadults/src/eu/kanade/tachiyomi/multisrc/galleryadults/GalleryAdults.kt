@@ -190,6 +190,7 @@ abstract class GalleryAdults(
     private val spaceRegex = Regex("""(?<!,)\s+""")
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
         val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
         val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
         return when {
@@ -197,6 +198,7 @@ abstract class GalleryAdults(
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegment("tag")
                     addPathSegment(genreFilter.toUriPart())
+                    if (sortFilter?.state == 0) addPathSegment("popular")
                     addPageUri(page)
                 }
                 GET(url.build(), headers)
@@ -215,7 +217,8 @@ abstract class GalleryAdults(
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegments("search/")
                     addEncodedQueryParameter("q", query.replace(spaceRegex, "+").trim())
-                    addQueryParameter("sort", "popular")
+                    // Search results sorting is not supported by AsmHentai
+                    if (sortFilter?.state == 0) addQueryParameter("sort", "popular")
                     addPageUri(page)
                 }
                 GET(url.build(), headers)
@@ -418,6 +421,7 @@ abstract class GalleryAdults(
         getGenres()
         return FilterList(
             Filter.Header("Use search to look for title, tag, artist, group"),
+            SortFilter(),
             Filter.Separator(),
 
             if (genres.isEmpty()) {
@@ -425,7 +429,7 @@ abstract class GalleryAdults(
             } else {
                 GenreFilter(genres)
             },
-            Filter.Header("Note: will ignore search"),
+            Filter.Header("Note: will ignore Search"),
 
             FavoriteFilter(),
         )
@@ -437,6 +441,11 @@ abstract class GalleryAdults(
         listOf(
             Pair("<select>", "---"),
         ) + genres,
+    )
+
+    private class SortFilter() : Filter.Select<String>(
+        "Sort order",
+        listOf("Popular", "Latest").toTypedArray(),
     )
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
