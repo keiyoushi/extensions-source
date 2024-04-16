@@ -82,6 +82,18 @@ abstract class GalleryAdults(
             .build()
     }
 
+    protected open val xhrHeaders = headers.newBuilder()
+        .add("X-Requested-With", "XMLHttpRequest")
+        .build()
+
+    /* List detail */
+    protected class SMangaDto(
+        val title: String,
+        val url: String,
+        val thumbnail: String?,
+        val lang: String,
+    )
+
     protected open fun Element.mangaTitle(selector: String = ".caption"): String? =
         selectFirst(selector)?.text()
 
@@ -94,11 +106,21 @@ abstract class GalleryAdults(
     // Overwrite this to filter other languages' manga from search result. Default to [mangaLang] won't filter anything
     protected open fun Element.mangaLang() = mangaLang
 
+    protected open fun HttpUrl.Builder.addPageUri(page: Int): HttpUrl.Builder {
+        val url = toString()
+        if (!url.endsWith('/') && !url.contains('?')) {
+            addPathSegment("") // trailing slash (/)
+        }
+        if (page > 1) addQueryParameter("page", page.toString())
+        return this
+    }
+
     /* Popular */
     override fun popularMangaRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (mangaLang.isNotEmpty()) addPathSegments("language/$mangaLang/")
-            if (page > 1) addQueryParameter("page", page.toString())
+            if (mangaLang.isNotBlank()) addPathSegments("language/$mangaLang")
+            if (supportsLatest) addPathSegment("popular")
+            addPageUri(page)
         }
         return GET(url.build(), headers)
     }
@@ -113,11 +135,16 @@ abstract class GalleryAdults(
         }
     }
 
-    override fun popularMangaNextPageSelector() =
-        "li.active + li:not(.disabled)"
+    override fun popularMangaNextPageSelector() = "li.active + li:not(.disabled)"
 
     /* Latest */
-    override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (mangaLang.isNotBlank()) addPathSegments("language/$mangaLang")
+            addPageUri(page)
+        }
+        return GET(url.build(), headers)
+    }
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -170,18 +197,15 @@ abstract class GalleryAdults(
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegment("tag")
                     addPathSegment(genreFilter.toUriPart())
-                    addPathSegment("") // add ending slash (/)
+                    addPageUri(page)
                 }
-                GET(tagPageUri(url, page).build(), headers)
+                GET(url.build(), headers)
             }
             favoriteFilter?.state == true -> {
                 val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
-                val headerBuilder = headers.newBuilder()
-                    .add("X-Requested-With", "XMLHttpRequest")
-                    .build()
                 return POST(
                     url.build().toString(),
-                    headerBuilder,
+                    xhrHeaders,
                     FormBody.Builder()
                         .add("page", page.toString())
                         .build(),
@@ -192,7 +216,7 @@ abstract class GalleryAdults(
                     addPathSegments("search/")
                     addEncodedQueryParameter("q", query.replace(spaceRegex, "+").trim())
                     addQueryParameter("sort", "popular")
-                    if (page > 1) addQueryParameter("page", page.toString())
+                    addPageUri(page)
                 }
                 GET(url.build(), headers)
             }
@@ -201,18 +225,6 @@ abstract class GalleryAdults(
     }
 
     protected open val favoritePath = "includes/user_favs.php"
-
-    protected open fun tagPageUri(url: HttpUrl.Builder, page: Int) =
-        url.apply {
-            addQueryParameter("page", page.toString())
-        }
-
-    protected class SMangaDto(
-        val title: String,
-        val url: String,
-        val thumbnail: String?,
-        val lang: String,
-    )
 
     protected open fun loginRequired(document: Document, url: String): Boolean {
         return (
@@ -236,7 +248,7 @@ abstract class GalleryAdults(
                     )
                 }
                 .let { unfiltered ->
-                    if (mangaLang.isNotEmpty()) unfiltered.filter { it.lang == mangaLang } else unfiltered
+                    if (mangaLang.isNotBlank()) unfiltered.filter { it.lang == mangaLang } else unfiltered
                 }
                 .map {
                     SManga.create().apply {
@@ -343,6 +355,10 @@ abstract class GalleryAdults(
         }
     }
 
+    /**
+     * Method to request then parse for a list of manga's page's URL,
+     * which will then request one by one to parse for page's image's URL.
+     */
     abstract fun pageListRequest(document: Document): List<Page>
 
     /* Filters */
@@ -351,8 +367,13 @@ abstract class GalleryAdults(
     private var tagsFetchAttempt = 0
     private var genres = emptyList<Pair<String, String>>()
 
-    protected open fun tagsRequest(page: Int) =
-        GET("$baseUrl/tags/popular/pag/$page/", headers)
+    protected open fun tagsRequest(page: Int): Request {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("tags/popular")
+            addPageUri(page)
+        }
+        return GET(url.build(), headers)
+    }
 
     protected open fun tagsParser(document: Document): List<Pair<String, String>> {
         return document.select(".list_tags .tag_item")

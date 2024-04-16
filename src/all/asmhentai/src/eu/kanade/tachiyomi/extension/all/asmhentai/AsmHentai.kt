@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,6 +17,8 @@ class AsmHentai(
     lang: String = "all",
     override val mangaLang: String = "",
 ) : GalleryAdults("AsmHentai", "https://asmhentai.com", lang) {
+
+    override val supportsLatest = mangaLang.isNotBlank()
     private val SharedPreferences.shortTitle
         get() = getBoolean(PREF_SHORT_TITLE, false)
 
@@ -87,6 +88,7 @@ class AsmHentai(
             )
     }
 
+    /* Search */
     override val favoritePath = "inc/user.php?act=favs"
 
     override val mangaDetailInfoSelector = ".book_page"
@@ -116,10 +118,6 @@ class AsmHentai(
                 .add("type", "2") // 1 would be "more", 2 is "all remaining"
                 .build()
 
-            val xhrHeaders = headers.newBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .build()
-
             client.newCall(POST("$baseUrl/inc/thumbs_loader.php", xhrHeaders, form))
                 .execute()
                 .asJsoup()
@@ -134,9 +132,6 @@ class AsmHentai(
     }
 
     /* Filters */
-    override fun tagsRequest(page: Int) =
-        GET("$baseUrl/tags/popular/?page=$page", headers)
-
     override fun tagsParser(document: Document): List<Pair<String, String>> {
         return document.select(".tags_page ul.tags li")
             .mapNotNull {

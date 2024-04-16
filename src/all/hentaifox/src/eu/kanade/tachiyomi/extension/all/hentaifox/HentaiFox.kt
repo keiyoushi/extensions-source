@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
@@ -15,7 +14,6 @@ class HentaiFox(
     override val mangaLang: String = "",
 ) : GalleryAdults("HentaiFox", "https://hentaifox.com", lang) {
 
-    //    override val id since we might change its lang
     override val supportsLatest = mangaLang.isNotBlank()
 
     override fun Element.mangaLang() = attr("data-languages")
@@ -28,27 +26,19 @@ class HentaiFox(
             }
         }
 
-    /* Popular */
-    override fun popularMangaRequest(page: Int) =
+    override fun HttpUrl.Builder.addPageUri(page: Int): HttpUrl.Builder {
+        val url = toString()
         when {
-            supportsLatest -> GET("$baseUrl/language/$mangaLang/popular/pag/$page/")
-            page == 2 -> GET("$baseUrl/page/$page/", headers)
-            else -> GET("$baseUrl/pag/$page/", headers)
+            url == "$baseUrl/" && page == 2 ->
+                addPathSegments("page/$page")
+            url.contains('?') ->
+                addQueryParameter("page", page.toString())
+            page > 1 ->
+                addPathSegments("pag/$page")
         }
-
-    /* Latest */
-    override fun latestUpdatesRequest(page: Int) =
-        if (supportsLatest) {
-            GET("$baseUrl/language/$mangaLang/pag/$page/")
-        } else {
-            throw UnsupportedOperationException()
-        }
-
-    /* Search */
-    override fun tagPageUri(url: HttpUrl.Builder, page: Int) =
-        url.apply {
-            addPathSegments("pag/$page/")
-        }
+        addPathSegment("") // trailing slash (/)
+        return this
+    }
 
     /* Pages */
     override fun pageListRequest(document: Document): List<Page> {
@@ -67,10 +57,6 @@ class HentaiFox(
                 .add("visible_pages", "10")
                 .add("total_pages", totalPages)
                 .add("type", "2") // 1 would be "more", 2 is "all remaining"
-                .build()
-
-            val xhrHeaders = headers.newBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
                 .build()
 
             client.newCall(POST("$baseUrl/includes/thumbs_loader.php", xhrHeaders, form))
