@@ -3,7 +3,7 @@ ext {
     extClass = '.ElarcPage'
     themePkg = 'mangathemesia'
     baseUrl = 'https://elarctoons.com'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = false
 }
 
