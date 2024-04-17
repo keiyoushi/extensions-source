@@ -52,6 +52,12 @@ class ElarcPage : MangaThemesia(
 
         // Always update URL
         val response = chain.proceed(request)
+
+        // Skip responses that do not start with "text/html"
+        if (response.header("content-type")?.startsWith("text/html") != true) {
+            return response
+        }
+        
         val document = Jsoup.parse(
             response.peekBody(Long.MAX_VALUE).string(),
             request.url.toString(),
