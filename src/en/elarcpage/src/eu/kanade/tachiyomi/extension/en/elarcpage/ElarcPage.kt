@@ -57,7 +57,7 @@ class ElarcPage : MangaThemesia(
         if (response.header("content-type")?.startsWith("text/html") != true) {
             return response
         }
-        
+
         val document = Jsoup.parse(
             response.peekBody(Long.MAX_VALUE).string(),
             request.url.toString(),
