@@ -1,0 +1,9 @@
+ext {
+    extName = 'One Piece TECA'
+    extClass = '.OnePieceTeca'
+    themePkg = 'madara'
+    baseUrl = 'https://onepieceteca.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
