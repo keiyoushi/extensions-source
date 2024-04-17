@@ -82,8 +82,11 @@ class Anchira : HttpSource(), ConfigurableSource {
                     url = "/g/${it.id}/${it.key}"
                     title = it.title
                     thumbnail_url = "$cdnUrl/${it.id}/${it.key}/m/${it.thumbnailIndex + 1}"
-                    artist = it.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
+                    val art = it.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
+                        .ifEmpty { null }
+                    artist = art
                     author = it.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
+                        .ifEmpty { art }
                     genre = prepareTags(it.tags, preferences.useTagGrouping)
                     update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
                     status = SManga.COMPLETED
@@ -240,8 +243,11 @@ class Anchira : HttpSource(), ConfigurableSource {
                 title = data.title
                 thumbnail_url =
                     "$cdnUrl/${data.id}/${data.key}/b/${data.thumbnailIndex + 1}"
-                artist = data.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
+                val art = data.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
+                    .ifEmpty { null }
+                artist = art
                 author = data.tags.filter { it.namespace == 2 }.joinToString(", ") { it.name }
+                    .ifEmpty { art }
                 genre = prepareTags(data.tags, preferences.useTagGrouping)
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
                 status = SManga.COMPLETED
@@ -398,7 +404,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     private class SortFilter : Filter.Sort(
         "Sort",
-        arrayOf("Title", "Pages", "Date published", "Date uploaded", "Popularity"),
+        arrayOf("Title", "Pages", "Date uploaded", "Date published", "Popularity"),
         Selection(2, false),
     )
 
