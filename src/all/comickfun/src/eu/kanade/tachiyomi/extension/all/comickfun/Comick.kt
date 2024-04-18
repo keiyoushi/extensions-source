@@ -37,7 +37,7 @@ abstract class Comick(
 
     override val baseUrl = "https://comick.io"
 
-    private val apiUrl = "https://api.comick.fun"
+    private val apiUrl = "https://api.comick.io"
 
     override val supportsLatest = true
 
