@@ -322,9 +322,17 @@ abstract class Liliana(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.separator").mapIndexed { i, page ->
-            val url = page.selectFirst("a")!!.attr("abs:href")
-            Page(i, document.location(), url)
+        return if (document.selectFirst("div.separator[data-index]") == null) {
+            document.select("div.separator").mapIndexed { i, page ->
+                val url = page.selectFirst("a")!!.attr("abs:href")
+                Page(i, document.location(), url)
+            }
+        } else {
+            document.select("div.separator[data-index]").map { page ->
+                val index = page.attr("data-index").toInt()
+                val url = page.selectFirst("a")!!.attr("abs:href")
+                Page(index, document.location(), url)
+            }.sortedBy { it.index }
         }
     }
 
