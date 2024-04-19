@@ -116,4 +116,6 @@ class HentaiFox(
             Filter.Header("HINT: Use double quote (\") for exact match"),
         ) + super.getFilterList().list,
     )
+
+    override val idPrefixUri = "gallery"
 }

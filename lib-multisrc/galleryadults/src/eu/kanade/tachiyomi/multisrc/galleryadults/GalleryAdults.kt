@@ -176,7 +176,7 @@ abstract class GalleryAdults(
 
     protected open fun searchMangaByIdRequest(id: String): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment(PREFIX_ID)
+            addPathSegment(idPrefixUri)
             addPathSegments("$id/")
         }
         return GET(url.build(), headers)
@@ -184,7 +184,7 @@ abstract class GalleryAdults(
 
     protected open fun searchMangaByIdParse(response: Response, id: String): MangasPage {
         val details = mangaDetailsParse(response)
-        details.url = "/$PREFIX_ID/$id/"
+        details.url = "/$idPrefixUri/$id/"
         return MangasPage(listOf(details), false)
     }
 
@@ -470,9 +470,10 @@ abstract class GalleryAdults(
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
 
+    protected open val idPrefixUri = "g"
+
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
-        const val PREFIX_ID = "g"
         private const val PREF_PARSE_IMAGES = "pref_parse_images"
     }
 }
