@@ -1,9 +1,9 @@
 ext {
-    extName = 'Scan Hentai Menu'
-    extClass = '.ScanHentaiMenu'
+    extName = 'X-Manga'
+    extClass = '.XManga'
     themePkg = 'madara'
-    baseUrl = 'https://scan.hentai.menu'
-    overrideVersionCode = 1
+    baseUrl = 'https://x-manga.net'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
