@@ -102,7 +102,7 @@ class IkigaiMangas : HttpSource() {
         return MangasPage(mangaList, result.hasNextPage())
     }
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("#")
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url
