@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.latmanga
+package eu.kanade.tachiyomi.extension.es.senshimanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -67,9 +67,8 @@ class SeriesChapterDto(
     private val number: Float,
     private val createdAt: String,
 ) {
-
-    fun toSChapter(chapterPrefix: String, seriesSlug: String) = SChapter.create().apply {
-        name = "$chapterPrefix ${number.toString().removeSuffix(".0")} - $title"
+    fun toSChapter(seriesSlug: String) = SChapter.create().apply {
+        name = "Capítulo ${number.toString().removeSuffix(".0")} - $title"
         date_upload = try {
             dateFormat.parse(createdAt)?.time ?: 0L
         } catch (_: Exception) {

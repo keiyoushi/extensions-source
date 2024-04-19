@@ -1,9 +1,8 @@
 ext {
     extName = 'Senshi Manga'
     extClass = '.SenshiManga'
-    themePkg = 'latmanga'
-    baseUrl = 'https://senshimanga.com'
-    overrideVersionCode = 0
+    extVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
