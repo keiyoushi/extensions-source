@@ -26,13 +26,22 @@ class HentaiFox(
 
     override val supportsLatest = mangaLang.isNotBlank()
 
+    private val languages: List<Pair<String, String>> = listOf(
+        Pair("english", "1"),
+        Pair("translated", "2"),
+        Pair("japanese", "5"),
+        Pair("chinese", "6"),
+        Pair("korean", "11"),
+    )
+    private val langCode = languages.firstOrNull { lang -> lang.first == mangaLang }?.second
+
     override fun Element.mangaLang() = attr("data-languages")
         .split(' ').let {
             when {
-                it.contains("11") -> "korean"
-                it.contains("6") -> "chinese"
-                it.contains("5") -> "japanese"
-                else -> "english"
+                it.contains(langCode) -> mangaLang
+                // search result doesn't have "data-languages"
+                it.size > 1 || (it.size == 1 && it.first().isNotBlank()) -> "other"
+                else -> mangaLang
             }
         }
 
@@ -88,6 +97,13 @@ class HentaiFox(
         return document.selectFirst("img#gimg")?.imgAttr()!!
     }
 
+    /**
+     * Convert space( ) typed in search-box into plus(+) in URL. Then:
+     * - ignore the word preceding by a special character (e.g. school-girl will ignore girl)
+     *    => replace to plus(+),
+     * - use plus(+) for separate terms, as AND condition.
+     * - use double quote(") to search for exact match.
+     */
     override fun buildQueryString(tags: List<String>, query: String): String {
         return (tags + query).filterNot { it.isBlank() }.joinToString("+") {
             // replace any special character

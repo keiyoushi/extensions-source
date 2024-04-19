@@ -104,7 +104,8 @@ abstract class GalleryAdults(
     protected open fun Element.mangaThumbnail() =
         selectFirst(".inner_thumb img")?.imgAttr()
 
-    // Overwrite this to filter other languages' manga from search result. Default to [mangaLang] won't filter anything
+    // Overwrite this to filter other languages' manga from search result.
+    // Default to [mangaLang] won't filter anything
     protected open fun Element.mangaLang() = mangaLang
 
     protected open fun HttpUrl.Builder.addPageUri(page: Int): HttpUrl.Builder {
@@ -227,16 +228,10 @@ abstract class GalleryAdults(
     }
 
     /**
-     * Both sites convert space( ) typed in search-box into plus(+) in URL. Then:
-     * + AsmHentai:
-     *   - uses plus(+) to search for exact match
-     *   - use comma(,) for separate terms, as AND condition.
-     *   Plus(+) after comma(,) doesn't have any effect.
-     * + HentaiFox:
-     *   - ignore the word preceding by a special character (e.g. school-girl will ignore girl)
-     *      => replace to plus(+),
-     *   - use plus(+) for separate terms, as AND condition.
-     *   - use double quote(") to search for exact match.
+     * Convert space( ) typed in search-box into plus(+) in URL. Then:
+     * - uses plus(+) to search for exact match
+     * - use comma(,) for separate terms, as AND condition.
+     * Plus(+) after comma(,) doesn't have any effect.
      */
     protected open fun buildQueryString(tags: List<String>, query: String): String {
         return (tags + query).filterNot { it.isBlank() }.joinToString(",") {
