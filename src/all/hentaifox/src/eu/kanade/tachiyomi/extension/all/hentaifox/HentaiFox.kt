@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.toDate
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,7 +16,13 @@ import org.jsoup.nodes.Element
 class HentaiFox(
     lang: String = "all",
     override val mangaLang: String = "",
-) : GalleryAdults("HentaiFox", "https://hentaifox.com", lang) {
+) : GalleryAdults(
+    "HentaiFox",
+    "https://hentaifox.com",
+    lang = lang,
+    mangaLang = mangaLang,
+    simpleDateFormat = null,
+) {
 
     override val supportsLatest = mangaLang.isNotBlank()
 
@@ -27,6 +35,12 @@ class HentaiFox(
                 else -> "english"
             }
         }
+
+    override fun Element.getTime(): Long {
+        return selectFirst(".pages:contains(Posted:)")?.ownText()
+            ?.removePrefix("Posted: ")
+            .toDate(simpleDateFormat)
+    }
 
     override fun HttpUrl.Builder.addPageUri(page: Int): HttpUrl.Builder {
         val url = toString()

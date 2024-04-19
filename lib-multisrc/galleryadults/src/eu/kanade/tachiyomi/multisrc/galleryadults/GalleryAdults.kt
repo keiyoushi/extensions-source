@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.toDate
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -40,14 +42,13 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
-import java.util.Locale
 
 abstract class GalleryAdults(
     override val name: String,
     override val baseUrl: String,
     override val lang: String = "all",
     protected open val mangaLang: String = "",
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ssZ", Locale.getDefault()),
+    protected val simpleDateFormat: SimpleDateFormat? = null,
 ) : ConfigurableSource, ParsedHttpSource() {
 
     override val supportsLatest = false
@@ -311,6 +312,13 @@ abstract class GalleryAdults(
         )
         .joinToString("\n")
 
+    protected open fun Element.getTime(): Long {
+        return selectFirst("#main-info > div.tag-container > time")
+            ?.attr("datetime")
+            ?.replace("T", " ")
+            .toDate(simpleDateFormat)
+    }
+
     protected open val mangaDetailInfoSelector = ".gallery_top"
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -335,7 +343,7 @@ abstract class GalleryAdults(
                 name = "Chapter"
                 scanlator = document.selectFirst(mangaDetailInfoSelector)
                     ?.getTag("Groups")
-                // date_upload = utils.getTime(document, dateFormat)
+                date_upload = document.getTime()
                 setUrlWithoutDomain(response.request.url.encodedPath)
             },
         )
@@ -460,20 +468,12 @@ abstract class GalleryAdults(
         genres.map { Genre(it.name, it.uri) },
     )
 
-    private class SortFilter() : Filter.Select<String>(
+    private class SortFilter : Filter.Select<String>(
         "Sort order",
         listOf("Popular", "Latest").toTypedArray(),
     )
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
-
-    protected fun Element.imgAttr(): String? = when {
-        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
-        hasAttr("data-src") -> absUrl("data-src")
-        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-        hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
-        else -> absUrl("src")
-    }
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"

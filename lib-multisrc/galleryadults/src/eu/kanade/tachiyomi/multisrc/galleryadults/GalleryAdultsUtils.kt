@@ -4,6 +4,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.ParseException
 import java.text.SimpleDateFormat
+import java.util.Calendar
 
 object GalleryAdultsUtils {
     fun Element.imgAttr() = when {
@@ -13,6 +14,113 @@ object GalleryAdultsUtils {
         hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
         else -> absUrl("src")
     }!!
+
+    fun String?.toDate(simpleDateFormat: SimpleDateFormat?): Long {
+        this ?: return 0L
+
+        return if (simpleDateFormat != null) {
+            if (contains(Regex("""\d(st|nd|rd|th)"""))) {
+                // Clean date (e.g. 5th December 2019 to 5 December 2019) before parsing it
+                split(" ").map {
+                    if (it.contains(Regex("""\d\D\D"""))) {
+                        it.replace(Regex("""\D"""), "")
+                    } else {
+                        it
+                    }
+                }
+                    .let { simpleDateFormat.tryParse(it.joinToString(" ")) }
+            } else {
+                simpleDateFormat.tryParse(this)
+            }
+        } else {
+            parseDate(this)
+        }
+    }
+
+    fun parseDate(date: String?): Long {
+        date ?: return 0
+
+        return when {
+            // Handle 'yesterday' and 'today', using midnight
+            WordSet("yesterday", "يوم واحد").startsWith(date) -> {
+                Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_MONTH, -1) // yesterday
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+            }
+            WordSet("today", "just now").startsWith(date) -> {
+                Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+            }
+            WordSet("يومين").startsWith(date) -> {
+                Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_MONTH, -2) // day before yesterday
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+            }
+            WordSet("ago", "atrás", "önce", "قبل").endsWith(date) -> {
+                parseRelativeDate(date)
+            }
+            WordSet("hace").startsWith(date) -> {
+                parseRelativeDate(date)
+            }
+            else -> 0L
+        }
+    }
+
+    // Parses dates in this form: 21 hours ago OR "2 days ago (Updated 19 hours ago)"
+    fun parseRelativeDate(date: String): Long {
+        val number = Regex("""\d*[^0-9]*(\d+)""").find(date)?.value?.toIntOrNull()
+            ?: date.split(" ").firstOrNull()
+                ?.replace("one", "1")
+                ?.replace("a", "1")
+                ?.toIntOrNull()
+            ?: return 0L
+        val now = Calendar.getInstance()
+
+        // Sort by order
+        return when {
+            WordSet("detik", "segundo", "second", "วินาที").anyWordIn(date) ->
+                now.apply { add(Calendar.SECOND, -number) }.timeInMillis
+            WordSet("menit", "dakika", "min", "minute", "minuto", "นาที", "دقائق").anyWordIn(date) ->
+                now.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            WordSet("jam", "saat", "heure", "hora", "hour", "ชั่วโมง", "giờ", "ore", "ساعة", "小时").anyWordIn(date) ->
+                now.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            WordSet("hari", "gün", "jour", "día", "dia", "day", "วัน", "ngày", "giorni", "أيام", "天").anyWordIn(date) ->
+                now.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+            WordSet("week", "semana").anyWordIn(date) ->
+                now.apply { add(Calendar.DAY_OF_MONTH, -number * 7) }.timeInMillis
+            WordSet("month", "mes").anyWordIn(date) ->
+                now.apply { add(Calendar.MONTH, -number) }.timeInMillis
+            WordSet("year", "año").anyWordIn(date) ->
+                now.apply { add(Calendar.YEAR, -number) }.timeInMillis
+            else -> 0L
+        }
+    }
+
+    fun SimpleDateFormat.tryParse(string: String): Long {
+        return try {
+            parse(string)?.time ?: 0L
+        } catch (_: ParseException) {
+            0L
+        }
+    }
+
+    class WordSet(private vararg val words: String) {
+        fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) }
+        fun startsWith(dateString: String): Boolean = words.any { dateString.startsWith(it, ignoreCase = true) }
+        fun endsWith(dateString: String): Boolean = words.any { dateString.endsWith(it, ignoreCase = true) }
+    }
 
     fun getCover(document: Document): String {
         return document.selectFirst("#main-cover img")!!.imgAttr()
@@ -73,23 +181,6 @@ object GalleryAdultsUtils {
 
     fun getNumPages(document: Document): String {
         return document.selectFirst("#main-info > div.tag-container:contains(Pages) > span")!!.cleanTag()
-    }
-
-    fun getTime(document: Document, simpleDateFormat: SimpleDateFormat): Long {
-        val timeString = document.selectFirst("#main-info > div.tag-container > time")
-            ?.attr("datetime")
-            ?.replace("T", " ")
-            ?: ""
-
-        return simpleDateFormat.tryParse(timeString)
-    }
-
-    private fun SimpleDateFormat.tryParse(string: String): Long {
-        return try {
-            parse(string)?.time ?: 0L
-        } catch (_: ParseException) {
-            0L
-        }
     }
 
     fun getCodes(document: Document): String? {

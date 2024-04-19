@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -16,7 +17,11 @@ import org.jsoup.nodes.Element
 class AsmHentai(
     lang: String = "all",
     override val mangaLang: String = "",
-) : GalleryAdults("AsmHentai", "https://asmhentai.com", lang) {
+) : GalleryAdults(
+    "AsmHentai",
+    "https://asmhentai.com",
+    lang = lang,
+) {
 
     override val supportsLatest = mangaLang.isNotBlank()
     private val SharedPreferences.shortTitle
