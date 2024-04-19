@@ -191,18 +191,10 @@ abstract class GalleryAdults(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
-        val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
+        val genresFilter = filters.filterIsInstance<GenresFilter>().firstOrNull()
+        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
         val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
         return when {
-            genreFilter!!.state > 0 -> {
-                val url = baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("tag")
-                    addPathSegment(genreFilter.toUriPart())
-                    if (sortFilter?.state == 0) addPathSegment("popular")
-                    addPageUri(page)
-                }
-                GET(url.build(), headers)
-            }
             favoriteFilter?.state == true -> {
                 val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
                 return POST(
@@ -213,7 +205,16 @@ abstract class GalleryAdults(
                         .build(),
                 )
             }
-            query.isNotBlank() -> {
+            selectedGenres.size == 1 && query.isBlank() -> {
+                val url = baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("tag")
+                    addPathSegment(selectedGenres.single().uri)
+                    if (sortFilter?.state == 0) addPathSegment("popular")
+                    addPageUri(page)
+                }
+                GET(url.build(), headers)
+            }
+            selectedGenres.size > 1 || query.isNotBlank() -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegments("search/")
                     addEncodedQueryParameter("q", query.replace(spaceRegex, "+").trim())
@@ -368,7 +369,7 @@ abstract class GalleryAdults(
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
     private var tagsFetchAttempt = 0
-    private var genres = emptyList<Pair<String, String>>()
+    private var genres = emptyList<Genre>()
 
     protected open fun tagsRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -409,7 +410,7 @@ abstract class GalleryAdults(
                         )
                     }
                     jobsPool.joinAll()
-                    genres = tags.sortedWith(compareBy { it.first })
+                    genres = tags.sortedWith(compareBy { it.first }).map { Genre(it.first, it.second) }
                 }
 
                 tagsFetchAttempt++
@@ -420,27 +421,25 @@ abstract class GalleryAdults(
     override fun getFilterList(): FilterList {
         getGenres()
         return FilterList(
-            Filter.Header("Use search to look for title, tag, artist, group"),
             SortFilter(),
             Filter.Separator(),
 
             if (genres.isEmpty()) {
                 Filter.Header("Press 'reset' to attempt to load tags")
             } else {
-                GenreFilter(genres)
+                GenresFilter(genres)
             },
-            Filter.Header("Note: will ignore Search"),
+            Filter.Separator(),
 
             FavoriteFilter(),
         )
     }
 
     // Top 50 tags
-    private class GenreFilter(genres: List<Pair<String, String>>) : UriPartFilter(
-        "Browse tag",
-        listOf(
-            Pair("<select>", "---"),
-        ) + genres,
+    private class Genre(name: String, val uri: String) : Filter.CheckBox(name)
+    private class GenresFilter(genres: List<Genre>) : Filter.Group<Genre>(
+        "Tag filter",
+        genres.map { Genre(it.name, it.uri) },
     )
 
     private class SortFilter() : Filter.Select<String>(
@@ -449,11 +448,6 @@ abstract class GalleryAdults(
     )
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
-
-    protected open class UriPartFilter(displayName: String, private val pairs: List<Pair<String, String>>) :
-        Filter.Select<String>(displayName, pairs.map { it.first }.toTypedArray()) {
-        fun toUriPart() = pairs[state].second
-    }
 
     protected fun Element.imgAttr(): String? = when {
         hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
