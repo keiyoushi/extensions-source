@@ -32,7 +32,7 @@ class SlimeRead : HttpSource() {
     override val baseUrl = "https://slimeread.com"
 
     private val apiUrl = run {
-        val apiList = arrayOf("free", "beta", "api", "data", "test", "dev", "staging", "prod", "old", "new")
+        val apiList = arrayOf("api1", "api2", "api3")
         "https://${apiList.random()}.slimeread.com:8443"
     }
 
