@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaMukai'
+    extClass = '.MangaMukai'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangamukai.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
