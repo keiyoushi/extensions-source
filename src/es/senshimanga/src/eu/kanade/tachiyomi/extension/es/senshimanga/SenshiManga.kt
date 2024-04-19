@@ -28,22 +28,20 @@ class SenshiManga : HttpSource() {
 
     override val supportsLatest = true
 
-    private val organizationDomain = baseUrl.substringAfter("://")
-
     private val apiBaseUrl = "https://lat-manga.com"
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
         .rateLimitHost(apiBaseUrl.toHttpUrl(), 3)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val apiHeaders: Headers = headersBuilder()
-        .add("Organization-Domain", organizationDomain)
+        .add("Organization-Domain", "senshimanga.com")
         .build()
 
     override fun popularMangaRequest(page: Int): Request =
@@ -76,7 +74,7 @@ class SenshiManga : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")!!.toInt()
-        val result = json.decodeFromString<SeriesPayloadDto>(response.body.string())
+        val result = json.decodeFromString<Data<SeriesListDataDto>>(response.body.string())
 
         val mangas = result.data.series.map { it.toSManga() }
         val hasNextPage = page < result.data.maxPage
@@ -99,7 +97,7 @@ class SenshiManga : HttpSource() {
         GET("$apiBaseUrl/api/manga-custom/${manga.url}", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val result = json.decodeFromString<SeriesDataDto>(response.body.string())
+        val result = json.decodeFromString<Data<SeriesDto>>(response.body.string())
         return result.data.toSMangaDetails()
     }
 
@@ -113,7 +111,7 @@ class SenshiManga : HttpSource() {
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = json.decodeFromString<SeriesDataDto>(response.body.string())
+        val result = json.decodeFromString<Data<SeriesDto>>(response.body.string())
         val seriesSlug = result.data.slug
         return result.data.chapters?.map { it.toSChapter(seriesSlug) } ?: emptyList()
     }
@@ -126,7 +124,7 @@ class SenshiManga : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = json.decodeFromString<PagesPayloadDto>(response.body.string())
+        val result = json.decodeFromString<Data<List<PageDto>>>(response.body.string())
         return result.data.mapIndexed { i, page ->
             Page(i, imageUrl = page.imageUrl)
         }

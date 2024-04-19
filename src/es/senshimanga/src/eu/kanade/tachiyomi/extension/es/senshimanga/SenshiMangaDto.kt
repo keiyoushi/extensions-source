@@ -4,23 +4,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-class SeriesPayloadDto(
-    val data: SeriesListDataDto,
-)
+class Data<T>(val data: T)
 
 @Serializable
 class SeriesListDataDto(
     @SerialName("data") val series: List<SeriesDto> = emptyList(),
     val maxPage: Int = 0,
-)
-
-@Serializable
-class SeriesDataDto(
-    val data: SeriesDto,
 )
 
 @Serializable
@@ -71,17 +65,12 @@ class SeriesChapterDto(
         name = "Capítulo ${number.toString().removeSuffix(".0")} - $title"
         date_upload = try {
             dateFormat.parse(createdAt)?.time ?: 0L
-        } catch (_: Exception) {
+        } catch (_: ParseException) {
             0L
         }
         url = "$seriesSlug/$number"
     }
 }
-
-@Serializable
-class PagesPayloadDto(
-    val data: List<PageDto>,
-)
 
 @Serializable
 class PageDto(
