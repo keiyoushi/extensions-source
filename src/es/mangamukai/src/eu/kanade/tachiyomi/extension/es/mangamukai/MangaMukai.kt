@@ -5,7 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MangaMukai : MangaThemesia(
-    "MangaMukai",
+    "Manga Mukai",
     "https://mangamukai.com",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),

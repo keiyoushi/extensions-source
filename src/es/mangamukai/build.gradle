@@ -1,5 +1,5 @@
 ext {
-    extName = 'MangaMukai'
+    extName = 'Manga Mukai'
     extClass = '.MangaMukai'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangamukai.com'
