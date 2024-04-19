@@ -1,9 +1,0 @@
-ext {
-    extName = 'Hizomanga'
-    extClass = '.Hizomanga'
-    themePkg = 'madara'
-    baseUrl = 'https://hizomanga.me'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
