@@ -186,9 +186,6 @@ abstract class GalleryAdults(
         return MangasPage(listOf(details), false)
     }
 
-    // any space except after a comma (we're going to replace spaces only between words)
-    private val spaceRegex = Regex("""(?<!,)\s+""")
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
         val genresFilter = filters.filterIsInstance<GenresFilter>().firstOrNull()
@@ -217,7 +214,7 @@ abstract class GalleryAdults(
             selectedGenres.size > 1 || query.isNotBlank() -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegments("search/")
-                    addEncodedQueryParameter("q", query.replace(spaceRegex, "+").trim())
+                    addEncodedQueryParameter("q", buildQueryString(selectedGenres.map { it.name }, query))
                     // Search results sorting is not supported by AsmHentai
                     if (sortFilter?.state == 0) addQueryParameter("sort", "popular")
                     addPageUri(page)
@@ -225,6 +222,27 @@ abstract class GalleryAdults(
                 GET(url.build(), headers)
             }
             else -> popularMangaRequest(page)
+        }
+    }
+
+    /**
+     * Both sites convert space( ) typed in search-box into plus(+) in URL. Then:
+     * + AsmHentai:
+     *   - uses plus(+) to search for exact match
+     *   - use comma(,) for separate terms, as AND condition.
+     *   Plus(+) after comma(,) doesn't have any effect.
+     * + HentaiFox:
+     *   - ignore the word preceding by a special character (e.g. school-girl will ignore girl)
+     *      => replace to plus(+),
+     *   - use plus(+) for separate terms, as AND condition.
+     *   - use double quote(") to search for exact match.
+     */
+    protected open fun buildQueryString(tags: List<String>, query: String): String {
+        return (tags + query).filterNot { it.isBlank() }.joinToString(",") {
+            // any space except after a comma (we're going to replace spaces only between words)
+            it.trim()
+                .replace(Regex("""(?<!,)\s+"""), "+")
+                .replace(" ", "")
         }
     }
 

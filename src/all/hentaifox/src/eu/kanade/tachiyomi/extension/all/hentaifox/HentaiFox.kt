@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.all.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
@@ -71,4 +73,17 @@ class HentaiFox(
     override fun imageUrlParse(document: Document): String {
         return document.selectFirst("img#gimg")?.imgAttr()!!
     }
+
+    override fun buildQueryString(tags: List<String>, query: String): String {
+        return (tags + query).filterNot { it.isBlank() }.joinToString("+") {
+            // replace any special character
+            it.trim().replace(Regex("""[^a-zA-Z0-9"]+"""), "+")
+        }
+    }
+
+    override fun getFilterList() = FilterList(
+        listOf(
+            Filter.Header("HINT: Use double quote (\") for exact match"),
+        ) + super.getFilterList().list,
+    )
 }
