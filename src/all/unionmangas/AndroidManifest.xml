@@ -12,7 +12,7 @@
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
 
-            <data android:host="https://unionmangas.xyz" />
+            <data android:host="unionmangasbr.org" />
 
             <data android:scheme="https"/>
             <data android:pathPattern="/manga-br/..*"/>
