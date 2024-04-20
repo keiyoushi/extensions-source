@@ -23,7 +23,7 @@ class GalaxScanlator : ZeistManga(
     override val popularMangaSelectorUrl = "div > a"
 
     override val mangaDetailsSelector = ".grid.gta-series"
-    override val mangaDetailsSelectorGenres = "aside > div > dl dt:contains(Genre) + dd > a[rel=tag]"
+    override val mangaDetailsSelectorGenres = "dt:contains(Genre) + dd a[rel=tag]"
 
     override val useNewChapterFeed = true
     override val chapterCategory = "Capítulo"
