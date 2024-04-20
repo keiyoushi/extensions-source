@@ -28,4 +28,7 @@ class GalaxScanlator : ZeistManga(
     override val useNewChapterFeed = true
     override val chapterCategory = "Capítulo"
     override val pageListSelector = "#reader"
+
+    override val hasFilters = true
+    override val hasLanguageFilter = false
 }
