@@ -1,17 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.drakescans
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
-class DrakeScans : Madara(
+class DrakeScans : MangaThemesia(
     "Drake Scans",
     "https://drakescans.com",
     "en",
-    SimpleDateFormat("dd/MM/yyyy", Locale.US),
 ) {
-
-    override val mangaDetailsSelectorTag = ""
-
-    override val mangaSubString = "series"
+    // madara -> mangathemesia
+    override val versionId = 2
 }

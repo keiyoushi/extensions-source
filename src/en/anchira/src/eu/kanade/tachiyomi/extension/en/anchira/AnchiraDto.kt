@@ -23,7 +23,7 @@ data class Entry(
     val key: String,
     @SerialName("published_at") val publishedAt: Long = 0L,
     val title: String,
-    @SerialName("thumb_index") val thumbnailIndex: Int = 1,
+    @SerialName("thumb_index") val thumbnailIndex: Int = 0,
     val tags: List<Tag> = emptyList(),
     val url: String? = null,
     val pages: Int = 1,

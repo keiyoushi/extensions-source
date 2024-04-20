@@ -1,7 +1,9 @@
 ext {
     extName = 'Temple Scan'
     extClass = '.TempleScanEsp'
-    extVersionCode = 33
+    themePkg = 'mangaesp'
+    baseUrl = 'https://templescanesp.net'
+    overrideVersionCode = 34
     isNsfw = true
 }
 

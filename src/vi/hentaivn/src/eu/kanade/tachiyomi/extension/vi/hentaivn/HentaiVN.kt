@@ -43,7 +43,7 @@ class HentaiVN : ParsedHttpSource(), ConfigurableSource {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private val defaultBaseUrl = "https://henvn.tv"
+    private val defaultBaseUrl = "https://hentaihvn.tv"
     override val baseUrl by lazy { preferences.getString(PREF_KEY_BASE_URL, defaultBaseUrl)!! }
 
     override val name = "HentaiVN"

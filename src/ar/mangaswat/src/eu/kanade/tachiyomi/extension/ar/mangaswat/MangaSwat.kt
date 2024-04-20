@@ -22,7 +22,7 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val swatUrl = "https://swatmanhua.com"
+private const val swatUrl = "https://normoyun.com"
 
 class MangaSwat :
     MangaThemesia(
