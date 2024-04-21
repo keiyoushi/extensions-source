@@ -110,16 +110,6 @@ class ChapterMetaDto(
 }
 
 @Serializable
-class PayloadPagesDto(
-    val chapter: PageDto,
-)
-
-@Serializable
-class PageDto(
-    val pages: List<String>,
-)
-
-@Serializable
 class SeriesStatusDto(
     val id: Long,
 )
