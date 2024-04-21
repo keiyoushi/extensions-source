@@ -2,12 +2,8 @@ package eu.kanade.tachiyomi.extension.all.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.toDate
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -66,32 +62,7 @@ class HentaiFox(
     }
 
     /* Pages */
-    override fun pageListRequest(document: Document): List<Page> {
-        val pageUrls = document.select("$pageSelector a")
-            .map { it.absUrl("href") }
-            .toMutableList()
-
-        // input only exists if pages > 10 and have to make a request to get the other thumbnails
-        val totalPages = document.inputIdValueOf(totalPagesSelector)
-
-        if (totalPages.isNotEmpty()) {
-            val form = FormBody.Builder()
-                .add("u_id", document.inputIdValueOf(galleryIdSelector))
-                .add("g_id", document.inputIdValueOf(loadIdSelector))
-                .add("img_dir", document.inputIdValueOf(loadDirSelector))
-                .add("visible_pages", "10")
-                .add("total_pages", totalPages)
-                .add("type", "2") // 1 would be "more", 2 is "all remaining"
-                .build()
-
-            client.newCall(POST("$baseUrl/includes/thumbs_loader.php", xhrHeaders, form))
-                .execute()
-                .asJsoup()
-                .select("a")
-                .mapTo(pageUrls) { it.absUrl("href") }
-        }
-        return pageUrls.mapIndexed { i, url -> Page(i, url) }
-    }
+    override val pagesRequest = "includes/thumbs_loader.php"
 
     override fun getServer(document: Document, galleryId: String): String {
         val domain = baseUrl.toHttpUrl().host

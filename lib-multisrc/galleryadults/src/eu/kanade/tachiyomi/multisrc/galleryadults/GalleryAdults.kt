@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.multisrc.galleryadults
 
 import android.app.Application
 import android.content.SharedPreferences
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
@@ -60,16 +60,17 @@ abstract class GalleryAdults(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private val SharedPreferences.parseImages
-        get() = getBoolean(PREF_PARSE_IMAGES, false)
+    private val SharedPreferences.parseImagesMethod
+        get() = getString(PREF_PARSE_IMAGES, PARSE_METHOD_DEFAULT_VALUE)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
+        ListPreference(screen.context).apply {
             key = PREF_PARSE_IMAGES
-            title = "Parse for images' URL one by one (Might help if chapter failed to load some pages)"
-            summaryOff = "Fast images' URL generator"
-            summaryOn = "Slowly parsing images' URL"
-            setDefaultValue(false)
+            title = "Method to parse for images' URL"
+            entries = PARSE_METHODS
+            entryValues = PARSE_METHOD_VALUES
+            setDefaultValue(PARSE_METHOD_DEFAULT_VALUE)
+            summary = "%s"
         }.also(screen::addPreference)
 
         addRandomUAPreferenceToScreen(screen)
@@ -366,9 +367,7 @@ abstract class GalleryAdults(
     private val jsonFormat: Json by injectLazy()
 
     override fun pageListParse(document: Document): List<Page> {
-        if (preferences.parseImages) {
-            return pageListRequest(document)
-        } else {
+        if (preferences.parseImagesMethod == "1") {
             val json = document.selectFirst("script:containsData(var g_th)")?.data()
                 ?.substringAfter("$.parseJSON('")
                 ?.substringBefore("');")?.trim()
@@ -429,6 +428,8 @@ abstract class GalleryAdults(
                     )
                 }
             }
+        } else {
+            return pageListRequest(document)
         }
     }
 
@@ -443,13 +444,68 @@ abstract class GalleryAdults(
         return cover!!.toHttpUrl().host
     }
 
+    protected open val pagesRequest = "inc/thumbs_loader.php"
+
     /**
      * Method to request then parse for a list of manga's page's URL,
      * which will then request one by one to parse for page's image's URL.
      * This method will be used when user set in preference.
      */
-    protected open fun pageListRequest(document: Document): List<Page> =
-        throw UnsupportedOperationException()
+    protected open fun pageListRequest(document: Document): List<Page> {
+        // input only exists if pages > 10 and have to make a request to get the other thumbnails
+        val totalPages = document.inputIdValueOf(totalPagesSelector)
+
+        val isThumbnailsParsing = preferences.parseImagesMethod == "2"
+        val galleryId = document.inputIdValueOf(galleryIdSelector)
+        val pageUrl = "$baseUrl/$pageUri/$galleryId"
+
+        val pageUrls = document.select("$pageSelector a")
+            .map {
+                if (isThumbnailsParsing) {
+                    it.selectFirst("img")!!.imgAttr()
+                } else {
+                    it.absUrl("href")
+                }
+            }
+            .toMutableList()
+
+        if (totalPages.isNotBlank()) {
+            val form = pageRequestForm(document, totalPages)
+
+            client.newCall(POST("$baseUrl/$pagesRequest", xhrHeaders, form))
+                .execute()
+                .asJsoup()
+                .select("a")
+                .mapTo(pageUrls) {
+                    if (isThumbnailsParsing) {
+                        it.selectFirst("img")!!.imgAttr()
+                    } else {
+                        it.absUrl("href")
+                    }
+                }
+        }
+        return pageUrls.mapIndexed { idx, url ->
+            if (isThumbnailsParsing) {
+                Page(
+                    index = idx,
+                    imageUrl = url.thumbnailToFull(),
+                    url = "$pageUrl/$idx/",
+                )
+            } else {
+                Page(idx, url)
+            }
+        }
+    }
+
+    protected open fun pageRequestForm(document: Document, totalPages: String): FormBody =
+        FormBody.Builder()
+            .add("u_id", document.inputIdValueOf(galleryIdSelector))
+            .add("g_id", document.inputIdValueOf(loadIdSelector))
+            .add("img_dir", document.inputIdValueOf(loadDirSelector))
+            .add("visible_pages", "10")
+            .add("total_pages", totalPages)
+            .add("type", "2") // 1 would be "more", 2 is "all remaining"
+            .build()
 
     override fun imageUrlParse(document: Document): String {
         return document.selectFirst("img#gimg, img#fimg")?.imgAttr()!!
@@ -543,7 +599,19 @@ abstract class GalleryAdults(
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
-        private const val PREF_PARSE_IMAGES = "pref_parse_images"
+
+        private const val PREF_PARSE_IMAGES = "pref_parse_images_methods"
+        private val PARSE_METHODS get() = arrayOf(
+            "Fast generator",
+            "Query for list of all pages (fast)",
+            "Query each page one-by-one (slow - safe)",
+        )
+        private val PARSE_METHOD_VALUES get() = arrayOf(
+            "1",
+            "2",
+            "3",
+        )
+        private val PARSE_METHOD_DEFAULT_VALUE get() = PARSE_METHOD_VALUES[0]
 
         // references to be used in factory
         const val LANGUAGE_MULTI = ""

@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import kotlinx.serialization.json.Json
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,7 +17,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 
 class IMHentai(
@@ -178,26 +177,40 @@ class IMHentai(
     /* Pages */
     override val pageUri = "view"
     override val pageSelector = ".gthumb"
-    private val jsonFormat: Json by injectLazy()
     private val serverSelector = "load_server"
+
+    private fun serverNumber(document: Document, galleryId: String): String {
+        return document.inputIdValueOf(serverSelector).takeIf {
+            it.isNotBlank()
+        } ?: when (galleryId.toInt()) {
+            in 1..274825 -> "1"
+            in 274826..403818 -> "2"
+            in 403819..527143 -> "3"
+            in 527144..632481 -> "4"
+            in 632482..816010 -> "5"
+            in 816011..970098 -> "6"
+            in 970099..1121113 -> "7"
+            else -> "8"
+        }
+    }
 
     override fun getServer(document: Document, galleryId: String): String {
         val domain = baseUrl.toHttpUrl().host
-        val loadServer = document.inputIdValueOf(serverSelector)
-        return if (loadServer.isNotBlank()) {
-            "m$loadServer.$domain"
-        } else {
-            when (galleryId.toInt()) {
-                in 1..274825 -> "m1.$domain"
-                in 274826..403818 -> "m2.$domain"
-                in 403819..527143 -> "m3.$domain"
-                in 527144..632481 -> "m4.$domain"
-                in 632482..816010 -> "m5.$domain"
-                in 816011..970098 -> "m6.$domain"
-                in 970099..1121113 -> "m7.$domain"
-                else -> "m8.$domain"
-            }
-        }
+        return "m${serverNumber(document, galleryId)}.$domain"
+    }
+
+    override fun pageRequestForm(document: Document, totalPages: String): FormBody {
+        val galleryId = document.inputIdValueOf(galleryIdSelector)
+
+        return FormBody.Builder()
+            .add("server", serverNumber(document, galleryId))
+            .add("u_id", document.inputIdValueOf(galleryIdSelector))
+            .add("g_id", document.inputIdValueOf(loadIdSelector))
+            .add("img_dir", document.inputIdValueOf(loadDirSelector))
+            .add("visible_pages", "10")
+            .add("total_pages", totalPages)
+            .add("type", "2") // 1 would be "more", 2 is "all remaining"
+            .build()
     }
 
     // Filters
