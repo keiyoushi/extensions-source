@@ -9,8 +9,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import kotlin.random.Random
 
 class HentaiFox(
     lang: String = "all",
@@ -91,6 +93,10 @@ class HentaiFox(
         return pageUrls.mapIndexed { i, url -> Page(i, url) }
     }
 
+    override fun getServer(document: Document, galleryId: String): String {
+        val domain = baseUrl.toHttpUrl().host
+        // Randomly choose between servers
+        return if (Random.nextBoolean()) "i2.$domain" else "i.$domain"
     }
 
     /**

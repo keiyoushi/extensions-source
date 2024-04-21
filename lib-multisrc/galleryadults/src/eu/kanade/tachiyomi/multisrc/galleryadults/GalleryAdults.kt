@@ -30,6 +30,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -41,6 +43,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 
 abstract class GalleryAdults(
@@ -360,24 +363,84 @@ abstract class GalleryAdults(
     protected open val pageUri = "g"
     protected open val pageSelector = ".gallery_thumb"
 
+    private val jsonFormat: Json by injectLazy()
+
     override fun pageListParse(document: Document): List<Page> {
-        return if (preferences.parseImages) {
-            pageListRequest(document)
+        if (preferences.parseImages) {
+            return pageListRequest(document)
         } else {
+            val json = document.selectFirst("script:containsData(var g_th)")?.data()
+                ?.substringAfter("$.parseJSON('")
+                ?.substringBefore("');")?.trim()
+
+            val loadDir = document.inputIdValueOf(loadDirSelector)
+            val loadId = document.inputIdValueOf(loadIdSelector)
             val galleryId = document.inputIdValueOf(galleryIdSelector)
-            val totalPages = document.inputIdValueOf(totalPagesSelector)
             val pageUrl = "$baseUrl/$pageUri/$galleryId"
-            val imageUrl = document.selectFirst("$pageSelector img")?.imgAttr()!!
-            val imageUrlPrefix = imageUrl.substringBeforeLast('/')
-            val imageUrlSuffix = imageUrl.substringAfterLast('.')
-            return listOf(1..totalPages.toInt()).flatten().map {
-                Page(
-                    index = it,
-                    imageUrl = "$imageUrlPrefix/$it.$imageUrlSuffix",
-                    url = "$pageUrl/$it/",
-                )
+
+            val randomServer = getServer(document, galleryId)
+            val imagesUri = "https://$randomServer/$loadDir/$loadId"
+
+            if (json != null) {
+                val images = jsonFormat.parseToJsonElement(json).jsonObject
+                val pages = mutableListOf<Page>()
+
+                // JSON string in this form: {"1":"j,1100,1148","2":"j,728,689",...
+                for (image in images) {
+                    val ext = image.value.toString().replace("\"", "").split(",")[0]
+                    val imageExt = when (ext) {
+                        "p" -> "png"
+                        "b" -> "bmp"
+                        "g" -> "gif"
+                        else -> "jpg"
+                    }
+                    val idx = image.key.toInt()
+                    pages.add(
+                        Page(
+                            index = idx,
+                            imageUrl = "$imagesUri/${image.key}.$imageExt",
+                            url = "$pageUrl/$idx/",
+                        ),
+                    )
+                }
+                return pages
+            } else {
+                val images = document.select("$pageSelector img")
+                val thumbUrls = images.map { it.imgAttr() }.toMutableList()
+
+                // totalPages only exists if pages > 10 and have to make a request to get the other thumbnails
+                val totalPages = document.inputIdValueOf(totalPagesSelector)
+
+                if (totalPages.isNotBlank()) {
+                    val imagesExt = images.first()?.imgAttr()!!
+                        .substringAfterLast('.')
+
+                    thumbUrls.addAll(
+                        listOf((images.size + 1)..totalPages.toInt()).flatten().map {
+                            "$imagesUri/${it}t.$imagesExt"
+                        },
+                    )
+                }
+                return thumbUrls.mapIndexed { idx, url ->
+                    Page(
+                        index = idx,
+                        imageUrl = url.thumbnailToFull(),
+                        url = "$pageUrl/$idx/",
+                    )
+                }
             }
         }
+    }
+
+    // convert thumbnail URLs to full image URLs
+    private fun String.thumbnailToFull(): String {
+        val ext = substringAfterLast(".")
+        return replace("t.$ext", ".$ext")
+    }
+
+    protected open fun getServer(document: Document, galleryId: String): String {
+        val cover = document.getCover()
+        return cover!!.toHttpUrl().host
     }
 
     /**
