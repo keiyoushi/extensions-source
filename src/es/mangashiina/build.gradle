@@ -1,9 +1,10 @@
 ext {
-    extName = 'MangaShiina'
-    extClass = '.MangaShiina'
+    extName = 'Manga Mukai'
+    extClass = '.MangaMukai'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://mangashiina.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://mangamukai.com'
+    overrideVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
