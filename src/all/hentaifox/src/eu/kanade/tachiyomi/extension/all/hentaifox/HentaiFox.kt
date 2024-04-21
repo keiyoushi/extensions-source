@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
-import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.toDate
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -92,8 +91,6 @@ class HentaiFox(
         return pageUrls.mapIndexed { i, url -> Page(i, url) }
     }
 
-    override fun imageUrlParse(document: Document): String {
-        return document.selectFirst("img#gimg")?.imgAttr()!!
     }
 
     /**

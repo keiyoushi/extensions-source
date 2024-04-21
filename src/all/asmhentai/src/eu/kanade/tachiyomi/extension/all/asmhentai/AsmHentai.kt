@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.cleanTag
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -64,18 +65,17 @@ class AsmHentai(
 
     override fun popularMangaSelector() = ".preview_item"
 
-    override fun Element.getTag(tag: String): String {
+    override fun Element.getInfo(tag: String): String {
         return select(".tags:contains($tag:) .tag")
             .joinToString { it.ownText().cleanTag() }
     }
-    private fun String.cleanTag(): String = replace(Regex("\\(.*\\)"), "").trim()
 
     override fun Element.getDescription(): String {
         return (
             listOf("Parodies", "Characters", "Languages", "Category")
                 .mapNotNull { tag ->
-                    getTag(tag)
-                        .let { if (it.isNotEmpty()) "$tag: $it" else null }
+                    getInfo(tag)
+                        .let { if (it.isNotBlank()) "$tag: $it" else null }
                 } +
                 listOfNotNull(
                     selectFirst(".book_page .pages h3")?.ownText()?.cleanTag(),
@@ -130,10 +130,6 @@ class AsmHentai(
                 .mapTo(pageUrls) { it.absUrl("href") }
         }
         return pageUrls.mapIndexed { i, url -> Page(i, url) }
-    }
-
-    override fun imageUrlParse(document: Document): String {
-        return document.selectFirst("img#fimg")?.imgAttr()!!
     }
 
     /* Filters */

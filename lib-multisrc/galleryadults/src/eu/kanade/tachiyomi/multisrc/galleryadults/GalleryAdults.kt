@@ -137,7 +137,7 @@ abstract class GalleryAdults(
         }
     }
 
-    override fun popularMangaNextPageSelector() = "li.active + li:not(.disabled)"
+    override fun popularMangaNextPageSelector() = ".pagination li.active + li:not(.disabled)"
 
     /* Latest */
     override fun latestUpdatesRequest(page: Int): Request {
@@ -290,7 +290,7 @@ abstract class GalleryAdults(
     protected open fun Element.getCover() =
         selectFirst(".cover img")?.imgAttr()
 
-    protected open fun Element.getTag(tag: String): String {
+    protected open fun Element.getInfo(tag: String): String {
         return select("ul.${tag.lowercase()} a")
             .joinToString { it.ownText() }
     }
@@ -298,8 +298,8 @@ abstract class GalleryAdults(
     protected open fun Element.getDescription(): String = (
         listOf("Parodies", "Characters", "Languages", "Categories")
             .mapNotNull { tag ->
-                getTag(tag)
-                    .let { if (it.isNotEmpty()) "$tag: $it" else null }
+                getInfo(tag)
+                    .let { if (it.isNotBlank()) "$tag: $it" else null }
             } +
             listOfNotNull(
                 selectFirst(".pages:contains(Pages:)")?.ownText(),
@@ -323,8 +323,8 @@ abstract class GalleryAdults(
                 status = SManga.COMPLETED
                 title = mangaTitle("h1")!!
                 thumbnail_url = getCover()
-                genre = getTag("Tags")
-                author = getTag("Artists")
+                genre = getInfo("Tags")
+                author = getInfo("Artists")
                 description = getDescription()
             }
         }
@@ -337,7 +337,7 @@ abstract class GalleryAdults(
             SChapter.create().apply {
                 name = "Chapter"
                 scanlator = document.selectFirst(mangaDetailInfoSelector)
-                    ?.getTag("Groups")
+                    ?.getInfo("Groups")
                 date_upload = document.getTime()
                 setUrlWithoutDomain(response.request.url.encodedPath)
             },
@@ -383,8 +383,14 @@ abstract class GalleryAdults(
     /**
      * Method to request then parse for a list of manga's page's URL,
      * which will then request one by one to parse for page's image's URL.
+     * This method will be used when user set in preference.
      */
-    abstract fun pageListRequest(document: Document): List<Page>
+    protected open fun pageListRequest(document: Document): List<Page> =
+        throw UnsupportedOperationException()
+
+    override fun imageUrlParse(document: Document): String {
+        return document.selectFirst("img#gimg, img#fimg")?.imgAttr()!!
+    }
 
     /* Filters */
     private val scope = CoroutineScope(Dispatchers.IO)

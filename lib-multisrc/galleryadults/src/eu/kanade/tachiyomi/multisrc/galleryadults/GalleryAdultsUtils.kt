@@ -198,5 +198,6 @@ object GalleryAdultsUtils {
         return null
     }
 
-    private fun Element.cleanTag(): String = text().replace(Regex("\\(.*\\)"), "").trim()
+    fun Element.cleanTag(): String = text().replace(Regex("\\(.*\\)"), "").trim()
+    fun String.cleanTag(): String = replace(Regex("\\(.*\\)"), "").trim()
 }
