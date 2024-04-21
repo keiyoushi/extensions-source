@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -141,14 +142,13 @@ class IkigaiMangas : HttpSource() {
         return mangas
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url.substringAfter("/capitulo/")
-        return GET("$apiBaseUrl/api/swf/chapters/$id", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request =
+        GET(baseUrl + chapter.url.substringBefore("#"), headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        return json.decodeFromString<PayloadPagesDto>(response.body.string()).chapter.pages.mapIndexed { i, img ->
-            Page(i, "", img)
+        val document = response.asJsoup()
+        return document.select("section > div.img > img").mapIndexed { i, element ->
+            Page(i, imageUrl = element.attr("abs:src"))
         }
     }
 
