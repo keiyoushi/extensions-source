@@ -110,7 +110,7 @@ class SeriManga : ParsedHttpSource() {
 
     companion object {
         val dateFormat by lazy {
-            SimpleDateFormat("dd MMMM yyyy", Locale("tr"))
+            SimpleDateFormat("dd MMMM yyyy", Locale("en"))
         }
     }
 
