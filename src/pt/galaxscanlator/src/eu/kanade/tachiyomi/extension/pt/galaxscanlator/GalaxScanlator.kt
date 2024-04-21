@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.galaxscanlator
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 class GalaxScanlator : ZeistManga(
@@ -15,12 +13,9 @@ class GalaxScanlator : ZeistManga(
         .rateLimit(5, 2, TimeUnit.SECONDS)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/search/label/Mangá?max-results=150")
-
-    override val popularMangaSelector = ".blog-posts > section"
-    override val popularMangaSelectorTitle: String = "h2"
-    override val popularMangaSelectorUrl = "div > a"
+    override val popularMangaSelector = "#PopularPosts2 article"
+    override val popularMangaSelectorTitle = "h3"
+    override val popularMangaSelectorUrl = "a"
 
     override val mangaDetailsSelector = ".grid.gta-series"
     override val mangaDetailsSelectorGenres = "dt:contains(Genre) + dd a[rel=tag]"
