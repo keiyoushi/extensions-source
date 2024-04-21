@@ -47,7 +47,7 @@ abstract class GalleryAdults(
     override val name: String,
     override val baseUrl: String,
     override val lang: String = "all",
-    protected open val mangaLang: String = "",
+    protected open val mangaLang: String = LANGUAGE_MULTI,
     protected val simpleDateFormat: SimpleDateFormat? = null,
 ) : ConfigurableSource, ParsedHttpSource() {
 
@@ -475,5 +475,18 @@ abstract class GalleryAdults(
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
         private const val PREF_PARSE_IMAGES = "pref_parse_images"
+
+        // references to be used in factory
+        const val LANGUAGE_MULTI = ""
+        const val LANGUAGE_ENGLISH = "english"
+        const val LANGUAGE_JAPANESE = "japanese"
+        const val LANGUAGE_CHINESE = "chinese"
+        const val LANGUAGE_KOREAN = "korean"
+        const val LANGUAGE_SPANISH = "spanish"
+        const val LANGUAGE_FRENCH = "french"
+        const val LANGUAGE_GERMAN = "german"
+        const val LANGUAGE_RUSSIAN = "russian"
+        const val LANGUAGE_SPEECHLESS = "speechless"
+        const val LANGUAGE_TRANSLATED = "translated"
     }
 }

@@ -16,14 +16,14 @@ import org.jsoup.nodes.Element
 
 class AsmHentai(
     lang: String = "all",
-    override val mangaLang: String = "",
+    override val mangaLang: String = LANGUAGE_MULTI,
 ) : GalleryAdults(
     "AsmHentai",
     "https://asmhentai.com",
     lang = lang,
 ) {
-
     override val supportsLatest = mangaLang.isNotBlank()
+
     private val SharedPreferences.shortTitle
         get() = getBoolean(PREF_SHORT_TITLE, false)
 

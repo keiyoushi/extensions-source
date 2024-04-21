@@ -15,7 +15,7 @@ import org.jsoup.nodes.Element
 
 class HentaiFox(
     lang: String = "all",
-    override val mangaLang: String = "",
+    override val mangaLang: String = LANGUAGE_MULTI,
 ) : GalleryAdults(
     "HentaiFox",
     "https://hentaifox.com",
@@ -23,15 +23,14 @@ class HentaiFox(
     mangaLang = mangaLang,
     simpleDateFormat = null,
 ) {
-
     override val supportsLatest = mangaLang.isNotBlank()
 
     private val languages: List<Pair<String, String>> = listOf(
-        Pair("english", "1"),
-        Pair("translated", "2"),
-        Pair("japanese", "5"),
-        Pair("chinese", "6"),
-        Pair("korean", "11"),
+        Pair(LANGUAGE_ENGLISH, "1"),
+        Pair(LANGUAGE_TRANSLATED, "2"),
+        Pair(LANGUAGE_JAPANESE, "5"),
+        Pair(LANGUAGE_CHINESE, "6"),
+        Pair(LANGUAGE_KOREAN, "11"),
     )
     private val langCode = languages.firstOrNull { lang -> lang.first == mangaLang }?.second
 
