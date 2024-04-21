@@ -138,7 +138,7 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val mangaId = document.selectFirst(".chapters-container .row.itemlist p[data-ref]")!!
+        val mangaId = document.selectFirst(".chapters-container .row.itemlist p[data-mangaid]")!!
             .attr("data-mangaid")
 
         val key = getKey(document)
