@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
@@ -31,9 +32,12 @@ class IkigaiMangas : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
+    private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "data-saving" to "0")
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
+        .addNetworkInterceptor(cookieInterceptor)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
