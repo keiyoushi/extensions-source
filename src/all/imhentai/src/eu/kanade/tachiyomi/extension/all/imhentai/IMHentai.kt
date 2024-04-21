@@ -213,7 +213,17 @@ class IMHentai(
             .build()
     }
 
-    // Filters
+    /* Filters */
+    override fun tagsParser(document: Document): List<Pair<String, String>> {
+        return document.select(".stags .tag_btn")
+            .mapNotNull {
+                Pair(
+                    it.selectFirst(".list_tag")?.ownText() ?: "",
+                    it.select("a").attr("href")
+                        .removeSuffix("/").substringAfterLast('/'),
+                )
+            }
+    }
 
     private class SortOrderFilter(sortOrderURIs: List<Pair<String, String>>, state: Int) :
         Filter.Select<String>("Sort By", sortOrderURIs.map { it.first }.toTypedArray(), state)
@@ -223,7 +233,10 @@ class IMHentai(
     private class LanguageFilters(flags: List<LanguageFilter>) : Filter.Group<LanguageFilter>("Other Languages", flags)
     private class CategoryFilters(flags: List<SearchFlagFilter>) : Filter.Group<SearchFlagFilter>("Categories", flags)
 
-    override fun getFilterList() = getFilterList(SORT_ORDER_DEFAULT)
+    override fun getFilterList() = FilterList(
+        super.getFilterList().list +
+            getFilterList(SORT_ORDER_DEFAULT).list,
+    )
 
     private fun getFilterList(sortOrderState: Int) = FilterList(
         SortOrderFilter(getSortOrderURIs(), sortOrderState),
