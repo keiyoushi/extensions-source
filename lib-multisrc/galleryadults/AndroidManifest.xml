@@ -14,7 +14,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="${SOURCEHOST}"
-                    android:pathPattern="/g/..*"
+                    android:pathPattern="/g.*/..*/"
                     android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
