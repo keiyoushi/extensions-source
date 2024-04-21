@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.imhentai
 
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 
@@ -13,5 +14,6 @@ class IMHentaiFactory : SourceFactory {
         IMHentai("ko", IMHentai.LANGUAGE_KOREAN),
         IMHentai("de", IMHentai.LANGUAGE_GERMAN),
         IMHentai("ru", IMHentai.LANGUAGE_RUSSIAN),
+        IMHentai("all", GalleryAdults.LANGUAGE_MULTI),
     )
 }

@@ -1,16 +1,15 @@
 package eu.kanade.tachiyomi.extension.all.imhentai
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.cleanTag
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,16 +17,50 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
-import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 
-class IMHentai(override val lang: String, private val imhLang: String) : ParsedHttpSource() {
-
-    override val baseUrl: String = "https://imhentai.xxx"
-    override val name: String = "IMHentai"
+class IMHentai(
+    lang: String = "all",
+    override val mangaLang: String = LANGUAGE_MULTI,
+) : GalleryAdults(
+    "IMHentai",
+    "https://imhentai.xxx",
+    lang = lang,
+) {
     override val supportsLatest = true
+
+    private val SharedPreferences.shortTitle
+        get() = getBoolean(PREF_SHORT_TITLE, false)
+
+    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+
+    private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHORT_TITLE
+            title = "Display Short Titles"
+            summaryOff = "Showing Long Titles"
+            summaryOn = "Showing short Titles"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        super.setupPreferenceScreen(screen)
+    }
+
+    override fun Element.mangaTitle(selector: String) =
+        mangaFullTitle(selector).let {
+            if (preferences.shortTitle) it?.shortenTitle() else it
+        }
+
+    private fun Element.mangaFullTitle(selector: String) =
+        selectFirst(selector)?.text()
+            ?.replace("\"", "")?.trim()
+
+    override fun Element.mangaLang() =
+        select("a:has(.thumb_flag)").attr("href")
+            .removeSuffix("/").substringAfterLast("/")
 
     override val client: OkHttpClient = network.cloudflareClient
         .newBuilder()
@@ -57,56 +90,6 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
             },
         ).build()
 
-    // Popular
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            thumbnail_url = element.selectFirst(".inner_thumb img")?.let {
-                it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
-            }
-            with(element.select(".caption a")) {
-                url = this.attr("href")
-                title = this.text()
-            }
-        }
-    }
-
-    override fun popularMangaNextPageSelector(): String = ".pagination li a:contains(Next):not([tabindex])"
-
-    override fun popularMangaSelector(): String = ".thumbs_container .thumb"
-
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList(SORT_ORDER_POPULAR))
-
-    // Latest
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
-
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList(SORT_ORDER_LATEST))
-
-    override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    // Search
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("id:")) {
-            val id = query.substringAfter("id:")
-            return client.newCall(GET("$baseUrl/gallery/$id/"))
-                .asObservableSuccess()
-                .map { response ->
-                    val manga = mangaDetailsParse(response)
-                    manga.url = "/gallery/$id/"
-                    MangasPage(listOf(manga), false)
-                }
-        }
-        return super.fetchSearchManga(page, query, filters)
-    }
-
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
-
     private fun toBinary(boolean: Boolean) = if (boolean) "1" else "0"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -121,7 +104,7 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("key", query)
                 .addQueryParameter("page", page.toString())
-                .addQueryParameter(getLanguageURIByName(imhLang).uri, toBinary(true)) // main language always enabled
+                .addQueryParameter(getLanguageURIByName(mangaLang).uri, toBinary(true)) // main language always enabled
 
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
@@ -147,114 +130,75 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
         }
     }
 
-    override fun searchMangaSelector(): String = popularMangaSelector()
-
-    // Details
-
-    private fun Elements.csvText(splitTagSeparator: String = ", "): String {
-        return this.joinToString {
-            listOf(
-                it.ownText(),
-                it.select(".split_tag").text()
-                    .trim()
-                    .removePrefix("| "),
-            )
-                .filter { s -> !s.isNullOrBlank() }
-                .joinToString(splitTagSeparator)
-        }
-    }
-
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("div.right_details > h1")!!.text()
-
-        thumbnail_url = document.selectFirst("div.left_cover img")?.let {
-            it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
-        }
-
-        val mangaInfoElement = document.select(".galleries_info")
-        val infoMap = mangaInfoElement.select("li:not(.pages)").associate {
-            it.select("span.tags_text").text().removeSuffix(":") to it.select(".tag")
-        }
-
-        artist = infoMap["Artists"]?.csvText(" | ")
-
-        author = artist
-
-        genre = infoMap["Tags"]?.csvText()
-
-        status = SManga.COMPLETED
-
-        val pages = mangaInfoElement.select("li.pages").text().substringAfter("Pages: ")
-        val altTitle = document.select(".subtitle").text().ifBlank { null }
-
-        description = listOf(
-            "Parodies",
-            "Characters",
-            "Groups",
-            "Languages",
-            "Category",
-        ).map { it to infoMap[it]?.csvText() }
-            .let { listOf(Pair("Alternate Title", altTitle)) + it + listOf(Pair("Pages", pages)) }
-            .filter { !it.second.isNullOrEmpty() }
-            .joinToString("\n\n") { "${it.first}:\n${it.second}" }
-    }
-
-    // Chapters
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return listOf(
-            SChapter.create().apply {
-                setUrlWithoutDomain(response.request.url.toString().replace("gallery", "view") + "1")
-                name = "Chapter"
-                chapter_number = 1f
-            },
-        )
-    }
-
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
-
-    override fun chapterListSelector(): String = throw UnsupportedOperationException()
-
-    // Pages
-
-    private val json: Json by injectLazy()
-
-    override fun pageListParse(document: Document): List<Page> {
-        val imageDir = document.select("#image_dir").`val`()
-        val galleryId = document.select("#gallery_id").`val`()
-        val uId = document.select("#u_id").`val`().toInt()
-
-        val randomServer = when (uId) {
-            in 1..274825 -> "m1.imhentai.xxx"
-            in 274826..403818 -> "m2.imhentai.xxx"
-            in 403819..527143 -> "m3.imhentai.xxx"
-            in 527144..632481 -> "m4.imhentai.xxx"
-            in 632482..816010 -> "m5.imhentai.xxx"
-            in 816011..970098 -> "m6.imhentai.xxx"
-            in 970099..1121113 -> "m7.imhentai.xxx"
-            else -> "m8.imhentai.xxx"
-        }
-
-        val images = json.parseToJsonElement(
-            document.selectFirst("script:containsData(var g_th)")!!.data()
-                .substringAfter("$.parseJSON('").substringBefore("');").trim(),
-        ).jsonObject
-        val pages = mutableListOf<Page>()
-
-        for (image in images) {
-            val iext = image.value.toString().replace("\"", "").split(",")[0]
-            val iextPr = when (iext) {
-                "p" -> "png"
-                "b" -> "bmp"
-                "g" -> "gif"
-                else -> "jpg"
+    /* Details */
+    override fun Element.getInfo(tag: String): String {
+        return select("li:has(.tags_text:contains($tag:)) .tag").map {
+            it?.run {
+                listOf(
+                    ownText().cleanTag(),
+                    select(".split_tag").text()
+                        .trim()
+                        .removePrefix("| ")
+                        .cleanTag(),
+                )
+                    .filter { s -> s.isNotBlank() }
+                    .joinToString()
             }
-            pages.add(Page(image.key.toInt() - 1, "", "https://$randomServer/$imageDir/$galleryId/${image.key}.$iextPr"))
-        }
-        return pages
+        }.joinToString()
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun Element.getDescription(): String {
+        return (
+            listOf("Parodies", "Characters", "Languages", "Category")
+                .mapNotNull { tag ->
+                    getInfo(tag)
+                        .let { if (it.isNotBlank()) "$tag: $it" else null }
+                } +
+                listOfNotNull(
+                    selectFirst(".pages")?.ownText()?.cleanTag(),
+                    selectFirst(".subtitle")?.ownText()?.cleanTag()
+                        .let { altTitle -> if (!altTitle.isNullOrBlank()) "Alternate Title: $altTitle" else null },
+                )
+            )
+            .joinToString("\n")
+            .plus(
+                if (preferences.shortTitle) {
+                    "\nFull title: ${mangaFullTitle("h1")}"
+                } else {
+                    ""
+                },
+            )
+    }
+
+    override fun Element.getCover() =
+        selectFirst(".left_cover img")?.imgAttr()
+
+    override val mangaDetailInfoSelector = ".gallery_first"
+
+    /* Pages */
+    override val pageUri = "view"
+    override val pageSelector = ".gthumb"
+    private val jsonFormat: Json by injectLazy()
+    private val serverSelector = "load_server"
+
+    override fun getServer(document: Document, galleryId: String): String {
+        val domain = baseUrl.toHttpUrl().host
+        val loadServer = document.inputIdValueOf(serverSelector)
+        return if (loadServer.isNotBlank()) {
+            "m$loadServer.$domain"
+        } else {
+            when (galleryId.toInt()) {
+                in 1..274825 -> "m1.$domain"
+                in 274826..403818 -> "m2.$domain"
+                in 403819..527143 -> "m3.$domain"
+                in 527144..632481 -> "m4.$domain"
+                in 632482..816010 -> "m5.$domain"
+                in 816011..970098 -> "m6.$domain"
+                in 970099..1121113 -> "m7.$domain"
+                else -> "m8.$domain"
+            }
+        }
+    }
 
     // Filters
 
@@ -271,7 +215,7 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
     private fun getFilterList(sortOrderState: Int) = FilterList(
         SortOrderFilter(getSortOrderURIs(), sortOrderState),
         CategoryFilters(getCategoryURIs()),
-        LanguageFilters(getLanguageURIs().filter { it.name != imhLang }), // exclude main lang
+        LanguageFilters(getLanguageURIs().filter { it.name != mangaLang }), // exclude main lang
         Filter.Header("Speechless language: ignores all filters except \"Popular\" and \"Latest\" in Sorting Filter"),
     )
 
@@ -307,6 +251,8 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
         return getLanguageURIs().first { it.name == name }
     }
 
+    override val idPrefixUri = "gallery"
+
     companion object {
 
         // references to sort order indices
@@ -323,5 +269,7 @@ class IMHentai(override val lang: String, private val imhLang: String) : ParsedH
         const val LANGUAGE_GERMAN = "German"
         const val LANGUAGE_RUSSIAN = "Russian"
         const val LANGUAGE_SPEECHLESS = "Speechless"
+
+        private const val PREF_SHORT_TITLE = "pref_short_title"
     }
 }
