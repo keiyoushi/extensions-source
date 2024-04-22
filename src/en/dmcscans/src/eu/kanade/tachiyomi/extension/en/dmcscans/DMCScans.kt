@@ -23,6 +23,7 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
 
     override val mangaDetailsSelectorGenres = "#labels > a[rel=tag]"
     override val mangaDetailsSelectorInfo = ".imptdt"
+    override val mangaDetailsSelectorDescription = "#summary"
 
     // =============================== Filters ==============================
 
