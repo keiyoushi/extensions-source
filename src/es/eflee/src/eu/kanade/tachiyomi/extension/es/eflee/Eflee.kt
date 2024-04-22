@@ -62,6 +62,7 @@ class Eflee : ZeistManga(
             try {
                 genresList = client.newCall(GET(baseUrl, headers)).execute()
                     .use { parseGenres(it.asJsoup()) }
+                    .sortedBy { it.value }
             } catch (_: Exception) {
             } finally {
                 fetchGenresAttempts++
