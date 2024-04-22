@@ -44,7 +44,7 @@ class Eflee : ZeistManga(
         } else {
             filters += listOf(
                 Filter.Separator(),
-                Filter.Header("Aperte 'Redefinir' mostrar os gêneros disponíveis"),
+                Filter.Header("Presione 'Restablecer' para mostrar los géneros disponibles"),
             )
         }
         return FilterList(filters)
