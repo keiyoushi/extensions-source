@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.cleanTag
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.FormBody
@@ -60,6 +61,10 @@ class IMHentai(
     override fun Element.mangaLang() =
         select("a:has(.thumb_flag)").attr("href")
             .removeSuffix("/").substringAfterLast("/")
+            .let {
+                // Include Speechless in search results
+                if (it == LANGUAGE_SPEECHLESS) mangaLang else it
+            }
 
     override val client: OkHttpClient = network.cloudflareClient
         .newBuilder()
@@ -92,44 +97,54 @@ class IMHentai(
     private fun toBinary(boolean: Boolean) = if (boolean) "1" else "0"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (filters.any { it is LanguageFilters && it.state.any { it.name == LANGUAGE_SPEECHLESS && it.state } }) { // edge case for language = speechless
-            val url = "$baseUrl/language/speechless/".toHttpUrl().newBuilder()
-
-            if ((if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<SortOrderFilter>()[0].state == 0) {
-                url.addPathSegment("popular")
+        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
+        val genresFilter = filters.filterIsInstance<GenresFilter>().firstOrNull()
+        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
+        val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
+        val speechlessFilter = filters.filterIsInstance<SpeechlessFilter>().firstOrNull()
+        return when {
+            favoriteFilter?.state == true -> {
+                val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
+                return POST(
+                    url.build().toString(),
+                    xhrHeaders,
+                    FormBody.Builder()
+                        .add("page", page.toString())
+                        .build(),
+                )
             }
-            return GET(url.build())
-        } else {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("key", query)
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter(getLanguageURIByName(mangaLang).uri, toBinary(true)) // main language always enabled
-
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-                when (filter) {
-                    is LanguageFilters -> {
-                        filter.state.forEach {
-                            url.addQueryParameter(it.uri, toBinary(it.state))
-                        }
+            speechlessFilter?.state == true -> {
+                val url = baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("language")
+                    addPathSegment(GalleryAdults.LANGUAGE_SPEECHLESS)
+                    if (sortOrderFilter?.state == 0) addPathSegment("popular")
+                    addPageUri(page)
+                }
+                GET(url.build(), headers)
+            }
                     }
-                    is CategoryFilters -> {
-                        filter.state.forEach {
-                            url.addQueryParameter(it.uri, toBinary(it.state))
-                        }
                     }
-                    is SortOrderFilter -> {
-                        getSortOrderURIs().forEachIndexed { index, pair ->
-                            url.addQueryParameter(pair.second, toBinary(filter.state == index))
                         }
+            }
+            selectedGenres.size == 1 && query.isBlank() -> {
+                // Browsing single tag's catalog
+                val url = baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("tag")
+                    addPathSegment(selectedGenres.single().uri)
+                    if (sortOrderFilter?.state == 0) addPathSegment("popular")
+                    addPageUri(page)
+                }
+                GET(url.build(), headers)
+            }
                     }
-                    else -> {}
                 }
             }
-            return GET(url.build())
         }
     }
 
     /* Details */
+    override val idPrefixUri = "gallery"
+
     override fun Element.getInfo(tag: String): String {
         return select("li:has(.tags_text:contains($tag:)) .tag").map {
             it?.run {
@@ -159,7 +174,7 @@ class IMHentai(
                         .let { altTitle -> if (!altTitle.isNullOrBlank()) "Alternate Title: $altTitle" else null },
                 )
             )
-            .joinToString("\n")
+            .joinToString("\n\n")
             .plus(
                 if (preferences.shortTitle) {
                     "\nFull title: ${mangaFullTitle("h1")}"
@@ -225,8 +240,8 @@ class IMHentai(
             }
     }
 
-    private class SortOrderFilter(sortOrderURIs: List<Pair<String, String>>, state: Int) :
-        Filter.Select<String>("Sort By", sortOrderURIs.map { it.first }.toTypedArray(), state)
+    private class SortOrderFilter(sortOrderURIs: List<Pair<String, String>>) :
+        Filter.Select<String>("Sort By", sortOrderURIs.map { it.first }.toTypedArray())
 
     private open class SearchFlagFilter(name: String, val uri: String, state: Boolean = true) : Filter.CheckBox(name, state)
     private class LanguageFilter(name: String, uri: String = name) : SearchFlagFilter(name, uri, false)
@@ -244,6 +259,26 @@ class IMHentai(
         LanguageFilters(getLanguageURIs().filter { it.name != mangaLang }), // exclude main lang
         Filter.Header("Speechless language: ignores all filters except \"Popular\" and \"Latest\" in Sorting Filter"),
     )
+    private class SpeechlessFilter : Filter.CheckBox("Show speechless items only", false)
+
+    override fun getFilterList(): FilterList {
+        getGenres()
+        return FilterList(
+            if (genres.isEmpty()) {
+                Filter.Header("Press 'reset' to attempt to load tags")
+            } else {
+                GenresFilter(genres)
+            },
+            Filter.Separator(),
+
+            SortOrderFilter(getSortOrderURIs()),
+            CategoryFilters(getCategoryURIs()),
+
+            Filter.Separator(),
+            SpeechlessFilter(),
+            FavoriteFilter(),
+        )
+    }
 
     private fun getCategoryURIs() = listOf(
         SearchFlagFilter("Manga", "manga"),
@@ -263,14 +298,13 @@ class IMHentai(
     )
 
     private fun getLanguageURIs() = listOf(
-        LanguageFilter(LANGUAGE_ENGLISH, "en"),
-        LanguageFilter(LANGUAGE_JAPANESE, "jp"),
-        LanguageFilter(LANGUAGE_SPANISH, "es"),
-        LanguageFilter(LANGUAGE_FRENCH, "fr"),
-        LanguageFilter(LANGUAGE_KOREAN, "kr"),
-        LanguageFilter(LANGUAGE_GERMAN, "de"),
-        LanguageFilter(LANGUAGE_RUSSIAN, "ru"),
-        LanguageFilter(LANGUAGE_SPEECHLESS, ""),
+        Pair(LANGUAGE_ENGLISH, "en"),
+        Pair(LANGUAGE_JAPANESE, "jp"),
+        Pair(LANGUAGE_SPANISH, "es"),
+        Pair(LANGUAGE_FRENCH, "fr"),
+        Pair(LANGUAGE_KOREAN, "kr"),
+        Pair(LANGUAGE_GERMAN, "de"),
+        Pair(LANGUAGE_RUSSIAN, "ru"),
     )
 
     private fun getLanguageURIByName(name: String): LanguageFilter {
