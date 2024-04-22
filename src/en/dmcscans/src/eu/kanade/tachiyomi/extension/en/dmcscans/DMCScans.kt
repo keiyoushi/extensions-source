@@ -53,9 +53,9 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val imgData = document.selectFirst("script:containsData(imgTags)")
+        val imgData = document.selectFirst("script:containsData(imgTag)")
             ?.data()
-            ?.substringAfter("imgTags")
+            ?.substringAfter("imgTag")
             ?.substringAfter("`")
             ?.substringBefore("`")
             ?.replace("\\\"", "\"")
