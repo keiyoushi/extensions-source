@@ -25,6 +25,11 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     override val mangaDetailsSelectorInfo = ".imptdt"
     override val mangaDetailsSelectorDescription = "#summary"
 
+    // =========================== Chapter Feed =============================
+
+    override val chapterFeedRegex = """clwds\.run\(["'](.*?)["']\)""".toRegex()
+    override val scriptSelector = "#clwds > script"
+
     // =============================== Filters ==============================
 
     override val hasFilters = true
