@@ -2,4 +2,4 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 9
+baseVersionCode = 10
