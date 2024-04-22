@@ -309,7 +309,7 @@ abstract class GalleryAdults(
                 selectFirst(".pages:contains(Pages:)")?.ownText(),
             )
         )
-        .joinToString("\n")
+        .joinToString("\n\n")
 
     protected open fun Element.getTime(): Long {
         return selectFirst("#main-info > div.tag-container > time")
@@ -515,7 +515,7 @@ abstract class GalleryAdults(
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
     private var tagsFetchAttempt = 0
-    private var genres = emptyList<Genre>()
+    protected var genres = emptyList<Genre>()
 
     protected open fun tagsRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -582,8 +582,8 @@ abstract class GalleryAdults(
     }
 
     // Top 50 tags
-    private class Genre(name: String, val uri: String) : Filter.CheckBox(name)
-    private class GenresFilter(genres: List<Genre>) : Filter.Group<Genre>(
+    protected class Genre(name: String, val uri: String) : Filter.CheckBox(name)
+    protected class GenresFilter(genres: List<Genre>) : Filter.Group<Genre>(
         "Tag filter",
         genres.map { Genre(it.name, it.uri) },
     )
@@ -593,7 +593,7 @@ abstract class GalleryAdults(
         listOf("Popular", "Latest").toTypedArray(),
     )
 
-    private class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
+    protected class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
 
     protected open val idPrefixUri = "g"
 

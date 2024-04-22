@@ -80,7 +80,7 @@ class AsmHentai(
                         .let { altTitle -> if (!altTitle.isNullOrBlank()) "Alternate Title: $altTitle" else null },
                 )
             )
-            .joinToString("\n")
+            .joinToString("\n\n")
             .plus(
                 if (preferences.shortTitle) {
                     "\nFull title: ${mangaFullTitle("h1")}"
