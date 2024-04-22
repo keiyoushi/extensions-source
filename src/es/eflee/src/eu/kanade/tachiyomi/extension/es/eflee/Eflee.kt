@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.es.eflee
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.GenreList
+import eu.kanade.tachiyomi.multisrc.zeistmanga.Type
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -27,9 +28,9 @@ class Eflee : ZeistManga(
     override val hasFilters = true
     override val hasLanguageFilter = false
     override val hasGenreFilter = false
+    override val hasStatusFilter = false
 
     private var genresList: List<Genre> = emptyList()
-
     private var fetchGenresAttempts: Int = 0
 
     override fun getFilterList(): FilterList {
@@ -48,6 +49,13 @@ class Eflee : ZeistManga(
         }
         return FilterList(filters)
     }
+
+    override fun getTypeList(): List<Type> = listOf(
+        Type("Todos", ""),
+        Type("Manga", "Manga"),
+        Type("Manhua", "Manhua"),
+        Type("Manhwa", "Manhwa"),
+    )
 
     private fun fetchGenres() {
         if (fetchGenresAttempts < 3 && genresList.isEmpty()) {
