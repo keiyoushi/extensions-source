@@ -23,12 +23,12 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
 
     override val mangaDetailsSelectorGenres = "#labels > a[rel=tag]"
     override val mangaDetailsSelectorInfo = ".imptdt"
-    override val mangaDetailsSelectorDescription = "#summary"
+    override val mangaDetailsSelectorDescription = "#desc"
 
     // =========================== Chapter Feed =============================
 
-    override val chapterFeedRegex = """clwds\.run\(["'](.*?)["']\)""".toRegex()
-    override val scriptSelector = "#clwds > script"
+    override val chapterFeedRegex = """clwd.\.run\(["'](.*?)["']\)""".toRegex()
+    override val scriptSelector = ".epcheck > script"
 
     // =============================== Filters ==============================
 
