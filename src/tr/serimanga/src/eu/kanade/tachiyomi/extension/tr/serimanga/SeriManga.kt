@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.tr.serimanga
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,6 +12,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -105,7 +107,12 @@ class SeriManga : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.select("a").attr("href"))
         name = "${element.select("span").first()!!.text()}: ${element.select("span")[1].text()}"
-        date_upload = dateFormat.parse(element.select("span")[2].ownText())?.time ?: 0
+        date_upload = try {
+            dateFormat.parse(element.select("span")[2].ownText())?.time ?: 0
+        } catch (e: ParseException) {
+            Log.e("SeriManga", e.toString())
+            0
+        }
     }
 
     companion object {
