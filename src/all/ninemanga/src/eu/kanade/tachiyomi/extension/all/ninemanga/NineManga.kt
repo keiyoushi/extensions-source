@@ -97,7 +97,6 @@ open class NineManga(
         element.select("a.chapter_list_a").let {
             name = it.text().replace(mangaTitleForCleaning, "", true)
             url = it.attr("href").substringAfter(baseUrl).replace("%20", " ")
-                .substringBeforeLast(".html") + "-1-1.html"
         }
         date_upload = parseChapterDate(element.select("span").text())
     }
@@ -126,6 +125,10 @@ open class NineManga(
             }
         }
         return 0L
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        return GET(baseUrl + chapter.url.replace(".html", "-1.html"), headers)
     }
 
     override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
