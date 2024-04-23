@@ -301,7 +301,7 @@ abstract class Comick(
                     is TagFilter -> {
                         if (it.state.isNotEmpty()) {
                             it.state.split(",").forEach {
-                                addQueryParameter("tags", it.trim())
+                                addQueryParameter("tags", it.trim().replace(Regex("[ /]"), "-"))
                             }
                         }
                     }
