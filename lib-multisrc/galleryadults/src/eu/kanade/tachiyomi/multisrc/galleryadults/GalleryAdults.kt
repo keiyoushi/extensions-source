@@ -681,11 +681,8 @@ abstract class GalleryAdults(
                 listOf(
                     Filter.Separator(),
                     CategoryFilters(getCategoryURIs()),
-                    Filter.Separator(),
                 ),
             )
-        } else {
-            filters.add(Filter.Separator())
         }
 
         if (useAdvanceSearch) {
@@ -698,19 +695,16 @@ abstract class GalleryAdults(
                     ArtistsFilter(),
                     CharactersFilter(),
                     GroupsFilter(),
-                    Filter.Separator(),
                 ),
             )
-        } else {
-            filters.add(Filter.Separator())
         }
 
-        filters.addAll(
-            listOf(
-                SpeechlessFilter(),
-                FavoriteFilter(),
-            ),
-        )
+        filters.add(Filter.Separator())
+
+        if (useIntermediateSearch)
+            filters.add(SpeechlessFilter())
+        filters.add(FavoriteFilter())
+
         return FilterList(filters)
     }
 
