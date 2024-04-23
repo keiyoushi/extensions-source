@@ -192,11 +192,28 @@ abstract class GalleryAdults(
         return MangasPage(listOf(details), false)
     }
 
+    protected open val useIntermediateSearch: Boolean = false
+    protected open val useAdvanceSearch: Boolean = false
+    protected open val supportSpeechless: Boolean = false
+    private val useBasicSearch: Boolean
+        get() = !useIntermediateSearch
+
+    private fun toBinary(boolean: Boolean) = if (boolean) "1" else "0"
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
+        // Basic search
+        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
         val genresFilter = filters.filterIsInstance<GenresFilter>().firstOrNull()
         val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
         val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
+
+        // Speechless
+        val speechlessFilter = filters.filterIsInstance<SpeechlessFilter>().firstOrNull()
+        // Intermediate search
+        val categoryFilters = filters.filterIsInstance<CategoryFilters>().firstOrNull()
+        // Advance search
+        val advancedSearchFilters = filters.filterIsInstance<Filter.Text>()
+
         return when {
             favoriteFilter?.state == true -> {
                 val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
@@ -208,25 +225,108 @@ abstract class GalleryAdults(
                         .build(),
                 )
             }
-            selectedGenres.size == 1 && query.isBlank() -> {
+            supportSpeechless && speechlessFilter?.state == true -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("tag")
-                    addPathSegment(selectedGenres.single().uri)
-                    if (sortFilter?.state == 0) addPathSegment("popular")
+                    addPathSegment("language")
+                    addPathSegment(LANGUAGE_SPEECHLESS)
+                    if (sortOrderFilter?.state == 0) addPathSegment("popular")
                     addPageUri(page)
                 }
                 GET(url.build(), headers)
             }
-            selectedGenres.size > 1 || query.isNotBlank() -> {
+            useAdvanceSearch && advancedSearchFilters.any { it.state.isNotBlank() } -> {
+                val url = "$baseUrl/advsearch".toHttpUrl().newBuilder().apply {
+                    getSortOrderURIs().forEachIndexed { index, pair ->
+                        addQueryParameter(pair.second, toBinary(sortOrderFilter?.state == index))
+                    }
+                    categoryFilters?.state?.forEach {
+                        addQueryParameter(it.uri, toBinary(it.state))
+                    }
+                    getLanguageURIs().forEach { pair ->
+                        addQueryParameter(
+                            pair.second,
+                            toBinary(
+                                mangaLang == pair.first ||
+                                    mangaLang == LANGUAGE_MULTI,
+                            ),
+                        )
+                    }
+
+                    // Build this query string: +tag:"bat+man"+-tag:"cat"+artist:"Joe"...
+                    // +tag must be encoded into %2Btag while the rest are not needed to encode
+                    val keys = emptyList<String>().toMutableList()
+                    keys.addAll(selectedGenres.map { "%2Btag:\"${it.name}\"" })
+                    advancedSearchFilters.forEach { filter ->
+                        val key = when (filter) {
+                            is TagsFilter -> "tag"
+                            is ParodiesFilter -> "parody"
+                            is ArtistsFilter -> "artist"
+                            is CharactersFilter -> "character"
+                            is GroupsFilter -> "group"
+                            else -> null
+                        }
+                        if (key != null) {
+                            keys.addAll(
+                                filter.state.trim()
+                                    // any space except after a comma (we're going to replace spaces only between words)
+                                    .replace(Regex("""(?<!,)\s+"""), "+")
+                                    .replace(" ", "")
+                                    .split(',')
+                                    .mapNotNull {
+                                        val match = Regex("""^(-?)"?(.+)"?""").find(it)
+                                        match?.groupValues?.let { groups ->
+                                            "${if (groups[1].isNotBlank()) "-" else "%2B"}$key:\"${groups[2]}\""
+                                        }
+                                    },
+                            )
+                        }
+                    }
+                    addEncodedQueryParameter("key", keys.joinToString("+"))
+                    addPageUri(page)
+                }
+                GET(url.build())
+            }
+            selectedGenres.size == 1 && query.isBlank() -> {
+                // Browsing single tag's catalog
+                val url = baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("tag")
+                    addPathSegment(selectedGenres.single().uri)
+                    if (sortOrderFilter?.state == 0) addPathSegment("popular")
+                    addPageUri(page)
+                }
+                GET(url.build(), headers)
+            }
+            useIntermediateSearch -> {
+                // Only for query string or multiple tags
+                val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+                    getSortOrderURIs().forEachIndexed { index, pair ->
+                        addQueryParameter(pair.second, toBinary(sortOrderFilter?.state == index))
+                    }
+                    categoryFilters?.state?.forEach {
+                        addQueryParameter(it.uri, toBinary(it.state))
+                    }
+                    getLanguageURIs().forEach { pair ->
+                        addQueryParameter(
+                            pair.second,
+                            toBinary(mangaLang == pair.first || mangaLang == LANGUAGE_MULTI),
+                        )
+                    }
+                    addEncodedQueryParameter("key", buildQueryString(selectedGenres.map { it.name }, query))
+                    addPageUri(page)
+                }
+                GET(url.build())
+            }
+            useBasicSearch && (selectedGenres.size > 1 || query.isNotBlank()) -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegments("search/")
                     addEncodedQueryParameter("q", buildQueryString(selectedGenres.map { it.name }, query))
                     // Search results sorting is not supported by AsmHentai
-                    if (sortFilter?.state == 0) addQueryParameter("sort", "popular")
+                    if (sortOrderFilter?.state == 0) addQueryParameter("sort", "popular")
                     addPageUri(page)
                 }
                 GET(url.build(), headers)
             }
+            sortOrderFilter?.state == 1 -> latestUpdatesRequest(page)
             else -> popularMangaRequest(page)
         }
     }
@@ -566,34 +666,110 @@ abstract class GalleryAdults(
 
     override fun getFilterList(): FilterList {
         getGenres()
-        return FilterList(
-            SortFilter(),
-            Filter.Separator(),
+        val filters = emptyList<Filter<*>>().toMutableList()
 
-            if (genres.isEmpty()) {
-                Filter.Header("Press 'reset' to attempt to load tags")
-            } else {
-                GenresFilter(genres)
-            },
-            Filter.Separator(),
+        filters.add(SortOrderFilter(getSortOrderURIs()))
 
-            FavoriteFilter(),
+        if (genres.isEmpty()) {
+            filters.add(Filter.Header("Press 'reset' to attempt to load tags"))
+        } else {
+            filters.add(GenresFilter(genres))
+        }
+
+        if (useIntermediateSearch) {
+            filters.addAll(
+                listOf(
+                    Filter.Separator(),
+                    CategoryFilters(getCategoryURIs()),
+                    Filter.Separator(),
+                ),
+            )
+        } else {
+            filters.add(Filter.Separator())
+        }
+
+        if (useAdvanceSearch) {
+            filters.addAll(
+                listOf(
+                    Filter.Separator(),
+                    Filter.Header("Advanced filters will ignore query search. Separate terms by comma (,) and precede term with minus (-) to exclude."),
+                    TagsFilter(),
+                    ParodiesFilter(),
+                    ArtistsFilter(),
+                    CharactersFilter(),
+                    GroupsFilter(),
+                    Filter.Separator(),
+                ),
+            )
+        } else {
+            filters.add(Filter.Separator())
+        }
+
+        filters.addAll(
+            listOf(
+                SpeechlessFilter(),
+                FavoriteFilter(),
+            ),
         )
+        return FilterList(filters)
     }
 
     // Top 50 tags
     protected class Genre(name: String, val uri: String) : Filter.CheckBox(name)
     protected class GenresFilter(genres: List<Genre>) : Filter.Group<Genre>(
-        "Tag filter",
+        "Tags",
         genres.map { Genre(it.name, it.uri) },
     )
 
-    private class SortFilter : Filter.Select<String>(
-        "Sort order",
-        listOf("Popular", "Latest").toTypedArray(),
-    )
+    protected class SortOrderFilter(sortOrderURIs: List<Pair<String, String>>) :
+        Filter.Select<String>("Sort By", sortOrderURIs.map { it.first }.toTypedArray())
 
     protected class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
+
+    // Speechless
+    protected class SpeechlessFilter : Filter.CheckBox("Show speechless items only", false)
+
+    // Intermediate search
+    protected class SearchFlagFilter(name: String, val uri: String, state: Boolean = true) : Filter.CheckBox(name, state)
+    protected class CategoryFilters(flags: List<SearchFlagFilter>) : Filter.Group<SearchFlagFilter>("Categories", flags)
+
+    // Advance search
+    protected class TagsFilter : Filter.Text("Tags")
+    protected class ParodiesFilter : Filter.Text("Parodies")
+    protected class ArtistsFilter : Filter.Text("Artists")
+    protected class CharactersFilter : Filter.Text("Characters")
+    protected class GroupsFilter : Filter.Text("Groups")
+
+    protected fun getSortOrderURIs() = listOf(
+        Pair("Popular", "pp"),
+        Pair("Latest", "lt"),
+    ) + if (useIntermediateSearch || useAdvanceSearch) {
+        listOf(
+            Pair("Downloads", "dl"),
+            Pair("Top Rated", "tr"),
+        )
+    } else {
+        emptyList()
+    }
+
+    protected fun getCategoryURIs() = listOf(
+        SearchFlagFilter("Manga", "m"),
+        SearchFlagFilter("Doujinshi", "d"),
+        SearchFlagFilter("Western", "w"),
+        SearchFlagFilter("Image Set", "i"),
+        SearchFlagFilter("Artist CG", "a"),
+        SearchFlagFilter("Game CG", "g"),
+    )
+
+    protected fun getLanguageURIs() = listOf(
+        Pair(LANGUAGE_ENGLISH, "en"),
+        Pair(LANGUAGE_JAPANESE, "jp"),
+        Pair(LANGUAGE_SPANISH, "es"),
+        Pair(LANGUAGE_FRENCH, "fr"),
+        Pair(LANGUAGE_KOREAN, "kr"),
+        Pair(LANGUAGE_GERMAN, "de"),
+        Pair(LANGUAGE_RUSSIAN, "ru"),
+    )
 
     protected open val idPrefixUri = "g"
 
