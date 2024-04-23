@@ -25,7 +25,7 @@ class IMHentai(
 ) {
     override val supportsLatest = true
     override val useIntermediateSearch: Boolean = true
-    override val useAdvanceSearch: Boolean = true
+    override val supportAdvanceSearch: Boolean = true
     override val supportSpeechless: Boolean = true
 
     private val SharedPreferences.shortTitle

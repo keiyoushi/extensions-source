@@ -193,7 +193,7 @@ abstract class GalleryAdults(
     }
 
     protected open val useIntermediateSearch: Boolean = false
-    protected open val useAdvanceSearch: Boolean = false
+    protected open val supportAdvanceSearch: Boolean = false
     protected open val supportSpeechless: Boolean = false
     private val useBasicSearch: Boolean
         get() = !useIntermediateSearch
@@ -234,7 +234,7 @@ abstract class GalleryAdults(
                 }
                 GET(url.build(), headers)
             }
-            useAdvanceSearch && advancedSearchFilters.any { it.state.isNotBlank() } -> {
+            supportAdvanceSearch && advancedSearchFilters.any { it.state.isNotBlank() } -> {
                 val url = "$baseUrl/advsearch".toHttpUrl().newBuilder().apply {
                     getSortOrderURIs().forEachIndexed { index, pair ->
                         addQueryParameter(pair.second, toBinary(sortOrderFilter?.state == index))
@@ -668,6 +668,8 @@ abstract class GalleryAdults(
         getGenres()
         val filters = emptyList<Filter<*>>().toMutableList()
 
+        if (useIntermediateSearch)
+            filters.add(Filter.Header("HINT: Separate search term with comma (,)"))
         filters.add(SortOrderFilter(getSortOrderURIs()))
 
         if (genres.isEmpty()) {
@@ -685,7 +687,7 @@ abstract class GalleryAdults(
             )
         }
 
-        if (useAdvanceSearch) {
+        if (supportAdvanceSearch) {
             filters.addAll(
                 listOf(
                     Filter.Separator(),
@@ -737,7 +739,7 @@ abstract class GalleryAdults(
     protected fun getSortOrderURIs() = listOf(
         Pair("Popular", "pp"),
         Pair("Latest", "lt"),
-    ) + if (useIntermediateSearch || useAdvanceSearch) {
+    ) + if (useIntermediateSearch || supportAdvanceSearch) {
         listOf(
             Pair("Downloads", "dl"),
             Pair("Top Rated", "tr"),
