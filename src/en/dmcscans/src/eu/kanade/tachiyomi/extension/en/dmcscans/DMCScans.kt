@@ -10,7 +10,7 @@ import org.jsoup.Jsoup
 
 class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en") {
     override val client = super.client.newBuilder()
-        .rateLimit(2)
+        .rateLimit(1, 3)
         .build()
 
     // ============================== Popular ===============================
