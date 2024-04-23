@@ -102,6 +102,8 @@ class IMHentai(
         val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
         val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
         val speechlessFilter = filters.filterIsInstance<SpeechlessFilter>().firstOrNull()
+        val categoryFilters = filters.filterIsInstance<CategoryFilters>().firstOrNull()
+        val advancedSearchFilters = filters.filterIsInstance<Filter.Text>()
         return when {
             favoriteFilter?.state == true -> {
                 val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
@@ -116,15 +118,63 @@ class IMHentai(
             speechlessFilter?.state == true -> {
                 val url = baseUrl.toHttpUrl().newBuilder().apply {
                     addPathSegment("language")
-                    addPathSegment(GalleryAdults.LANGUAGE_SPEECHLESS)
+                    addPathSegment(LANGUAGE_SPEECHLESS)
                     if (sortOrderFilter?.state == 0) addPathSegment("popular")
                     addPageUri(page)
                 }
                 GET(url.build(), headers)
             }
+            advancedSearchFilters.any { it.state.isNotBlank() } -> {
+                val url = "$baseUrl/advsearch".toHttpUrl().newBuilder().apply {
+                    getSortOrderURIs().forEachIndexed { index, pair ->
+                        addQueryParameter(pair.second, toBinary(sortOrderFilter?.state == index))
                     }
+                    categoryFilters?.state?.forEach {
+                        addQueryParameter(it.uri, toBinary(it.state))
                     }
+                    getLanguageURIs().forEach { pair ->
+                        addQueryParameter(
+                            pair.second,
+                            toBinary(
+                                mangaLang == pair.first ||
+                                    mangaLang == LANGUAGE_MULTI,
+                            ),
+                        )
+                    }
+
+                    // Build this query string: +tag:"bat+man"+-tag:"cat"+artist:"Joe"...
+                    // +tag must be encoded into %2Btag while the rest are not needed to encode
+                    val keys = emptyList<String>().toMutableList()
+                    keys.addAll(selectedGenres.map { "%2Btag:\"${it.name}\"" })
+                    advancedSearchFilters.forEach { filter ->
+                        val key = when (filter) {
+                            is TagsFilter -> "tag"
+                            is ParodiesFilter -> "parody"
+                            is ArtistsFilter -> "artist"
+                            is CharactersFilter -> "character"
+                            is GroupsFilter -> "group"
+                            else -> null
                         }
+                        if (key != null) {
+                            keys.addAll(
+                                filter.state.trim()
+                                    // any space except after a comma (we're going to replace spaces only between words)
+                                    .replace(Regex("""(?<!,)\s+"""), "+")
+                                    .replace(" ", "")
+                                    .split(',')
+                                    .mapNotNull {
+                                        val match = Regex("""^(-?)"?(.+)"?""").find(it)
+                                        match?.groupValues?.let { groups ->
+                                            "${if (groups[1].isNotBlank()) "-" else "%2B"}$key:\"${groups[2]}\""
+                                        }
+                                    },
+                            )
+                        }
+                    }
+                    addEncodedQueryParameter("key", keys.joinToString("+"))
+                    addPageUri(page)
+                }
+                GET(url.build())
             }
             selectedGenres.size == 1 && query.isBlank() -> {
                 // Browsing single tag's catalog
@@ -136,15 +186,32 @@ class IMHentai(
                 }
                 GET(url.build(), headers)
             }
+            else -> {
+                // Only for query string or multiple tags
+                val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+                    getSortOrderURIs().forEachIndexed { index, pair ->
+                        addQueryParameter(pair.second, toBinary(sortOrderFilter?.state == index))
                     }
+                    categoryFilters?.state?.forEach {
+                        addQueryParameter(it.uri, toBinary(it.state))
+                    }
+                    getLanguageURIs().forEach { pair ->
+                        addQueryParameter(
+                            pair.second,
+                            toBinary(mangaLang == pair.first || mangaLang == LANGUAGE_MULTI),
+                        )
+                    }
+                    addEncodedQueryParameter("key", buildQueryString(selectedGenres.map { it.name }, query))
+                    addPageUri(page)
                 }
+                GET(url.build())
             }
         }
     }
 
-    /* Details */
-    override val idPrefixUri = "gallery"
+    override val favoritePath = "user/fav_pags.php"
 
+    /* Details */
     override fun Element.getInfo(tag: String): String {
         return select("li:has(.tags_text:contains($tag:)) .tag").map {
             it?.run {
@@ -244,22 +311,15 @@ class IMHentai(
         Filter.Select<String>("Sort By", sortOrderURIs.map { it.first }.toTypedArray())
 
     private open class SearchFlagFilter(name: String, val uri: String, state: Boolean = true) : Filter.CheckBox(name, state)
-    private class LanguageFilter(name: String, uri: String = name) : SearchFlagFilter(name, uri, false)
-    private class LanguageFilters(flags: List<LanguageFilter>) : Filter.Group<LanguageFilter>("Other Languages", flags)
     private class CategoryFilters(flags: List<SearchFlagFilter>) : Filter.Group<SearchFlagFilter>("Categories", flags)
 
-    override fun getFilterList() = FilterList(
-        super.getFilterList().list +
-            getFilterList(SORT_ORDER_DEFAULT).list,
-    )
-
-    private fun getFilterList(sortOrderState: Int) = FilterList(
-        SortOrderFilter(getSortOrderURIs(), sortOrderState),
-        CategoryFilters(getCategoryURIs()),
-        LanguageFilters(getLanguageURIs().filter { it.name != mangaLang }), // exclude main lang
-        Filter.Header("Speechless language: ignores all filters except \"Popular\" and \"Latest\" in Sorting Filter"),
-    )
     private class SpeechlessFilter : Filter.CheckBox("Show speechless items only", false)
+
+    private class TagsFilter : Filter.Text("Tags")
+    private class ParodiesFilter : Filter.Text("Parodies")
+    private class ArtistsFilter : Filter.Text("Artists")
+    private class CharactersFilter : Filter.Text("Characters")
+    private class GroupsFilter : Filter.Text("Groups")
 
     override fun getFilterList(): FilterList {
         getGenres()
@@ -275,21 +335,28 @@ class IMHentai(
             CategoryFilters(getCategoryURIs()),
 
             Filter.Separator(),
+            Filter.Header("Advanced filters will ignore query search. Separate terms by comma (,) and precede term with minus (-) to exclude."),
+            TagsFilter(),
+            ParodiesFilter(),
+            ArtistsFilter(),
+            CharactersFilter(),
+            GroupsFilter(),
+
+            Filter.Separator(),
             SpeechlessFilter(),
             FavoriteFilter(),
         )
     }
 
     private fun getCategoryURIs() = listOf(
-        SearchFlagFilter("Manga", "manga"),
-        SearchFlagFilter("Doujinshi", "doujinshi"),
-        SearchFlagFilter("Western", "western"),
-        SearchFlagFilter("Image Set", "imageset"),
-        SearchFlagFilter("Artist CG", "artistcg"),
-        SearchFlagFilter("Game CG", "gamecg"),
+        SearchFlagFilter("Manga", "m"),
+        SearchFlagFilter("Doujinshi", "d"),
+        SearchFlagFilter("Western", "w"),
+        SearchFlagFilter("Image Set", "i"),
+        SearchFlagFilter("Artist CG", "a"),
+        SearchFlagFilter("Game CG", "g"),
     )
 
-    // update sort order indices in companion object if order is changed
     private fun getSortOrderURIs() = listOf(
         Pair("Popular", "pp"),
         Pair("Latest", "lt"),
@@ -307,29 +374,9 @@ class IMHentai(
         Pair(LANGUAGE_RUSSIAN, "ru"),
     )
 
-    private fun getLanguageURIByName(name: String): LanguageFilter {
-        return getLanguageURIs().first { it.name == name }
-    }
-
     override val idPrefixUri = "gallery"
 
     companion object {
-
-        // references to sort order indices
-        private const val SORT_ORDER_POPULAR = 0
-        private const val SORT_ORDER_LATEST = 1
-        private const val SORT_ORDER_DEFAULT = SORT_ORDER_POPULAR
-
-        // references to be used in factory
-        const val LANGUAGE_ENGLISH = "English"
-        const val LANGUAGE_JAPANESE = "Japanese"
-        const val LANGUAGE_SPANISH = "Spanish"
-        const val LANGUAGE_FRENCH = "French"
-        const val LANGUAGE_KOREAN = "Korean"
-        const val LANGUAGE_GERMAN = "German"
-        const val LANGUAGE_RUSSIAN = "Russian"
-        const val LANGUAGE_SPEECHLESS = "Speechless"
-
         private const val PREF_SHORT_TITLE = "pref_short_title"
     }
 }
