@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.ninemanga
 
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -26,6 +27,8 @@ open class NineManga(
 
     override val supportsLatest: Boolean = true
 
+    private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "ninemanga_list_num" to "1")
+
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
@@ -37,7 +40,9 @@ open class NineManga(
                 return@addInterceptor chain.proceed(newRequest)
             }
             chain.proceed(request)
-        }.build()
+        }
+        .addNetworkInterceptor(cookieInterceptor)
+        .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Accept-Language", "es-ES,es;q=0.9,en;q=0.8,gl;q=0.7")
@@ -125,10 +130,6 @@ open class NineManga(
             }
         }
         return 0L
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url.replace(".html", "-1.html"), headers)
     }
 
     override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
