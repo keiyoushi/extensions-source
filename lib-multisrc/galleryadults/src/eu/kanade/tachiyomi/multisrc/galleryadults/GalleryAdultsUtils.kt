@@ -14,8 +14,8 @@ object GalleryAdultsUtils {
         else -> absUrl("src")
     }!!
 
-    fun Element.cleanTag(): String = text().replace(Regex("\\(.*\\)"), "").trim()
-    fun String.cleanTag(): String = replace(Regex("\\(.*\\)"), "").trim()
+    fun Element.cleanTag(): String = text().cleanTag()
+    fun String.cleanTag(): String = replace(Regex("\\([0-9,]*\\)"), "").trim()
 
     // convert thumbnail URLs to full image URLs
     fun String.thumbnailToFull(): String {

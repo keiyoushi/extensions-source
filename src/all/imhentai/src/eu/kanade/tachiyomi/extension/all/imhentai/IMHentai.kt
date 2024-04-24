@@ -119,7 +119,7 @@ class IMHentai(
                         .let { if (it.isNotBlank()) "$tag: $it" else null }
                 } +
                 listOfNotNull(
-                    selectFirst(".pages")?.ownText()?.cleanTag(),
+                    selectFirst(".pages")?.ownText(),
                     selectFirst(".subtitle")?.ownText()
                         .let { altTitle -> if (!altTitle.isNullOrBlank()) "Alternate Title: $altTitle" else null },
                 )
