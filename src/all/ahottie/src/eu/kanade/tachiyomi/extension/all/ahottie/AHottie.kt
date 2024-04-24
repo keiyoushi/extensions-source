@@ -22,14 +22,13 @@ class AHottie() : ParsedHttpSource() {
 
     // Popular
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-            thumbnail_url = element.select(".relative img").attr("src")
-            genre = element.select(".flex a").joinToString(", ") {
-                it.text()
-            }
-            title = element.select("h2").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.select(".relative img").attr("src")
+        genre = element.select(".flex a").joinToString(", ") {
+            it.text()
+        }
+        title = element.select("h2").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
     }
-
 
     override fun popularMangaNextPageSelector() = "a[rel=next]"
     override fun popularMangaRequest(page: Int): Request {
@@ -64,7 +63,7 @@ class AHottie() : ParsedHttpSource() {
         var doc = document
         while (true) {
             doc.select("#main img.block").map {
-                pages.add(Page(pages.size, imageUrl=it.attr("src")))
+                pages.add(Page(pages.size, imageUrl = it.attr("src")))
             }
             val nextPageUrl = doc.select("a[rel=next]").attr("abs:href")
             if (nextPageUrl.isEmpty()) break
@@ -74,15 +73,14 @@ class AHottie() : ParsedHttpSource() {
     }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-            val pages = element.select("[role=navigation] :nth-last-child(2)")?.text() ?: "1"
-            setUrlWithoutDomain(element.select("link[rel=canonical]").attr("abs:href") + "#pages=$pages")
-            chapter_number = 0F
-            name = "GALLERY"
-            date_upload =
-                SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH).parse(element.select("time").text())?.time
-                    ?: 0L
+        val pages = element.select("[role=navigation] :nth-last-child(2)")?.text() ?: "1"
+        setUrlWithoutDomain(element.select("link[rel=canonical]").attr("abs:href") + "#pages=$pages")
+        chapter_number = 0F
+        name = "GALLERY"
+        date_upload =
+            SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH).parse(element.select("time").text())?.time
+                ?: 0L
     }
-
 
     override fun chapterListSelector() = "html"
 
@@ -109,5 +107,4 @@ class AHottie() : ParsedHttpSource() {
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Filters not implemented, use search"),
     )
-
 }
