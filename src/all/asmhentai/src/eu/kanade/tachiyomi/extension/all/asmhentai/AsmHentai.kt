@@ -76,7 +76,7 @@ class AsmHentai(
                 } +
                 listOfNotNull(
                     selectFirst(".book_page .pages h3")?.ownText()?.cleanTag(),
-                    selectFirst(".book_page h1 + h2")?.ownText()?.cleanTag()
+                    selectFirst(".book_page h1 + h2")?.ownText()
                         .let { altTitle -> if (!altTitle.isNullOrBlank()) "Alternate Title: $altTitle" else null },
                 )
             )
