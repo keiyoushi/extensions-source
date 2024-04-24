@@ -70,7 +70,9 @@ class SeriManga : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        description = document.select(".demo1").text()
+        description = document.select(".demo1").text().ifBlank {
+            document.select(".demo1").next().text()
+        }
         genre = document.select("div.spc2rcrc-links > a").joinToString { it.text() }
         status = document.select("div.is-status.is-status--green").text().let {
             parseStatus(it)
