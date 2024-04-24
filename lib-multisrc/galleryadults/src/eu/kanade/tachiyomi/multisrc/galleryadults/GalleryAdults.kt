@@ -419,7 +419,6 @@ abstract class GalleryAdults(
     protected open fun Element.getTime(): Long {
         return selectFirst(timeSelector)
             ?.attr("datetime")
-            ?.replace("T", " ")
             .toDate(simpleDateFormat)
     }
 
