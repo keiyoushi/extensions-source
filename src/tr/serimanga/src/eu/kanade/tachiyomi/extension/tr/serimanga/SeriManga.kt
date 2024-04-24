@@ -74,14 +74,14 @@ class SeriManga : ParsedHttpSource() {
             document.select(".demo1").next().text()
         }
         genre = document.select("div.spc2rcrc-links > a").joinToString { it.text() }
-        status = document.select("div.is-status.is-status--green").text().let {
+        status = document.select("div.is-status.is-status--blue").text().let {
             parseStatus(it)
         }
         thumbnail_url = document.select("[rel=image_src]").attr("href")
     }
 
     private fun parseStatus(status: String) = when {
-        status.contains("CONTINUES") -> SManga.ONGOING
+        status.contains("Devam Ediyor") -> SManga.ONGOING
         status.contains("Tamamlanmış") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
