@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.thumbnailToFull
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.toBinary
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.toDate
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -178,6 +180,8 @@ abstract class GalleryAdults(
         }
     }
 
+    protected open val idPrefixUri = "g"
+
     protected open fun searchMangaByIdRequest(id: String): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment(idPrefixUri)
@@ -197,8 +201,6 @@ abstract class GalleryAdults(
     protected open val supportSpeechless: Boolean = false
     private val useBasicSearch: Boolean
         get() = !useIntermediateSearch
-
-    private fun toBinary(boolean: Boolean) = if (boolean) "1" else "0"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // Basic search
@@ -411,14 +413,15 @@ abstract class GalleryAdults(
         )
         .joinToString("\n\n")
 
+    protected open val mangaDetailInfoSelector = ".gallery_top"
+    protected open val timeSelector = "time[datetime]"
+
     protected open fun Element.getTime(): Long {
-        return selectFirst("#main-info > div.tag-container > time")
+        return selectFirst(timeSelector)
             ?.attr("datetime")
             ?.replace("T", " ")
             .toDate(simpleDateFormat)
     }
-
-    protected open val mangaDetailInfoSelector = ".gallery_top"
 
     override fun mangaDetailsParse(document: Document): SManga {
         return document.selectFirst(mangaDetailInfoSelector)!!.run {
@@ -533,12 +536,6 @@ abstract class GalleryAdults(
         }
     }
 
-    // convert thumbnail URLs to full image URLs
-    private fun String.thumbnailToFull(): String {
-        val ext = substringAfterLast(".")
-        return replace("t.$ext", ".$ext")
-    }
-
     protected open fun getServer(document: Document, galleryId: String): String {
         val cover = document.getCover()
         return cover!!.toHttpUrl().host
@@ -615,9 +612,9 @@ abstract class GalleryAdults(
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
     private var tagsFetchAttempt = 0
-    protected var genres = emptyList<Genre>()
+    private var genres = emptyList<Genre>()
 
-    protected open fun tagsRequest(page: Int): Request {
+    private fun tagsRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("tags/popular")
             addPageUri(page)
@@ -636,7 +633,7 @@ abstract class GalleryAdults(
             }
     }
 
-    protected open fun getGenres() {
+    private fun getGenres() {
         if (genres.isEmpty() && tagsFetchAttempt < 3) {
             launchIO {
                 val tags = mutableListOf<Pair<String, String>>()
@@ -667,9 +664,9 @@ abstract class GalleryAdults(
     override fun getFilterList(): FilterList {
         getGenres()
         val filters = emptyList<Filter<*>>().toMutableList()
-
         if (useIntermediateSearch)
             filters.add(Filter.Header("HINT: Separate search term with comma (,)"))
+
         filters.add(SortOrderFilter(getSortOrderURIs()))
 
         if (genres.isEmpty()) {
@@ -703,40 +700,14 @@ abstract class GalleryAdults(
 
         filters.add(Filter.Separator())
 
-        if (useIntermediateSearch)
+        if (supportSpeechless)
             filters.add(SpeechlessFilter())
         filters.add(FavoriteFilter())
 
         return FilterList(filters)
     }
 
-    // Top 50 tags
-    protected class Genre(name: String, val uri: String) : Filter.CheckBox(name)
-    protected class GenresFilter(genres: List<Genre>) : Filter.Group<Genre>(
-        "Tags",
-        genres.map { Genre(it.name, it.uri) },
-    )
-
-    protected class SortOrderFilter(sortOrderURIs: List<Pair<String, String>>) :
-        Filter.Select<String>("Sort By", sortOrderURIs.map { it.first }.toTypedArray())
-
-    protected class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
-
-    // Speechless
-    protected class SpeechlessFilter : Filter.CheckBox("Show speechless items only", false)
-
-    // Intermediate search
-    protected class SearchFlagFilter(name: String, val uri: String, state: Boolean = true) : Filter.CheckBox(name, state)
-    protected class CategoryFilters(flags: List<SearchFlagFilter>) : Filter.Group<SearchFlagFilter>("Categories", flags)
-
-    // Advance search
-    protected class TagsFilter : Filter.Text("Tags")
-    protected class ParodiesFilter : Filter.Text("Parodies")
-    protected class ArtistsFilter : Filter.Text("Artists")
-    protected class CharactersFilter : Filter.Text("Characters")
-    protected class GroupsFilter : Filter.Text("Groups")
-
-    protected fun getSortOrderURIs() = listOf(
+    protected open fun getSortOrderURIs() = listOf(
         Pair("Popular", "pp"),
         Pair("Latest", "lt"),
     ) + if (useIntermediateSearch || supportAdvanceSearch) {
@@ -748,7 +719,7 @@ abstract class GalleryAdults(
         emptyList()
     }
 
-    protected fun getCategoryURIs() = listOf(
+    protected open fun getCategoryURIs() = listOf(
         SearchFlagFilter("Manga", "m"),
         SearchFlagFilter("Doujinshi", "d"),
         SearchFlagFilter("Western", "w"),
@@ -757,7 +728,7 @@ abstract class GalleryAdults(
         SearchFlagFilter("Game CG", "g"),
     )
 
-    protected fun getLanguageURIs() = listOf(
+    protected open fun getLanguageURIs() = listOf(
         Pair(LANGUAGE_ENGLISH, "en"),
         Pair(LANGUAGE_JAPANESE, "jp"),
         Pair(LANGUAGE_SPANISH, "es"),
@@ -766,8 +737,6 @@ abstract class GalleryAdults(
         Pair(LANGUAGE_GERMAN, "de"),
         Pair(LANGUAGE_RUSSIAN, "ru"),
     )
-
-    protected open val idPrefixUri = "g"
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
