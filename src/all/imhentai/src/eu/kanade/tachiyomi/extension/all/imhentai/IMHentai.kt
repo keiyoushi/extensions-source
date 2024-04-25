@@ -4,8 +4,8 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
-import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.cleanTag
-import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
+import eu.kanade.tachiyomi.multisrc.galleryadults.cleanTag
+import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient

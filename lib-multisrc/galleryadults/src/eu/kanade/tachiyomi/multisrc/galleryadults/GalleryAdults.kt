@@ -8,10 +8,6 @@ import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
-import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.imgAttr
-import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.thumbnailToFull
-import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.toBinary
-import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdultsUtils.toDate
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
