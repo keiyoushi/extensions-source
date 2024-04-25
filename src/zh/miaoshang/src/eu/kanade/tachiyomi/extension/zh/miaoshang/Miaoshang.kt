@@ -35,6 +35,10 @@ class Miaoshang : MCCMS(
                     .selectFirst("img[$lazyLoadImageAttr]")?.attr(lazyLoadImageAttr).let { imageUrl ->
                         Page(i, imageUrl = imageUrl)
                     }
+            }.ifEmpty {
+                document.select("img[$lazyLoadImageAttr]").mapIndexed { i, img ->
+                    Page(i, imageUrl = img.attr(lazyLoadImageAttr))
+                }
             }
         }
     }
