@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.elarcpage
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -63,12 +64,10 @@ class ElarcPage : MangaThemesia(
             request.url.toString(),
         )
 
-        document.select("#menu-item-14 > a, a:contains(All Series), #main-menu a, .mm a")
-            .reversed()
-            .map { it.attr("href") }
-            .lastOrNull { it.length >= 2 && it[0] == '/' }
+        document.selectFirst(".serieslist > ul > li a.series")
             ?.let {
-                setMangaUrlDirectory(it)
+                val mangaUrlDirectory = it.attr("abs:href").toHttpUrl().pathSegments.first()
+                setMangaUrlDirectory("/$mangaUrlDirectory")
                 dynamicUrlUpdated = timeNow
             }
 
