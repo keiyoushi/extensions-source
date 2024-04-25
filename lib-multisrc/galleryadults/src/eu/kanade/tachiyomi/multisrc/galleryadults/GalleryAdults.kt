@@ -4,14 +4,9 @@ import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -70,20 +65,9 @@ abstract class GalleryAdults(
             setDefaultValue(PARSE_METHOD_DEFAULT_VALUE)
             summary = "%s"
         }.also(screen::addPreference)
-
-        addRandomUAPreferenceToScreen(screen)
     }
 
-    override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
-            .setRandomUserAgent(
-                userAgentType = preferences.getPrefUAType(),
-                customUA = preferences.getPrefCustomUA(),
-                filterInclude = listOf("chrome"),
-            )
-            .rateLimit(4)
-            .build()
-    }
+    override val client: OkHttpClient = network.cloudflareClient
 
     protected open val xhrHeaders = headers.newBuilder()
         .add("X-Requested-With", "XMLHttpRequest")
