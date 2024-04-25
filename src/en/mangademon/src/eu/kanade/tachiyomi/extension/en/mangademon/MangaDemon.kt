@@ -28,7 +28,7 @@ class MangaDemon : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = true
     override val name = "Manga Demon"
-    override val baseUrl = "https://demonreader.org"
+    override val baseUrl = "https://comicdemons.com"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
