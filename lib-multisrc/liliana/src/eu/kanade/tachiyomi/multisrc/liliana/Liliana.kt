@@ -342,6 +342,7 @@ abstract class Liliana(
         val imgHeaders = headersBuilder().apply {
             add("Accept", "image/avif,image/webp,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
+            removeAll("Referer")
         }.build()
         return GET(page.imageUrl!!, imgHeaders)
     }
