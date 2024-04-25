@@ -78,9 +78,9 @@ class HentaiFox(
      * - use double quote(") to search for exact match.
      */
     override fun buildQueryString(tags: List<String>, query: String): String {
+        val regexSpecialCharacters = Regex("""[^a-zA-Z0-9"]+""")
         return (tags + query).filterNot { it.isBlank() }.joinToString("+") {
-            // replace any special character
-            it.trim().replace(Regex("""[^a-zA-Z0-9"]+"""), "+")
+            it.trim().replace(regexSpecialCharacters, "+")
         }
     }
 

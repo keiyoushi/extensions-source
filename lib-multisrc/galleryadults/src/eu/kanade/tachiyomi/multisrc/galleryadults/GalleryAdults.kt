@@ -266,12 +266,11 @@ abstract class GalleryAdults(
                         if (key != null) {
                             keys.addAll(
                                 filter.state.trim()
-                                    // any space except after a comma (we're going to replace spaces only between words)
-                                    .replace(Regex("""(?<!,)\s+"""), "+")
+                                    .replace(regexSpaceNotAfterComma, "+")
                                     .replace(" ", "")
                                     .split(',')
                                     .mapNotNull {
-                                        val match = Regex("""^(-?)"?(.+)"?""").find(it)
+                                        val match = regexExcludeTerm.find(it)
                                         match?.groupValues?.let { groups ->
                                             "${if (groups[1].isNotBlank()) "-" else "%2B"}$key:\"${groups[2]}\""
                                         }
@@ -339,7 +338,7 @@ abstract class GalleryAdults(
         return (tags + query).filterNot { it.isBlank() }.joinToString(",") {
             // any space except after a comma (we're going to replace spaces only between words)
             it.trim()
-                .replace(Regex("""(?<!,)\s+"""), "+")
+                .replace(regexSpaceNotAfterComma, "+")
                 .replace(" ", "")
         }
     }

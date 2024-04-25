@@ -5,6 +5,16 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
+// any space except after a comma (we're going to replace spaces only between words)
+val regexSpaceNotAfterComma = Regex("""(?<!,)\s+""")
+// extract preceding minus (-) and term
+val regexExcludeTerm = Regex("""^(-?)"?(.+)"?""")
+val regexTagCountNumber = Regex("\\([0-9,]*\\)")
+val regexDateSuffix = Regex("""\d(st|nd|rd|th)""")
+val regexDate = Regex("""\d\D\D""")
+val regexNotNumber = Regex("""\D""")
+val regexRelativeDateTime = Regex("""\d*[^0-9]*(\d+)""")
+
 fun Element.imgAttr() = when {
     hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
     hasAttr("data-src") -> absUrl("data-src")
@@ -14,7 +24,7 @@ fun Element.imgAttr() = when {
 }!!
 
 fun Element.cleanTag(): String = text().cleanTag()
-fun String.cleanTag(): String = replace(Regex("\\([0-9,]*\\)"), "").trim()
+fun String.cleanTag(): String = replace(regexTagCountNumber, "").trim()
 
 // convert thumbnail URLs to full image URLs
 fun String.thumbnailToFull(): String {
@@ -26,11 +36,11 @@ fun String?.toDate(simpleDateFormat: SimpleDateFormat?): Long {
     this ?: return 0L
 
     return if (simpleDateFormat != null) {
-        if (contains(Regex("""\d(st|nd|rd|th)"""))) {
+        if (contains(regexDateSuffix)) {
             // Clean date (e.g. 5th December 2019 to 5 December 2019) before parsing it
             split(" ").map {
-                if (it.contains(Regex("""\d\D\D"""))) {
-                    it.replace(Regex("""\D"""), "")
+                if (it.contains(regexDate)) {
+                    it.replace(regexNotNumber, "")
                 } else {
                     it
                 }
@@ -87,7 +97,7 @@ private fun parseDate(date: String?): Long {
 
 // Parses dates in this form: 21 hours ago OR "2 days ago (Updated 19 hours ago)"
 private fun parseRelativeDate(date: String): Long {
-    val number = Regex("""\d*[^0-9]*(\d+)""").find(date)?.value?.toIntOrNull()
+    val number = regexRelativeDateTime.find(date)?.value?.toIntOrNull()
         ?: date.split(" ").firstOrNull()
             ?.replace("one", "1")
             ?.replace("a", "1")
