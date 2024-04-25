@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.imhentai
 
+import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.cleanTag
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -13,12 +15,14 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 
 class IMHentai(
     lang: String = "all",
     override val mangaLang: String = LANGUAGE_MULTI,
-) : GalleryAdults(
+) : ConfigurableSource, GalleryAdults(
     "IMHentai",
     "https://imhentai.xxx",
     lang = lang,
@@ -27,6 +31,10 @@ class IMHentai(
     override val useIntermediateSearch: Boolean = true
     override val supportAdvanceSearch: Boolean = true
     override val supportSpeechless: Boolean = true
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     private val SharedPreferences.shortTitle
         get() = getBoolean(PREF_SHORT_TITLE, false)
@@ -43,8 +51,6 @@ class IMHentai(
             summaryOn = "Showing short Titles"
             setDefaultValue(false)
         }.also(screen::addPreference)
-
-        super.setupPreferenceScreen(screen)
     }
 
     override fun Element.mangaTitle(selector: String) =
@@ -93,6 +99,8 @@ class IMHentai(
         ).build()
 
     override val favoritePath = "user/fav_pags.php"
+
+    override fun pageListParse(document: Document) = pageListParseJSON(document)
 
     /* Details */
     override fun Element.getInfo(tag: String): String {
