@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.serimanga
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -112,7 +111,6 @@ class SeriManga : ParsedHttpSource() {
         date_upload = try {
             dateFormat.parse(element.select("span")[2].ownText())?.time ?: 0
         } catch (e: ParseException) {
-            Log.e("SeriManga", e.toString())
             0
         }
     }
