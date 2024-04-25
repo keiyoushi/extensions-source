@@ -11,6 +11,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -68,16 +69,18 @@ class SeriManga : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        description = document.select(".demo1").text()
+        description = document.select(".demo1").text().ifBlank {
+            document.select(".demo1").next().text()
+        }
         genre = document.select("div.spc2rcrc-links > a").joinToString { it.text() }
-        status = document.select("div.is-status.is-status--green").text().let {
+        status = document.select("div.is-status.is-status--blue").text().let {
             parseStatus(it)
         }
         thumbnail_url = document.select("[rel=image_src]").attr("href")
     }
 
     private fun parseStatus(status: String) = when {
-        status.contains("CONTINUES") -> SManga.ONGOING
+        status.contains("Devam Ediyor") -> SManga.ONGOING
         status.contains("Tamamlanmış") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
@@ -105,12 +108,16 @@ class SeriManga : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.select("a").attr("href"))
         name = "${element.select("span").first()!!.text()}: ${element.select("span")[1].text()}"
-        date_upload = dateFormat.parse(element.select("span")[2].ownText())?.time ?: 0
+        date_upload = try {
+            dateFormat.parse(element.select("span")[2].ownText())?.time ?: 0
+        } catch (e: ParseException) {
+            0
+        }
     }
 
     companion object {
         val dateFormat by lazy {
-            SimpleDateFormat("dd MMMM yyyy", Locale("tr"))
+            SimpleDateFormat("dd MMMM yyyy", Locale("en"))
         }
     }
 
