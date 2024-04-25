@@ -7,8 +7,10 @@ import java.util.Calendar
 
 // any space except after a comma (we're going to replace spaces only between words)
 val regexSpaceNotAfterComma = Regex("""(?<!,)\s+""")
+
 // extract preceding minus (-) and term
 val regexExcludeTerm = Regex("""^(-?)"?(.+)"?""")
+
 val regexTagCountNumber = Regex("\\([0-9,]*\\)")
 val regexDateSuffix = Regex("""\d(st|nd|rd|th)""")
 val regexDate = Regex("""\d\D\D""")
