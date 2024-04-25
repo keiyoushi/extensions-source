@@ -516,6 +516,8 @@ abstract class GalleryAdults(
             .add("type", "2") // 1 would be "more", 2 is "all remaining"
             .build()
 
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
     /* Filters */
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
