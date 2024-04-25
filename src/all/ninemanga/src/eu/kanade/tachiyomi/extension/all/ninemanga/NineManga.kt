@@ -97,7 +97,6 @@ open class NineManga(
         element.select("a.chapter_list_a").let {
             name = it.text().replace(mangaTitleForCleaning, "", true)
             url = it.attr("href").substringAfter(baseUrl).replace("%20", " ")
-                .substringBeforeLast(".html") + "-1-1.html"
         }
         date_upload = parseChapterDate(element.select("span").text())
     }
