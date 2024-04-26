@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.thunderscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.source.SourceFactory
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -12,7 +13,7 @@ class ThunderScansFactory : SourceFactory {
     )
 }
 
-class ThunderScansAR : MangaThemesia(
+class ThunderScansAR : MangaThemesiaAlt(
     "Thunder Scans",
     "https://thunderscans.com",
     "ar",
