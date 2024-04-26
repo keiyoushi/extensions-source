@@ -9,6 +9,6 @@ class CeriseScan : PeachScan("Cerise Scan", "https://cerisetoon.com", "pt-BR") {
     override val versionId: Int = 2
 
     override val client = super.client.newBuilder()
-        .rateLimit(3, 2)
+        .rateLimit(1, 2)
         .build()
 }
