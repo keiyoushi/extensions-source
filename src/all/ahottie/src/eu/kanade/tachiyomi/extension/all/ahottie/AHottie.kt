@@ -75,7 +75,7 @@ class AHottie() : ParsedHttpSource() {
             }
             val nextPageUrl = doc.select("a[rel=next]").attr("abs:href")
             if (nextPageUrl.isEmpty()) break
-            doc = client.newCall(GET(nextPageUrl)).execute().asJsoup()
+            doc = client.newCall(GET(nextPageUrl, headers)).execute().asJsoup()
         }
         return pages
     }
