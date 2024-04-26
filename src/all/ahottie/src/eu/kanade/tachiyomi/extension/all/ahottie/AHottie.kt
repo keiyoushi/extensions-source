@@ -34,7 +34,7 @@ class AHottie() : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = "a[rel=next]"
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/?page=$page")
+        return GET("$baseUrl/?page=$page", headers)
     }
 
     override fun popularMangaSelector() = "#main > div > div"
