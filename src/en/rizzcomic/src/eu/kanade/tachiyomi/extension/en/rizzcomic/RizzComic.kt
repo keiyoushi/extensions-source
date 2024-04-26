@@ -23,7 +23,7 @@ import java.util.Locale
 
 class RizzComic : MangaThemesiaAlt(
     "Rizz Comic",
-    "https://rizzfables.com/",
+    "https://rizzfables.com",
     "en",
     mangaUrlDirectory = "/series",
     dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
