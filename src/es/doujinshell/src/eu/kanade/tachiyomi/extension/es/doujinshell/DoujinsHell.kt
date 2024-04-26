@@ -35,11 +35,10 @@ class DoujinsHell : Madara(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return super.pageListParse(document).let { pages ->
+        return super.pageListParse(document).also { pages ->
             if (pages.isEmpty() && document.select(".reading-content iframe").isNotEmpty()) {
                 throw Exception("No se admiten vídeos")
             }
-            pages
         }
     }
 }
