@@ -44,16 +44,14 @@ class AHottie() : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return when {
-            query.isNotEmpty() -> GET(
-                baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("search")
-                    addQueryParameter("kw", query)
-                    addQueryParameter("page", page.toString())
-                }.build(),
-            )
-            else -> popularMangaRequest(page)
-        }
+        return GET(
+            baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("search")
+                addQueryParameter("kw", query)
+                addQueryParameter("page", page.toString())
+            }.build(),
+            headers,
+        )
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
