@@ -63,8 +63,6 @@ class IMHentai(
 
     override val favoritePath = "user/fav_pags.php"
 
-    override fun pageListParse(document: Document) = pageListParseJSON(document)
-
     /* Details */
     override fun Element.getInfo(tag: String): String {
         return select("li:has(.tags_text:contains($tag:)) .tag").map {

@@ -59,6 +59,9 @@ abstract class GalleryAdults(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
+    protected val SharedPreferences.scrapingImage
+        get() = getBoolean(PREF_PARSE_IMAGES, false)
+
     protected val SharedPreferences.shortTitle
         get() = getBoolean(PREF_SHORT_TITLE, false)
 
@@ -70,6 +73,12 @@ abstract class GalleryAdults(
             title = "Display Short Titles"
             summaryOff = "Showing Long Titles"
             summaryOn = "Showing short Titles"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_PARSE_IMAGES
+            title = "Parsing photo one by one, it helps if you notice some pages is missing or unable to load"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
@@ -458,22 +467,29 @@ abstract class GalleryAdults(
     protected open val pageUri = "g"
     protected open val pageSelector = ".gallery_thumb"
 
+    protected open val pagesRequest = "inc/thumbs_loader.php"
+
     private val jsonFormat: Json by injectLazy()
 
-    protected open fun pageListParseJSON(document: Document): List<Page> {
+    protected open fun getServer(document: Document, galleryId: String): String {
+        val cover = document.getCover()
+        return cover!!.toHttpUrl().host
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
         val json = document.selectFirst("script:containsData(var g_th)")?.data()
             ?.substringAfter("$.parseJSON('")
             ?.substringBefore("');")?.trim()
 
-        val loadDir = document.inputIdValueOf(loadDirSelector)
-        val loadId = document.inputIdValueOf(loadIdSelector)
-        val galleryId = document.inputIdValueOf(galleryIdSelector)
-        val pageUrl = "$baseUrl/$pageUri/$galleryId"
-
-        val randomServer = getServer(document, galleryId)
-        val imagesUri = "https://$randomServer/$loadDir/$loadId"
-
         if (json != null) {
+            val loadDir = document.inputIdValueOf(loadDirSelector)
+            val loadId = document.inputIdValueOf(loadIdSelector)
+            val galleryId = document.inputIdValueOf(galleryIdSelector)
+            val pageUrl = "$baseUrl/$pageUri/$galleryId"
+
+            val randomServer = getServer(document, galleryId)
+            val imagesUri = "https://$randomServer/$loadDir/$loadId"
+
             val images = jsonFormat.parseToJsonElement(json).jsonObject
             val pages = mutableListOf<Page>()
 
@@ -497,45 +513,97 @@ abstract class GalleryAdults(
             }
             return pages
         } else {
-            return this.pageListParse(document)
+            return this.pageListParseAlternative(document)
         }
     }
 
-    protected open fun getServer(document: Document, galleryId: String): String {
-        val cover = document.getCover()
-        return cover!!.toHttpUrl().host
-    }
-
-    protected open val pagesRequest = "inc/thumbs_loader.php"
-
     /**
-     * Method to request then parse for a list of manga's page's URL,
-     * which will then request one by one to parse for page's image's URL.
-     * This method will be used when user set in preference.
+     * Either:
+     *  - Load all thumbnails then convert thumbnails to full images.
+     *  - Or request then parse for a list of manga's page's URL,
+     *   which will then request one by one to parse for page's image's URL using [imageUrlParse].
      */
-    override fun pageListParse(document: Document): List<Page> {
+    protected open fun pageListParseAlternative(document: Document): List<Page> {
         // input only exists if pages > 10 and have to make a request to get the other thumbnails
         val totalPages = document.inputIdValueOf(totalPagesSelector)
-
         val galleryId = document.inputIdValueOf(galleryIdSelector)
         val pageUrl = "$baseUrl/$pageUri/$galleryId"
+        val thumbnailConverting = !preferences.scrapingImage
 
-        val pageUrls = document.select("$pageSelector a")
-            .map { it.selectFirst("img")!!.imgAttr() }
+        val pages = document.select("$pageSelector a")
+            .map {
+                if (thumbnailConverting) {
+                    it.selectFirst("img")!!.imgAttr()
+                } else {
+                    it.absUrl("href")
+                }
+            }
             .toMutableList()
 
         if (totalPages.isNotBlank()) {
             val form = pageRequestForm(document, totalPages)
 
-            client.newCall(POST("$baseUrl/$pagesRequest", xhrHeaders, form))
+            val morePages = client.newCall(POST("$baseUrl/$pagesRequest", xhrHeaders, form))
                 .execute()
                 .asJsoup()
                 .select("a")
-                .mapTo(pageUrls) {
-                    it.selectFirst("img")!!.imgAttr()
+                .map {
+                    if (thumbnailConverting) {
+                        it.selectFirst("img")!!.imgAttr()
+                    } else {
+                        it.absUrl("href")
+                    }
                 }
+            if (morePages.isNotEmpty()) {
+                pages.addAll(morePages)
+            } else {
+                return pageListParseDummy(document)
+            }
         }
-        return pageUrls.mapIndexed { idx, url ->
+
+        return pages.mapIndexed { idx, url ->
+            if (thumbnailConverting) {
+                Page(
+                    index = idx,
+                    imageUrl = url.thumbnailToFull(),
+                    url = "$pageUrl/$idx/",
+                )
+            } else {
+                Page(idx, url)
+            }
+        }
+    }
+
+    /**
+     * Generate all images using `totalPages`. Supposedly they are sequential.
+     * Use in case any extension doesn't know how to request for "All thumbnails"
+     */
+    protected open fun pageListParseDummy(document: Document): List<Page> {
+        val loadDir = document.inputIdValueOf(loadDirSelector)
+        val loadId = document.inputIdValueOf(loadIdSelector)
+        val galleryId = document.inputIdValueOf(galleryIdSelector)
+        val pageUrl = "$baseUrl/$pageUri/$galleryId"
+
+        val randomServer = getServer(document, galleryId)
+        val imagesUri = "https://$randomServer/$loadDir/$loadId"
+
+        val images = document.select("$pageSelector img")
+        val thumbUrls = images.map { it.imgAttr() }.toMutableList()
+
+        // totalPages only exists if pages > 10 and have to make a request to get the other thumbnails
+        val totalPages = document.inputIdValueOf(totalPagesSelector)
+
+        if (totalPages.isNotBlank()) {
+            val imagesExt = images.first()?.imgAttr()!!
+                .substringAfterLast('.')
+
+            thumbUrls.addAll(
+                listOf((images.size + 1)..totalPages.toInt()).flatten().map {
+                    "$imagesUri/${it}t.$imagesExt"
+                },
+            )
+        }
+        return thumbUrls.mapIndexed { idx, url ->
             Page(
                 index = idx,
                 imageUrl = url.thumbnailToFull(),
@@ -554,7 +622,9 @@ abstract class GalleryAdults(
             .add("type", "2") // 1 would be "more", 2 is "all remaining"
             .build()
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String {
+        return document.selectFirst("img#gimg, img#fimg")?.imgAttr()!!
+    }
 
     /* Filters */
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -689,9 +759,10 @@ abstract class GalleryAdults(
     )
 
     companion object {
-        private const val PREF_SHORT_TITLE = "pref_short_title"
-
         const val PREFIX_ID_SEARCH = "id:"
+
+        private const val PREF_SHORT_TITLE = "pref_short_title"
+        private const val PREF_PARSE_IMAGES = "pref_parse_images_methods"
 
         // references to be used in factory
         const val LANGUAGE_MULTI = ""

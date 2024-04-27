@@ -67,8 +67,6 @@ class HentaiFox(
     /* Pages */
     override val pagesRequest = "includes/thumbs_loader.php"
 
-    override fun pageListParse(document: Document) = pageListParseJSON(document)
-
     override fun getServer(document: Document, galleryId: String): String {
         val domain = baseUrl.toHttpUrl().host
         // Randomly choose between servers
