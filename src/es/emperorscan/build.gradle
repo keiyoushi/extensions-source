@@ -2,8 +2,8 @@ ext {
     extName = 'Emperor Scan'
     extClass = '.EmperorScan'
     themePkg = 'madara'
-    baseUrl = 'https://emperorscan.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://emperorscan.org'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
