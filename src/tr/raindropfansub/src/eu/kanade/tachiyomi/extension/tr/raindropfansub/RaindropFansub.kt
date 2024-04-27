@@ -21,23 +21,19 @@ class RaindropFansub : MangaThemesia(
         val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
         val chapters = super.chapterListParse(response)
 
-        return document.selectFirst("a:has(.epcurlast)")
+        val lastChapterUrl = document
+            .selectFirst("a:has(.epcurlast)")
             ?.attr("href")
             ?.let {
                 val dummyChapter = SChapter.create()
                 dummyChapter.setUrlWithoutDomain(it)
-                val url = dummyChapter.url
+                dummyChapter.url
+            }
 
-                if (chapters.first().url == url) {
-                    // Last chapter was in the first index, descending as expected by Tachiyomi API
-                    chapters
-                } else if (chapters.last().url == url) {
-                    // Last chapter was in the last index, ascending, we reverse it
-                    chapters.reversed()
-                } else {
-                    // Last chapter wasn't found. Site sort is ascending, we reverse it
-                    chapters.reversed()
-                }
-            } ?: chapters.reversed() // Missing button. Site sort is ascending, we reverse it
+        return when {
+            chapters.first().url == lastChapterUrl -> chapters
+            chapters.last().url == lastChapterUrl -> chapters.reversed()
+            else -> chapters.reversed()
+        }
     }
 }
