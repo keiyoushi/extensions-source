@@ -1,0 +1,9 @@
+ext {
+    extName = 'SapphireScan'
+    extClass = '.SapphireScan'
+    themePkg = 'madara'
+    baseUrl = 'https://sapphirescan.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

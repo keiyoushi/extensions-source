@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
@@ -9,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,9 +32,12 @@ class IkigaiMangas : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
+    private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "data-saving" to "0")
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
+        .addNetworkInterceptor(cookieInterceptor)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -102,7 +107,7 @@ class IkigaiMangas : HttpSource() {
         return MangasPage(mangaList, result.hasNextPage())
     }
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("#")
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url
@@ -141,14 +146,13 @@ class IkigaiMangas : HttpSource() {
         return mangas
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url.substringAfter("/capitulo/")
-        return GET("$apiBaseUrl/api/swf/chapters/$id", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request =
+        GET(baseUrl + chapter.url.substringBefore("#"), headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        return json.decodeFromString<PayloadPagesDto>(response.body.string()).chapter.pages.mapIndexed { i, img ->
-            Page(i, "", img)
+        val document = response.asJsoup()
+        return document.select("section > div.img > img").mapIndexed { i, element ->
+            Page(i, imageUrl = element.attr("abs:src"))
         }
     }
 

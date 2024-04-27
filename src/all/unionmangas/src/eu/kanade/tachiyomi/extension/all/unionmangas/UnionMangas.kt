@@ -32,7 +32,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     override val name: String = "Union Mangas"
 
-    override val baseUrl: String = "https://unionmangas.xyz"
+    override val baseUrl: String = "https://unionmangasbr.org"
 
     override val supportsLatest = true
 

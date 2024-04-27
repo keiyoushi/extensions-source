@@ -1,8 +1,16 @@
 package eu.kanade.tachiyomi.extension.es.plottwistnofansub
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,9 +32,11 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Entities
 import org.jsoup.select.Elements
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
-class PlotTwistNoFansub : ParsedHttpSource() {
+class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Plot Twist No Fansub"
 
@@ -38,9 +48,20 @@ class PlotTwistNoFansub : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x000)
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .build()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
+    }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", "$baseUrl/")
@@ -117,7 +138,7 @@ class PlotTwistNoFansub : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val mangaId = document.selectFirst("div.td-ss-main-content > article[id^=post-]")!!.id().substringAfter("-")
+        val mangaId = document.selectFirst(".chapters-container .row.itemlist p[data-mangaid]")!!.attr("data-mangaid")
 
         val key = getKey(document)
         val url = "$baseUrl/wp-admin/admin-ajax.php"
