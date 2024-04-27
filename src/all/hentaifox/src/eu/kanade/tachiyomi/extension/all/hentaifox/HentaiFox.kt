@@ -35,8 +35,9 @@ class HentaiFox(
         .split(' ').let {
             when {
                 it.contains(langCode) -> mangaLang
-                // search result doesn't have "data-languages"
+                // search result doesn't have "data-languages" which will return a list with 1 blank element
                 it.size > 1 || (it.size == 1 && it.first().isNotBlank()) -> "other"
+                // if we don't know which language to filter then set to mangaLang to not filter at all
                 else -> mangaLang
             }
         }
@@ -76,14 +77,14 @@ class HentaiFox(
 
     /**
      * Convert space( ) typed in search-box into plus(+) in URL. Then:
-     * - ignore the word preceding by a special character (e.g. school-girl will ignore girl)
+     * - ignore the word preceding by a special character (e.g. 'school-girl' will ignore 'girl')
      *    => replace to plus(+),
      * - use plus(+) for separate terms, as AND condition.
      * - use double quote(") to search for exact match.
      */
     override fun buildQueryString(tags: List<String>, query: String): String {
-        val regexSpecialCharacters = Regex("""[^a-zA-Z0-9"]+""")
-        return (tags + query).filterNot { it.isBlank() }.joinToString("+") {
+        val regexSpecialCharacters = Regex("""[^a-zA-Z0-9"]+(?=[a-zA-Z0-9"])""")
+        return (tags + query + mangaLang).filterNot { it.isBlank() }.joinToString("+") {
             it.trim().replace(regexSpecialCharacters, "+")
         }
     }
