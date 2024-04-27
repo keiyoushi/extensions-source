@@ -1,60 +1,23 @@
 package eu.kanade.tachiyomi.extension.all.asmhentai
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.cleanTag
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.FormBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class AsmHentai(
     lang: String = "all",
     override val mangaLang: String = LANGUAGE_MULTI,
-) : ConfigurableSource, GalleryAdults(
+) : GalleryAdults(
     "AsmHentai",
     "https://asmhentai.com",
     lang = lang,
 ) {
     override val supportsLatest = mangaLang.isNotBlank()
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
-
-    private val SharedPreferences.shortTitle
-        get() = getBoolean(PREF_SHORT_TITLE, false)
-
-    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
-
-    private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_SHORT_TITLE
-            title = "Display Short Titles"
-            summaryOff = "Showing Long Titles"
-            summaryOn = "Showing short Titles"
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-    }
-
-    override fun Element.mangaTitle(selector: String) =
-        mangaFullTitle(selector).let {
-            if (preferences.shortTitle) it?.shortenTitle() else it
-        }
-
-    private fun Element.mangaFullTitle(selector: String) =
-        selectFirst(selector)?.text()
-            ?.replace("\"", "")?.trim()
 
     override fun Element.mangaUrl() =
         selectFirst(".image a")?.attr("abs:href")
@@ -136,8 +99,4 @@ class AsmHentai(
             Filter.Header("HINT: Separate search term with comma (,)"),
         ) + super.getFilterList().list,
     )
-
-    companion object {
-        private const val PREF_SHORT_TITLE = "pref_short_title"
-    }
 }

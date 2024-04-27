@@ -41,6 +41,8 @@ class HentaiFox(
             }
         }
 
+    override fun Element.mangaTitle(selector: String): String? = mangaFullTitle(selector)
+
     override fun Element.getTime(): Long {
         return selectFirst(".pages:contains(Posted:)")?.ownText()
             ?.removePrefix("Posted: ")

@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.multisrc.galleryadults
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -29,6 +34,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 
@@ -38,7 +45,7 @@ abstract class GalleryAdults(
     override val lang: String = "all",
     protected open val mangaLang: String = LANGUAGE_MULTI,
     protected val simpleDateFormat: SimpleDateFormat? = null,
-) : ParsedHttpSource() {
+) : ConfigurableSource, ParsedHttpSource() {
 
     override val supportsLatest = false
 
@@ -48,6 +55,35 @@ abstract class GalleryAdults(
         .add("X-Requested-With", "XMLHttpRequest")
         .build()
 
+    protected val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    protected val SharedPreferences.shortTitle
+        get() = getBoolean(PREF_SHORT_TITLE, false)
+
+    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHORT_TITLE
+            title = "Display Short Titles"
+            summaryOff = "Showing Long Titles"
+            summaryOn = "Showing short Titles"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    protected open fun Element.mangaTitle(selector: String = ".caption"): String? =
+        mangaFullTitle(selector).let {
+            if (preferences.shortTitle) it?.shortenTitle() else it
+        }
+
+    protected fun Element.mangaFullTitle(selector: String) =
+        selectFirst(selector)?.text()
+
+    private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
+
     /* List detail */
     protected class SMangaDto(
         val title: String,
@@ -55,9 +91,6 @@ abstract class GalleryAdults(
         val thumbnail: String?,
         val lang: String,
     )
-
-    protected open fun Element.mangaTitle(selector: String = ".caption"): String? =
-        selectFirst(selector)?.text()
 
     protected open fun Element.mangaUrl() =
         selectFirst(".inner_thumb a")?.attr("abs:href")
@@ -651,6 +684,8 @@ abstract class GalleryAdults(
     )
 
     companion object {
+        private const val PREF_SHORT_TITLE = "pref_short_title"
+
         const val PREFIX_ID_SEARCH = "id:"
 
         // references to be used in factory
