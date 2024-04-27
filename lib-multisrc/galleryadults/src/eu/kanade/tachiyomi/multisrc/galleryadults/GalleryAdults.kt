@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.multisrc.galleryadults
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import okhttp3.FormBody
@@ -477,7 +479,7 @@ abstract class GalleryAdults(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val json = document.selectFirst("script:containsData(var g_th)")?.data()
+        val json = document.selectFirst("script:containsData(parseJSON)")?.data()
             ?.substringAfter("$.parseJSON('")
             ?.substringBefore("');")?.trim()
 
@@ -490,28 +492,33 @@ abstract class GalleryAdults(
             val randomServer = getServer(document, galleryId)
             val imagesUri = "https://$randomServer/$loadDir/$loadId"
 
-            val images = jsonFormat.parseToJsonElement(json).jsonObject
-            val pages = mutableListOf<Page>()
+            try {
+                val pages = mutableListOf<Page>()
+                val images = jsonFormat.parseToJsonElement(json).jsonObject
 
-            // JSON string in this form: {"1":"j,1100,1148","2":"j,728,689",...
-            for (image in images) {
-                val ext = image.value.toString().replace("\"", "").split(",")[0]
-                val imageExt = when (ext) {
-                    "p" -> "png"
-                    "b" -> "bmp"
-                    "g" -> "gif"
-                    else -> "jpg"
+                // JSON string in this form: {"1":"j,1100,1148","2":"j,728,689",...
+                for (image in images) {
+                    val ext = image.value.toString().replace("\"", "").split(",")[0]
+                    val imageExt = when (ext) {
+                        "p" -> "png"
+                        "b" -> "bmp"
+                        "g" -> "gif"
+                        else -> "jpg"
+                    }
+                    val idx = image.key.toInt()
+                    pages.add(
+                        Page(
+                            index = idx,
+                            imageUrl = "$imagesUri/${image.key}.$imageExt",
+                            url = "$pageUrl/$idx/",
+                        ),
+                    )
                 }
-                val idx = image.key.toInt()
-                pages.add(
-                    Page(
-                        index = idx,
-                        imageUrl = "$imagesUri/${image.key}.$imageExt",
-                        url = "$pageUrl/$idx/",
-                    ),
-                )
+                return pages
+            } catch (e: SerializationException) {
+                Log.e("GalleryAdults", "Failed to decode JSON")
+                return this.pageListParseAlternative(document)
             }
-            return pages
         } else {
             return this.pageListParseAlternative(document)
         }
