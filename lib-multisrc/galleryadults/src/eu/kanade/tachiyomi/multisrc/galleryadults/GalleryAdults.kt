@@ -142,8 +142,6 @@ abstract class GalleryAdults(
         return GET(url.build(), headers)
     }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
@@ -164,7 +162,11 @@ abstract class GalleryAdults(
                     .asObservableSuccess()
                     .map { response -> searchMangaByIdParse(response, query) }
             }
-            else -> super.fetchSearchManga(page, query, filters)
+            else -> {
+                client.newCall(searchMangaRequest(page, query, filters))
+                    .asObservableSuccess()
+                    .map { response -> searchMangaParse(response) }
+            }
         }
     }
 
@@ -179,7 +181,7 @@ abstract class GalleryAdults(
     }
 
     protected open fun searchMangaByIdParse(response: Response, id: String): MangasPage {
-        val details = mangaDetailsParse(response)
+        val details = mangaDetailsParse(response.asJsoup())
         details.url = "/$idPrefixUri/$id/"
         return MangasPage(listOf(details), false)
     }
@@ -349,6 +351,7 @@ abstract class GalleryAdults(
         if (loginRequired(document, response.request.url.toString())) {
             throw Exception("Log in via WebView to view favorites")
         } else {
+            val hasNextPage = document.select(searchMangaNextPageSelector()).isNotEmpty()
             val mangas = document.select(searchMangaSelector())
                 .map {
                     SMangaDto(
@@ -359,7 +362,9 @@ abstract class GalleryAdults(
                     )
                 }
                 .let { unfiltered ->
-                    if (mangaLang.isNotBlank()) unfiltered.filter { it.lang == mangaLang } else unfiltered
+                    val results = unfiltered.filter { mangaLang.isBlank() || it.lang == mangaLang }
+                    // return at least 1 title if all mangas in current page is of other languages
+                    if (results.isEmpty() && hasNextPage) listOf(unfiltered[0]) else results
                 }
                 .map {
                     SManga.create().apply {
@@ -369,7 +374,7 @@ abstract class GalleryAdults(
                     }
                 }
 
-            return MangasPage(mangas, document.select(searchMangaNextPageSelector()).isNotEmpty())
+            return MangasPage(mangas, hasNextPage)
         }
     }
 
