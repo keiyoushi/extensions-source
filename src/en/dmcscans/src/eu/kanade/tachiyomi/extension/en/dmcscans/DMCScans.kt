@@ -65,7 +65,9 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
             ?.replace("\\/", "/")
             ?.replace("\\:", ":")
             ?.let(Jsoup::parseBodyFragment)
-            ?: return super.pageListParse(response)
+            ?: return document.select(pageListSelector).select("img[src]").mapIndexed { i, img ->
+                Page(i, "", img.attr("abs:src"))
+        }
 
         return imgData.select("img[src]").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))
