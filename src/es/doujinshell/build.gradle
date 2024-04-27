@@ -1,0 +1,10 @@
+ext {
+    extName = 'DoujinsHell'
+    extClass = '.DoujinsHell'
+    themePkg = 'madara'
+    baseUrl = 'https://www.doujinshell.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
