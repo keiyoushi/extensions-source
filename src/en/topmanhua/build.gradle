@@ -2,8 +2,9 @@ ext {
     extName = 'Top Manhua'
     extClass = '.TopManhua'
     themePkg = 'madara'
-    baseUrl = 'https://topmanhua.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://mangatop.org'
+    overrideVersionCode = 4
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
