@@ -49,8 +49,6 @@ abstract class GalleryAdults(
     protected val simpleDateFormat: SimpleDateFormat? = null,
 ) : ConfigurableSource, ParsedHttpSource() {
 
-    override val supportsLatest = false
-
     override val client: OkHttpClient = network.cloudflareClient
 
     protected open val xhrHeaders = headers.newBuilder()
