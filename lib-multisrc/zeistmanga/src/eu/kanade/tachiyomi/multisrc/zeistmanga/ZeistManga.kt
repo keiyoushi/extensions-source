@@ -434,6 +434,6 @@ abstract class ZeistManga(
 
     companion object {
         private const val maxMangaResults = 20
-        private const val maxChapterResults = 999999
+        const val maxChapterResults = 999999
     }
 }

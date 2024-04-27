@@ -7,10 +7,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import java.util.concurrent.TimeUnit
 
 class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en") {
     override val client = super.client.newBuilder()
-        .rateLimit(1, 3)
+        .rateLimit(1, 3, TimeUnit.SECONDS)
         .build()
 
     // ============================== Popular ===============================
@@ -22,13 +24,13 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     // =========================== Manga Details ============================
 
     override val mangaDetailsSelectorGenres = "#labels > a[rel=tag]"
-    override val mangaDetailsSelectorInfo = ".imptdt"
-    override val mangaDetailsSelectorDescription = "#desc"
+    override val mangaDetailsSelectorInfo = ".imptdts"
+    override val mangaDetailsSelectorDescription = "p"
+    override val mangaDetailsSelectorInfoDescription = "div:containsOwn(Status) > span"
 
     // =========================== Chapter Feed =============================
 
-    override val chapterFeedRegex = """clwd.\.run\(["'](.*?)["']\)""".toRegex()
-    override val scriptSelector = ".epcheck > script"
+    override val chapterFeedRegex = """.run\(["'](.*?)["']\)""".toRegex()
 
     // =============================== Filters ==============================
 
@@ -68,5 +70,17 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
         return imgData.select("img[src]").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))
         }
+    }
+
+    override fun getChapterFeedUrl(doc: Document): String {
+        val feed = chapterFeedRegex
+            .find(doc.html())
+            ?.groupValues?.get(1)
+            ?: throw Exception("Failed to find chapter feed")
+
+        return apiUrl(chapterCategory)
+            .addPathSegments(feed)
+            .addQueryParameter("max-results", maxChapterResults.toString())
+            .build().toString()
     }
 }
