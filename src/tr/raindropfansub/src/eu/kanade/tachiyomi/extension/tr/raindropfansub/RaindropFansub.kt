@@ -30,9 +30,9 @@ class RaindropFansub : MangaThemesia(
                 dummyChapter.url
             }
 
-        return when {
-            chapters.first().url == lastChapterUrl -> chapters
-            chapters.last().url == lastChapterUrl -> chapters.reversed()
+        return when (lastChapterUrl) {
+            chapters.first().url -> chapters
+            chapters.last().url -> chapters.reversed()
             else -> chapters.reversed()
         }
     }
