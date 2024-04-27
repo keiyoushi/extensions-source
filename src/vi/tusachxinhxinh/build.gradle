@@ -1,9 +1,9 @@
 ext {
-    extName = 'Tủ sách xinh xinh'
+    extName = 'Tusachxinhxinh'
     extClass = '.Tusachxinhxinh'
     themePkg = 'a3manga'
     baseUrl = 'https://tusachxinh.online'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
