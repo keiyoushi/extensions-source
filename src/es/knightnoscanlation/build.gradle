@@ -2,8 +2,8 @@ ext {
     extName = 'Knight No Scanlation'
     extClass = '.KnightNoScanlation'
     themePkg = 'madara'
-    baseUrl = 'https://knightnoscanlation.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://lectorkns.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
