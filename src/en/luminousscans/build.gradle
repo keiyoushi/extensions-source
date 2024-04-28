@@ -2,8 +2,9 @@ ext {
     extName = 'Luminous Scans'
     extClass = '.LuminousScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://lumitoon.com'
-    overrideVersionCode = 5
+    baseUrl = 'https://luminouscomics.org'
+    overrideVersionCode = 6
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
