@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
 class DrakeScans : MangaThemesia(
     "Drake Scans",
-    "https://drakescans.com",
+    "https://drake-scans.com",
     "en",
 ) {
     // madara -> mangathemesia
