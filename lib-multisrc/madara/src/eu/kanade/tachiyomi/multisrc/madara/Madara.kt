@@ -628,6 +628,7 @@ abstract class Madara(
         "Pausado",
         "En espera",
         "Durduruldu",
+        "Beklemede",
         "Đang chờ",
     )
 
