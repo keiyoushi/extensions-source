@@ -22,7 +22,7 @@ class IMHentai(
 ) {
     override val supportsLatest = true
     override val useIntermediateSearch: Boolean = true
-    override val supportAdvanceSearch: Boolean = true
+    override val supportAdvancedSearch: Boolean = true
     override val supportSpeechless: Boolean = true
 
     override fun Element.mangaLang() =
