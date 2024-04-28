@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.asmhentai
+package eu.kanade.tachiyomi.multisrc.galleryadults
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -8,27 +8,27 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 /**
- * Springboard that accepts https://asmhentai.com/g/xxxxxx intents and redirects them to
- * the main Tachiyomi process.
+ * Springboard that accepts https://<domain>/g/xxxxxx intents and redirects them to main app process.
  */
-class ASMHUrlActivity : Activity() {
+class GalleryAdultsUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
+            val id = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${AsmHentai.PREFIX_ID_SEARCH}${pathSegments[1]}")
+                putExtra("query", "${GalleryAdults.PREFIX_ID_SEARCH}$id")
                 putExtra("filter", packageName)
             }
 
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("ASMHUrlActivity", e.toString())
+                Log.e("GalleryAdultsUrl", e.toString())
             }
         } else {
-            Log.e("ASMHUrlActivity", "could not parse uri from intent $intent")
+            Log.e("GalleryAdultsUrl", "could not parse uri from intent $intent")
         }
 
         finish()
