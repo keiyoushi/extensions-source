@@ -11,4 +11,5 @@ class PrinceEdiciones : Madara(
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
     override val mangaSubString = "media"
+    override val useNewChapterEndpoint = true
 }
