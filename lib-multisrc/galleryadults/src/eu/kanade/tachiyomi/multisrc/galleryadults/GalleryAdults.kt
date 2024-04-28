@@ -59,9 +59,6 @@ abstract class GalleryAdults(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    protected val SharedPreferences.scrapingImage
-        get() = getBoolean(PREF_PARSE_IMAGES, false)
-
     protected val SharedPreferences.shortTitle
         get() = getBoolean(PREF_SHORT_TITLE, false)
 
@@ -73,12 +70,6 @@ abstract class GalleryAdults(
             title = "Display Short Titles"
             summaryOff = "Showing Long Titles"
             summaryOn = "Showing short Titles"
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_PARSE_IMAGES
-            title = "Parsing photo one by one, it helps if you notice some pages is missing or unable to load"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
@@ -523,6 +514,14 @@ abstract class GalleryAdults(
     }
 
     /**
+     * Overwrite this to force extension not blindly converting thumbnails to full image
+     * with simply removing the trailing "t" from file name. Instead, it will open each page,
+     * one by one, then parsing for actual image's URL.
+     * This will be much slower but guaranteed work.
+     */
+    protected open val parsingImagePageByPage: Boolean = false
+
+    /**
      * Either:
      *  - Load all thumbnails then convert thumbnails to full images.
      *  - Or request then parse for a list of manga's page's URL,
@@ -533,14 +532,13 @@ abstract class GalleryAdults(
         val totalPages = document.inputIdValueOf(totalPagesSelector)
         val galleryId = document.inputIdValueOf(galleryIdSelector)
         val pageUrl = "$baseUrl/$pageUri/$galleryId"
-        val thumbnailConverting = !preferences.scrapingImage
 
         val pages = document.select("$pageSelector a")
             .map {
-                if (thumbnailConverting) {
-                    it.selectFirst("img")!!.imgAttr()
-                } else {
+                if (parsingImagePageByPage) {
                     it.absUrl("href")
+                } else {
+                    it.selectFirst("img")!!.imgAttr()
                 }
             }
             .toMutableList()
@@ -553,10 +551,10 @@ abstract class GalleryAdults(
                 .asJsoup()
                 .select("a")
                 .map {
-                    if (thumbnailConverting) {
-                        it.selectFirst("img")!!.imgAttr()
-                    } else {
+                    if (parsingImagePageByPage) {
                         it.absUrl("href")
+                    } else {
+                        it.selectFirst("img")!!.imgAttr()
                     }
                 }
             if (morePages.isNotEmpty()) {
@@ -567,14 +565,14 @@ abstract class GalleryAdults(
         }
 
         return pages.mapIndexed { idx, url ->
-            if (thumbnailConverting) {
+            if (parsingImagePageByPage) {
+                Page(idx, url)
+            } else {
                 Page(
                     index = idx,
                     imageUrl = url.thumbnailToFull(),
                     url = "$pageUrl/$idx/",
                 )
-            } else {
-                Page(idx, url)
             }
         }
     }
@@ -767,7 +765,6 @@ abstract class GalleryAdults(
         const val PREFIX_ID_SEARCH = "id:"
 
         private const val PREF_SHORT_TITLE = "pref_short_title"
-        private const val PREF_PARSE_IMAGES = "pref_parse_images_methods"
 
         // references to be used in factory
         const val LANGUAGE_MULTI = ""
