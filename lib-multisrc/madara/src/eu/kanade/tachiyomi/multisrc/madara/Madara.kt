@@ -946,7 +946,11 @@ abstract class Madara(
                 val imageUrl = element.selectFirst("img")?.let { imageFromElement(it) }
                 Page(index, document.location(), imageUrl)
             }
-        val chapterProtectorHtml = chapterProtector.html()
+        val chapterProtectorHtml = chapterProtector.attr("src")
+            .takeIf { it.startsWith("data:text/javascript;base64,") }
+            ?.substringAfter("data:text/javascript;base64,")
+            ?.let { Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8) }
+            ?: chapterProtector.html()
         val password = chapterProtectorHtml
             .substringAfter("wpmangaprotectornonce='")
             .substringBefore("';")
