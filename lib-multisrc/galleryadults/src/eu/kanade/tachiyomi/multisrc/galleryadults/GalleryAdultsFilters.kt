@@ -21,8 +21,9 @@ class SearchFlagFilter(name: String, val uri: String, state: Boolean = true) : F
 class CategoryFilters(flags: List<SearchFlagFilter>) : Filter.Group<SearchFlagFilter>("Categories", flags)
 
 // Advance search
-class TagsFilter : Filter.Text("Tags")
-class ParodiesFilter : Filter.Text("Parodies")
-class ArtistsFilter : Filter.Text("Artists")
-class CharactersFilter : Filter.Text("Characters")
-class GroupsFilter : Filter.Text("Groups")
+abstract class AdvancedTextFilter(name: String) : Filter.Text(name)
+class TagsFilter : AdvancedTextFilter("Tags")
+class ParodiesFilter : AdvancedTextFilter("Parodies")
+class ArtistsFilter : AdvancedTextFilter("Artists")
+class CharactersFilter : AdvancedTextFilter("Characters")
+class GroupsFilter : AdvancedTextFilter("Groups")

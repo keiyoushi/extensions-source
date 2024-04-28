@@ -203,7 +203,7 @@ abstract class GalleryAdults(
         val speechlessFilter = filters.filterIsInstance<SpeechlessFilter>().firstOrNull()
 
         // Advanced search
-        val advancedSearchFilters = filters.filterIsInstance<Filter.Text>()
+        val advancedSearchFilters = filters.filterIsInstance<AdvancedTextFilter>()
 
         return when {
             favoriteFilter?.state == true ->
@@ -337,7 +337,7 @@ abstract class GalleryAdults(
         // Intermediate search
         val categoryFilters = filters.filterIsInstance<CategoryFilters>().firstOrNull()
         // Advanced search
-        val advancedSearchFilters = filters.filterIsInstance<Filter.Text>()
+        val advancedSearchFilters = filters.filterIsInstance<AdvancedTextFilter>()
 
         val url = "$baseUrl/advsearch".toHttpUrl().newBuilder().apply {
             getSortOrderURIs().forEachIndexed { index, pair ->
