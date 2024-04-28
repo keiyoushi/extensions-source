@@ -635,6 +635,7 @@ abstract class Madara(
         "Canceled",
         "Cancelado",
         "İptal Edildi",
+        "Güncel",
         "Đã hủy",
     )
 
