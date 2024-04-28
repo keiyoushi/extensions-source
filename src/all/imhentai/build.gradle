@@ -1,7 +1,9 @@
 ext {
     extName = 'IMHentai'
     extClass = '.IMHentaiFactory'
-    extVersionCode = 14
+    themePkg = 'galleryadults'
+    baseUrl = 'https://imhentai.xxx'
+    overrideVersionCode = 15
     isNsfw = true
 }
 
