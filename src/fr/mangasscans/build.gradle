@@ -1,0 +1,9 @@
+ext {
+    extName = 'Mangas Scans'
+    extClass = '.MangasScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangas-scans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

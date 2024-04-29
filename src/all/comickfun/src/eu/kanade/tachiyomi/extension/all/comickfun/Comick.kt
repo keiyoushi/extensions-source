@@ -301,7 +301,7 @@ abstract class Comick(
                     is TagFilter -> {
                         if (it.state.isNotEmpty()) {
                             it.state.split(",").forEach {
-                                addQueryParameter("tags", it.trim())
+                                addQueryParameter("tags", it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-").replace("'-", "-and-039-").replace("'", "-and-039-"))
                             }
                         }
                     }
@@ -453,6 +453,7 @@ abstract class Comick(
 
     companion object {
         const val SLUG_SEARCH_PREFIX = "id:"
+        private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
         private const val INCLUDE_MU_TAGS_PREF = "IncludeMangaUpdatesTags"
         private const val INCLUDE_MU_TAGS_DEFAULT = false

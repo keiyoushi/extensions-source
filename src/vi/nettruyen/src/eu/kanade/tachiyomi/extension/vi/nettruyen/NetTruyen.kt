@@ -15,7 +15,7 @@ import java.util.Locale
 
 class NetTruyen : WPComics(
     "NetTruyen",
-    "https://www.nettruyentt.com",
+    "https://www.nettruyenvv.com",
     "vi",
     dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
     gmtOffset = null,
