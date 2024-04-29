@@ -1,0 +1,10 @@
+ext {
+    extName = 'Lich Mangas'
+    extClass = '.LichMangas'
+    themePkg = 'madara'
+    baseUrl = 'https://lichmangas.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
