@@ -1,9 +1,9 @@
 ext {
-    extName = 'Tusachxinhxinh'
-    extClass = '.Tusachxinhxinh'
+    extName = 'Tu Sach Xinh Xinh'
+    extClass = '.TuSachXinhXinh'
     themePkg = 'a3manga'
-    baseUrl = 'https://tusachxinh.online'
-    overrideVersionCode = 1
+    baseUrl = 'https://www.tusachxinh.online'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"

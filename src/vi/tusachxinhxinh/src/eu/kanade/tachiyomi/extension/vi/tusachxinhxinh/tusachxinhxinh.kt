@@ -1,5 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.tusachxinhxinh
 
-import eu.kanade.tachiyomi.multisrc.a3manga
+import eu.kanade.tachiyomi.multisrc.a3manga.A3Manga
 
-class A3Manga : A3Manga("Tusachxinhxinh", "https://tusachxinh.online", "vi")
+class TuSachXinhXinh : A3Manga("Tủ sách xinh xinh", "https://www.tusachxinh.online", "vi")
