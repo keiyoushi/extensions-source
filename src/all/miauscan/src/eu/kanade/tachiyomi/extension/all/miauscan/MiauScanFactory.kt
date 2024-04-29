@@ -20,7 +20,7 @@ class MiauScanFactory : SourceFactory {
 
 open class MiauScan(lang: String) : MangaThemesia(
     name = "Miau Scan",
-    baseUrl = "https://miauvisor.org",
+    baseUrl = "https://lectormiau.com",
     lang = lang,
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
