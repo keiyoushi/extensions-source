@@ -3,7 +3,7 @@ ext {
     extClass = '.TuSachXinhXinh'
     themePkg = 'a3manga'
     baseUrl = 'https://www.tusachxinh.online'
-    overrideVersionCode = 2
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
