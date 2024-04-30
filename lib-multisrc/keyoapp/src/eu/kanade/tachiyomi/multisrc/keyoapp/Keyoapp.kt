@@ -234,7 +234,7 @@ abstract class Keyoapp(
     // Utilities
 
     // From mangathemesia
-    private fun Element.imgAttr(width: String): String {
+    protected fun Element.imgAttr(width: String): String {
         val url = when {
             hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
             hasAttr("data-src") -> attr("abs:data-src")
