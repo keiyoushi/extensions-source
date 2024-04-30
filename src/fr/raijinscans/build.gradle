@@ -2,7 +2,7 @@ ext {
     extName = 'Raijin Scans'
     extClass = '.RaijinScans'
     themePkg = 'madara'
-    baseUrl = 'https://raijinscans.fr'
+    baseUrl = 'https://raijinscans.com'
     overrideVersionCode = 0
 }
 
