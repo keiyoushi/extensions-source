@@ -13,4 +13,6 @@ class ReadKomik : MangaThemesia(
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()
+
+    override val hasProjectPage = true
 }
