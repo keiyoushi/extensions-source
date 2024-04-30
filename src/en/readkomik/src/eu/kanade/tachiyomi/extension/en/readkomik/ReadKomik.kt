@@ -10,6 +10,8 @@ class ReadKomik : MangaThemesia(
     "en",
     "/archives/manga",
 ) {
+    override val versionId = 2
+
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()
