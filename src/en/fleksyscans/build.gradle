@@ -2,7 +2,7 @@ ext {
     extName = 'FleksyScans'
     extClass = '.FleksyScans'
     themePkg = 'fuzzydoodle'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
