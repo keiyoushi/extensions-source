@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.manga18me
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,7 +14,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -50,10 +47,15 @@ class Manga18Me : ParsedHttpSource() {
                 val raw = document.selectFirst("div.canonical")?.attr("href") ?: ""
                 val title = it.selectFirst("div.item-thumb.wleft a")?.attr("href") ?: ""
 
-                if (searchText.lowercase().contains("raw")) true
-                else if (raw.lowercase().contains("raw")) true
-                else if (title.contains("raw")) false
-                else true
+                if (searchText.lowercase().contains("raw")) {
+                    true
+                } else if (raw.lowercase().contains("raw")) {
+                    true
+                } else if (title.contains("raw")) {
+                    false
+                } else {
+                    true
+                }
             }
             .map(::popularMangaFromElement)
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
@@ -80,9 +82,8 @@ class Manga18Me : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if(query.isEmpty()){
+            if (query.isEmpty()) {
                 var completed = false
                 var raw = false
                 var genre = ""
@@ -115,7 +116,7 @@ class Manga18Me : ParsedHttpSource() {
                     addPathSegment("genre")
                     addPathSegment(genre)
                 }
-            }else{
+            } else {
                 addPathSegment("search")
                 addPathSegment(query)
             }
