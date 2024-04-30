@@ -1,0 +1,10 @@
+ext {
+    extName = 'Cocomic'
+    extClass = '.Cocomic'
+    themePkg = 'madara'
+    baseUrl = 'https://cocomic.co'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
