@@ -23,8 +23,6 @@ class ReadKomik : MangaThemesia(
         .rateLimit(4)
         .build()
 
-    override val hasProjectPage = true
-
     override fun popularMangaRequest(page: Int) =
         searchMangaRequest(page, "", FilterList(OrderByFilter("", orderByFilterOptions, "az-list")))
 
@@ -102,16 +100,15 @@ class ReadKomik : MangaThemesia(
             GenreFilter("Genre", genreFilterOptions),
         )
 
-        if (hasProjectPage) {
-            filters.addAll(
-                mutableListOf<Filter<*>>(
-                    Filter.Separator(),
-                    Filter.Header(intl["project_filter_warning"]),
-                    Filter.Header(intl.format("project_filter_name", name)),
-                    ProjectFilter(intl["project_filter_title"], projectFilterOptions),
-                ),
-            )
-        }
+        filters.addAll(
+            mutableListOf<Filter<*>>(
+                Filter.Separator(),
+                Filter.Header(intl["project_filter_warning"]),
+                Filter.Header(intl.format("project_filter_name", name)),
+                ProjectFilter(intl["project_filter_title"], projectFilterOptions),
+            ),
+        )
+
         return FilterList(filters)
     }
 
