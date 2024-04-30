@@ -40,22 +40,18 @@ class Manga18Me : ParsedHttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
+
+        val searchText = document.selectFirst("div.section-heading h1")?.text() ?: ""
+        val raw = document.selectFirst("div.canonical")?.attr("href") ?: ""
+
         val entries = document
             .select(popularMangaSelector())
             .filter { it ->
-                val searchText = document.selectFirst("div.section-heading h1")?.text() ?: ""
-                val raw = document.selectFirst("div.canonical")?.attr("href") ?: ""
                 val title = it.selectFirst("div.item-thumb.wleft a")?.attr("href") ?: ""
 
-                if (searchText.lowercase().contains("raw")) {
-                    true
-                } else if (raw.lowercase().contains("raw")) {
-                    true
-                } else if (title.contains("raw")) {
-                    false
-                } else {
-                    true
-                }
+                searchText.lowercase().contains("raw") ||
+                    raw.contains("raw") ||
+                    !title.contains("raw")
             }
             .map(::popularMangaFromElement)
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
@@ -113,14 +109,15 @@ class Manga18Me : ParsedHttpSource() {
                 } else if (completed) {
                     addPathSegment("completed")
                 } else {
-                    addPathSegment("genre")
+                    if (genre != "manga") addPathSegment("genre")
                     addPathSegment(genre)
                 }
+                addPathSegment(page.toString())
             } else {
                 addPathSegment("search")
-                addPathSegment(query)
+                addQueryParameter("q", query)
+                addQueryParameter("page", page.toString())
             }
-            addPathSegment(page.toString())
         }.build()
         return GET(url, headers)
     }

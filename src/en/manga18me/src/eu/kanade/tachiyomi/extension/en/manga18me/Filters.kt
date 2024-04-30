@@ -34,6 +34,7 @@ internal open class SelectFilter(name: String, private val vals: List<Pair<Strin
 
 /** Filters Data **/
 private val getGenresList: List<Pair<String, String>> = listOf(
+    Pair("Manga", "manga"),
     Pair("Drama", "drama"),
     Pair("Mature", "mature"),
     Pair("Romance", "romance"),
