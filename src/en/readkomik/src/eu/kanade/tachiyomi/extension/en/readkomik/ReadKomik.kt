@@ -47,41 +47,30 @@ class ReadKomik : MangaThemesia(
             return GET(url.build(), headers)
         }
 
-        for (filter in filters) {
-            if (filter !is SelectFilter) continue
+        val filter = filters.filterIsInstance<SelectFilter>()
+            .first { it.selectedValue().isNotBlank() }
 
-            val selectedValue = filter.selectedValue()
-            if (selectedValue == "none") {
-                continue
+        when (filter) {
+            is GenreFilter -> {
+                url.apply {
+                    addPathSegment(mangaUrlDirectory.substringBeforeLast("/").substring(1))
+                    addPathSegment("genres")
+                    addPathSegment(filter.selectedValue())
+                }
             }
 
-            when (filter) {
-                is GenreFilter -> {
-                    url.apply {
-                        addPathSegment(mangaUrlDirectory.substringBeforeLast("/").substring(1))
-                        addPathSegment("genres")
-                        addPathSegment(selectedValue)
-                    }
-                    break
+            is OrderByFilter -> {
+                url.addPathSegment("az-list")
+                if (filter.selectedValue() != "az-list") {
+                    url.addQueryParameter("show", filter.selectedValue())
                 }
-
-                is OrderByFilter -> {
-                    url.addPathSegment("az-list")
-                    if (selectedValue == "az-list") break
-
-                    url.addQueryParameter("show", selectedValue)
-
-                    break
-                }
-
-                is ProjectFilter -> {
-                    if (selectedValue == "project-filter-on") {
-                        url.setPathSegment(0, projectPageString.substring(1))
-                        break
-                    }
-                }
-                else -> { }
             }
+
+            is ProjectFilter -> {
+                url.setPathSegment(0, projectPageString.substring(1))
+            }
+
+            else -> { /* Do Nothing */ }
         }
 
         url.apply {
@@ -112,22 +101,22 @@ class ReadKomik : MangaThemesia(
         return FilterList(filters)
     }
 
-    override val orderByFilterOptions = arrayOf("None" to "none", "A-Z" to "az-list").let {
+    override val orderByFilterOptions = arrayOf("None" to "", "A-Z" to "az-list").let {
         val A = 65; val Z = A + 25
         it.plus((A..Z).map { "${it.toChar()}" }.map { it to it }.toTypedArray())
     }
 
     private val genres = listOf(
-        "None", "Action", "Adult", "Adventure", "Comedy",
+        "Action", "Adult", "Adventure", "Comedy",
         "Drama", "Ecchi", "Fantasy", "Harem", "Historical",
         "Horror", "Josei", "Martial Arts", "Mature", "Romance",
         "School Life", "Sci-fi", "Seinen", "Shounen", "Slice of Life",
         "Smut", "Supernatural", "Tragedy", "Yaoi",
     )
 
-    private var genreFilterOptions: Array<Pair<String, String>> = genres
-        .map { Pair(it, it.lowercase().replace(" ", "-")) }
-        .toTypedArray()
+    private var genreFilterOptions: Array<Pair<String, String>> = arrayOf(("None" to "")).let {
+        it.plus(genres.map { Pair(it, it.lowercase().replace(" ", "-")) }.toTypedArray())
+    }
 
     protected class GenreFilter(
         name: String,
