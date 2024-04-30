@@ -23,7 +23,7 @@ import java.util.Locale
 
 class Manga18Me : ParsedHttpSource() {
 
-    override val name = "Manga18Me"
+    override val name = "Manga18.me"
 
     override val lang = "en"
 
@@ -31,9 +31,7 @@ class Manga18Me : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.client.newBuilder()
-        .rateLimit(3, 1)
-        .build()
+    override val client = network.cloudflareClient
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")
@@ -52,15 +50,10 @@ class Manga18Me : ParsedHttpSource() {
                 val raw = document.selectFirst("div.canonical")?.attr("href") ?: ""
                 val title = it.selectFirst("div.item-thumb.wleft a")?.attr("href") ?: ""
 
-                if (searchText.lowercase().contains("raw")) {
-                    true
-                } else if (raw.lowercase().contains("raw")) {
-                    true
-                } else if (title.contains("raw")) {
-                    false
-                } else {
-                    true
-                }
+                if (searchText.lowercase().contains("raw")) true
+                else if (raw.lowercase().contains("raw")) true
+                else if (title.contains("raw")) false
+                else true
             }
             .map(::popularMangaFromElement)
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
@@ -86,60 +79,48 @@ class Manga18Me : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
-    /** Manga Search **/
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.isEmpty()) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map(::searchMangaParse)
-        } else {
-            client.newCall(GET("$baseUrl/search?q=$query", headers))
-                .asObservableSuccess()
-                .map(::searchMangaParse)
-        }
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            var completed = false
-            var raw = false
-            var genre = ""
-            filters.forEach {
-                when (it) {
-                    is GenreFilter -> {
-                        genre = it.getValue()
-                    }
+            if(query.isEmpty()){
+                var completed = false
+                var raw = false
+                var genre = ""
+                filters.forEach {
+                    when (it) {
+                        is GenreFilter -> {
+                            genre = it.getValue()
+                        }
 
-                    is CompletedFilter -> {
-                        completed = it.state
-                    }
+                        is CompletedFilter -> {
+                            completed = it.state
+                        }
 
-                    is RawFilter -> {
-                        raw = it.state
-                    }
+                        is RawFilter -> {
+                            raw = it.state
+                        }
 
-                    is SortFilter -> {
-                        addQueryParameter("orderby", it.getValue())
-                    }
+                        is SortFilter -> {
+                            addQueryParameter("orderby", it.getValue())
+                        }
 
-                    else -> {}
+                        else -> {}
+                    }
                 }
-            }
-            if (raw) {
-                addPathSegment("raw")
-            } else if (completed) {
-                addPathSegment("completed")
-            } else {
-                addPathSegment("genre")
-                addPathSegment(genre)
+                if (raw) {
+                    addPathSegment("raw")
+                } else if (completed) {
+                    addPathSegment("completed")
+                } else {
+                    addPathSegment("genre")
+                    addPathSegment(genre)
+                }
+            }else{
+                addPathSegment("search")
+                addPathSegment(query)
             }
             addPathSegment(page.toString())
         }.build()
-
         return GET(url, headers)
     }
 
@@ -150,28 +131,18 @@ class Manga18Me : ParsedHttpSource() {
 
     override fun getFilterList() = getFilters()
 
-    private val infoElementSelector = "div.post_content"
-    private val titleSelector = "div.post-title.wleft > h1"
-    private val descriptionSelector = "div.ss-manga > p"
-    private val statusSelector = "div.post-content_item.wleft:contains(Status) div.summary-content"
-    private val altNameSelector = "div.post-content_item.wleft:contains(Alternative) div.summary-content"
-    private val genreSelector = "div.href-content.genres-content > a[href*=/manga-list/]"
-    private val authorSelector = "div.href-content.artist-content > a"
-    private val artistSelector = "div.href-content.artist-content > a"
-    private val thumbnailSelector = "div.summary_image > img"
-
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val info = document.selectFirst(infoElementSelector)!!
+        val info = document.selectFirst("div.post_content")!!
 
-        title = document.select(titleSelector).text()
+        title = document.select("div.post-title.wleft > h1").text()
         description = buildString {
-            document.select(descriptionSelector)
+            document.select("div.ss-manga > p")
                 .eachText().onEach {
                     append(it.trim())
                     append("\n\n")
                 }
 
-            info.selectFirst(altNameSelector)
+            info.selectFirst("div.post-content_item.wleft:contains(Alternative) div.summary-content")
                 ?.text()
                 ?.takeIf { it != "Updating" && it.isNotEmpty() }
                 ?.let {
@@ -179,15 +150,15 @@ class Manga18Me : ParsedHttpSource() {
                     append(it.trim())
                 }
         }
-        status = when (info.select(statusSelector).text()) {
+        status = when (info.select("div.post-content_item.wleft:contains(Status) div.summary-content").text()) {
             "Ongoing" -> SManga.ONGOING
             "Completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        author = info.selectFirst(authorSelector)?.text()?.takeIf { it != "Updating" }
-        artist = info.selectFirst(artistSelector)?.text()?.takeIf { it != "Updating" }
-        genre = info.select(genreSelector).eachText().joinToString()
-        thumbnail_url = document.selectFirst(thumbnailSelector)?.absUrl("src")
+        author = info.selectFirst("div.href-content.artist-content > a")?.text()?.takeIf { it != "Updating" }
+        artist = info.selectFirst("div.href-content.artist-content > a")?.text()?.takeIf { it != "Updating" }
+        genre = info.select("div.href-content.genres-content > a[href*=/manga-list/]").eachText().joinToString()
+        thumbnail_url = document.selectFirst("div.summary_image > img")?.absUrl("src")
     }
 
     override fun chapterListSelector() = "ul.row-content-chapter.wleft .a-h.wleft"
@@ -208,7 +179,9 @@ class Manga18Me : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val contents = document.select("div.read-content.wleft img")
-            ?: throw Exception("Unable to find script with image data")
+        if (contents.isEmpty()) {
+            throw Exception("Unable to find script with image data")
+        }
 
         return contents.mapIndexed { idx, image ->
             val imageUrl = image.attr("src")
