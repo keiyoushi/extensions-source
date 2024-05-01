@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.slimeread
 
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.LatestResponseDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.MangaInfoDto
@@ -15,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -31,7 +33,7 @@ class SlimeRead : HttpSource() {
 
     override val baseUrl = "https://slimeread.com"
 
-    private val apiUrl = "https://aishiteru-dear-dev-f0cc1f0a-4900-493e-acd5-9f3df303a1b5.slimeread.com:8443"
+    private val apiUrl: String by lazy { getApiUrlFromPage() }
 
     override val lang = "pt-BR"
 
@@ -47,6 +49,29 @@ class SlimeRead : HttpSource() {
     override fun headersBuilder() = super.headersBuilder().add("Origin", baseUrl)
 
     private val json: Json by injectLazy()
+
+    private fun getApiUrlFromPage(): String {
+        val initClient = network.client
+        val document = initClient.newCall(GET(baseUrl, headers)).execute().asJsoup()
+        val scriptUrl = document.selectFirst("script[src*=pages/_app]")?.attr("abs:src")
+            ?: throw Exception("Could not find script URL")
+        val script = initClient.newCall(GET(scriptUrl, headers)).execute().body.string()
+        val apiUrl = FUNCTION_REGEX.find(script)?.value?.let { function ->
+            BASEURL_VAL_REGEX.find(function)?.groupValues?.get(1)?.let { baseUrlVar ->
+                val regex = """let.*?$baseUrlVar\s*=.*?(?=,)""".toRegex(RegexOption.DOT_MATCHES_ALL)
+                regex.find(function)?.value?.let { varBlock ->
+                    try {
+                        QuickJs.create().use {
+                            it.evaluate("$varBlock;$baseUrlVar") as String
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            }
+        }
+        return apiUrl?.removeSuffix("/") ?: throw Exception("Could not find API URL")
+    }
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$apiUrl/ranking/semana?nsfw=false", headers)
@@ -144,11 +169,10 @@ class SlimeRead : HttpSource() {
 
     private fun parseChapterNumber(number: Float): String {
         val cap = number + 1F
-        val num = "%.2f".format(cap)
+        return "%.2f".format(cap)
             .let { if (cap < 10F) "0$it" else it }
             .replace(",00", "")
             .replace(",", ".")
-        return num
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -191,5 +215,7 @@ class SlimeRead : HttpSource() {
 
     companion object {
         const val PREFIX_SEARCH = "id:"
+        val FUNCTION_REGEX = """function\s*\(\)\s*\{(?:(?!function)[\s\S])*?8443[^\}]*\}""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        val BASEURL_VAL_REGEX = """baseURL\s*:\s*(\w+)""".toRegex()
     }
 }
