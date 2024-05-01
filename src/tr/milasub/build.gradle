@@ -1,0 +1,10 @@
+ext {
+    extName = 'MilaSub'
+    extClass = '.MilaSub'
+    themePkg = 'madara'
+    baseUrl = 'https://www.milasub.co'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
