@@ -25,6 +25,8 @@ class ManhuaThai : Madara(
     "th",
     dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("th")),
 ) {
+    override val supportsLatest = false
+
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
