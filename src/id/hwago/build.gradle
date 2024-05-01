@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hwago'
+    extClass = '.Hwago'
+    themePkg = 'madara'
+    baseUrl = 'https://hwago.org'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

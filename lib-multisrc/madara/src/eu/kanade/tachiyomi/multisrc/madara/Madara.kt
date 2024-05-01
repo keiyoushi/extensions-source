@@ -612,6 +612,7 @@ abstract class Madara(
         "مكتمل",
         "已完结",
         "Tamamlandı",
+        "Đã hoàn thành",
     )
 
     protected val ongoingStatusList: Array<String> = arrayOf(
@@ -619,6 +620,7 @@ abstract class Madara(
         "Em Andamento", "En cours", "En Cours", "En cours de publication", "Ativo", "Lançando", "Đang Tiến Hành", "Devam Ediyor",
         "Devam ediyor", "In Corso", "In Arrivo", "مستمرة", "مستمر", "En Curso", "En curso", "Emision",
         "Curso", "En marcha", "Publicandose", "En emision", "连载中", "Em Lançamento", "Devam Ediyo",
+        "Đang làm",
     )
 
     protected val hiatusStatusList: Array<String> = arrayOf(
@@ -626,12 +628,20 @@ abstract class Madara(
         "Pausado",
         "En espera",
         "Durduruldu",
+        "Beklemede",
+        "Đang chờ",
+        "متوقف",
+        "En Pause",
     )
 
     protected val canceledStatusList: Array<String> = arrayOf(
         "Canceled",
         "Cancelado",
         "İptal Edildi",
+        "Güncel",
+        "Đã hủy",
+        "ملغي",
+        "Abandonné",
     )
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -946,7 +956,11 @@ abstract class Madara(
                 val imageUrl = element.selectFirst("img")?.let { imageFromElement(it) }
                 Page(index, document.location(), imageUrl)
             }
-        val chapterProtectorHtml = chapterProtector.html()
+        val chapterProtectorHtml = chapterProtector.attr("src")
+            .takeIf { it.startsWith("data:text/javascript;base64,") }
+            ?.substringAfter("data:text/javascript;base64,")
+            ?.let { Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8) }
+            ?: chapterProtector.html()
         val password = chapterProtectorHtml
             .substringAfter("wpmangaprotectornonce='")
             .substringBefore("';")

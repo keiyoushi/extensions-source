@@ -6,7 +6,7 @@ import java.util.Locale
 
 class TecnoScan : MangaThemesia(
     "Tecno Scan",
-    "https://tecnoscann.com",
+    "https://visortecno.com",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {

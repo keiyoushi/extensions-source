@@ -1,9 +1,0 @@
-ext {
-    extName = 'Sdl scans'
-    extClass = '.SdlScans'
-    themePkg = 'madara'
-    baseUrl = 'https://sdlscans.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
