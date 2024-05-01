@@ -11,7 +11,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class ManhwaFreak : MangaThemesia("Manhwa Freak", "https://freakcomic.com", "en") {
+class ManhwaFreak : MangaThemesia("Manhwa Freak", "https://manhwa-freak.org", "en") {
 
     // they called the theme "mangareaderfix"
 
