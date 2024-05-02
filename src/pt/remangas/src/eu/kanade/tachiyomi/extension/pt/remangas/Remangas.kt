@@ -16,7 +16,8 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Remangas : Madara(
+class Remangas :
+    Madara(
         "Remangas",
         "https://remangas.net",
         "pt-BR",
