@@ -1,0 +1,10 @@
+ext {
+    extName = 'Indo18h'
+    extClass = '.Indo18h'
+    themePkg = 'madara'
+    baseUrl = 'https://indo18h.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
