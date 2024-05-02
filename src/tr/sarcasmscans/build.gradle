@@ -1,0 +1,10 @@
+ext {
+    extName = 'Sarcasm Scans'
+    extClass = '.SarcasmScans'
+    themePkg = 'madara'
+    baseUrl = 'https://sarcasmscans.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
