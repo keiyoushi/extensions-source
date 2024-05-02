@@ -1,0 +1,10 @@
+ext {
+    extName = 'Opiatoon'
+    extClass = '.Opiatoon'
+    themePkg = 'madara'
+    baseUrl = 'https://opiatoon.biz'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
