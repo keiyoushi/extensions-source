@@ -4,7 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://lscans.com'
     overrideVersionCode = 0
-    // isNsfw = ?
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
