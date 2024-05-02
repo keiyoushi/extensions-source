@@ -1,0 +1,10 @@
+ext {
+    extName = 'Lunar Scans Hentai'
+    extClass = '.LunarScansHentai'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://hentai.lunarscans.fr'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
