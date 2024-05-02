@@ -1,0 +1,10 @@
+ext {
+    extName = 'Stray Fansub'
+    extClass = '.StrayFansub'
+    themePkg = 'madara'
+    baseUrl = 'https://strayfansub.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
