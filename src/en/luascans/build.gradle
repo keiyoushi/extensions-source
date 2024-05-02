@@ -1,0 +1,9 @@
+ext {
+    extName = 'Lua Scans'
+    extClass = '.LuaScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://luascans.com'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
