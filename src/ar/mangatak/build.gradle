@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaTak'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangatak.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
