@@ -33,9 +33,11 @@ class RizzComic : MangaThemesiaAlt(
         .rateLimit(1, 3)
         .addInterceptor { chain ->
             val request = chain.request()
-            val headers = request.headers.newBuilder()
-                .removeAll("X-Requested-With")
-                .build()
+            val isApiRequest = request.header("X-API-Request") != null
+            val headers = request.headers.newBuilder().apply {
+                if (!isApiRequest) removeAll("X-Requested-With")
+                removeAll("X-API-Request")
+            }.build()
             chain.proceed(request.newBuilder().headers(headers).build())
         }
         .build()
@@ -46,6 +48,7 @@ class RizzComic : MangaThemesiaAlt(
     private val apiHeaders by lazy {
         headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
+            .set("X-API-Request", "1")
             .build()
     }
 
