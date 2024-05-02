@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,11 +18,17 @@ class ReadKomik : MangaThemesia(
     "en",
     "/archives/manga",
 ) {
-    override val versionId = 2
-
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()
+
+    // mangaDetailsRequest: Keeps compatibility with before version
+    override fun mangaDetailsRequest(manga: SManga) =
+        super.mangaDetailsRequest(replaceBaseUrlDirectoryByCustomUrlDirectory(manga))
+
+    // chapterListRequest: Keeps compatibility with before version
+    override fun chapterListRequest(manga: SManga) =
+        super.chapterListRequest(replaceBaseUrlDirectoryByCustomUrlDirectory(manga))
 
     override fun popularMangaRequest(page: Int) =
         searchMangaRequest(page, "", FilterList(OrderByFilter("", orderByFilterOptions, "az-list")))
@@ -117,6 +124,17 @@ class ReadKomik : MangaThemesia(
     private var genreFilterOptions: Array<Pair<String, String>> = arrayOf(("None" to "")).let {
         it.plus(genres.map { Pair(it, it.lowercase().replace(" ", "-")) }.toTypedArray())
     }
+
+    private fun replaceBaseUrlDirectoryByCustomUrlDirectory(manga: SManga): SManga {
+        return when {
+            isOldUrl(manga) -> manga.apply {
+                url = url.replace("/manga", mangaUrlDirectory)
+            }
+            else -> manga
+        }
+    }
+
+    private fun isOldUrl(manga: SManga) = !manga.url.contains(this.mangaUrlDirectory)
 
     protected class GenreFilter(
         name: String,
