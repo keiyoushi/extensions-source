@@ -1,0 +1,10 @@
+ext {
+    extName = 'L Scans'
+    extClass = '.LScans'
+    themePkg = 'madara'
+    baseUrl = 'https://lscans.com'
+    overrideVersionCode = 0
+    // isNsfw = ?
+}
+
+apply from: "$rootDir/common.gradle"
