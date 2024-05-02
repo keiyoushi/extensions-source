@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 class DemonSect : Madara(
     "Demon Sect",
-    "https://demonsect.com.br",
+    "https://dsectcomics.org",
     "pt-BR",
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 ) {
