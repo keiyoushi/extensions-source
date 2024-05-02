@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manga-Lc'
+    extClass = '.MangaLc'
+    themePkg = 'madara'
+    baseUrl = 'https://manga-lc.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
