@@ -91,7 +91,7 @@ class ChapterDto(
     @SerialName("published_at") val date: String,
 ) {
     fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
-        url = "/capitulo/$id"
+        url = "/capitulo/$id/"
         name = "Capítulo ${this@ChapterDto.name}"
         date_upload = try {
             dateFormat.parse(date)?.time ?: 0L
