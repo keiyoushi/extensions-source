@@ -1,0 +1,14 @@
+ext {
+    extName = 'ManhwaBreakup'
+    extClass = '.ManhwaBreakup'
+    themePkg = 'madara'
+    baseUrl = 'https://www.manhwabreakup.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:unpacker"))
+}
