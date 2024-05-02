@@ -31,7 +31,17 @@ class RizzComic : MangaThemesiaAlt(
 
     override val client = super.client.newBuilder()
         .rateLimit(1, 3)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val headers = request.headers.newBuilder()
+                .removeAll("X-Requested-With")
+                .build()
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
         .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("X-Requested-With", randomString((1..20).random())) // For WebView
 
     private val apiHeaders by lazy {
         headersBuilder()
@@ -153,5 +163,10 @@ class RizzComic : MangaThemesiaAlt(
         } else {
             it.toString()
         }
+    }
+
+    private fun randomString(length: Int): String {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        return List(length) { charPool.random() }.joinToString("")
     }
 }
