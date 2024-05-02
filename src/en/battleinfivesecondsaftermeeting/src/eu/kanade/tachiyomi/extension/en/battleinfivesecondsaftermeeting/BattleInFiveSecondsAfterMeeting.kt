@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.battleinfivesecondsaftermeeting
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -25,6 +26,14 @@ class BattleInFiveSecondsAfterMeeting : Madara(
     override val mangaDetailsSelectorTag = "h5:contains(Tag) + h4 a"
     override val seriesTypeSelector = "h5:contains(Type) + h4"
     override val altNameSelector = "h5:contains(Alternative) + h4"
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return fetchPopularManga(page)
+    }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val manga = SManga.create().apply {
@@ -56,5 +65,9 @@ class BattleInFiveSecondsAfterMeeting : Madara(
                 }
             }
         }
+    }
+
+    override fun getFilterList(): FilterList {
+        return FilterList()
     }
 }
