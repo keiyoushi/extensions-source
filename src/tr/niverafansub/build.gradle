@@ -1,0 +1,10 @@
+ext {
+    extName = 'Nivera Fansub'
+    extClass = '.NiveraFansub'
+    themePkg = 'madara'
+    baseUrl = 'https://niverafansub.co'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
