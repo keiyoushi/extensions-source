@@ -31,11 +31,24 @@ class RizzComic : MangaThemesiaAlt(
 
     override val client = super.client.newBuilder()
         .rateLimit(1, 3)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val isApiRequest = request.header("X-API-Request") != null
+            val headers = request.headers.newBuilder().apply {
+                if (!isApiRequest) removeAll("X-Requested-With")
+                removeAll("X-API-Request")
+            }.build()
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
         .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("X-Requested-With", randomString((1..20).random())) // For WebView
 
     private val apiHeaders by lazy {
         headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
+            .set("X-API-Request", "1")
             .build()
     }
 
@@ -153,5 +166,10 @@ class RizzComic : MangaThemesiaAlt(
         } else {
             it.toString()
         }
+    }
+
+    private fun randomString(length: Int): String {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        return List(length) { charPool.random() }.joinToString("")
     }
 }
