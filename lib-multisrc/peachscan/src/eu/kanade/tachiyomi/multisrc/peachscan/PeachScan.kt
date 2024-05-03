@@ -162,7 +162,7 @@ abstract class PeachScan(
         val urls = scriptElement.html().substringAfter("const urls =[").substringBefore("];")
 
         return urls.split(",").mapIndexed { i, it ->
-            Page(i, imageUrl = baseUrl + it.trim().removeSurrounding("'") + "#page")
+            Page(i, document.location(), baseUrl + it.trim().removeSurrounding("'") + "#page")
         }
     }
 
