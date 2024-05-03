@@ -2,8 +2,8 @@ ext {
     extName = 'Readkomik'
     extClass = '.ReadKomik'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://readkomik.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://rkreader.org'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
