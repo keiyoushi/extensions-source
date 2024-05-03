@@ -6,9 +6,10 @@ import java.util.Locale
 
 class MangaTime : Madara(
     "Manga Time",
-    "https://anime-time.net",
+    "https://mangatime.us",
     "ar",
     dateFormat = SimpleDateFormat("dd MMMM، yyyy", Locale("ar")),
 ) {
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 }
