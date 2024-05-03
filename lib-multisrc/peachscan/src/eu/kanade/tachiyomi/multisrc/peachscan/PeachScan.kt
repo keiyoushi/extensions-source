@@ -156,7 +156,7 @@ abstract class PeachScan(
     override fun pageListParse(document: Document): List<Page> {
         val scriptElement = document.selectFirst("script:containsData(const urls =[)")
             ?: return document.select("#imageContainer img").mapIndexed { i, it ->
-                Page(i, imageUrl = it.attr("abs:src"))
+                Page(i, document.location(), it.attr("abs:src"))
             }
 
         val urls = scriptElement.html().substringAfter("const urls =[").substringBefore("];")
