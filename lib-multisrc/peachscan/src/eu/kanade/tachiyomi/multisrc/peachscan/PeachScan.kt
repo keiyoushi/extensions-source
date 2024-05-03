@@ -156,17 +156,24 @@ abstract class PeachScan(
     override fun pageListParse(document: Document): List<Page> {
         val scriptElement = document.selectFirst("script:containsData(const urls =[)")
             ?: return document.select("#imageContainer img").mapIndexed { i, it ->
-                Page(i, imageUrl = it.attr("abs:src"))
+                Page(i, document.location(), it.attr("abs:src"))
             }
 
         val urls = scriptElement.html().substringAfter("const urls =[").substringBefore("];")
 
         return urls.split(",").mapIndexed { i, it ->
-            Page(i, imageUrl = baseUrl + it.trim().removeSurrounding("'") + "#page")
+            Page(i, document.location(), baseUrl + it.trim().removeSurrounding("'") + "#page")
         }
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    override fun imageRequest(page: Page): Request {
+        val imgHeaders = headersBuilder()
+            .add("Referer", page.url)
+            .build()
+        return GET(page.imageUrl!!, imgHeaders)
+    }
 
     private val dataUriRegex = Regex("""base64,([0-9a-zA-Z/+=\s]+)""")
 
