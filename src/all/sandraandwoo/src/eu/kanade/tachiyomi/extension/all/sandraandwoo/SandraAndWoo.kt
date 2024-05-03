@@ -17,7 +17,7 @@ import java.util.Locale
 import kotlin.math.floor
 
 abstract class SandraAndWoo(
-    final override val baseUrl: String = "http://www.sandraandwoo.com",
+    final override val baseUrl: String = "https://www.sandraandwoo.com",
     final override val lang: String,
 ) : ParsedHttpSource() {
     override val supportsLatest = false
