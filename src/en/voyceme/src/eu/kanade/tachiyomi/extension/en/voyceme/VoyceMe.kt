@@ -29,7 +29,7 @@ class VoyceMe : HttpSource() {
 
     override val name = "VoyceMe"
 
-    override val baseUrl = "http://voyce.me"
+    override val baseUrl = "https://www.voyce.me"
 
     override val lang = "en"
 
