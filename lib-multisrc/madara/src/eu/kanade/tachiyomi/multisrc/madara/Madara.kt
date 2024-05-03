@@ -613,6 +613,7 @@ abstract class Madara(
         "已完结",
         "Tamamlandı",
         "Đã hoàn thành",
+        "Завершено",
     )
 
     protected val ongoingStatusList: Array<String> = arrayOf(
@@ -632,6 +633,7 @@ abstract class Madara(
         "Đang chờ",
         "متوقف",
         "En Pause",
+        "Заморожено",
     )
 
     protected val canceledStatusList: Array<String> = arrayOf(
@@ -642,6 +644,7 @@ abstract class Madara(
         "Đã hủy",
         "ملغي",
         "Abandonné",
+        "Заброшено",
     )
 
     override fun mangaDetailsParse(document: Document): SManga {
