@@ -15,7 +15,7 @@ class GWTB : HttpSource() {
 
     override val name = "Gone with the Blastwave"
 
-    override val baseUrl = "http://www.blastwave-comic.com"
+    override val baseUrl = "https://www.blastwave-comic.com"
 
     override val supportsLatest = false
 
