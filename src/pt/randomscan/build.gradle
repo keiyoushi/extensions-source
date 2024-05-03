@@ -3,7 +3,7 @@ ext {
     extClass = '.LuraToon'
     themePkg = 'peachscan'
     baseUrl = 'https://luratoon.com'
-    overrideVersionCode = 40
+    overrideVersionCode = 39
 }
 
 apply from: "$rootDir/common.gradle"

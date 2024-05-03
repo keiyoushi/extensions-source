@@ -168,6 +168,13 @@ abstract class PeachScan(
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
+    override fun imageRequest(page: Page): Request {
+        val imgHeaders = headersBuilder()
+            .add("Referer", page.url)
+            .build()
+        return GET(page.imageUrl!!, imgHeaders)
+    }
+
     private val dataUriRegex = Regex("""base64,([0-9a-zA-Z/+=\s]+)""")
 
     private fun zipImageInterceptor(chain: Interceptor.Chain): Response {
