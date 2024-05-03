@@ -1,7 +1,8 @@
 ext {
     extName = 'Gone with the Blastwave'
     extClass = '.GWTB'
-    extVersionCode = 2
+    extVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
