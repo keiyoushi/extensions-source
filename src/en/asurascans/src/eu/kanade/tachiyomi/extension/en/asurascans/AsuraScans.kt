@@ -11,7 +11,7 @@ import java.util.Locale
 
 class AsuraScans : MangaThemesiaAlt(
     "Asura Scans",
-    "https://asuratoon.com",
+    "https://asuracomic.net",
     "en",
     dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
     randomUrlPrefKey = "pref_permanent_manga_url_2_en",
