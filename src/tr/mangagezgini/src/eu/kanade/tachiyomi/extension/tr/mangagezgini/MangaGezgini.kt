@@ -8,5 +8,5 @@ class MangaGezgini : Madara(
     "MangaGezgini",
     "https://mangagezgini.com",
     "tr",
-    SimpleDateFormat("dd/MM/yyy", Locale("tr")),
+    SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 )
