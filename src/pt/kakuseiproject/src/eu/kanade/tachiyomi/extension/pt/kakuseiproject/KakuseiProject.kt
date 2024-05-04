@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class KakuseiProject : Madara(
     "Kakusei Project",
-    "https://kakuseiproject.com.br",
+    "https://kakuseiproject.com",
     "pt-BR",
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 ) {
