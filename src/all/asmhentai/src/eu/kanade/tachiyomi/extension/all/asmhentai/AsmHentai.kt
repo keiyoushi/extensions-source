@@ -31,6 +31,8 @@ class AsmHentai(
 
     override fun popularMangaSelector() = ".preview_item"
 
+    override val favoritePath = "inc/user.php?act=favs"
+
     override fun Element.getInfo(tag: String): String {
         return select(".tags:contains($tag:) .tag")
             .joinToString { it.ownText().cleanTag() }
@@ -59,13 +61,10 @@ class AsmHentai(
             )
     }
 
-    /* Search */
-    override val favoritePath = "inc/user.php?act=favs"
-
     override val mangaDetailInfoSelector = ".book_page"
 
-    override val galleryIdSelector = "load_id"
     override val totalPagesSelector = "t_pages"
+    override val galleryIdSelector = "load_id"
     override val pageUri = "gallery"
     override val pageSelector = ".preview_thumb"
 

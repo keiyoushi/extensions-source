@@ -64,15 +64,6 @@ class HentaiFox(
         return this
     }
 
-    /* Pages */
-    override val pagesRequest = "includes/thumbs_loader.php"
-
-    override fun getServer(document: Document, galleryId: String): String {
-        val domain = baseUrl.toHttpUrl().host
-        // Randomly choose between servers
-        return if (Random.nextBoolean()) "i2.$domain" else "i.$domain"
-    }
-
     /**
      * Convert space( ) typed in search-box into plus(+) in URL. Then:
      * - ignore the word preceding by a special character (e.g. 'school-girl' will ignore 'girl')
@@ -87,11 +78,19 @@ class HentaiFox(
         }
     }
 
+    override val idPrefixUri = "gallery"
+
+    override val pagesRequest = "includes/thumbs_loader.php"
+
+    override fun getServer(document: Document, galleryId: String): String {
+        val domain = baseUrl.toHttpUrl().host
+        // Randomly choose between servers
+        return if (Random.nextBoolean()) "i2.$domain" else "i.$domain"
+    }
+
     override fun getFilterList() = FilterList(
         listOf(
             Filter.Header("HINT: Use double quote (\") for exact match"),
         ) + super.getFilterList().list,
     )
-
-    override val idPrefixUri = "gallery"
 }

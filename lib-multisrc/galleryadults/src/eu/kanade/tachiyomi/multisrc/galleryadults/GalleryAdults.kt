@@ -59,11 +59,6 @@ abstract class GalleryAdults(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    protected val SharedPreferences.shortTitle
-        get() = getBoolean(PREF_SHORT_TITLE, false)
-
-    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHORT_TITLE
@@ -73,6 +68,17 @@ abstract class GalleryAdults(
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
+
+    protected val SharedPreferences.shortTitle
+        get() = getBoolean(PREF_SHORT_TITLE, false)
+
+    /* List detail */
+    protected class SMangaDto(
+        val title: String,
+        val url: String,
+        val thumbnail: String?,
+        val lang: String,
+    )
 
     protected open fun Element.mangaTitle(selector: String = ".caption"): String? =
         mangaFullTitle(selector).let {
@@ -84,13 +90,7 @@ abstract class GalleryAdults(
 
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
-    /* List detail */
-    protected class SMangaDto(
-        val title: String,
-        val url: String,
-        val thumbnail: String?,
-        val lang: String,
-    )
+    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
 
     protected open fun Element.mangaUrl() =
         selectFirst(".inner_thumb a")?.attr("abs:href")
@@ -226,53 +226,6 @@ abstract class GalleryAdults(
     }
 
     /**
-     * Browsing user's personal favorites saved on site. This requires login in view WebView.
-     */
-    protected open fun favoriteFilterSearchRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
-        return POST(
-            url.build().toString(),
-            xhrHeaders,
-            FormBody.Builder()
-                .add("page", page.toString())
-                .build(),
-        )
-    }
-
-    /**
-     * Browsing speechless titles. Some sites exclude speechless titles from normal search and
-     * allow browsing separately.
-     */
-    protected open fun speechlessFilterSearchRequest(page: Int, query: String, filters: FilterList): Request {
-        // Basic search
-        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
-
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("language")
-            addPathSegment(LANGUAGE_SPEECHLESS)
-            if (sortOrderFilter?.state == 0) addPathSegment("popular")
-            addPageUri(page)
-        }
-        return GET(url.build(), headers)
-    }
-
-    protected open fun tagBrowsingSearchRequest(page: Int, query: String, filters: FilterList): Request {
-        // Basic search
-        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
-        val genresFilter = filters.filterIsInstance<GenresFilter>().firstOrNull()
-        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
-
-        // Browsing single tag's catalog
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("tag")
-            addPathSegment(selectedGenres.single().uri)
-            if (sortOrderFilter?.state == 0) addPathSegment("popular")
-            addPageUri(page)
-        }
-        return GET(url.build(), headers)
-    }
-
-    /**
      * Basic Search: support query string with multiple-genres filter by adding genres to query string.
      */
     protected open fun basicSearchRequest(page: Int, query: String, filters: FilterList): Request {
@@ -405,6 +358,53 @@ abstract class GalleryAdults(
         }
     }
 
+    protected open fun tagBrowsingSearchRequest(page: Int, query: String, filters: FilterList): Request {
+        // Basic search
+        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
+        val genresFilter = filters.filterIsInstance<GenresFilter>().firstOrNull()
+        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
+
+        // Browsing single tag's catalog
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("tag")
+            addPathSegment(selectedGenres.single().uri)
+            if (sortOrderFilter?.state == 0) addPathSegment("popular")
+            addPageUri(page)
+        }
+        return GET(url.build(), headers)
+    }
+
+    /**
+     * Browsing speechless titles. Some sites exclude speechless titles from normal search and
+     * allow browsing separately.
+     */
+    protected open fun speechlessFilterSearchRequest(page: Int, query: String, filters: FilterList): Request {
+        // Basic search
+        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
+
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("language")
+            addPathSegment(LANGUAGE_SPEECHLESS)
+            if (sortOrderFilter?.state == 0) addPathSegment("popular")
+            addPageUri(page)
+        }
+        return GET(url.build(), headers)
+    }
+
+    /**
+     * Browsing user's personal favorites saved on site. This requires login in view WebView.
+     */
+    protected open fun favoriteFilterSearchRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/$favoritePath".toHttpUrl().newBuilder()
+        return POST(
+            url.build().toString(),
+            xhrHeaders,
+            FormBody.Builder()
+                .add("page", page.toString())
+                .build(),
+        )
+    }
+
     protected open val favoritePath = "includes/user_favs.php"
 
     protected open fun loginRequired(document: Document, url: String): Boolean {
@@ -453,6 +453,22 @@ abstract class GalleryAdults(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     /* Details */
+    protected open val mangaDetailInfoSelector = ".gallery_top"
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        return document.selectFirst(mangaDetailInfoSelector)!!.run {
+            SManga.create().apply {
+                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                status = SManga.COMPLETED
+                title = mangaTitle("h1")!!
+                thumbnail_url = getCover()
+                genre = getInfo("Tags")
+                author = getInfo("Artists")
+                description = getDescription()
+            }
+        }
+    }
+
     protected open fun Element.getCover() =
         selectFirst(".cover img")?.imgAttr()
 
@@ -473,27 +489,12 @@ abstract class GalleryAdults(
         )
         .joinToString("\n\n")
 
-    protected open val mangaDetailInfoSelector = ".gallery_top"
     protected open val timeSelector = "time[datetime]"
 
     protected open fun Element.getTime(): Long {
         return selectFirst(timeSelector)
             ?.attr("datetime")
             .toDate(simpleDateFormat)
-    }
-
-    override fun mangaDetailsParse(document: Document): SManga {
-        return document.selectFirst(mangaDetailInfoSelector)!!.run {
-            SManga.create().apply {
-                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                status = SManga.COMPLETED
-                title = mangaTitle("h1")!!
-                thumbnail_url = getCover()
-                genre = getInfo("Tags")
-                author = getInfo("Artists")
-                description = getDescription()
-            }
-        }
     }
 
     /* Chapters */
@@ -519,14 +520,25 @@ abstract class GalleryAdults(
         return select("input[id=$string]").attr("value")
     }
 
+    protected open val pagesRequest = "inc/thumbs_loader.php"
+
     protected open val galleryIdSelector = "gallery_id"
     protected open val loadIdSelector = "load_id"
     protected open val loadDirSelector = "load_dir"
     protected open val totalPagesSelector = "load_pages"
+
+    protected open fun pageRequestForm(document: Document, totalPages: String): FormBody =
+        FormBody.Builder()
+            .add("u_id", document.inputIdValueOf(galleryIdSelector))
+            .add("g_id", document.inputIdValueOf(loadIdSelector))
+            .add("img_dir", document.inputIdValueOf(loadDirSelector))
+            .add("visible_pages", "10")
+            .add("total_pages", totalPages)
+            .add("type", "2") // 1 would be "more", 2 is "all remaining"
+            .build()
+
     protected open val pageUri = "g"
     protected open val pageSelector = ".gallery_thumb"
-
-    protected open val pagesRequest = "inc/thumbs_loader.php"
 
     private val jsonFormat: Json by injectLazy()
 
@@ -682,16 +694,6 @@ abstract class GalleryAdults(
             )
         }
     }
-
-    protected open fun pageRequestForm(document: Document, totalPages: String): FormBody =
-        FormBody.Builder()
-            .add("u_id", document.inputIdValueOf(galleryIdSelector))
-            .add("g_id", document.inputIdValueOf(loadIdSelector))
-            .add("img_dir", document.inputIdValueOf(loadDirSelector))
-            .add("visible_pages", "10")
-            .add("total_pages", totalPages)
-            .add("type", "2") // 1 would be "more", 2 is "all remaining"
-            .build()
 
     override fun imageUrlParse(document: Document): String {
         return document.selectFirst("img#gimg, img#fimg")?.imgAttr()!!

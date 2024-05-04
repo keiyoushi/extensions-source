@@ -109,6 +109,7 @@ class IMHentai(
     override val mangaDetailInfoSelector = ".gallery_first"
 
     /* Pages */
+    override val idPrefixUri = "gallery"
     override val pageUri = "view"
     override val pageSelector = ".gthumb"
     private val serverSelector = "load_server"
@@ -158,6 +159,4 @@ class IMHentai(
                 )
             }
     }
-
-    override val idPrefixUri = "gallery"
 }
