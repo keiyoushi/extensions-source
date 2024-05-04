@@ -1,0 +1,10 @@
+ext {
+    extName = 'ManhwaHub'
+    extClass = '.ManhwaHub'
+    themePkg = 'manhwaz'
+    baseUrl = 'https://manhwahub.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
