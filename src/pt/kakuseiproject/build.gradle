@@ -2,8 +2,8 @@ ext {
     extName = 'Kakusei Project'
     extClass = '.KakuseiProject'
     themePkg = 'madara'
-    baseUrl = 'https://kakuseiproject.com.br'
-    overrideVersionCode = 0
+    baseUrl = 'https://kakuseiproject.com'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
