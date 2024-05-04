@@ -2,8 +2,9 @@ ext {
     extName = 'GuncelManga'
     extClass = '.GuncelManga'
     themePkg = 'madara'
-    baseUrl = 'https://guncelmanga.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://guncelmanga.net'
+    overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
