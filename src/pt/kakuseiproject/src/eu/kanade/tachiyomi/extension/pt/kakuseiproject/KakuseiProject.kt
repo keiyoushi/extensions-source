@@ -19,4 +19,6 @@ class KakuseiProject : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 }
