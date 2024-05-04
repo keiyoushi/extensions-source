@@ -9,4 +9,7 @@ class MangaGezgini : Madara(
     "https://mangagezgini.com",
     "tr",
     SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
-)
+) {
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useNewChapterEndpoint = true
+}
