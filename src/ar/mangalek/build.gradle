@@ -3,7 +3,7 @@ ext {
     extClass = '.Mangalek'
     themePkg = 'madara'
     baseUrl = 'https://lekmanga.net'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = false
 }
 
