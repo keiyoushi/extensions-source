@@ -665,7 +665,7 @@ abstract class GalleryAdults(
             }
             .toMutableList()
 
-        if (totalPages.isNotBlank()) {
+        if (totalPages.isNotBlank() && totalPages.toInt() > pages.size) {
             val form = pageRequestForm(document, totalPages, pages.size)
 
             val morePages = client.newCall(POST("$baseUrl/$pagesRequest", xhrHeaders, form))
@@ -717,7 +717,7 @@ abstract class GalleryAdults(
 
         val totalPages = document.inputIdValueOf(totalPagesSelector)
 
-        if (totalPages.isNotBlank()) {
+        if (totalPages.isNotBlank() && totalPages.toInt() > thumbUrls.size) {
             val imagesExt = images.first()?.imgAttr()!!
                 .substringAfterLast('.')
 
