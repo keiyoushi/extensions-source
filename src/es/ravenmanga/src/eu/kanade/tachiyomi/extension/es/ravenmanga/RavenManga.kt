@@ -29,7 +29,7 @@ class RavenManga : ParsedHttpSource() {
 
     override val name = "RavenManga"
 
-    override val baseUrl = "https://ravenseries.lat"
+    override val baseUrl = "https://ravensword.lat"
 
     override val lang = "es"
 
