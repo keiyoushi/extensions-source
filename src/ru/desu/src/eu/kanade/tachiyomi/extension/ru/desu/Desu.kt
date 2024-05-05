@@ -4,10 +4,6 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.ListPreference
-import eu.kanade.tachiyomi.extension.ru.desu.dto.MangaDetDto
-import eu.kanade.tachiyomi.extension.ru.desu.dto.MangaDetGenresDto
-import eu.kanade.tachiyomi.extension.ru.desu.dto.PageWrapperDto
-import eu.kanade.tachiyomi.extension.ru.desu.dto.SeriesWrapperDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -112,7 +108,7 @@ class Desu : ConfigurableSource, HttpSource() {
                 name
             }
             url = "/$id"
-            thumbnail_url = o.image.original
+            thumbnail_url = image.original
             description = if (isEng.equals("rus")) {
                 name
             } else {

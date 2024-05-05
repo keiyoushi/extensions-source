@@ -1,18 +1,19 @@
-package eu.kanade.tachiyomi.extension.ru.desu.dto
+package eu.kanade.tachiyomi.extension.ru.desu
 
 import kotlinx.serialization.Serializable
+
 @Serializable
-data class SeriesWrapperDto<T>(
+class SeriesWrapperDto<T>(
     val response: T,
 )
 
 @Serializable
-data class PageWrapperDto<T>(
+class PageWrapperDto<T>(
     val pageNavParams: NavDto,
     val response: List<T>,
 ) {
     @Serializable
-    data class NavDto(
+    class NavDto(
         val count: Int,
         val page: Int,
         val limit: Int,
@@ -20,7 +21,7 @@ data class PageWrapperDto<T>(
 }
 
 @Serializable
-data class MangaDetDto(
+class MangaDetDto(
     val id: Long,
     val name: String,
     val russian: String,
@@ -35,17 +36,17 @@ data class MangaDetDto(
     val status: String? = null,
 ) {
     @Serializable
-    data class ImgDto(
+    class ImgDto(
         val original: String? = null,
     )
 }
 
 @Serializable
-data class MangaDetGenresDto(
+class MangaDetGenresDto(
     val genres: List<TagsDto>? = null,
 ) {
     @Serializable
-    data class TagsDto(
+    class TagsDto(
         val russian: String,
     )
 }
