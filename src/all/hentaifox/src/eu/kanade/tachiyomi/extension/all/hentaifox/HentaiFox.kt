@@ -5,10 +5,8 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import kotlin.random.Random
 
 class HentaiFox(
     lang: String = "all",
@@ -17,8 +15,6 @@ class HentaiFox(
     "HentaiFox",
     "https://hentaifox.com",
     lang = lang,
-    mangaLang = mangaLang,
-    simpleDateFormat = null,
 ) {
     override val supportsLatest = mangaLang.isNotBlank()
 
@@ -44,11 +40,15 @@ class HentaiFox(
 
     override fun Element.mangaTitle(selector: String): String? = mangaFullTitle(selector)
 
-    override fun Element.getTime(): Long {
-        return selectFirst(".pages:contains(Posted:)")?.ownText()
+    override fun Element.getInfo(tag: String): String {
+        return select("ul.${tag.lowercase()} a")
+            .joinToString { it.ownText() }
+    }
+
+    override fun Element.getTime(): Long =
+        selectFirst(".pages:contains(Posted:)")?.ownText()
             ?.removePrefix("Posted: ")
             .toDate(simpleDateFormat)
-    }
 
     override fun HttpUrl.Builder.addPageUri(page: Int): HttpUrl.Builder {
         val url = toString()
@@ -80,12 +80,18 @@ class HentaiFox(
 
     override val idPrefixUri = "gallery"
 
+    override val favoritePath = "includes/user_favs.php"
     override val pagesRequest = "includes/thumbs_loader.php"
 
-    override fun getServer(document: Document, galleryId: String): String {
-        val domain = baseUrl.toHttpUrl().host
-        // Randomly choose between servers
-        return if (Random.nextBoolean()) "i2.$domain" else "i.$domain"
+    override fun tagsParser(document: Document): List<Pair<String, String>> {
+        return document.select(".list_tags .tag_item")
+            .mapNotNull {
+                Pair(
+                    it.selectFirst("h3.list_tag")?.ownText() ?: "",
+                    it.select("a").attr("href")
+                        .removeSuffix("/").substringAfterLast('/'),
+                )
+            }
     }
 
     override fun getFilterList() = FilterList(

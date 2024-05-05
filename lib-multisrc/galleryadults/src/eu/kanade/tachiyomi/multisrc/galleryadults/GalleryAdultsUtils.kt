@@ -57,7 +57,7 @@ fun String?.toDate(simpleDateFormat: SimpleDateFormat?): Long {
 }
 
 private fun parseDate(date: String?): Long {
-    date ?: return 0
+    date ?: return 0L
 
     return when {
         // Handle 'yesterday' and 'today', using midnight

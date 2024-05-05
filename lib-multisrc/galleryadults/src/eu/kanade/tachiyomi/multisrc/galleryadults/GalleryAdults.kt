@@ -55,6 +55,7 @@ abstract class GalleryAdults(
         .add("X-Requested-With", "XMLHttpRequest")
         .build()
 
+    /* Preferences */
     protected val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
@@ -88,9 +89,9 @@ abstract class GalleryAdults(
     protected fun Element.mangaFullTitle(selector: String) =
         selectFirst(selector)?.text()
 
-    private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
+    protected fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
-    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+    protected open val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
 
     protected open fun Element.mangaUrl() =
         selectFirst(".inner_thumb a")?.attr("abs:href")
@@ -170,6 +171,9 @@ abstract class GalleryAdults(
         }
     }
 
+    /**
+     * Manga URL: $baseUrl/$idPrefixUri/<id>/
+     */
     protected open val idPrefixUri = "g"
 
     protected open fun searchMangaByIdRequest(id: String): Request {
@@ -189,7 +193,7 @@ abstract class GalleryAdults(
     protected open val useIntermediateSearch: Boolean = false
     protected open val supportAdvancedSearch: Boolean = false
     protected open val supportSpeechless: Boolean = false
-    private val useBasicSearch: Boolean
+    protected open val useBasicSearch: Boolean
         get() = !useIntermediateSearch
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -225,6 +229,8 @@ abstract class GalleryAdults(
         }
     }
 
+    protected open val basicSearchKey = "q"
+
     /**
      * Basic Search: support query string with multiple-genres filter by adding genres to query string.
      */
@@ -236,13 +242,15 @@ abstract class GalleryAdults(
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search/")
-            addEncodedQueryParameter("q", buildQueryString(selectedGenres.map { it.name }, query))
+            addEncodedQueryParameter(basicSearchKey, buildQueryString(selectedGenres.map { it.name }, query))
             // Search results sorting is not supported by AsmHentai
             if (sortOrderFilter?.state == 0) addQueryParameter("sort", "popular")
             addPageUri(page)
         }
         return GET(url.build(), headers)
     }
+
+    protected open val intermediateSearchKey = "key"
 
     /**
      * This supports filter query search with languages, categories (manga, doujinshi...)
@@ -271,11 +279,13 @@ abstract class GalleryAdults(
                     toBinary(mangaLang == pair.first || mangaLang == LANGUAGE_MULTI),
                 )
             }
-            addEncodedQueryParameter("key", buildQueryString(selectedGenres.map { it.name }, query))
+            addEncodedQueryParameter(intermediateSearchKey, buildQueryString(selectedGenres.map { it.name }, query))
             addPageUri(page)
         }
         return GET(url.build())
     }
+
+    protected open val advancedSearchKey = "key"
 
     /**
      * Advanced Search normally won't support search for string but allow include/exclude specific
@@ -337,7 +347,7 @@ abstract class GalleryAdults(
                     )
                 }
             }
-            addEncodedQueryParameter("key", keys.joinToString("+"))
+            addEncodedQueryParameter(advancedSearchKey, keys.joinToString("+"))
             addPageUri(page)
         }
         return GET(url.build())
@@ -405,7 +415,7 @@ abstract class GalleryAdults(
         )
     }
 
-    protected open val favoritePath = "includes/user_favs.php"
+    protected open val favoritePath = "user/fav_pags.php"
 
     protected open fun loginRequired(document: Document, url: String): Boolean {
         return (
@@ -472,30 +482,43 @@ abstract class GalleryAdults(
     protected open fun Element.getCover() =
         selectFirst(".cover img")?.imgAttr()
 
-    protected open fun Element.getInfo(tag: String): String {
-        return select("ul.${tag.lowercase()} a")
-            .joinToString { it.ownText() }
-    }
+    /**
+     * Parsing document to extract info related to [tag].
+     */
+    protected abstract fun Element.getInfo(tag: String): String
 
     protected open fun Element.getDescription(): String = (
-        listOf("Parodies", "Characters", "Languages", "Categories")
+        listOf("Parodies", "Parody", "Characters", "Character", "Languages", "Language", "Categories", "Category")
             .mapNotNull { tag ->
                 getInfo(tag)
-                    .let { if (it.isNotBlank()) "$tag: $it" else null }
+                    .takeIf { it.isNotBlank() }
+                    ?.let { "$tag: $it" }
             } +
             listOfNotNull(
-                selectFirst(".pages:contains(Pages:)")?.ownText(),
+                getInfoPages(),
+                getInfoAlternativeTitle(),
+                getInfoFullTitle(),
             )
         )
         .joinToString("\n\n")
 
-    protected open val timeSelector = "time[datetime]"
+    protected open fun Element.getInfoPages(): String? =
+        inputIdValueOf(totalPagesSelector)
+            .takeIf { it.isNotBlank() }
+            ?.let { "Pages: $it" }
 
-    protected open fun Element.getTime(): Long {
-        return selectFirst(timeSelector)
-            ?.attr("datetime")
+    protected open fun Element.getInfoAlternativeTitle(): String? =
+        selectFirst("h1 + h2, .subtitle")?.ownText()
+            .takeIf { !it.isNullOrBlank() }
+            ?.let { "Alternative title: $it" }
+
+    protected open fun Element.getInfoFullTitle(): String? =
+        if (preferences.shortTitle) "Full title: ${mangaFullTitle("h1")}" else null
+
+    protected open fun Element.getTime(): Long =
+        selectFirst(".uploaded")
+            ?.ownText()
             .toDate(simpleDateFormat)
-    }
 
     /* Chapters */
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -516,41 +539,61 @@ abstract class GalleryAdults(
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     /* Pages */
-    protected open fun Document.inputIdValueOf(string: String): String {
+    protected open fun Element.inputIdValueOf(string: String): String {
         return select("input[id=$string]").attr("value")
     }
 
     protected open val pagesRequest = "inc/thumbs_loader.php"
-
     protected open val galleryIdSelector = "gallery_id"
     protected open val loadIdSelector = "load_id"
     protected open val loadDirSelector = "load_dir"
     protected open val totalPagesSelector = "load_pages"
+    protected open val serverSelector = "load_server"
 
-    protected open fun pageRequestForm(document: Document, totalPages: String): FormBody =
-        FormBody.Builder()
+    protected open fun pageRequestForm(document: Document, totalPages: String, loadedPages: Int): FormBody {
+        val token = document.select("[name=csrf-token]").attr("content")
+        val serverNumber = document.serverNumber()
+
+        return FormBody.Builder()
             .add("u_id", document.inputIdValueOf(galleryIdSelector))
             .add("g_id", document.inputIdValueOf(loadIdSelector))
             .add("img_dir", document.inputIdValueOf(loadDirSelector))
-            .add("visible_pages", "10")
+            .add("visible_pages", loadedPages.toString())
             .add("total_pages", totalPages)
             .add("type", "2") // 1 would be "more", 2 is "all remaining"
+            .apply {
+                if (token.isNotBlank()) add("_token", token)
+                if (serverNumber != null) add("server", serverNumber)
+            }
             .build()
+    }
 
+    /**
+     * Page URL: $baseUrl/$pageUri/<id>/<page>
+     */
     protected open val pageUri = "g"
     protected open val pageSelector = ".gallery_thumb"
 
     private val jsonFormat: Json by injectLazy()
 
-    protected open fun getServer(document: Document, galleryId: String): String {
-        val cover = document.getCover()
-        return cover!!.toHttpUrl().host
+    protected open fun Element.getServer(): String {
+        val domain = baseUrl.toHttpUrl().host
+        return serverNumber()
+            ?.let { "m$it.$domain" }
+            ?: getCover()!!.toHttpUrl().host
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val json = document.selectFirst("script:containsData(parseJSON)")?.data()
+    protected open fun Element.serverNumber(): String? =
+        inputIdValueOf(serverSelector)
+            .takeIf { it.isNotBlank() }
+
+    protected open fun Element.parseJson(): String? =
+        selectFirst("script:containsData(parseJSON)")?.data()
             ?.substringAfter("$.parseJSON('")
             ?.substringBefore("');")?.trim()
+
+    override fun pageListParse(document: Document): List<Page> {
+        val json = document.parseJson()
 
         if (json != null) {
             val loadDir = document.inputIdValueOf(loadDirSelector)
@@ -558,8 +601,8 @@ abstract class GalleryAdults(
             val galleryId = document.inputIdValueOf(galleryIdSelector)
             val pageUrl = "$baseUrl/$pageUri/$galleryId"
 
-            val randomServer = getServer(document, galleryId)
-            val imagesUri = "https://$randomServer/$loadDir/$loadId"
+            val server = document.getServer()
+            val imagesUri = "https://$server/$loadDir/$loadId"
 
             try {
                 val pages = mutableListOf<Page>()
@@ -608,7 +651,6 @@ abstract class GalleryAdults(
      *   which will then request one by one to parse for page's image's URL using [imageUrlParse].
      */
     protected open fun pageListParseAlternative(document: Document): List<Page> {
-        // input only exists if pages > 10 and have to make a request to get the other thumbnails
         val totalPages = document.inputIdValueOf(totalPagesSelector)
         val galleryId = document.inputIdValueOf(galleryIdSelector)
         val pageUrl = "$baseUrl/$pageUri/$galleryId"
@@ -624,7 +666,7 @@ abstract class GalleryAdults(
             .toMutableList()
 
         if (totalPages.isNotBlank()) {
-            val form = pageRequestForm(document, totalPages)
+            val form = pageRequestForm(document, totalPages, pages.size)
 
             val morePages = client.newCall(POST("$baseUrl/$pagesRequest", xhrHeaders, form))
                 .execute()
@@ -667,13 +709,12 @@ abstract class GalleryAdults(
         val galleryId = document.inputIdValueOf(galleryIdSelector)
         val pageUrl = "$baseUrl/$pageUri/$galleryId"
 
-        val randomServer = getServer(document, galleryId)
-        val imagesUri = "https://$randomServer/$loadDir/$loadId"
+        val server = document.getServer()
+        val imagesUri = "https://$server/$loadDir/$loadId"
 
         val images = document.select("$pageSelector img")
         val thumbUrls = images.map { it.imgAttr() }.toMutableList()
 
-        // totalPages only exists if pages > 10 and have to make a request to get the other thumbnails
         val totalPages = document.inputIdValueOf(totalPagesSelector)
 
         if (totalPages.isNotBlank()) {
@@ -703,9 +744,9 @@ abstract class GalleryAdults(
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
     private var tagsFetchAttempt = 0
-    private var genres = emptyList<Genre>()
+    protected var genres = emptyList<Genre>()
 
-    private fun tagsRequest(page: Int): Request {
+    protected open fun tagsRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("tags/popular")
             addPageUri(page)
@@ -713,18 +754,12 @@ abstract class GalleryAdults(
         return GET(url.build(), headers)
     }
 
-    protected open fun tagsParser(document: Document): List<Pair<String, String>> {
-        return document.select(".list_tags .tag_item")
-            .mapNotNull {
-                Pair(
-                    it.selectFirst("h3.list_tag")?.ownText() ?: "",
-                    it.select("a").attr("href")
-                        .removeSuffix("/").substringAfterLast('/'),
-                )
-            }
-    }
+    /**
+     * Parsing [document] to return a list of tags in <name, uri> pairs.
+     */
+    protected abstract fun tagsParser(document: Document): List<Pair<String, String>>
 
-    private fun getGenres() {
+    protected open fun requestTags() {
         if (genres.isEmpty() && tagsFetchAttempt < 3) {
             launchIO {
                 val tags = mutableListOf<Pair<String, String>>()
@@ -753,7 +788,7 @@ abstract class GalleryAdults(
     }
 
     override fun getFilterList(): FilterList {
-        getGenres()
+        requestTags()
         val filters = emptyList<Filter<*>>().toMutableList()
         if (useIntermediateSearch) {
             filters.add(Filter.Header("HINT: Separate search term with comma (,)"))

@@ -38,50 +38,34 @@ class AsmHentai(
             .joinToString { it.ownText().cleanTag() }
     }
 
-    override fun Element.getDescription(): String {
-        return (
-            listOf("Parodies", "Characters", "Languages", "Category")
-                .mapNotNull { tag ->
-                    getInfo(tag)
-                        .let { if (it.isNotBlank()) "$tag: $it" else null }
-                } +
-                listOfNotNull(
-                    selectFirst(".book_page .pages h3")?.ownText(),
-                    selectFirst(".book_page h1 + h2")?.ownText()
-                        .let { altTitle -> if (!altTitle.isNullOrBlank()) "Alternate Title: $altTitle" else null },
-                )
-            )
-            .joinToString("\n\n")
-            .plus(
-                if (preferences.shortTitle) {
-                    "\nFull title: ${mangaFullTitle("h1")}"
-                } else {
-                    ""
-                },
-            )
-    }
+    override fun Element.getInfoPages() = selectFirst(".book_page .pages h3")?.ownText()
 
     override val mangaDetailInfoSelector = ".book_page"
 
+    /**
+     * [totalPagesSelector] only exists if pages > 10
+     */
     override val totalPagesSelector = "t_pages"
+
     override val galleryIdSelector = "load_id"
     override val pageUri = "gallery"
     override val pageSelector = ".preview_thumb"
 
-    override fun pageRequestForm(document: Document, totalPages: String): FormBody {
+    override fun pageRequestForm(document: Document, totalPages: String, loadedPages: Int): FormBody {
         val token = document.select("[name=csrf-token]").attr("content")
 
         return FormBody.Builder()
-            .add("_token", token)
             .add("id", document.inputIdValueOf(loadIdSelector))
             .add("dir", document.inputIdValueOf(loadDirSelector))
-            .add("visible_pages", "10")
+            .add("visible_pages", loadedPages.toString())
             .add("t_pages", totalPages)
             .add("type", "2") // 1 would be "more", 2 is "all remaining"
+            .apply {
+                if (token.isNotBlank()) add("_token", token)
+            }
             .build()
     }
 
-    /* Filters */
     override fun tagsParser(document: Document): List<Pair<String, String>> {
         return document.select(".tags_page ul.tags li")
             .mapNotNull {
