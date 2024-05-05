@@ -1,0 +1,10 @@
+ext {
+    extName = 'TopManhua.net'
+    extClass = '.TopManhuaNet'
+    themePkg = 'madara'
+    baseUrl = 'https://topmanhua.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
