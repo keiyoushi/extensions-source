@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaHoNa'
+    extClass = '.MangaHoNa'
+    themePkg = 'madara'
+    baseUrl = 'https://mangahona.pl'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
