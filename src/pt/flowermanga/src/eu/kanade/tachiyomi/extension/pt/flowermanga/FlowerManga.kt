@@ -9,12 +9,14 @@ import java.util.concurrent.TimeUnit
 
 class FlowerManga : Madara(
     "Flower Manga",
-    "https://flowermanga.com",
+    "https://flowermanga.net",
     "pt-BR",
-    SimpleDateFormat("dd MMMMM yyyy", Locale("pt", "BR")),
+    SimpleDateFormat("d 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
-
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useNewChapterEndpoint = false
 }
