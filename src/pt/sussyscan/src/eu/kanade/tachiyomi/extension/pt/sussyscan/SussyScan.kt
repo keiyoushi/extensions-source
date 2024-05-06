@@ -16,4 +16,7 @@ class SussyScan : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
+
+    // There's no manga thumbnail in manga page, keeps thumbnail from popular, latest and search
+    override val mangaDetailsSelectorThumbnail = "#thumbnail-empty"
 }
