@@ -1,0 +1,9 @@
+ext {
+    extName = 'Pati Manga'
+    extClass = '.PatiManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://www.patimanga.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
