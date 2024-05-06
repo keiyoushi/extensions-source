@@ -17,6 +17,5 @@ class MaidScan : Madara(
         .build()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
-
     override val useNewChapterEndpoint = true
 }
