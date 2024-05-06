@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.sussyscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class SussyScan : Madara(
     "Sussy Scan",
