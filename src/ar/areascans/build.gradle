@@ -1,0 +1,9 @@
+ext {
+    extName = 'Area Scans'
+    extClass = '.AreaScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://ar.areascans.org'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
