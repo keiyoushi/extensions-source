@@ -1,0 +1,9 @@
+ext {
+    extName = 'Afrodit Scans'
+    extClass = '.AfroditScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://afroditscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
