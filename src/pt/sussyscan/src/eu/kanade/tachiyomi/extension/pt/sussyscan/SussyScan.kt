@@ -9,7 +9,7 @@ class SussyScan : Madara(
     "Sussy Scan",
     "https://sussyscan.com",
     "pt-BR",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR"))
+    SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
 ) {
     override val client = super.client.newBuilder()
         .rateLimit(2)
