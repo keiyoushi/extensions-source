@@ -97,6 +97,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
         thumbnail_url = dto.titleArt
         title = dto.name!!
         url = helper.getSeriesUrl(dto)
+        initialized = true
     }
 
     private fun parseMangaPage(response: Response, filterPredicate: (SeriesDto) -> Boolean = { true }): MangasPage {
@@ -205,8 +206,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request {
         val uri = manga.url.toHttpUrl()
 
-        val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)?.toInt()
-            ?: throw Exception("${manga.url} missing series param. This shouldn't happen")
+        val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
 
         return firestore.getDocument("Series/$seriesId")
     }
@@ -221,8 +221,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val uri = manga.url.toHttpUrl()
 
-        val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)?.toInt()
-            ?: throw Exception("${manga.url} missing series param. This shouldn't happen")
+        val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
 
         val seriesObservable = client.newCall(
             firestore.getDocument("Series/$seriesId"),
@@ -283,12 +282,8 @@ class Mangamo : ConfigurableSource, HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val uri = chapter.url.toHttpUrl()
 
-        val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)?.toInt()
-        val chapterId = uri.queryParameter(MangamoConstants.CHAPTER_QUERY_PARAM)?.toInt()
-
-        if (seriesId == null || chapterId == null) {
-            throw java.lang.Exception("${chapter.url} missing param. This shouldn't happen")
-        }
+        val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
+        val chapterId = uri.queryParameter(MangamoConstants.CHAPTER_QUERY_PARAM)!!.toInt()
 
         return getPagesImagesRequest(seriesId, chapterId)
     }

@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
 data class SeriesDto(
     val id: Int?,
     val authors: List<AuthorDto>?,
-    val chapterCount: Int?,
-    val createdAt: Long?,
+//    val chapterCount: Int?,
+//    val createdAt: Long?,
     val description: String?,
     val enabled: Boolean?,
     val genres: List<GenreDto>?,
@@ -20,13 +20,13 @@ data class SeriesDto(
     val ongoing: Boolean?,
     val onlyOnMangamo: Boolean?,
     val onlyTransactional: Boolean?,
-    val publishDate: Long?,
-    val publishers: List<PublisherDto>?,
+//    val publishDate: Long?,
+//    val publishers: List<PublisherDto>?,
     val releaseStatusTag: String?,
     val titleArt: String?,
-    val updatedAt: Long?,
-    val updatedDate: Long?,
-    val uuid: String?,
+//    val updatedAt: Long?,
+//    val updatedDate: Long?,
+//    val uuid: String?,
 )
 
 @Serializable
@@ -35,11 +35,11 @@ data class AuthorDto(
     val name: String,
 )
 
-@Serializable
-data class PublisherDto(
-    val id: Int,
-    val name: String,
-)
+// @Serializable
+// data class PublisherDto(
+//    val id: Int,
+//    val name: String,
+// )
 
 @Serializable
 data class GenreDto(

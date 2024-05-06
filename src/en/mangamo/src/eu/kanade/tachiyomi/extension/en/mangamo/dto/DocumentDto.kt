@@ -25,10 +25,10 @@ typealias DocumentDto<T> = @Contextual DocumentDtoInternal<T>
 
 @Serializable
 data class DocumentDtoInternal<T>(
-    val name: String,
+//    val name: String,
     val fields: T,
-    val createTime: String,
-    val updateTime: String,
+//    val createTime: String,
+//    val updateTime: String,
 )
 
 class DocumentSerializer(dataSerializer: KSerializer<out DocumentDto<out Any?>>) :
