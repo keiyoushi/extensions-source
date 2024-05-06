@@ -482,13 +482,15 @@ abstract class GalleryAdults(
     protected open fun Element.getCover() =
         selectFirst(".cover img")?.imgAttr()
 
+    protected val regexTag = Regex("Tags?")
+
     /**
      * Parsing document to extract info related to [tag].
      */
     protected abstract fun Element.getInfo(tag: String): String
 
     protected open fun Element.getDescription(): String = (
-        listOf("Parodies", "Parody", "Characters", "Character", "Languages", "Language", "Categories", "Category")
+        listOf("Parodies", "Characters", "Languages", "Categories", "Category")
             .mapNotNull { tag ->
                 getInfo(tag)
                     .takeIf { it.isNotBlank() }
@@ -743,8 +745,13 @@ abstract class GalleryAdults(
     /* Filters */
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
+    private var tagsFetched = false
     private var tagsFetchAttempt = 0
-    protected var genres = emptyList<Genre>()
+
+    /**
+     * List of tags in <name, uri> pairs
+     */
+    protected var genres: MutableMap<String, String> = mutableMapOf()
 
     protected open fun tagsRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -757,12 +764,21 @@ abstract class GalleryAdults(
     /**
      * Parsing [document] to return a list of tags in <name, uri> pairs.
      */
-    protected abstract fun tagsParser(document: Document): List<Pair<String, String>>
+    protected open fun tagsParser(document: Document): List<Genre> {
+        return document.select("a.tag_btn")
+            .mapNotNull {
+                Genre(
+                    it.select(".list_tag, .tag_name").text(),
+                    it.attr("href")
+                        .removeSuffix("/").substringAfterLast('/'),
+                )
+            }
+    }
 
     protected open fun requestTags() {
-        if (genres.isEmpty() && tagsFetchAttempt < 3) {
+        if (!tagsFetched && tagsFetchAttempt < 3) {
             launchIO {
-                val tags = mutableListOf<Pair<String, String>>()
+                val tags = mutableListOf<Genre>()
                 runBlocking {
                     val jobsPool = mutableListOf<Job>()
                     // Get first 3 pages
@@ -779,7 +795,11 @@ abstract class GalleryAdults(
                         )
                     }
                     jobsPool.joinAll()
-                    genres = tags.sortedWith(compareBy { it.first }).map { Genre(it.first, it.second) }
+                    tags.sortedWith(compareBy { it.name })
+                        .forEach {
+                            genres[it.name] = it.uri
+                        }
+                    tagsFetched = true
                 }
 
                 tagsFetchAttempt++

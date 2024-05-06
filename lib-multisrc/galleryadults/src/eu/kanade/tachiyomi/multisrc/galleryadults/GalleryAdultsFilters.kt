@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.multisrc.galleryadults
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(name: String, val uri: String) : Filter.CheckBox(name)
-class GenresFilter(genres: List<Genre>) : Filter.Group<Genre>(
+class GenresFilter(genres: Map<String, String>) : Filter.Group<Genre>(
     "Tags",
-    genres.map { Genre(it.name, it.uri) },
+    genres.map { Genre(it.key, it.value) },
 )
 
 class SortOrderFilter(sortOrderURIs: List<Pair<String, String>>) :

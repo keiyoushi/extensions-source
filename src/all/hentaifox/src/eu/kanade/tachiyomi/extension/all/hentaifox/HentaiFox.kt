@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class HentaiFox(
@@ -42,7 +41,21 @@ class HentaiFox(
 
     override fun Element.getInfo(tag: String): String {
         return select("ul.${tag.lowercase()} a")
-            .joinToString { it.ownText() }
+            .joinToString {
+                val name = it.ownText()
+                if (tag.contains(regexTag)) {
+                    genres[name] = it.attr("href")
+                        .removeSuffix("/").substringAfterLast('/')
+                }
+                listOf(
+                    name,
+                    it.select(".split_tag").text()
+                        .removePrefix("| ")
+                        .trim(),
+                )
+                    .filter { s -> s.isNotBlank() }
+                    .joinToString()
+            }
     }
 
     override fun Element.getTime(): Long =
@@ -82,17 +95,6 @@ class HentaiFox(
 
     override val favoritePath = "includes/user_favs.php"
     override val pagesRequest = "includes/thumbs_loader.php"
-
-    override fun tagsParser(document: Document): List<Pair<String, String>> {
-        return document.select(".list_tags .tag_item")
-            .mapNotNull {
-                Pair(
-                    it.selectFirst("h3.list_tag")?.ownText() ?: "",
-                    it.select("a").attr("href")
-                        .removeSuffix("/").substringAfterLast('/'),
-                )
-            }
-    }
 
     override fun getFilterList() = FilterList(
         listOf(

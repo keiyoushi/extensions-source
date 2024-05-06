@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.asmhentai
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.Genre
 import eu.kanade.tachiyomi.multisrc.galleryadults.cleanTag
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.source.model.Filter
@@ -34,8 +35,22 @@ class AsmHentai(
     override val favoritePath = "inc/user.php?act=favs"
 
     override fun Element.getInfo(tag: String): String {
-        return select(".tags:contains($tag:) .tag")
-            .joinToString { it.ownText().cleanTag() }
+        return select(".tags:contains($tag:) .tag_list a")
+            .joinToString {
+                val name = it.selectFirst(".tag")?.ownText() ?: ""
+                if (tag.contains(regexTag)) {
+                    genres[name] = it.attr("href")
+                        .removeSuffix("/").substringAfterLast('/')
+                }
+                listOf(
+                    name,
+                    it.select(".split_tag").text()
+                        .removePrefix("| ")
+                        .trim(),
+                )
+                    .filter { s -> s.isNotBlank() }
+                    .joinToString()
+            }
     }
 
     override fun Element.getInfoPages() = selectFirst(".book_page .pages h3")?.ownText()
@@ -66,12 +81,12 @@ class AsmHentai(
             .build()
     }
 
-    override fun tagsParser(document: Document): List<Pair<String, String>> {
-        return document.select(".tags_page ul.tags li")
+    override fun tagsParser(document: Document): List<Genre> {
+        return document.select(".tags_page .tags a.tag")
             .mapNotNull {
-                Pair(
-                    it.selectFirst("a.tag")?.ownText() ?: "",
-                    it.select("a.tag").attr("href")
+                Genre(
+                    it.ownText(),
+                    it.attr("href")
                         .removeSuffix("/").substringAfterLast('/'),
                 )
             }

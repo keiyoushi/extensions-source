@@ -23,7 +23,7 @@ fun Element.imgAttr() = when {
     hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
     hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
     else -> absUrl("src")
-}!!
+}
 
 fun Element.cleanTag(): String = text().cleanTag()
 fun String.cleanTag(): String = replace(regexTagCountNumber, "").trim()

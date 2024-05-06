@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.imhentai
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
-import eu.kanade.tachiyomi.multisrc.galleryadults.cleanTag
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
-import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
 
@@ -62,19 +59,22 @@ class IMHentai(
 
     /* Details */
     override fun Element.getInfo(tag: String): String {
-        return select("li:has(.tags_text:contains($tag:)) .tag").map {
-            it?.run {
+        return select("li:has(.tags_text:contains($tag:)) a.tag")
+            .joinToString {
+                val name = it.ownText()
+                if (tag.contains(regexTag)) {
+                    genres[name] = it.attr("href")
+                        .removeSuffix("/").substringAfterLast('/')
+                }
                 listOf(
-                    ownText().cleanTag(),
-                    select(".split_tag").text()
+                    name,
+                    it.select(".split_tag").text()
                         .trim()
-                        .removePrefix("| ")
-                        .cleanTag(),
+                        .removePrefix("| "),
                 )
                     .filter { s -> s.isNotBlank() }
                     .joinToString()
             }
-        }.joinToString()
     }
 
     override fun Element.getCover() =
@@ -86,16 +86,4 @@ class IMHentai(
     override val idPrefixUri = "gallery"
     override val pageUri = "view"
     override val pageSelector = ".gthumb"
-
-    /* Filters */
-    override fun tagsParser(document: Document): List<Pair<String, String>> {
-        return document.select(".stags .tag_btn")
-            .mapNotNull {
-                Pair(
-                    it.selectFirst(".list_tag")?.ownText() ?: "",
-                    it.select("a").attr("href")
-                        .removeSuffix("/").substringAfterLast('/'),
-                )
-            }
-    }
 }
