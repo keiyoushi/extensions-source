@@ -60,6 +60,8 @@ abstract class GalleryAdults(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
+    protected open val useShortTitlePreference = true
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHORT_TITLE
@@ -67,6 +69,7 @@ abstract class GalleryAdults(
             summaryOff = "Showing Long Titles"
             summaryOn = "Showing short Titles"
             setDefaultValue(false)
+            setVisible(useShortTitlePreference)
         }.also(screen::addPreference)
     }
 
