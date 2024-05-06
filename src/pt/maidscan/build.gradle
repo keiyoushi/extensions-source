@@ -2,8 +2,8 @@ ext {
     extName = 'Maid Scan'
     extClass = '.MaidScan'
     themePkg = 'madara'
-    baseUrl = 'https://maidscan.com.br'
-    overrideVersionCode = 0
+    baseUrl = 'https://maidscans.com'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
