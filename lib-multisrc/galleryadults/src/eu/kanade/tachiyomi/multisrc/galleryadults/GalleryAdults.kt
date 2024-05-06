@@ -151,7 +151,14 @@ abstract class GalleryAdults(
 
     /* Search */
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val randomEntryFilter = filters.filterIsInstance<RandomEntryFilter>().firstOrNull()
+
         return when {
+            randomEntryFilter?.state == true -> {
+                client.newCall(randomEntryRequest())
+                    .asObservableSuccess()
+                    .map { response -> randomEntryParse(response) }
+            }
             query.startsWith(PREFIX_ID_SEARCH) -> {
                 val id = query.removePrefix(PREFIX_ID_SEARCH)
                 client.newCall(searchMangaByIdRequest(id))
@@ -169,6 +176,26 @@ abstract class GalleryAdults(
                     .map { response -> searchMangaParse(response) }
             }
         }
+    }
+
+    protected open fun randomEntryRequest(): Request = GET("$baseUrl/random/", headers)
+
+    protected open fun randomEntryParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val url = response.request.url.toString()
+        val id = url.removeSuffix("/")
+            .substringAfterLast('/')
+        return MangasPage(
+            listOf(
+                SManga.create().apply {
+                    title = document.mangaTitle("h1")!!
+                    setUrlWithoutDomain("$baseUrl/$idPrefixUri/$id/")
+                    thumbnail_url = document.getCover()
+                },
+            ),
+            false,
+        )
     }
 
     /**
@@ -851,6 +878,8 @@ abstract class GalleryAdults(
             filters.add(SpeechlessFilter())
         }
         filters.add(FavoriteFilter())
+
+        filters.add(RandomEntryFilter())
 
         return FilterList(filters)
     }

@@ -13,6 +13,8 @@ class SortOrderFilter(sortOrderURIs: List<Pair<String, String>>) :
 
 class FavoriteFilter : Filter.CheckBox("Show favorites only (login via WebView)", false)
 
+class RandomEntryFilter : Filter.CheckBox("Random manga", false)
+
 // Speechless
 class SpeechlessFilter : Filter.CheckBox("Show speechless items only", false)
 
