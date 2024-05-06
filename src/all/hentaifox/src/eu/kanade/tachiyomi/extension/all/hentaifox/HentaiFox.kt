@@ -37,6 +37,7 @@ class HentaiFox(
             }
         }
 
+    override val useShortTitlePreference = false
     override fun Element.mangaTitle(selector: String): String? = mangaFullTitle(selector)
 
     override fun Element.getInfo(tag: String): String {
@@ -70,7 +71,7 @@ class HentaiFox(
                 addPathSegments("page/$page")
             url.contains('?') ->
                 addQueryParameter("page", page.toString())
-            page > 1 ->
+            else ->
                 addPathSegments("pag/$page")
         }
         addPathSegment("") // trailing slash (/)

@@ -63,8 +63,8 @@ class AsmHentai(
     override val totalPagesSelector = "t_pages"
 
     override val galleryIdSelector = "load_id"
+    override val thumbnailSelector = ".preview_thumb"
     override val pageUri = "gallery"
-    override val pageSelector = ".preview_thumb"
 
     override fun pageRequestForm(document: Document, totalPages: String, loadedPages: Int): FormBody {
         val token = document.select("[name=csrf-token]").attr("content")

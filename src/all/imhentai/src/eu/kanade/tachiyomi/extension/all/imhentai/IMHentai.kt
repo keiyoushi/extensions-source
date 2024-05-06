@@ -84,6 +84,6 @@ class IMHentai(
 
     /* Pages */
     override val idPrefixUri = "gallery"
+    override val thumbnailSelector = ".gthumb"
     override val pageUri = "view"
-    override val pageSelector = ".gthumb"
 }

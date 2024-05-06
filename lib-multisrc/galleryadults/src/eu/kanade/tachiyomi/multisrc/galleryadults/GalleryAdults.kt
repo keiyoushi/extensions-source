@@ -597,11 +597,7 @@ abstract class GalleryAdults(
             .build()
     }
 
-    /**
-     * Page URL: $baseUrl/$pageUri/<id>/<page>
-     */
-    protected open val pageUri = "g"
-    protected open val pageSelector = ".gallery_thumb"
+    protected open val thumbnailSelector = ".gallery_thumb"
 
     private val jsonFormat: Json by injectLazy()
 
@@ -620,6 +616,11 @@ abstract class GalleryAdults(
         selectFirst("script:containsData(parseJSON)")?.data()
             ?.substringAfter("$.parseJSON('")
             ?.substringBefore("');")?.trim()
+
+    /**
+     * Page URL: $baseUrl/$pageUri/<id>/<page>
+     */
+    protected open val pageUri = "g"
 
     override fun pageListParse(document: Document): List<Page> {
         val json = document.parseJson()
@@ -684,7 +685,7 @@ abstract class GalleryAdults(
         val galleryId = document.inputIdValueOf(galleryIdSelector)
         val pageUrl = "$baseUrl/$pageUri/$galleryId"
 
-        val pages = document.select("$pageSelector a")
+        val pages = document.select("$thumbnailSelector a")
             .map {
                 if (parsingImagePageByPage) {
                     it.absUrl("href")
@@ -741,7 +742,7 @@ abstract class GalleryAdults(
         val server = document.getServer()
         val imagesUri = "https://$server/$loadDir/$loadId"
 
-        val images = document.select("$pageSelector img")
+        val images = document.select("$thumbnailSelector img")
         val thumbUrls = images.map { it.imgAttr() }.toMutableList()
 
         val totalPages = document.inputIdValueOf(totalPagesSelector)
