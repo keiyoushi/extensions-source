@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class MaidScan : Madara(
     "Maid Scan",
@@ -15,7 +14,7 @@ class MaidScan : Madara(
 ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(2)
         .build()
 
     override val useNewChapterEndpoint = true
