@@ -16,6 +16,4 @@ class SussyScan : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
-
-    override val mangaSubString = "sus"
 }
