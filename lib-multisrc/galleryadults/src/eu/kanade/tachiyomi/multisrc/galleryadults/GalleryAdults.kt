@@ -108,7 +108,7 @@ abstract class GalleryAdults(
         if (!url.endsWith('/') && !url.contains('?')) {
             addPathSegment("") // trailing slash (/)
         }
-        if (page > 1) addQueryParameter("page", page.toString())
+        addQueryParameter("page", page.toString())
         return this
     }
 
