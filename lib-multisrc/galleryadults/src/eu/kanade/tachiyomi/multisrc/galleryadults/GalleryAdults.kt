@@ -854,7 +854,7 @@ abstract class GalleryAdults(
             filters.add(GenresFilter(genres))
         }
 
-        if (useIntermediateSearch) {
+        if (useIntermediateSearch || supportAdvancedSearch) {
             filters.addAll(
                 listOf(
                     Filter.Separator(),
