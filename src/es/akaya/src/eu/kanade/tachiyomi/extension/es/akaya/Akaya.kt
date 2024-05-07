@@ -38,7 +38,7 @@ class Akaya : ParsedHttpSource() {
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .addInterceptor { chain ->
             val request = chain.request()
-            if (request.url.pathSegments.first() != "serie") return@addInterceptor chain.proceed(request)
+            if (!request.url.toString().startsWith("$baseUrl/serie")) return@addInterceptor chain.proceed(request)
             val response = chain.proceed(request)
             if (response.request.url.toString().removeSuffix("/") == baseUrl) {
                 throw IOException("Esta serie no se encuentra disponible")
