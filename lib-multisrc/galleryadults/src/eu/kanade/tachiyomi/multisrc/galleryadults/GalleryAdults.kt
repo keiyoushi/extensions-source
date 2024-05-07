@@ -187,8 +187,7 @@ abstract class GalleryAdults(
         val document = response.asJsoup()
 
         val url = response.request.url.toString()
-        val id = url.removeSuffix("/")
-            .substringAfterLast('/')
+        val id = url.removeSuffix("/").substringAfterLast('/')
         return MangasPage(
             listOf(
                 SManga.create().apply {
@@ -204,7 +203,7 @@ abstract class GalleryAdults(
     /**
      * Manga URL: $baseUrl/$idPrefixUri/<id>/
      */
-    protected open val idPrefixUri = "g"
+    protected open val idPrefixUri = "gallery"
 
     protected open fun searchMangaByIdRequest(id: String): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -273,7 +272,6 @@ abstract class GalleryAdults(
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search/")
             addEncodedQueryParameter(basicSearchKey, buildQueryString(selectedGenres.map { it.name }, query))
-            // Search results sorting is not supported by AsmHentai
             if (sortOrderFilter?.state == 0) addQueryParameter("sort", "popular")
             addPageUri(page)
         }
@@ -316,6 +314,7 @@ abstract class GalleryAdults(
     }
 
     protected open val advancedSearchKey = "key"
+    protected open val advancedSearchUri = "advsearch"
 
     /**
      * Advanced Search normally won't support search for string but allow include/exclude specific
@@ -332,7 +331,7 @@ abstract class GalleryAdults(
         // Advanced search
         val advancedSearchFilters = filters.filterIsInstance<AdvancedTextFilter>()
 
-        val url = "$baseUrl/advsearch".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/$advancedSearchUri".toHttpUrl().newBuilder().apply {
             getSortOrderURIs().forEachIndexed { index, pair ->
                 addQueryParameter(pair.second, toBinary(sortOrderFilter?.state == index))
             }
@@ -671,9 +670,11 @@ abstract class GalleryAdults(
 
     /**
      * Overwrite this to force extension not blindly converting thumbnails to full image
-     * with simply removing the trailing "t" from file name. Instead, it will open each page,
+     * by simply removing the trailing "t" from file name. Instead, it will open each page,
      * one by one, then parsing for actual image's URL.
      * This will be much slower but guaranteed work.
+     *
+     * This only apply if site doesn't provide 'parseJSON'.
      */
     protected open val parsingImagePageByPage: Boolean = false
 

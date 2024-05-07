@@ -92,8 +92,6 @@ class HentaiFox(
         }
     }
 
-    override val idPrefixUri = "gallery"
-
     override val favoritePath = "includes/user_favs.php"
     override val pagesRequest = "includes/thumbs_loader.php"
 

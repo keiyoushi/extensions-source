@@ -83,7 +83,6 @@ class IMHentai(
     override val mangaDetailInfoSelector = ".gallery_first"
 
     /* Pages */
-    override val idPrefixUri = "gallery"
     override val thumbnailSelector = ".gthumb"
     override val pageUri = "view"
 }

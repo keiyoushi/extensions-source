@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.asmhentai
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.Genre
-import eu.kanade.tachiyomi.multisrc.galleryadults.cleanTag
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -64,6 +63,8 @@ class AsmHentai(
 
     override val galleryIdSelector = "load_id"
     override val thumbnailSelector = ".preview_thumb"
+
+    override val idPrefixUri = "g"
     override val pageUri = "gallery"
 
     override fun pageRequestForm(document: Document, totalPages: String, loadedPages: Int): FormBody {
@@ -95,6 +96,7 @@ class AsmHentai(
     override fun getFilterList() = FilterList(
         listOf(
             Filter.Header("HINT: Separate search term with comma (,)"),
+            Filter.Header("String query search doesn't support Sort order"),
         ) + super.getFilterList().list,
     )
 }
