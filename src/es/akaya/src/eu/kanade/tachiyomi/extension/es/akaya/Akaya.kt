@@ -45,7 +45,32 @@ class Akaya : ParsedHttpSource() {
             }
             return@addInterceptor response
         }
+        .addInterceptor { chain ->
+            val request = chain.request()
+            if (!request.url.toString().startsWith("$baseUrl/search")) return@addInterceptor chain.proceed(request)
+            val query = request.url.fragment!!
+            if (csrfToken.isEmpty()) getCsrftoken()
+            val response = chain.proceed(addFormBody(request, query))
+            if (response.code == 419) {
+                response.close()
+                getCsrftoken()
+                return@addInterceptor chain.proceed(addFormBody(request, query))
+            }
+            return@addInterceptor response
+        }
         .build()
+
+    private fun addFormBody(request: Request, query: String): Request {
+        val body = FormBody.Builder()
+            .add("_token", csrfToken)
+            .add("search", query)
+            .build()
+
+        return request.newBuilder()
+            .url(request.url.toString().substringBefore("#"))
+            .post(body)
+            .build()
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -68,10 +93,12 @@ class Akaya : ParsedHttpSource() {
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
+    private var csrfToken: String = ""
+
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.isEmpty()) return super.fetchSearchManga(page, query, filters)
-        return client.newCall(GET(baseUrl, headers)).asObservableSuccess().map { response ->
-            querySearchMangaParse(response, query)
+        return client.newCall(querySearchMangaRequest(query)).asObservableSuccess().map { response ->
+            querySearchMangaParse(response)
         }
     }
 
@@ -91,18 +118,17 @@ class Akaya : ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    private fun querySearchMangaParse(response: Response, query: String): MangasPage {
+    private fun getCsrftoken() {
+        val response = client.newCall(GET(baseUrl, headers)).execute()
         val document = response.asJsoup()
-        val csrfToken = document.selectFirst("meta[name=csrf-token]")!!.attr("content")
+        csrfToken = document.selectFirst("meta[name=csrf-token]")!!.attr("content")
+    }
 
-        val body = FormBody.Builder()
-            .add("_token", csrfToken)
-            .add("search", query)
-            .build()
+    private fun querySearchMangaRequest(query: String): Request = POST("$baseUrl/search#$query", headers)
 
-        val doc = client.newCall(POST("$baseUrl/search", headers, body)).execute().asJsoup()
-
-        val mangas = doc.select("main > div.search-title > div.rowDiv div.list-search:has(div.inner-img-search)").map {
+    private fun querySearchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("main > div.search-title > div.rowDiv div.list-search:has(div.inner-img-search)").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.selectFirst("div.name-serie-search > a")!!.attr("href"))
                 thumbnail_url = it.selectFirst("div.inner-img-search")!!.attr("style")
