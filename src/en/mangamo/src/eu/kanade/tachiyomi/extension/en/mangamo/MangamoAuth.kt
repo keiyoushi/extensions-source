@@ -22,11 +22,13 @@ class MangamoAuth(
     private var expirationTime: Long = 0
 
     fun getIdToken(): String {
-        if (!this::currentToken.isInitialized) {
-            obtainInitialIdToken()
+        synchronized(this) {
+            if (!this::currentToken.isInitialized) {
+                obtainInitialIdToken()
+            }
+            refreshIfNecessary()
+            return currentToken
         }
-        refreshIfNecessary()
-        return currentToken
     }
 
     fun forceRefresh() {

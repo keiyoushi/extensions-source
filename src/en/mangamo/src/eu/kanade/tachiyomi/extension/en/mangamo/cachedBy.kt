@@ -10,11 +10,13 @@ class cachedBy<T>(private val dependencies: () -> Any?, private val callback: ()
 
     @Suppress("UNCHECKED_CAST")
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T {
-        val newDeps = dependencies()
-        if (newDeps != lastDeps) {
-            lastDeps = newDeps
-            cachedValue = callback()
+        synchronized(this) {
+            val newDeps = dependencies()
+            if (newDeps != lastDeps) {
+                lastDeps = newDeps
+                cachedValue = callback()
+            }
+            return cachedValue as T
         }
-        return cachedValue as T
     }
 }
