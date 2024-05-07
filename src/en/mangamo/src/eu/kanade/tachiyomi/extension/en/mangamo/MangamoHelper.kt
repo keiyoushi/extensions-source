@@ -45,7 +45,7 @@ class MangamoHelper(headers: Headers) {
         .build()
 
     private fun getCatalogUrl(series: SeriesDto): String {
-        val lowercaseHyphenated = series.nameLowercase!!.replace(' ', '-')
+        val lowercaseHyphenated = series.name_lowercase!!.replace(' ', '-')
         return "${MangamoConstants.MANGAMO_WEBSITE}/catalog/$lowercaseHyphenated"
     }
 

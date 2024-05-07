@@ -89,6 +89,18 @@ class Mangamo : ConfigurableSource, HttpSource() {
         }
         .build()
 
+    private val seriesRequiredFields = listOf(
+        SeriesDto::id.name,
+        SeriesDto::name.name,
+        SeriesDto::name_lowercase.name,
+        SeriesDto::description.name,
+        SeriesDto::authors.name,
+        SeriesDto::genres.name,
+        SeriesDto::ongoing.name,
+        SeriesDto::releaseStatusTag.name,
+        SeriesDto::titleArt.name,
+    )
+
     private fun processSeries(dto: SeriesDto) = SManga.create().apply {
         author = dto.authors?.joinToString { it.name }
         description = dto.description
@@ -116,16 +128,23 @@ class Mangamo : ConfigurableSource, HttpSource() {
         limit = MangamoConstants.BROWSE_PAGE_SIZE
         offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
 
+        val fields = seriesRequiredFields.toMutableList()
+        this.fields = fields
+
+        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
+            fields += SeriesDto::onlyTransactional.name
+        }
+
         val prefFilters =
             if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_BROWSE)) {
-                isEqual("onlyOnMangamo", true)
+                isEqual(SeriesDto::onlyOnMangamo.name, true)
             } else {
                 null
             }
 
         filter = and(
             *listOfNotNull(
-                isEqual("enabled", true),
+                isEqual(SeriesDto::enabled.name, true),
                 prefFilters,
             ).toTypedArray(),
         )
@@ -146,7 +165,18 @@ class Mangamo : ConfigurableSource, HttpSource() {
         limit = MangamoConstants.BROWSE_PAGE_SIZE
         offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
 
-        orderBy = listOf(descending("updatedAt"))
+        val fields = seriesRequiredFields.toMutableList()
+        this.fields = fields
+
+        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
+            fields += SeriesDto::onlyTransactional.name
+        }
+
+        if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_BROWSE)) {
+            fields += SeriesDto::onlyOnMangamo.name
+        }
+
+        orderBy = listOf(descending(SeriesDto::updatedAt.name))
 
         // Filters can't be used with orderBy because firebase wants there to be indexes
         // on various fields to support those queries and we can't create them.
@@ -173,13 +203,24 @@ class Mangamo : ConfigurableSource, HttpSource() {
         limit = MangamoConstants.BROWSE_PAGE_SIZE
         offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
 
+        val fields = seriesRequiredFields.toMutableList()
+        this.fields = fields
+
+        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
+            fields += SeriesDto::onlyTransactional.name
+        }
+
+        if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_SEARCH)) {
+            fields += SeriesDto::onlyOnMangamo.name
+        }
+
         // Adding additional filters makes Firestore complain about wanting an index
         // so we filter on the client in parse, just like for Latest.
 
         filter = and(
-            isEqual("enabled", true),
-            isGreaterThanOrEqual("name_lowercase", query.lowercase()),
-            isLessThanOrEqual("name_lowercase", query.lowercase() + "\uf8ff"),
+            isEqual(SeriesDto::enabled.name, true),
+            isGreaterThanOrEqual(SeriesDto::name_lowercase.name, query.lowercase()),
+            isLessThanOrEqual(SeriesDto::name_lowercase.name, query.lowercase() + "\uf8ff"),
         )
     }
 
@@ -208,7 +249,9 @@ class Mangamo : ConfigurableSource, HttpSource() {
 
         val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
 
-        return firestore.getDocument("Series/$seriesId")
+        return firestore.getDocument("Series/$seriesId") {
+            fields = seriesRequiredFields
+        }
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -224,14 +267,30 @@ class Mangamo : ConfigurableSource, HttpSource() {
         val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
 
         val seriesObservable = client.newCall(
-            firestore.getDocument("Series/$seriesId"),
+            firestore.getDocument("Series/$seriesId") {
+                fields = listOf(
+                    SeriesDto::maxFreeChapterNumber.name,
+                    SeriesDto::maxMeteredReadingChapterNumber.name,
+                    SeriesDto::onlyTransactional.name,
+                )
+            },
         ).asObservableSuccess().map { response ->
             response.body.string().parseJson<DocumentDto<SeriesDto>>().fields
         }
 
         val chaptersObservable = client.newCall(
             firestore.getCollection("Series/$seriesId/chapters") {
-                orderBy = listOf(descending("chapterNumber"))
+                fields = listOf(
+                    ChapterDto::enabled.name,
+                    ChapterDto::id.name,
+                    ChapterDto::seriesId.name,
+                    ChapterDto::chapterNumber.name,
+                    ChapterDto::name.name,
+                    ChapterDto::createdAt.name,
+                    ChapterDto::onlyTransactional.name,
+                )
+
+                orderBy = listOf(descending(ChapterDto::chapterNumber.name))
             },
         ).asObservableSuccess().map { response ->
             response.body.string().parseJson<QueryResultDto<ChapterDto>>().elements
@@ -242,6 +301,10 @@ class Mangamo : ConfigurableSource, HttpSource() {
         return Observable.combineLatest(seriesObservable, chaptersObservable) { series, chapters ->
             chapters
                 .mapNotNull { chapter ->
+                    if (chapter.enabled != true) {
+                        return@mapNotNull null
+                    }
+
                     val isFreeChapter = chapter.chapterNumber!! <= (series.maxFreeChapterNumber ?: 0)
 
                     val isCoinChapter = chapter.onlyTransactional == true ||
