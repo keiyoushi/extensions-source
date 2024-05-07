@@ -168,6 +168,8 @@ class Mangamo : ConfigurableSource, HttpSource() {
         val fields = seriesRequiredFields.toMutableList()
         this.fields = fields
 
+        fields += SeriesDto::enabled.name
+
         if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
             fields += SeriesDto::onlyTransactional.name
         }
@@ -184,6 +186,9 @@ class Mangamo : ConfigurableSource, HttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response) {
+        if (it.enabled != true) {
+            return@parseMangaPage false
+        }
         if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
             if (it.onlyTransactional == true) {
                 return@parseMangaPage false
@@ -270,7 +275,6 @@ class Mangamo : ConfigurableSource, HttpSource() {
             firestore.getDocument("Series/$seriesId") {
                 fields = listOf(
                     SeriesDto::maxFreeChapterNumber.name,
-                    SeriesDto::maxMeteredReadingChapterNumber.name,
                     SeriesDto::onlyTransactional.name,
                 )
             },

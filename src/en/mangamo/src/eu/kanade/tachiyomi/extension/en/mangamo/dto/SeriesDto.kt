@@ -12,7 +12,7 @@ data class SeriesDto(
     val enabled: Boolean? = null,
     val genres: List<GenreDto>? = null,
     val maxFreeChapterNumber: Int? = null,
-    val maxMeteredReadingChapterNumber: Int? = null,
+//    val maxMeteredReadingChapterNumber: Int? = null,
     val name: String? = null,
     @Suppress("PropertyName")
     val name_lowercase: String? = null,
