@@ -36,7 +36,13 @@ class DocumentSerializer(dataSerializer: KSerializer<out DocumentDto<out Any?>>)
 
     override fun transformDeserialize(element: JsonElement): JsonElement {
         val objMap = element.jsonObject.toMap(HashMap())
-        objMap["fields"] = reduceFieldsObject(objMap["fields"]!!)
+
+        if (objMap.containsKey("fields")) {
+            objMap["fields"] = reduceFieldsObject(objMap["fields"]!!)
+        } else {
+            objMap["fields"] = JsonObject(mapOf())
+        }
+
         return JsonObject(objMap)
     }
 
