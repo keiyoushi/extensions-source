@@ -52,7 +52,8 @@ class AsmHentai(
             }
     }
 
-    override fun Element.getInfoPages() = selectFirst(".book_page .pages h3")?.ownText()
+    override fun Element.getInfoPages(document: Document?) =
+        selectFirst(".book_page .pages h3")?.ownText()
 
     override val mangaDetailInfoSelector = ".book_page"
 

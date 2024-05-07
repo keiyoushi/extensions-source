@@ -503,7 +503,7 @@ abstract class GalleryAdults(
                 thumbnail_url = getCover()
                 genre = getInfo("Tags")
                 author = getInfo("Artists")
-                description = getDescription()
+                description = getDescription(document)
             }
         }
     }
@@ -518,7 +518,7 @@ abstract class GalleryAdults(
      */
     protected abstract fun Element.getInfo(tag: String): String
 
-    protected open fun Element.getDescription(): String = (
+    protected open fun Element.getDescription(document: Document? = null): String = (
         listOf("Parodies", "Characters", "Languages", "Categories", "Category")
             .mapNotNull { tag ->
                 getInfo(tag)
@@ -526,16 +526,16 @@ abstract class GalleryAdults(
                     ?.let { "$tag: $it" }
             } +
             listOfNotNull(
-                getInfoPages(),
+                getInfoPages(document),
                 getInfoAlternativeTitle(),
                 getInfoFullTitle(),
             )
         )
         .joinToString("\n\n")
 
-    protected open fun Element.getInfoPages(): String? =
-        inputIdValueOf(totalPagesSelector)
-            .takeIf { it.isNotBlank() }
+    protected open fun Element.getInfoPages(document: Document? = null): String? =
+        document?.inputIdValueOf(totalPagesSelector)
+            ?.takeIf { it.isNotBlank() }
             ?.let { "Pages: $it" }
 
     protected open fun Element.getInfoAlternativeTitle(): String? =
