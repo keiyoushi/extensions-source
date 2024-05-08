@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.extension.en.mangamo.dto.DocumentDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.PageDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.QueryResultDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.SeriesDto
+import eu.kanade.tachiyomi.extension.en.mangamo.dto.UserDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.documents
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.elements
 import eu.kanade.tachiyomi.network.POST
@@ -30,6 +31,7 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.IOException
 
 class Mangamo : ConfigurableSource, HttpSource() {
 
@@ -70,12 +72,32 @@ class Mangamo : ConfigurableSource, HttpSource() {
         FirestoreRequestFactory(helper, auth)
     }
 
+    private val user by cachedBy({ Pair(userToken, firestore) }) {
+        val response = client.newCall(
+            firestore.getDocument("Users/$userToken") {
+                fields = listOf(UserDto::isSubscribed.name)
+            },
+        ).execute()
+        response.body.string().parseJson<DocumentDto<UserDto>>().fields
+    }
+
     private val coinMangaPref
         get() = preferences.getStringSet(MangamoConstants.HIDE_COIN_MANGA_PREF, setOf())!!
     private val exclusivesOnlyPref
         get() = preferences.getStringSet(MangamoConstants.EXCLUSIVES_ONLY_PREF, setOf())!!
 
     override val client: OkHttpClient = super.client.newBuilder()
+        .addNetworkInterceptor {
+            val request = it.request()
+            val response = it.proceed(request)
+
+            if (request.url.toString().startsWith("${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/page")) {
+                if (response.code == 401) {
+                    throw IOException("You don't have access to this chapter")
+                }
+            }
+            response
+        }
         .addNetworkInterceptor {
             val response = it.proceed(it.request())
 
@@ -275,6 +297,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
             firestore.getDocument("Series/$seriesId") {
                 fields = listOf(
                     SeriesDto::maxFreeChapterNumber.name,
+                    SeriesDto::maxMeteredReadingChapterNumber.name,
                     SeriesDto::onlyTransactional.name,
                 )
             },
@@ -309,8 +332,10 @@ class Mangamo : ConfigurableSource, HttpSource() {
                         return@mapNotNull null
                     }
 
-                    val isFreeChapter = chapter.chapterNumber!! <= (series.maxFreeChapterNumber ?: 0)
+                    val isUserSubscribed = user.isSubscribed == true
 
+                    val isFreeChapter = chapter.chapterNumber!! <= (series.maxFreeChapterNumber ?: 0)
+                    val isMeteredChapter = chapter.chapterNumber <= (series.maxMeteredReadingChapterNumber ?: 0)
                     val isCoinChapter = chapter.onlyTransactional == true ||
                         (series.onlyTransactional == true && !isFreeChapter)
 
@@ -322,12 +347,15 @@ class Mangamo : ConfigurableSource, HttpSource() {
                         chapter_number = chapter.chapterNumber
                         date_upload = chapter.createdAt!!
                         name = chapter.name +
-                            if (isFreeChapter) {
-                                " (Free)"
-                            } else if (isCoinChapter) {
-                                " (Coin)"
-                            } else {
+                            if (isCoinChapter) {
+                                " \uD83E\uDE99" // coin emoji
+                            } else if (isFreeChapter || isUserSubscribed) {
                                 ""
+                            } else if (isMeteredChapter) {
+                                " \uD83D\uDD52" // three-o-clock emoji
+                            } else {
+                                // subscriber chapter
+                                " \uD83D\uDD12" // lock emoji
                             }
                         url = helper.getChapterUrl(chapter)
                     }
