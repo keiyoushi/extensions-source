@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class TokenRefreshDto(
+class TokenRefreshDto(
     @SerialName("expires_in")
     val expiresIn: Long,
     @SerialName("id_token")

@@ -11,7 +11,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
 @Serializable
-data class DocumentWrapper<T>(val document: DocumentDto<T>?)
+class DocumentWrapper<T>(val document: DocumentDto<T>?)
 
 typealias QueryResultDto<T> = @Serializable List<DocumentWrapper<T>>
 
@@ -24,11 +24,8 @@ val <T>QueryResultDto<T>.elements
 typealias DocumentDto<T> = @Contextual DocumentDtoInternal<T>
 
 @Serializable
-data class DocumentDtoInternal<T>(
-//    val name: String,
+class DocumentDtoInternal<T>(
     val fields: T,
-//    val createTime: String,
-//    val updateTime: String,
 )
 
 class DocumentSerializer(dataSerializer: KSerializer<out DocumentDto<out Any?>>) :
