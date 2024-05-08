@@ -268,11 +268,11 @@ class Mangamo : ConfigurableSource, HttpSource() {
     // Manga details
 
     override fun getMangaUrl(manga: SManga): String {
-        return manga.url
+        return baseUrl + manga.url
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val uri = manga.url.toHttpUrl()
+        val uri = getMangaUrl(manga).toHttpUrl()
 
         val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
 
@@ -289,7 +289,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
     // Chapter list section
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val uri = manga.url.toHttpUrl()
+        val uri = getMangaUrl(manga).toHttpUrl()
 
         val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
 
@@ -375,7 +375,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val uri = chapter.url.toHttpUrl()
+        val uri = (baseUrl + chapter.url).toHttpUrl()
 
         val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
         val chapterId = uri.queryParameter(MangamoConstants.CHAPTER_QUERY_PARAM)!!.toInt()

@@ -12,7 +12,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class MangamoHelper(headers: Headers) {
 
@@ -46,22 +45,15 @@ class MangamoHelper(headers: Headers) {
 
     private fun getCatalogUrl(series: SeriesDto): String {
         val lowercaseHyphenated = series.name_lowercase!!.replace(' ', '-')
-        return "${MangamoConstants.MANGAMO_WEBSITE}/catalog/$lowercaseHyphenated"
+        return "/catalog/$lowercaseHyphenated"
     }
 
     fun getSeriesUrl(series: SeriesDto): String {
-        return getCatalogUrl(series).toHttpUrl().newBuilder()
-            .setQueryParameter(MangamoConstants.SERIES_QUERY_PARAM, series.id.toString())
-            .build()
-            .toString()
+        return "${getCatalogUrl(series)}?${MangamoConstants.SERIES_QUERY_PARAM}=${series.id}"
     }
 
     fun getChapterUrl(chapter: ChapterDto): String {
-        return MangamoConstants.MANGAMO_WEBSITE.toHttpUrl().newBuilder()
-            .setQueryParameter(MangamoConstants.SERIES_QUERY_PARAM, chapter.seriesId.toString())
-            .setQueryParameter(MangamoConstants.CHAPTER_QUERY_PARAM, chapter.id.toString())
-            .build()
-            .toString()
+        return "?${MangamoConstants.SERIES_QUERY_PARAM}=${chapter.seriesId}&${MangamoConstants.CHAPTER_QUERY_PARAM}=${chapter.id}"
     }
 
     fun getSeriesStatus(series: SeriesDto): Int =

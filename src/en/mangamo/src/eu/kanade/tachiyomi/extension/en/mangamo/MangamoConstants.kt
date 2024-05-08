@@ -17,8 +17,6 @@ object MangamoConstants {
     const val FIRESTORE_API_BASE_PATH = "https://firestore.googleapis.com/v1/projects/mangamoapp1/databases/(default)/documents"
     const val FIRESTORE_CACHE_LENGTH = 600
 
-    const val MANGAMO_WEBSITE = "https://www.mangamo.com"
-
     const val SERIES_QUERY_PARAM = "series"
     const val CHAPTER_QUERY_PARAM = "chapter"
 
