@@ -89,10 +89,10 @@ abstract class GalleryAdults(
             if (preferences.shortTitle) it?.shortenTitle() else it
         }
 
-    protected fun Element.mangaFullTitle(selector: String) =
+    protected open fun Element.mangaFullTitle(selector: String) =
         selectFirst(selector)?.text()
 
-    protected fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
+    protected open fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     protected open val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
 
