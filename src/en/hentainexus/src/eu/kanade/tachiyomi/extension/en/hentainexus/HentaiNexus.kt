@@ -121,6 +121,7 @@ class HentaiNexus : ParsedHttpSource() {
             it.text().replace(tagCountRegex, "")
         }
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        status = SManga.COMPLETED
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
