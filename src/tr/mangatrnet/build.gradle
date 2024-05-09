@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaTR.net'
+    extClass = '.MangaTRNet'
+    themePkg = 'madara'
+    baseUrl = 'https://mangatr.net'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
