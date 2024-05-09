@@ -8,10 +8,11 @@ import java.util.concurrent.TimeUnit
 
 class Jiangzaitoon : Madara(
     "Jiangzaitoon",
-    "https://jiangzaitoon.info",
+    "https://jiangzaitoon.dev",
     "tr",
     SimpleDateFormat("d MMM yyy", Locale("tr")),
 ) {
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = false
 
     override val client: OkHttpClient by lazy {
