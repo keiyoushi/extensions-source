@@ -15,8 +15,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.floatOrNull
@@ -62,33 +62,8 @@ class Desu : ConfigurableSource, HttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 3)
             .build()
 
-    private fun mangaPageFromJSON(jsonStr: String, next: Boolean): MangasPage {
-        val mangaList = json.parseToJsonElement(jsonStr).jsonArray
-            .map {
-                SManga.create().apply {
-                    mangaFromJSON(it.jsonObject, false)
-                }
-            }
-
-        return MangasPage(mangaList, next)
-    }
-
-    private fun SManga.mangaFromJSON(obj: JsonObject, chapter: Boolean) {
-        val id = obj["id"]!!.jsonPrimitive.int
-
-        url = "/$id"
-        title = if (isEng.equals("rus")) {
-            obj["russian"]!!.jsonPrimitive.content
-                .split(" / ")
-                .first()
-        } else {
-            obj["name"]!!.jsonPrimitive.content
-                .split(" / ")
-                .first()
-        }
-        thumbnail_url = obj["image"]!!.jsonObject["original"]!!.jsonPrimitive.content
-
-        val ratingValue = obj["score"]!!.jsonPrimitive.floatOrNull ?: 0F
+    private fun MangaDetDto.toSManga(genresStr: String? = ""): SManga {
+        val ratingValue = score!!
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
             ratingValue > 8.5 -> "★★★★✬"
@@ -103,12 +78,12 @@ class Desu : ConfigurableSource, HttpSource() {
             else -> "☆☆☆☆☆"
         }
 
-        val rawAgeStop = when (obj["adult"]!!.jsonPrimitive.int) {
-            1 -> "18+"
-            else -> ""
+        val rawAgeStop = when (age_limit!!) {
+            "no" -> ""
+            else -> age_limit.replace("_plus", "+")
         }
 
-        val category = when (obj["kind"]!!.jsonPrimitive.content) {
+        val category = when (kind!!) {
             "manga" -> "Манга"
             "manhwa" -> "Манхва"
             "manhua" -> "Маньхуа"
@@ -119,45 +94,36 @@ class Desu : ConfigurableSource, HttpSource() {
 
         var altName = ""
 
-        if (obj["synonyms"]?.jsonPrimitive?.content.orEmpty().isNotEmpty() && obj["synonyms"]!!.jsonPrimitive.contentOrNull != null) {
+        if (!synonyms.isNullOrEmpty()) {
             altName = "Альтернативные названия:\n" +
-                obj["synonyms"]!!.jsonPrimitive.content
-                    .replace("/", " / ") +
+                synonyms.replace("/", " / ") +
                 "\n\n"
         }
 
-        description = if (isEng.equals("rus")) {
-            obj["name"]!!.jsonPrimitive.content
-                .split(" / ")
-                .first()
-        } else {
-            obj["russian"]!!.jsonPrimitive.content
-                .split(" / ")
-                .first()
-        } + "\n" +
-            ratingStar + " " + ratingValue +
-            " (голосов: " +
-            obj["score_users"]!!.jsonPrimitive.int +
-            ")\n" + altName +
-            obj["description"]!!.jsonPrimitive.content
-
-        genre = if (chapter) {
-            "$category, $rawAgeStop, " +
-                obj["genres"]!!.jsonArray
-                    .map { it.jsonObject["russian"]!!.jsonPrimitive.content }
-                    .joinToString()
-        } else {
-            category + ", " + rawAgeStop + ", " + obj["genres"]!!.jsonPrimitive.content
-        }
-
-        status = when (obj["trans_status"]!!.jsonPrimitive.content) {
-            "continued" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            else -> when (obj["status"]!!.jsonPrimitive.content) {
-                "ongoing" -> SManga.ONGOING
-                "released" -> SManga.COMPLETED
-                //  "copyright" -> SManga.LICENSED  Hides available chapters!
-                else -> SManga.UNKNOWN
+        return SManga.create().apply {
+            title = if (isEng.equals("rus")) {
+                russian
+            } else {
+                name
+            }
+            url = "/$id"
+            thumbnail_url = image.original
+            description = if (isEng.equals("rus")) {
+                name
+            } else {
+                russian
+            } + "\n" + ratingStar + " " + ratingValue + " (голосов: " +
+                score_users + ")\n" + altName + this@toSManga.description
+            genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
+            status = when (trans_status) {
+                "continued" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                else -> when (this@toSManga.status) {
+                    "ongoing" -> SManga.ONGOING
+                    "released" -> SManga.COMPLETED
+                    //  "copyright" -> SManga.LICENSED  Hides available chapters!
+                    else -> SManga.UNKNOWN
+                }
             }
         }
     }
@@ -198,14 +164,12 @@ class Desu : ConfigurableSource, HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val res = json.parseToJsonElement(response.body.string()).jsonObject
-        val obj = res["response"]!!.jsonArray
-        val nav = res["pageNavParams"]!!.jsonObject
-        val count = nav["count"]!!.jsonPrimitive.int
-        val limit = nav["limit"]!!.jsonPrimitive.int
-        val page = nav["page"]!!.jsonPrimitive.int
+        val page = json.decodeFromString<PageWrapperDto<MangaDetDto>>(response.body.string())
+        val mangas = page.response.map {
+            it.toSManga()
+        }
 
-        return mangaPageFromJSON(obj.toString(), count > page * limit)
+        return MangasPage(mangas, page.pageNavParams.count > page.pageNavParams.page * page.pageNavParams.limit)
     }
 
     private fun titleDetailsRequest(manga: SManga): Request {
@@ -225,11 +189,10 @@ class Desu : ConfigurableSource, HttpSource() {
         return GET(baseUrl + "/manga" + manga.url, headers)
     }
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val obj = json.parseToJsonElement(response.body.string())
-            .jsonObject["response"]!!
-            .jsonObject
-
-        mangaFromJSON(obj, true)
+        val responseString = response.body.string()
+        val series = json.decodeFromString<SeriesWrapperDto<MangaDetDto>>(responseString)
+        val genresStr = json.decodeFromString<SeriesWrapperDto<MangaDetGenresDto>>(responseString).response.genres!!.joinToString { it.russian }
+        return series.response.toSManga(genresStr)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
