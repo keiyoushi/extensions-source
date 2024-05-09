@@ -100,7 +100,6 @@ class Desu : ConfigurableSource, HttpSource() {
                 "\n\n"
         }
 
-        val o = this
         return SManga.create().apply {
             title = if (isEng.equals("rus")) {
                 russian
@@ -114,12 +113,12 @@ class Desu : ConfigurableSource, HttpSource() {
             } else {
                 russian
             } + "\n" + ratingStar + " " + ratingValue + " (голосов: " +
-                score_users + ")\n" + altName + o.description
+                score_users + ")\n" + altName + this@toSManga.description
             genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
             status = when (trans_status) {
                 "continued" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
-                else -> when (o.status) {
+                else -> when (this@toSManga.status) {
                     "ongoing" -> SManga.ONGOING
                     "released" -> SManga.COMPLETED
                     //  "copyright" -> SManga.LICENSED  Hides available chapters!

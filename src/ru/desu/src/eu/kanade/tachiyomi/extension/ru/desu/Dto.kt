@@ -25,25 +25,25 @@ class MangaDetDto(
     val id: Long,
     val name: String,
     val russian: String,
-    val kind: String? = null,
-    val description: String? = null,
-    val score: Float? = null,
-    val score_users: Long? = null,
-    val age_limit: String? = null,
-    val synonyms: String? = null,
+    val kind: String?,
+    val description: String?,
+    val score: Float?,
+    val score_users: Long?,
+    val age_limit: String?,
+    val synonyms: String?,
     val image: ImgDto,
-    val trans_status: String? = null,
-    val status: String? = null,
+    val trans_status: String?,
+    val status: String?,
 ) {
     @Serializable
     class ImgDto(
-        val original: String? = null,
+        val original: String?,
     )
 }
 
 @Serializable
 class MangaDetGenresDto(
-    val genres: List<TagsDto>? = null,
+    val genres: List<TagsDto>?,
 ) {
     @Serializable
     class TagsDto(
