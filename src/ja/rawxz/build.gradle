@@ -1,0 +1,10 @@
+ext {
+    extName = 'RawXZ'
+    extClass = '.RawXZ'
+    themePkg = 'madara'
+    baseUrl = 'https://rawxz.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
