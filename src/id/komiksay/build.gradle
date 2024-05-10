@@ -1,0 +1,10 @@
+ext {
+    extName = 'Komik Say'
+    extClass = '.KomikSay'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://komiksay.info'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
