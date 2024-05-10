@@ -7,7 +7,7 @@ import java.util.Locale
 
 class NinjaScan : Madara(
     "Ninja Scan",
-    "https://ninjascan.site",
+    "https://ninjacomics.xyz",
     "pt-BR",
     SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
@@ -15,5 +15,6 @@ class NinjaScan : Madara(
         .rateLimit(2)
         .build()
 
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 }
