@@ -2,8 +2,9 @@ ext {
     extName = 'Ninja Scan'
     extClass = '.NinjaScan'
     themePkg = 'madara'
-    baseUrl = 'https://ninjascan.site'
-    overrideVersionCode = 0
+    baseUrl = 'https://ninjacomics.xyz'
+    overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
