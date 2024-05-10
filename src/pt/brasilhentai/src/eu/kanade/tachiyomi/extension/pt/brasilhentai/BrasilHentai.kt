@@ -80,7 +80,7 @@ class BrasilHentai : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = ".next.page-numbers"
 
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int) = GET("baseUrl/page/$page", headers)
 
     override fun popularMangaSelector() = ".content-area article"
 
