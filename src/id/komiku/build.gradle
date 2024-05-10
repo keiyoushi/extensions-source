@@ -1,7 +1,7 @@
 ext {
     extName = 'Komiku'
     extClass = '.Komiku'
-    extVersionCode = 17
+    extVersionCode = 18
 }
 
 apply from: "$rootDir/common.gradle"
