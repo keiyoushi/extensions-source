@@ -2,7 +2,7 @@ ext {
     extName = 'Ecchi-Doujin'
     extClass = '.EcchiDoujin'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.lami-manga.com'
+    baseUrl = 'https://ecchi-doujin.com'
     overrideVersionCode = 0
     isNsfw = true
 }
