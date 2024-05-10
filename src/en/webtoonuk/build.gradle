@@ -1,9 +1,0 @@
-ext {
-    extName = 'WebtoonUK'
-    extClass = '.WebtoonUK'
-    themePkg = 'madara'
-    baseUrl = 'https://webtoon.uk'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'OPSCANS'
-    extClass = '.OPSCANS'
-    themePkg = 'madara'
-    baseUrl = 'https://opchapters.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
