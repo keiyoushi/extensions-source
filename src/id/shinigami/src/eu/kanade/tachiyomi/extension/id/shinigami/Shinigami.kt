@@ -12,10 +12,11 @@ import kotlinx.serialization.decodeFromString
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class Shinigami : Madara("Shinigami", "https://shinigami.cx", "id") {
+class Shinigami : Madara("Shinigami", "https://shinigami.ws", "id") {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 
     override fun headersBuilder() = super.headersBuilder().apply {
