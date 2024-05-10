@@ -123,7 +123,7 @@ class BrasilHentai : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun getFilterList(): FilterList {
-        CoroutineScope(Dispatchers.IO).launch { fetchGenres() }
+        CoroutineScope(Dispatchers.IO).launch { fetchCategories() }
 
         val filters = mutableListOf<Filter<*>>()
 
@@ -141,22 +141,22 @@ class BrasilHentai : ParsedHttpSource() {
 
     private var categoryFilterOptions: Array<Pair<String, String>> = emptyArray()
 
-    private var fetchGenresAttempts: Int = 0
+    private var fetchCategoriesAttempts: Int = 0
 
-    private fun fetchGenres() {
-        if (fetchGenresAttempts < 3 && categoryFilterOptions.isEmpty()) {
+    private fun fetchCategories() {
+        if (fetchCategoriesAttempts < 3 && categoryFilterOptions.isEmpty()) {
             try {
                 categoryFilterOptions += Pair("Todos", "")
-                categoryFilterOptions += client.newCall(genresRequest()).execute()
-                    .use { parseGenres(it.asJsoup()) }.toTypedArray()
+                categoryFilterOptions += client.newCall(categoriesRequest()).execute()
+                    .use { parseCategories(it.asJsoup()) }.toTypedArray()
             } catch (_: Exception) {
             } finally {
-                fetchGenresAttempts++
+                fetchCategoriesAttempts++
             }
         }
     }
 
-    private fun parseGenres(document: Document): List<Pair<String, String>> {
+    private fun parseCategories(document: Document): List<Pair<String, String>> {
         return document.select("#categories-2 li a")
             .map { element ->
                 val url = element.absUrl("href")
@@ -177,7 +177,7 @@ class BrasilHentai : ParsedHttpSource() {
         fun selectedValue() = vals[state].second
     }
 
-    private fun genresRequest(): Request = GET(baseUrl, headers)
+    private fun categoriesRequest(): Request = GET(baseUrl, headers)
 
     companion object {
         val PREFIX_SEARCH: String = "slug:"
