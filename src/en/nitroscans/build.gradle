@@ -1,9 +1,10 @@
 ext {
-    extName = 'Nitro Manga'
+    extName = 'Nitro Scans'
     extClass = '.NitroScans'
     themePkg = 'madara'
-    baseUrl = 'https://nitromanga.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://nitroscans.net'
+    overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
