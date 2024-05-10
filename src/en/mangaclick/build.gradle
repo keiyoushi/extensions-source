@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaClick'
+    extClass = '.MangaClick'
+    themePkg = 'madara'
+    baseUrl = 'https://mangaclick.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
