@@ -1,0 +1,10 @@
+ext {
+    extName = 'SaikoMangaRaw'
+    extClass = '.SaikoMangaRaw'
+    themePkg = 'madara'
+    baseUrl = 'https://saikomangaraw.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
