@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -18,8 +17,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)) {
-
-    override val json = Json { ignoreUnknownKeys = true }
 
     override val versionId: Int = 2
 
@@ -74,11 +71,18 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
             listOf(
                 SChapter.create().apply {
                     name = "Chapter"
-                    // There's like 2 non-English entries where this breaks
-                    url = "${manga.url}english/p/1/"
+                    url = manga.url
                 },
             ),
         )
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        // There's like 2 non-English entries where this breaks
+        chapter.url = chapter.url
+            .takeIf { it.endsWith("english/p/1/") }
+            ?: "${chapter.url}english/p/1/"
+        return super.pageListRequest(chapter)
     }
 }
 
