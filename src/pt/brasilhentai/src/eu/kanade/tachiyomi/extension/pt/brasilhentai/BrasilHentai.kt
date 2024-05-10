@@ -95,8 +95,7 @@ class BrasilHentai : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val category = filters.filterIsInstance<CategoryFilter>()
-            .first { it.selectedValue().isNotBlank() }
+        val category = filters.filterIsInstance<CategoryFilter>().first()
             .selectedValue()
 
         val url = if (category.isEmpty()) {
@@ -168,11 +167,10 @@ class BrasilHentai : ParsedHttpSource() {
     class CategoryFilter(
         displayName: String,
         private val vals: Array<Pair<String, String>>,
-        defaultValue: String? = null,
     ) : Filter.Select<String>(
         displayName,
         vals.map { it.first }.toTypedArray(),
-        vals.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0,
+        vals.indexOfFirst { it.second.isEmpty() }.takeIf { it != -1 } ?: 0,
     ) {
         fun selectedValue() = vals[state].second
     }
