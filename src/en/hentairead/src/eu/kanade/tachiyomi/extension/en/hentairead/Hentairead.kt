@@ -79,9 +79,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
 
     override fun pageListRequest(chapter: SChapter): Request {
         // There's like 2 non-English entries where this breaks
-        chapter.url = chapter.url
-            .takeIf { it.endsWith("english/p/1/") }
-            ?: "${chapter.url}english/p/1/"
+        chapter.url = "${chapter.url}english/p/1/"
         return super.pageListRequest(chapter)
     }
 }
