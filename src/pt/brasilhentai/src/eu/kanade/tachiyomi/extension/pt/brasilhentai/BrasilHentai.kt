@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.brasilhentai
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -28,6 +30,10 @@ class BrasilHentai : ParsedHttpSource() {
     override val lang = "pt-BR"
 
     override val supportsLatest: Boolean = false
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(4)
+        .build()
 
     override fun chapterFromElement(element: Element) =
         throw UnsupportedOperationException()
@@ -80,7 +86,7 @@ class BrasilHentai : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = ".next.page-numbers"
 
-    override fun popularMangaRequest(page: Int) = GET("baseUrl/page/$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page", headers)
 
     override fun popularMangaSelector() = ".content-area article"
 
