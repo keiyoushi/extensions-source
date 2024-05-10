@@ -163,7 +163,7 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
 
     // ============================== Settings ==============================
     companion object {
-        private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
+        private const val RESTART_TACHIYOMI = "أعد تشغيل التطبيق لتمكين الإعدادات الجديدة."
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "تعديل الرابط"
         internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
