@@ -1,0 +1,10 @@
+ext {
+    extName = 'Retsu'
+    extClass = '.Retsu'
+    themePkg = 'madara'
+    baseUrl = 'https://retsu.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
