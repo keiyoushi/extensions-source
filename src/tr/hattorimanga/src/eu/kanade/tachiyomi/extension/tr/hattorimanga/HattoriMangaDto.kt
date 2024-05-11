@@ -41,3 +41,14 @@ class LatestUpdateDto(
     @SerialName("cover_image")
     val thumbnail: String,
 )
+
+@Serializable
+class SearchManga(
+    val slug: String,
+    val title: String,
+    val description: String,
+    @SerialName("cover_image")
+    val thumbnail: String,
+    val author: String,
+    val artist: String,
+)

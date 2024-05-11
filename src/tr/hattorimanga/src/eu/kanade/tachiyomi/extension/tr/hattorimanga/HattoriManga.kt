@@ -1,16 +1,24 @@
 package eu.kanade.tachiyomi.extension.tr.hattorimanga
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -34,9 +42,57 @@ class HattoriManga : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
+    private var csrfToken: String = ""
+
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(4)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            if (!request.url.toString().contains("manga/search")) {
+                return@addInterceptor chain.proceed(request)
+            }
+
+            val req = request.newBuilder()
+                .addHeader("X-Requested-With", "XMLHttpRequest")
+                .build()
+
+            if (csrfToken.isEmpty()) {
+                getCsrftoken()
+            }
+
+            val query = request.url.fragment!!
+            val response = chain.proceed(addFormBody(req, query))
+
+            with(response) {
+                return@addInterceptor when {
+                    isPageExpired() -> {
+                        close()
+                        getCsrftoken()
+                        chain.proceed(addFormBody(req, query))
+                    }
+                    else -> response
+                }
+            }
+        }
         .build()
+
+    private fun addFormBody(request: Request, query: String): Request {
+        val body = FormBody.Builder()
+            .add("_token", csrfToken)
+            .add("query", query)
+            .build()
+
+        return request.newBuilder()
+            .url(request.url.toString().substringBefore("#"))
+            .post(body)
+            .build()
+    }
+
+    private fun getCsrftoken() {
+        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val document = response.asJsoup()
+        csrfToken = document.selectFirst("meta[name=csrf-token]")!!.attr("content")
+    }
 
     override fun chapterFromElement(element: Element) =
         throw UnsupportedOperationException()
@@ -61,7 +117,7 @@ class HattoriManga : ParsedHttpSource() {
             page = dto.currentPage + 1
         } while (dto.hasNextPage())
 
-        return Observable.just(chapters.sortedBy { it.name }.reversed())
+        return Observable.just(chapters)
     }
 
     private fun fetchChapterPageableList(slug: String, page: Int, manga: SManga): HMChapterDto =
@@ -125,28 +181,120 @@ class HattoriManga : ParsedHttpSource() {
 
     override fun popularMangaSelector() = ".product-card.grow-box"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException()
+        val request = POST("$baseUrl/manga/search#$query", headers)
+        if (query.isNotBlank()) {
+            return request
+        }
+
+        val url = "$baseUrl/manga-index".toHttpUrl().newBuilder()
+        val selection = filters.filterIsInstance<GenreList>()
+            .flatMap { it.state }
+            .filter { it.state }
+
+        return when {
+            selection.isNotEmpty() -> {
+                selection.forEach { genre ->
+                    url.addQueryParameter("genres[]", genre.id)
+                }
+                url.addQueryParameter("page", "$page")
+                GET(url.build(), headers)
+            }
+            else -> request
+        }
     }
 
-    override fun searchMangaSelector(): String {
-        throw UnsupportedOperationException()
+    override fun searchMangaSelector() = popularMangaSelector()
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val request = searchMangaRequest(page, query, filters)
+
+        if (request.url.toString().contains("manga-index")) {
+            return client.newCall(request).asObservableSuccess().map {
+                val document = it.asJsoup()
+                val mangas = document
+                    .select(searchMangaSelector())
+                    .map(::searchMangaFromElement)
+                MangasPage(mangas, document.selectFirst(popularMangaNextPageSelector()) != null)
+            }
+        }
+
+        return client.newCall(request).asObservableSuccess().map { response ->
+            val mangas = response.parseAs<List<SearchManga>>().map {
+                SManga.create().apply {
+                    title = it.title
+                    description = it.description
+                    author = it.author
+                    artist = it.artist
+                    thumbnail_url = "$baseUrl/storage/${it.thumbnail}"
+                    setUrlWithoutDomain("$baseUrl/manga/${it.slug}")
+                }
+            }
+            MangasPage(mangas, false)
+        }
     }
+
+    override fun getFilterList(): FilterList {
+        CoroutineScope(Dispatchers.IO).launch { fetchGenres() }
+
+        val filters = mutableListOf<Filter<*>>()
+
+        if (genresList.isNotEmpty()) {
+            filters += GenreList("Türler", genresList)
+        } else {
+            filters += listOf(
+                Filter.Separator(),
+                Filter.Header("Türleri göstermeyi denemek için 'Sıfırla' düğmesine basın"),
+            )
+        }
+
+        return FilterList(filters)
+    }
+
+    private var genresList: List<Genre> = emptyList()
+
+    private var fetchCategoriesAttempts: Int = 0
+
+    private fun fetchGenres() {
+        if (fetchCategoriesAttempts < 3 && genresList.isEmpty()) {
+            try {
+                genresList = client.newCall(genresRequest()).execute()
+                    .use { parseCategories(it.asJsoup()) }
+            } catch (_: Exception) {
+            } finally {
+                fetchCategoriesAttempts++
+            }
+        }
+    }
+
+    private fun parseCategories(document: Document): List<Genre> {
+        return document.select(".tags-blog a")
+            .map { element ->
+                val tag = element.text()
+                Genre(tag, tag)
+            }
+    }
+
+    private fun genresRequest(): Request = GET("$baseUrl/manga", headers)
 
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString(body.string())
     }
 
+    private fun Response.isPageExpired() = code == 419
+
     private fun String.toDate(): Long =
         try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+
+    class GenreList(title: String, genres: List<Genre>) : Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) })
+
+    class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
+
+    class Genre(val name: String, val id: String = name)
 
     companion object {
         val REGEX_MANGA_URL = """='(?<url>[^']+)""".toRegex()
