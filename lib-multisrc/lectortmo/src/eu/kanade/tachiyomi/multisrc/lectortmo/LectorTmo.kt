@@ -337,6 +337,38 @@ abstract class LectorTmo(
             doc = client.newCall(GET(newUrl, redirectHeaders)).execute().asJsoup()
         }
 
+        val imagesScript = doc.selectFirst("script:containsData(var dirPath):containsData(var images)")
+
+        if(imagesScript != null) {
+            val dirPath = imagesScript.data().substringAfter("var dirPath").substringAfter("'").substringBefore("';")
+            val images = imagesScript.data().substringAfter("var images").substringAfter("'[").substringBefore("]'").split(", ")
+            images.forEachIndexed { i, img ->
+                add(Page(i, doc.location(), "$dirPath${img.removeSuffix("\"")}"))
+            }
+        } else {
+            doc.select("div.viewer-container img:not(noscript img)").forEachIndexed { i, img ->
+                add(
+                    Page(i, doc.location(),
+                        img.let {
+                            if (it.hasAttr("data-src")) {
+                                it.attr("abs:data-src")
+                            } else {
+                                it.attr("abs:src")
+                            }
+                        },
+                    ),
+                )
+            }
+        }
+
+        doc.selectFirst("script:containsData(var dirPath):containsData(var images)")?.data()?.let {
+            val dirPath = it.substringAfter("var dirPath").substringAfter("'").substringBefore("';")
+            val images = it.substringAfter("var images").substringAfter("'[").substringBefore("]'").split(", ")
+            images.forEachIndexed { i, img ->
+                add(Page(i, doc.location(), "$dirPath${img.removeSuffix("\"")}"))
+            }
+        }
+
         doc.select("div.viewer-container img:not(noscript img)").forEach {
             add(
                 Page(
