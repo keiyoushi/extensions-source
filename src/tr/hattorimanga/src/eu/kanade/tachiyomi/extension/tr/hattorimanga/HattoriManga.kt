@@ -60,7 +60,7 @@ class HattoriManga : ParsedHttpSource() {
             page = dto.currentPage + 1
         } while (dto.hasNextPage())
 
-        return Observable.just(chapters)
+        return Observable.just(chapters.sortedBy { it.name }.reversed())
     }
 
     private fun fetchChapterPageableList(slug: String, page: Int, manga: SManga): HMChapterDto =
@@ -144,12 +144,12 @@ class HattoriManga : ParsedHttpSource() {
         return json.decodeFromString(body.string())
     }
 
+    private fun String.toDate(): Long =
+        try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+
     companion object {
         val REGEX_MANGA_URL = """='(?<url>[^']+)""".toRegex()
         val PREFIX_SEARCH = "slug:"
         val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US)
     }
-
-    private fun String.toDate(): Long =
-        try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
 }
