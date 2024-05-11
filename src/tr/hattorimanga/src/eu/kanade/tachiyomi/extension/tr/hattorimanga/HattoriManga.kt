@@ -214,13 +214,7 @@ class HattoriManga : ParsedHttpSource() {
         val request = searchMangaRequest(page, query, filters)
 
         if (request.url.toString().contains("manga-index")) {
-            return client.newCall(request).asObservableSuccess().map {
-                val document = it.asJsoup()
-                val mangas = document
-                    .select(searchMangaSelector())
-                    .map(::searchMangaFromElement)
-                MangasPage(mangas, document.selectFirst(popularMangaNextPageSelector()) != null)
-            }
+            return super.fetchSearchManga(page, query, filters)
         }
 
         return client.newCall(request).asObservableSuccess().map { response ->
