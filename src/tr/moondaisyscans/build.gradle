@@ -1,0 +1,10 @@
+ext {
+    extName = 'Moon Daisy Scans'
+    extClass = '.MoonDaisyScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://moondaisyscans.biz'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
