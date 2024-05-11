@@ -47,54 +47,52 @@ class Danbooru : ParsedHttpSource() {
     override fun popularMangaSelector(): String =
         searchMangaSelector()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = Request(
-        url = "$baseUrl/pools/gallery".toHttpUrl().newBuilder().run {
-            setEncodedQueryParameter("search[category]", "series")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/pools/gallery".toHttpUrl().newBuilder()
 
-            filters.forEach {
-                when (it) {
-                    is FilterTags -> if (it.state.isNotBlank()) {
-                        addQueryParameter("search[post_tags_match]", it.state)
-                    }
+        url.setEncodedQueryParameter("search[category]", "series")
 
-                    is FilterDescription -> if (it.state.isNotBlank()) {
-                        addQueryParameter("search[description_matches]", it.state)
-                    }
-
-                    is FilterIsDeleted -> if (it.state) {
-                        addEncodedQueryParameter("search[is_deleted]", "true")
-                    }
-
-                    is FilterCategory -> {
-                        setEncodedQueryParameter("search[category]", it.selected)
-                    }
-
-                    is FilterOrder -> if (it.selected != null) {
-                        addEncodedQueryParameter("search[order]", it.selected)
-                    }
-
-                    else -> throw IllegalStateException("Unrecognized filter")
+        filters.forEach {
+            when (it) {
+                is FilterTags -> if (it.state.isNotBlank()) {
+                    url.addQueryParameter("search[post_tags_match]", it.state)
                 }
+
+                is FilterDescription -> if (it.state.isNotBlank()) {
+                    url.addQueryParameter("search[description_matches]", it.state)
+                }
+
+                is FilterIsDeleted -> if (it.state) {
+                    url.addEncodedQueryParameter("search[is_deleted]", "true")
+                }
+
+                is FilterCategory -> {
+                    url.setEncodedQueryParameter("search[category]", it.selected)
+                }
+
+                is FilterOrder -> if (it.selected != null) {
+                    url.addEncodedQueryParameter("search[order]", it.selected)
+                }
+
+                else -> throw IllegalStateException("Unrecognized filter")
             }
+        }
 
-            addEncodedQueryParameter("page", page.toString())
+        url.addEncodedQueryParameter("page", page.toString())
 
-            if (query.isNotBlank()) {
-                addQueryParameter("search[name_contains]", query)
-            }
+        if (query.isNotBlank()) {
+            url.addQueryParameter("search[name_contains]", query)
+        }
 
-            build()
-        },
-
-        headers = headers,
-    )
+        return GET(url.build(), headers)
+    }
 
     override fun searchMangaSelector(): String =
-        ".post-preview"
+        "article.post-preview"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         url = element.selectFirst(".post-preview-link")?.attr("href")!!
-        title = element.selectFirst(".desc")?.text() ?: ""
+        title = element.selectFirst("div.text-center")?.text() ?: ""
 
         thumbnail_url = element.selectFirst("source")?.attr("srcset")
             ?.substringAfterLast(',')?.trim()
