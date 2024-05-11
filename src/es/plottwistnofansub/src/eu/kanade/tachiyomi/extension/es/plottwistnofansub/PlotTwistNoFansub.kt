@@ -139,13 +139,14 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        val mangaId = listOfNotNull(
-            MANGAID1_REGEX.find(document.html())?.groupValues?.get(1)
-                ?: document.selectFirst("link[rel=shortlink]")?.attr("href")?.substringAfterLast("=")
-                ?: document.selectFirst("body")?.classNames()?.filter { it.startsWith("postid-") }?.getOrNull(0)?.substringAfterLast("-")
-                ?: document.selectFirst(".td-post-views span")?.classNames()?.filter { it.startsWith("td-nr-views-") }?.getOrNull(0)?.substringAfterLast("-")
-                ?: document.select("*[data-mangaid]").map { it.attr("data-mangaid") }.firstOrNull(),
-        ).groupingBy { it }.eachCount().maxBy { it.value }.key
+        val mangaIds = listOfNotNull(
+            MANGAID1_REGEX.find(document.html())?.groupValues?.get(1),
+            document.selectFirst("link[rel=shortlink]")?.attr("href")?.substringAfterLast("="),
+            document.selectFirst("body")?.classNames()?.filter { it.startsWith("postid-") }?.getOrNull(0)?.substringAfterLast("-"),
+            document.selectFirst(".td-post-views span")?.classNames()?.filter { it.startsWith("td-nr-views-") }?.getOrNull(0)?.substringAfterLast("-"),
+        ) + document.select("*[data-mangaid]").map { it.attr("data-mangaid") }
+
+        val mangaId = mangaIds.groupingBy { it }.eachCount().maxBy { it.value }.key
 
         val key = getKey(document)
         val url = "$baseUrl/wp-admin/admin-ajax.php"
