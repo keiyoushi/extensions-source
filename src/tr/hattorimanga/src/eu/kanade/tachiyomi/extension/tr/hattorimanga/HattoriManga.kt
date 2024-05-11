@@ -159,6 +159,7 @@ class HattoriManga : ParsedHttpSource() {
         thumbnail_url = document.selectFirst(".set-bg")?.absUrl("data-setbg")
         author = document.selectFirst(".anime-details-widget li span:contains(Yazar) + span")?.text()
         description = document.selectFirst(".anime-details-text p")?.text()
+        setUrlWithoutDomain(document.location())
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -211,6 +212,15 @@ class HattoriManga : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+            val slug = query.removePrefix(PREFIX_SEARCH)
+            return client.newCall(GET("$baseUrl/$slug"))
+                .asObservableSuccess()
+                .map {
+                    MangasPage(listOf(mangaDetailsParse(it)), false)
+                }
+        }
+
         val request = searchMangaRequest(page, query, filters)
 
         if (request.url.toString().contains("manga-index")) {
