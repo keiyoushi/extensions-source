@@ -339,7 +339,7 @@ abstract class LectorTmo(
 
         val imagesScript = doc.selectFirst("script:containsData(var dirPath):containsData(var images)")
 
-        if(imagesScript != null) {
+        if (imagesScript != null) {
             val dirPath = imagesScript.data().substringAfter("var dirPath").substringAfter("'").substringBefore("';")
             val images = imagesScript.data().substringAfter("var images").substringAfter("'[").substringBefore("]'").split(", ")
             images.forEachIndexed { i, img ->
@@ -348,7 +348,9 @@ abstract class LectorTmo(
         } else {
             doc.select("div.viewer-container img:not(noscript img)").forEachIndexed { i, img ->
                 add(
-                    Page(i, doc.location(),
+                    Page(
+                        i,
+                        doc.location(),
                         img.let {
                             if (it.hasAttr("data-src")) {
                                 it.attr("abs:data-src")
