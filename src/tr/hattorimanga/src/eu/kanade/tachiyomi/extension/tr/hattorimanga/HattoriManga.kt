@@ -261,21 +261,21 @@ class HattoriManga : ParsedHttpSource() {
 
     private var genresList: List<Genre> = emptyList()
 
-    private var fetchCategoriesAttempts: Int = 0
+    private var fetchGenresAttempts: Int = 0
 
     private fun fetchGenres() {
-        if (fetchCategoriesAttempts < 3 && genresList.isEmpty()) {
+        if (fetchGenresAttempts < 3 && genresList.isEmpty()) {
             try {
                 genresList = client.newCall(genresRequest()).execute()
-                    .use { parseCategories(it.asJsoup()) }
+                    .use { parseGenres(it.asJsoup()) }
             } catch (_: Exception) {
             } finally {
-                fetchCategoriesAttempts++
+                fetchGenresAttempts++
             }
         }
     }
 
-    private fun parseCategories(document: Document): List<Genre> {
+    private fun parseGenres(document: Document): List<Genre> {
         return document.select(".tags-blog a")
             .map { element ->
                 val tag = element.text()
