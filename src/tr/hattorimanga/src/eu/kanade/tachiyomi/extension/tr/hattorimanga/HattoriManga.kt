@@ -29,8 +29,6 @@ class HattoriManga : ParsedHttpSource() {
     override val lang: String = "tr"
 
     override val supportsLatest: Boolean = true
-    override fun chapterFromElement(element: Element) =
-        throw UnsupportedOperationException()
 
     override val versionId: Int = 2
 
@@ -39,6 +37,9 @@ class HattoriManga : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
+
+    override fun chapterFromElement(element: Element) =
+        throw UnsupportedOperationException()
 
     override fun chapterListSelector() =
         throw UnsupportedOperationException()
