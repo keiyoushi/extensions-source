@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.tr.hattorimanga
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.math.min
 
 @Serializable
 class HMChapterDto(
@@ -11,7 +12,7 @@ class HMChapterDto(
 ) {
     fun hasNextPage(): Boolean = currentPage < lastPage
 
-    fun nextPage(): Int = currentPage + 1
+    fun nextPage(): Int = min(lastPage, currentPage + 1)
 }
 
 @Serializable
