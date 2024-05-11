@@ -7,10 +7,6 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-/**
- * Springboard that accepts https://blackoutcomics.com/comics/<item> intents
- * and redirects them to the main Tachiyomi process.
- */
 class HattoriMangaUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
