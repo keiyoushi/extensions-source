@@ -70,7 +70,7 @@ class HattoriManga : ParsedHttpSource() {
                         getCsrftoken()
                         chain.proceed(addFormBody(req, query))
                     }
-                    else -> response
+                    else -> this
                 }
             }
         }
