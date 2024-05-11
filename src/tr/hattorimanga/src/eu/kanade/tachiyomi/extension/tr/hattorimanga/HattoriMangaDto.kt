@@ -10,6 +10,8 @@ class HMChapterDto(
     val lastPage: Int,
 ) {
     fun hasNextPage(): Boolean = currentPage < lastPage
+
+    fun nextPage(): Int = currentPage + 1
 }
 
 @Serializable

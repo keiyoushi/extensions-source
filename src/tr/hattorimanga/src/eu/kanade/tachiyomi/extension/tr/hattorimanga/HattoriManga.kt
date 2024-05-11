@@ -114,7 +114,7 @@ class HattoriManga : ParsedHttpSource() {
                     url = "${manga.url}/${it.chapterSlug}"
                 }
             }
-            page = dto.currentPage + 1
+            page = dto.nextPage()
         } while (dto.hasNextPage())
 
         return Observable.just(chapters)
