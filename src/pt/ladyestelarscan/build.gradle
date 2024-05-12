@@ -1,9 +1,0 @@
-ext {
-    extName = 'Lady Estelar Scan'
-    extClass = '.LadyEstelarScan'
-    themePkg = 'madara'
-    baseUrl = 'https://ladyestelarscan.com.br'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

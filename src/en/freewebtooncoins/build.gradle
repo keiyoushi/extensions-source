@@ -1,9 +1,0 @@
-ext {
-    extName = 'FreeWebtoonCoins'
-    extClass = '.FreeWebtoonCoins'
-    themePkg = 'madara'
-    baseUrl = 'https://freewebtooncoins.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

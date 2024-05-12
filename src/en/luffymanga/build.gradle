@@ -1,9 +1,0 @@
-ext {
-    extName = 'Luffy Manga'
-    extClass = '.LuffyManga'
-    themePkg = 'madara'
-    baseUrl = 'https://luffymanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

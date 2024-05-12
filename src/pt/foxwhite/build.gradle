@@ -1,9 +1,0 @@
-ext {
-    extName = 'Fox White'
-    extClass = '.FoxWhite'
-    themePkg = 'madara'
-    baseUrl = 'https://foxwhite.com.br'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

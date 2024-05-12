@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Kitsu'
-    extClass = '.MangaKitsu'
-    themePkg = 'madara'
-    baseUrl = 'https://mangakitsu.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

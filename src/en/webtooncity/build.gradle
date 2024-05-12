@@ -1,9 +1,0 @@
-ext {
-    extName = 'Webtoon City'
-    extClass = '.WebtoonCity'
-    themePkg = 'madara'
-    baseUrl = 'https://webtooncity.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
