@@ -78,16 +78,13 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        // Making a copy in case the caller propagates changes
-        val chapterCopy = SChapter.create().apply {
-            // There's like 2 non-English entries where this breaks
-            url = "${chapter.url}english/p/1/"
-            name = chapter.name
-            date_upload = chapter.date_upload
-            chapter_number = chapter.chapter_number
-            scanlator = chapter.scanlator
+        // There's like 2 non-English entries where this breaks
+        val url = "${chapter.url}english/p/1/"
+
+        if (url.startsWith("http")) {
+            return GET(url, headers)
         }
-        return super.pageListRequest(chapterCopy)
+        return GET(baseUrl + url, headers)
     }
 }
 
