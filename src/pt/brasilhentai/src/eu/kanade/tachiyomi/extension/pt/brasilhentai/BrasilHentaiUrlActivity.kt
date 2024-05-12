@@ -9,26 +9,23 @@ import kotlin.system.exitProcess
 
 class BrasilHentaiUrlActivity : Activity() {
 
-    private val tag = javaClass.simpleName
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val item = pathSegments[1]
+        val segment = intent?.data?.lastPathSegment
+        if (segment != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${BrasilHentai.PREFIX_SEARCH}$item")
+                putExtra("query", "${BrasilHentai.PREFIX_SEARCH}$segment")
                 putExtra("filter", packageName)
             }
 
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e(tag, e.toString())
+                Log.e("BrasilHentaiUrlActivity", e.toString())
             }
         } else {
-            Log.e(tag, "could not parse uri from intent $intent")
+            Log.e("BrasilHentaiUrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()

@@ -111,7 +111,7 @@ class BrasilHentai : ParsedHttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SEARCH)) {
-            client.newCall(GET("$baseUrl/${query.removePrefix(PREFIX_SEARCH)}", headers))
+            client.newCall(GET("$baseUrl/${query.substringAfter(PREFIX_SEARCH)}", headers))
                 .asObservableSuccess()
                 .map { MangasPage(listOf(searchMangaFromElement(it.asJsoup())), false) }
         } else {
