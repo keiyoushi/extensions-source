@@ -45,7 +45,6 @@ class HattoriManga : ParsedHttpSource() {
     private var csrfToken: String = ""
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(4)
         .addInterceptor { chain ->
             val request = chain.request()
             if (!request.url.toString().contains("manga/search")) {
@@ -74,6 +73,7 @@ class HattoriManga : ParsedHttpSource() {
                 }
             }
         }
+        .rateLimit(4)
         .build()
 
     private fun addFormBody(request: Request, query: String): Request {
