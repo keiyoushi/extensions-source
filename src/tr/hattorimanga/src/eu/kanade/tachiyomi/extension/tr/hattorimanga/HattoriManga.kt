@@ -138,20 +138,18 @@ class HattoriManga : ParsedHttpSource() {
     override fun latestUpdatesSelector() =
         throw UnsupportedOperationException()
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return client.newCall(latestUpdatesRequest(page)).asObservableSuccess()
-            .map {
-                val mangas = it.parseAs<HMLatestUpdateDto>().chapters.map {
-                    SManga.create().apply {
-                        val manga = it.manga
-                        title = manga.title
-                        thumbnail_url = "$baseUrl/storage/${manga.thumbnail}"
-                        setUrlWithoutDomain("$baseUrl/manga/${manga.slug}")
-                    }
-                }.distinctBy { it.title }
-
-                MangasPage(mangas, false)
-            }
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        return response.use {
+            val mangas = it.parseAs<HMLatestUpdateDto>().chapters.map {
+                SManga.create().apply {
+                    val manga = it.manga
+                    title = manga.title
+                    thumbnail_url = "$baseUrl/storage/${manga.thumbnail}"
+                    setUrlWithoutDomain("$baseUrl/manga/${manga.slug}")
+                }
+            }.distinctBy { it.title }
+            MangasPage(mangas, false)
+        }
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
