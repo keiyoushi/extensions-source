@@ -171,14 +171,6 @@ class HattoriManga : HttpSource() {
         )
     }
 
-    private fun mangaFromElement(element: Element) = SManga.create().apply {
-        title = element.selectFirst("h5")!!.text()
-        thumbnail_url = element.selectFirst(".img-con")?.absUrl("data-setbg")
-        genre = element.select(".product-card-con ul li").joinToString { it.text() }
-        val script = element.attr("onclick")
-        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups["url"]!!.value)
-    }
-
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga?page=$page", headers)
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
@@ -254,12 +246,17 @@ class HattoriManga : HttpSource() {
 
     override fun imageUrlParse(response: Response) = ""
 
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h5")!!.text()
+        thumbnail_url = element.selectFirst(".img-con")?.absUrl("data-setbg")
+        genre = element.select(".product-card-con ul li").joinToString { it.text() }
+        val script = element.attr("onclick")
+        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups["url"]!!.value)
+    }
+
     private fun parseGenres(document: Document): List<Genre> {
         return document.select(".tags-blog a")
-            .map { element ->
-                val tag = element.text()
-                Genre(tag, tag)
-            }
+            .map { element -> Genre(element.text()) }
     }
 
     private inline fun <reified T> Response.parseAs(): T {
