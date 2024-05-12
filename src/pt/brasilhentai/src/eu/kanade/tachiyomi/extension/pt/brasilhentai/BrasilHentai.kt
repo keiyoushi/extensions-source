@@ -11,12 +11,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -34,6 +32,8 @@ class BrasilHentai : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
+
+    private var categoryFilterOptions: Array<Pair<String, String>> = emptyArray()
 
     override fun chapterFromElement(element: Element) =
         throw UnsupportedOperationException()
@@ -81,6 +81,7 @@ class BrasilHentai : ParsedHttpSource() {
         val anchor = element.selectFirst("a[title]")
         title = anchor!!.attr("title")
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        initialized = true
         setUrlWithoutDomain(anchor.absUrl("href"))
     }
 
@@ -89,6 +90,17 @@ class BrasilHentai : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page", headers)
 
     override fun popularMangaSelector() = ".content-area article"
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        if (categoryFilterOptions.isEmpty()) {
+            categoryFilterOptions = parseCategories(document)
+        }
+        return MangasPage(
+            mangas = document.select(popularMangaSelector()).map(::popularMangaFromElement),
+            hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null,
+        )
+    }
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
@@ -122,8 +134,6 @@ class BrasilHentai : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun getFilterList(): FilterList {
-        CoroutineScope(Dispatchers.IO).launch { fetchCategories() }
-
         val filters = mutableListOf<Filter<*>>()
 
         if (categoryFilterOptions.isNotEmpty()) {
@@ -138,30 +148,13 @@ class BrasilHentai : ParsedHttpSource() {
         return FilterList(filters)
     }
 
-    private var categoryFilterOptions: Array<Pair<String, String>> = emptyArray()
-
-    private var fetchCategoriesAttempts: Int = 0
-
-    private fun fetchCategories() {
-        if (fetchCategoriesAttempts < 3 && categoryFilterOptions.isEmpty()) {
-            try {
-                categoryFilterOptions += Pair("Todos", "")
-                categoryFilterOptions += client.newCall(categoriesRequest()).execute()
-                    .use { parseCategories(it.asJsoup()) }.toTypedArray()
-            } catch (_: Exception) {
-            } finally {
-                fetchCategoriesAttempts++
-            }
-        }
-    }
-
-    private fun parseCategories(document: Document): List<Pair<String, String>> {
+    private fun parseCategories(document: Document): Array<Pair<String, String>> {
         return document.select("#categories-2 li a")
             .map { element ->
                 val url = element.absUrl("href")
                 val category = url.split("/").filter { it.isNotBlank() }.last()
                 Pair(element.ownText(), category)
-            }
+            }.toTypedArray()
     }
 
     class CategoryFilter(
