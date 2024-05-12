@@ -145,7 +145,7 @@ class HattoriManga : ParsedHttpSource() {
                     val manga = it.manga
                     title = manga.title
                     thumbnail_url = "$baseUrl/storage/${manga.thumbnail}"
-                    setUrlWithoutDomain("$baseUrl/manga/${manga.slug}")
+                    url = "/manga/${manga.slug}"
                 }
             }.distinctBy { it.title }
             MangasPage(mangas, false)
