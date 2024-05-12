@@ -23,7 +23,7 @@ fun Element.imgAttr() = when {
     hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
     hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
     else -> absUrl("src")
-}!!
+}
 
 fun Element.cleanTag(): String = text().cleanTag()
 fun String.cleanTag(): String = replace(regexTagCountNumber, "").trim()
@@ -57,7 +57,7 @@ fun String?.toDate(simpleDateFormat: SimpleDateFormat?): Long {
 }
 
 private fun parseDate(date: String?): Long {
-    date ?: return 0
+    date ?: return 0L
 
     return when {
         // Handle 'yesterday' and 'today', using midnight

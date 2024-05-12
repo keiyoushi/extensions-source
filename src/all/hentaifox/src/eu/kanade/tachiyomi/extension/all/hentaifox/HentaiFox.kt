@@ -5,10 +5,7 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import kotlin.random.Random
 
 class HentaiFox(
     lang: String = "all",
@@ -17,8 +14,6 @@ class HentaiFox(
     "HentaiFox",
     "https://hentaifox.com",
     lang = lang,
-    mangaLang = mangaLang,
-    simpleDateFormat = null,
 ) {
     override val supportsLatest = mangaLang.isNotBlank()
 
@@ -42,13 +37,32 @@ class HentaiFox(
             }
         }
 
+    override val useShortTitlePreference = false
     override fun Element.mangaTitle(selector: String): String? = mangaFullTitle(selector)
 
-    override fun Element.getTime(): Long {
-        return selectFirst(".pages:contains(Posted:)")?.ownText()
+    override fun Element.getInfo(tag: String): String {
+        return select("ul.${tag.lowercase()} a")
+            .joinToString {
+                val name = it.ownText()
+                if (tag.contains(regexTag)) {
+                    genres[name] = it.attr("href")
+                        .removeSuffix("/").substringAfterLast('/')
+                }
+                listOf(
+                    name,
+                    it.select(".split_tag").text()
+                        .removePrefix("| ")
+                        .trim(),
+                )
+                    .filter { s -> s.isNotBlank() }
+                    .joinToString()
+            }
+    }
+
+    override fun Element.getTime(): Long =
+        selectFirst(".pages:contains(Posted:)")?.ownText()
             ?.removePrefix("Posted: ")
             .toDate(simpleDateFormat)
-    }
 
     override fun HttpUrl.Builder.addPageUri(page: Int): HttpUrl.Builder {
         val url = toString()
@@ -57,20 +71,11 @@ class HentaiFox(
                 addPathSegments("page/$page")
             url.contains('?') ->
                 addQueryParameter("page", page.toString())
-            page > 1 ->
+            else ->
                 addPathSegments("pag/$page")
         }
         addPathSegment("") // trailing slash (/)
         return this
-    }
-
-    /* Pages */
-    override val pagesRequest = "includes/thumbs_loader.php"
-
-    override fun getServer(document: Document, galleryId: String): String {
-        val domain = baseUrl.toHttpUrl().host
-        // Randomly choose between servers
-        return if (Random.nextBoolean()) "i2.$domain" else "i.$domain"
     }
 
     /**
@@ -87,11 +92,12 @@ class HentaiFox(
         }
     }
 
+    override val favoritePath = "includes/user_favs.php"
+    override val pagesRequest = "includes/thumbs_loader.php"
+
     override fun getFilterList() = FilterList(
         listOf(
             Filter.Header("HINT: Use double quote (\") for exact match"),
         ) + super.getFilterList().list,
     )
-
-    override val idPrefixUri = "gallery"
 }
