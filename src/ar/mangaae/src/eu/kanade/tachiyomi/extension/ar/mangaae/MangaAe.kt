@@ -2,9 +2,8 @@ package eu.kanade.tachiyomi.extension.ar.mangaae
 
 import android.app.Application
 import android.widget.Toast
-import androidx.preference.EditTextPreference
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -25,7 +24,12 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "مانجا العرب"
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override val baseUrl by lazy {
+        when {
+            System.getenv("CI") == "true" -> MIRROR_PREF_ENTRY_VALUES.joinToString("#, ")
+            else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
+        }
+    }
 
     private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -159,28 +163,31 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
 
     // ============================== Settings ==============================
     companion object {
-        private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
-        private const val BASE_URL_PREF_TITLE = "تعديل الرابط"
-        private const val BASE_URL_PREF_DEFAULT = "https://mangaae.com"
-        private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
-        private const val BASE_URL_PREF_SUMMARY = ".للاستخدام المؤقت. تحديث التطبيق سيؤدي الى حذف الإعدادات"
+        private const val RESTART_TACHIYOMI = "أعد تشغيل التطبيق لتمكين الإعدادات الجديدة."
+        private const val MIRROR_PREF_KEY = "MIRROR"
+        private const val MIRROR_PREF_TITLE = "تعديل الرابط"
+        internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
+            "https://mangaae.com",
+            "https://mangaat.com",
+            "https://mngaar.com",
+        )
+        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(BASE_URL_PREF_DEFAULT)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $BASE_URL_PREF_DEFAULT"
+        val mirrorPref = ListPreference(screen.context).apply {
+            key = MIRROR_PREF_KEY
+            title = MIRROR_PREF_TITLE
+            entries = MIRROR_PREF_ENTRY_VALUES
+            entryValues = MIRROR_PREF_ENTRY_VALUES
+            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
+            summary = "%s"
 
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
                 true
             }
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(mirrorPref)
     }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, BASE_URL_PREF_DEFAULT)!!
 }
