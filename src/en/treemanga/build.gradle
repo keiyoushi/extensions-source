@@ -1,9 +1,0 @@
-ext {
-    extName = 'TreeManga'
-    extClass = '.TreeManga'
-    themePkg = 'madara'
-    baseUrl = 'https://treemanga.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
