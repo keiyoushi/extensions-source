@@ -1,0 +1,9 @@
+ext {
+    extName = 'Athena Manga'
+    extClass = '.AthenaManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://athenamanga.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
