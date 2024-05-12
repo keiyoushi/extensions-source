@@ -362,30 +362,6 @@ abstract class LectorTmo(
                 )
             }
         }
-
-        doc.selectFirst("script:containsData(var dirPath):containsData(var images)")?.data()?.let {
-            val dirPath = it.substringAfter("var dirPath").substringAfter("'").substringBefore("';")
-            val images = it.substringAfter("var images").substringAfter("'[").substringBefore("]'").split(", ")
-            images.forEachIndexed { i, img ->
-                add(Page(i, doc.location(), "$dirPath${img.removeSuffix("\"")}"))
-            }
-        }
-
-        doc.select("div.viewer-container img:not(noscript img)").forEach {
-            add(
-                Page(
-                    size,
-                    doc.location(),
-                    it.let {
-                        if (it.hasAttr("data-src")) {
-                            it.attr("abs:data-src")
-                        } else {
-                            it.attr("abs:src")
-                        }
-                    },
-                ),
-            )
-        }
     }
 
     private tailrec fun redirectToReadPage(document: Document): Document {
