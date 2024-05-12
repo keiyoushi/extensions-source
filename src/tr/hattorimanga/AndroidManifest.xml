@@ -13,8 +13,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="blackoutcomics.com"
-                    android:pathPattern="/comics/..*"
+                    android:host="hattorimanga.com"
+                    android:pathPattern="/manga/..*"
                     android:scheme="https" />
             </intent-filter>
         </activity>
