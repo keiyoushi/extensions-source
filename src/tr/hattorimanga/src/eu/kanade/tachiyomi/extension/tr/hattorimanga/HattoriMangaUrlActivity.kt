@@ -18,7 +18,7 @@ class HattoriMangaUrlActivity : Activity() {
             val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${HattoriManga.PREFIX_SEARCH}$item")
+                putExtra("query", "${HattoriManga.SEARCH_PREFIX}$item")
                 putExtra("filter", packageName)
             }
 

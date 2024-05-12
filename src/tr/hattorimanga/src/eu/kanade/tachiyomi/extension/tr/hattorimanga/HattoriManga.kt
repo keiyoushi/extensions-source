@@ -10,11 +10,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -29,7 +26,7 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HattoriManga : ParsedHttpSource() {
+class HattoriManga : HttpSource() {
     override val name: String = "Hattori Manga"
 
     override val baseUrl: String = "https://hattorimanga.com"
@@ -43,6 +40,8 @@ class HattoriManga : ParsedHttpSource() {
     private val json: Json by injectLazy()
 
     private var csrfToken: String = ""
+
+    private var genresList: List<Genre> = emptyList()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
@@ -94,10 +93,7 @@ class HattoriManga : ParsedHttpSource() {
         csrfToken = document.selectFirst("meta[name=csrf-token]")!!.attr("content")
     }
 
-    override fun chapterFromElement(element: Element) =
-        throw UnsupportedOperationException()
-
-    override fun chapterListSelector() =
+    override fun chapterListParse(response: Response) =
         throw UnsupportedOperationException()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -125,18 +121,24 @@ class HattoriManga : ParsedHttpSource() {
             .execute()
             .parseAs<HMChapterDto>()
 
-    override fun imageUrlParse(document: Document) = ""
-
-    override fun latestUpdatesFromElement(element: Element) =
-        throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector() =
-        throw UnsupportedOperationException()
-
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest-chapters")
 
-    override fun latestUpdatesSelector() =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h3")!!.text()
+            thumbnail_url = document.selectFirst(".set-bg")?.absUrl("data-setbg")
+            author = document.selectFirst(".anime-details-widget li span:contains(Yazar) + span")?.text()
+            description = document.selectFirst(".anime-details-text p")?.text()
+            setUrlWithoutDomain(document.location())
+        }
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        return response.asJsoup().select(".image-wrapper img").mapIndexed { index, element ->
+            Page(index, imageUrl = "$baseUrl${element.attr("data-src")}")
+        }.takeIf { it.isNotEmpty() } ?: throw Exception("Oturum açmanız, WebView'ı açmanız ve oturum açmanız gerekir")
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         return response.use {
@@ -147,42 +149,39 @@ class HattoriManga : ParsedHttpSource() {
                     thumbnail_url = "$baseUrl/storage/${manga.thumbnail}"
                     url = "/manga/${manga.slug}"
                 }
-            }.distinctBy { it.title }
+            }.distinctBy { manga -> manga.title }
             MangasPage(mangas, false)
         }
     }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h3")!!.text()
-        thumbnail_url = document.selectFirst(".set-bg")?.absUrl("data-setbg")
-        author = document.selectFirst(".anime-details-widget li span:contains(Yazar) + span")?.text()
-        description = document.selectFirst(".anime-details-text p")?.text()
-        setUrlWithoutDomain(document.location())
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        if (genresList.isEmpty()) {
+            genresList = parseGenres(document)
+        }
+
+        val mangas = document
+            .select(".product-card.grow-box")
+            .map(::mangaFromElement)
+
+        return MangasPage(
+            mangas = mangas,
+            hasNextPage = document.selectFirst(".pagination .page-item:last-child:not(.disabled)") != null,
+        )
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".image-wrapper img").mapIndexed { index, element ->
-            Page(index, imageUrl = "$baseUrl${element.attr("data-src")}")
-        }.takeIf { it.isNotEmpty() } ?: throw Exception("Oturum açmanız, WebView'ı açmanız ve oturum açmanız gerekir")
-    }
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("h5")!!.text()
         thumbnail_url = element.selectFirst(".img-con")?.absUrl("data-setbg")
         genre = element.select(".product-card-con ul li").joinToString { it.text() }
         val script = element.attr("onclick")
-        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups.get("url")!!.value)
+        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups["url"]!!.value)
     }
-
-    override fun popularMangaNextPageSelector() = ".pagination .page-item:last-child:not(.disabled)"
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga?page=$page", headers)
 
-    override fun popularMangaSelector() = ".product-card.grow-box"
-
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val request = POST("$baseUrl/manga/search#$query", headers)
@@ -207,11 +206,9 @@ class HattoriManga : ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(PREFIX_SEARCH)) {
-            val slug = query.removePrefix(PREFIX_SEARCH)
+        if (query.startsWith(SEARCH_PREFIX)) {
+            val slug = query.removePrefix(SEARCH_PREFIX)
             return client.newCall(GET("$baseUrl/$slug", headers))
                 .asObservableSuccess()
                 .map {
@@ -241,8 +238,6 @@ class HattoriManga : ParsedHttpSource() {
     }
 
     override fun getFilterList(): FilterList {
-        CoroutineScope(Dispatchers.IO).launch { fetchGenres() }
-
         val filters = mutableListOf<Filter<*>>()
 
         if (genresList.isNotEmpty()) {
@@ -257,21 +252,7 @@ class HattoriManga : ParsedHttpSource() {
         return FilterList(filters)
     }
 
-    private var genresList: List<Genre> = emptyList()
-
-    private var fetchGenresAttempts: Int = 0
-
-    private fun fetchGenres() {
-        if (fetchGenresAttempts < 3 && genresList.isEmpty()) {
-            try {
-                genresList = client.newCall(genresRequest()).execute()
-                    .use { parseGenres(it.asJsoup()) }
-            } catch (_: Exception) {
-            } finally {
-                fetchGenresAttempts++
-            }
-        }
-    }
+    override fun imageUrlParse(response: Response) = ""
 
     private fun parseGenres(document: Document): List<Genre> {
         return document.select(".tags-blog a")
@@ -280,8 +261,6 @@ class HattoriManga : ParsedHttpSource() {
                 Genre(tag, tag)
             }
     }
-
-    private fun genresRequest(): Request = GET("$baseUrl/manga", headers)
 
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString(body.string())
@@ -299,8 +278,8 @@ class HattoriManga : ParsedHttpSource() {
     class Genre(val name: String, val id: String = name)
 
     companion object {
+        const val SEARCH_PREFIX = "slug:"
         val REGEX_MANGA_URL = """='(?<url>[^']+)""".toRegex()
-        val PREFIX_SEARCH = "slug:"
         val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US)
     }
 }
