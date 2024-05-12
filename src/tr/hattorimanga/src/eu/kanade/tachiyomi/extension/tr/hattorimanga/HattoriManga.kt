@@ -128,8 +128,14 @@ class HattoriManga : HttpSource() {
         return SManga.create().apply {
             title = document.selectFirst("h3")!!.text()
             thumbnail_url = document.selectFirst(".set-bg")?.absUrl("data-setbg")
-            author = document.selectFirst(".anime-details-widget li span:contains(Yazar) + span")?.text()
             description = document.selectFirst(".anime-details-text p")?.text()
+            author = document.selectFirst(".anime-details-widget li:has(span:contains(Yazar))")?.ownText()
+            artist = document.selectFirst(".anime-details-widget li:has(span:contains(Çizer))")?.ownText()
+            genre = document.selectFirst(".anime-details-widget li:has(span:contains(Etiketler))")
+                ?.ownText()
+                ?.split(",")
+                ?.map { it.trim() }
+                ?.joinToString()
             setUrlWithoutDomain(document.location())
         }
     }
@@ -222,7 +228,7 @@ class HattoriManga : HttpSource() {
                     author = it.author
                     artist = it.artist
                     thumbnail_url = "$baseUrl/storage/${it.thumbnail}"
-                    setUrlWithoutDomain("$baseUrl/manga/${it.slug}")
+                    url = "/manga/${it.slug}"
                 }
             }
             MangasPage(mangas, false)
