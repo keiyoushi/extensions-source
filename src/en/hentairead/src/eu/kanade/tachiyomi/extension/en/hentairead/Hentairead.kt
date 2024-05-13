@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentairead
 
-import android.net.Uri
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -50,19 +51,18 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         }
     }
 
+    // From ManhwaHentai - modified
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
-        return document.select(pageListParseSelector).mapIndexed { index, element ->
-            val pageUri: String? = element.selectFirst("img")!!.let {
-                it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
-            }
-            Page(
-                index,
-                document.location(),
-                Uri.parse(pageUri).buildUpon().clearQuery().appendQueryParameter("ssl", "1")
-                    .appendQueryParameter("w", "1100").build().toString(),
-            )
+        val pages = document.selectFirst("#chapter_preloaded_images")?.data()
+            ?.substringAfter("chapter_preloaded_images = ")
+            ?.substringBefore("],")
+            ?.let { json.decodeFromString<List<PageDto>>("$it]") }
+            ?: throw Exception("Failed to find page list. Non-English entries are not supported.")
+
+        return pages.mapIndexed { idx, page ->
+            Page(idx, document.location(), page.src)
         }
     }
 
@@ -76,4 +76,19 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
             ),
         )
     }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        // There's like 2 non-English entries where this breaks
+        val url = "${chapter.url}english/p/1/"
+
+        if (url.startsWith("http")) {
+            return GET(url, headers)
+        }
+        return GET(baseUrl + url, headers)
+    }
 }
+
+@Serializable
+class PageDto(
+    val src: String,
+)
