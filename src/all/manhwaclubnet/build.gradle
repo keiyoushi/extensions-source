@@ -1,0 +1,10 @@
+ext {
+    extName = 'ManhwaClub.net'
+    extClass = '.ManhwaClubNetFactory'
+    themePkg = 'madara'
+    baseUrl = 'https://manhwaclub.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
