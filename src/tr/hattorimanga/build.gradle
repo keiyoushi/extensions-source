@@ -1,9 +1,7 @@
 ext {
     extName = 'Hattori Manga'
     extClass = '.HattoriManga'
-    themePkg = 'madara'
-    baseUrl = 'https://hattorimanga.com'
-    overrideVersionCode = 0
+    extVersionCode = 37
     isNsfw = true
 }
 
