@@ -142,10 +142,12 @@ class Happymh : HttpSource(), ConfigurableSource {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val url = baseUrl + chapter.url
+        val comicId = chapter.url.substringAfter("code=").substringBefore("&")
+        val chapterId = chapter.url.substringAfter("cid=").substringBefore("&")
         // Some chapters return 403 without this header
         val header = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
-            .set("Referer", url)
+            .set("Referer", "$baseUrl/reads/$comicId/$chapterId")
             .build()
         return GET(url, header)
     }
