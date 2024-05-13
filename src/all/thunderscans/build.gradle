@@ -2,8 +2,8 @@ ext {
     extName = 'Thunder Scans'
     extClass = '.ThunderScansFactory'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://thunderscans.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://en-thunderepic.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
