@@ -42,8 +42,25 @@ class BatoToUrlActivity : Activity() {
 
     private fun fromBatoTo(pathSegments: MutableList<String>): String? {
         return if (pathSegments.size >= 2) {
-            val id = pathSegments[1]
-            "ID:$id"
+            val path = pathSegments[1] as java.lang.String?
+            if (path != null) {
+                var index = -1
+                for (i in path.indices) {
+                    if (path[i] == '-') {
+                        index = i
+                        break
+                    }
+                }
+
+                val id = if (index == -1) {
+                    path
+                } else {
+                    path.substring(0, index)
+                }
+                "ID:$id"
+            } else {
+                null
+            }
         } else {
             null
         }

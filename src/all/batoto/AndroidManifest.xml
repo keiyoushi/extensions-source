@@ -47,6 +47,9 @@
             <data
                 android:pathPattern="/subject-overview/..*"
                 android:scheme="https" />
+            <data
+                android:pathPattern="/title/..*"
+                android:scheme="https" />
         </intent-filter>
     </activity>
 </application>
