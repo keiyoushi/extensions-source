@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.thunderscans
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.source.SourceFactory
 import java.text.SimpleDateFormat
@@ -15,14 +14,14 @@ class ThunderScansFactory : SourceFactory {
 
 class ThunderScansAR : MangaThemesiaAlt(
     "Thunder Scans",
-    "https://thunderscans.com",
+    "https://ar-thunderepic.com",
     "ar",
     dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
 )
 
-class ThunderScansEN : MangaThemesia(
+class ThunderScansEN : MangaThemesiaAlt(
     "Thunder Scans",
-    "https://en-thunderscans.com",
+    "https://en-thunderepic.com",
     "en",
     mangaUrlDirectory = "/comics",
 )
