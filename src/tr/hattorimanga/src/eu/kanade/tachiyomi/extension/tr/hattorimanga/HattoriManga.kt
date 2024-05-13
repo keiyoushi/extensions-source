@@ -239,7 +239,7 @@ class HattoriManga : HttpSource() {
         val filters = mutableListOf<Filter<*>>()
 
         filters += if (genresList.isNotEmpty()) {
-            filters += GenreList("Türler", genresList)
+            GenreList("Türler", genresList)
         } else {
             Filter.Header("Türleri göstermeyi denemek için 'Sıfırla' düğmesine basın")
         }
