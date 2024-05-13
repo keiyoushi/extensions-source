@@ -238,13 +238,10 @@ class HattoriManga : HttpSource() {
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
 
-        if (genresList.isNotEmpty()) {
+        filters += if (genresList.isNotEmpty()) {
             filters += GenreList("Türler", genresList)
         } else {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header("Türleri göstermeyi denemek için 'Sıfırla' düğmesine basın"),
-            )
+            Filter.Header("Türleri göstermeyi denemek için 'Sıfırla' düğmesine basın")
         }
 
         return FilterList(filters)
