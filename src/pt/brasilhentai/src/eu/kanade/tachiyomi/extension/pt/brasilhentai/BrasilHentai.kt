@@ -136,12 +136,10 @@ class BrasilHentai : ParsedHttpSource() {
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
 
-        if (categoryFilterOptions.isNotEmpty()) {
-            filters += CategoryFilter("Categoria", categoryFilterOptions)
+        filters += if (categoryFilterOptions.isNotEmpty()) {
+            CategoryFilter("Categoria", categoryFilterOptions)
         } else {
-            filters += listOf(
-                Filter.Header("Aperte 'Redefinir' para tentar mostrar as categorias"),
-            )
+            Filter.Header("Aperte 'Redefinir' para tentar mostrar as categorias")
         }
 
         return FilterList(filters)
