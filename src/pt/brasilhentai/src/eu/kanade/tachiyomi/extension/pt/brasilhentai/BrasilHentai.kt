@@ -140,7 +140,6 @@ class BrasilHentai : ParsedHttpSource() {
             filters += CategoryFilter("Categoria", categoryFilterOptions)
         } else {
             filters += listOf(
-                Filter.Separator(),
                 Filter.Header("Aperte 'Redefinir' para tentar mostrar as categorias"),
             )
         }
