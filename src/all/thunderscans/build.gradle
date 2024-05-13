@@ -2,7 +2,7 @@ ext {
     extName = 'Thunder Scans'
     extClass = '.ThunderScansFactory'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://thunderepic.com'
+    baseUrl = 'https://en-thunderepic.com'
     overrideVersionCode = 2
 }
 
