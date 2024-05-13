@@ -1,17 +1,25 @@
 package eu.kanade.tachiyomi.extension.es.tecnoscan
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
-class TecnoScan : MangaThemesia(
+class TecnoScan : Madara(
     "Tecno Scan",
     "https://visortecno.com",
     "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-    // Site moved from Madara to MangaThemesia
-    override val versionId = 3
+    // Site moved from MangaThemesia to Madara
+    override val versionId = 4
 
-    override val seriesStatusSelector = ".tsinfo .imptdt:contains(Estado) i"
+    override val client = super.client.newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
+        .build()
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useNewChapterEndpoint = true
 }
