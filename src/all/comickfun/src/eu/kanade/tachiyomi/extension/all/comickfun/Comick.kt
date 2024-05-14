@@ -8,6 +8,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -158,7 +159,30 @@ abstract class Comick(
         .rateLimit(3, 1)
         .build()
 
+    private fun errorParse(response: Response): Nothing {
+        val error = try {
+            response.parseAs<Error>()
+        } catch (_: Exception) {
+            null
+        }
+
+        error?.run {
+            throw IllegalStateException("HTTP error $statusCode: $message")
+        } ?: throw IllegalStateException("HTTP error ${response.code}")
+    }
+
     /** Popular Manga **/
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return client.newCall(popularMangaRequest(page))
+            .asObservable()
+            .map { response ->
+                response
+                    .takeIf { it.isSuccessful }
+                    ?.let { popularMangaParse(it) }
+                    ?: errorParse(response)
+            }
+    }
+
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/v1.0/search?sort=follow&limit=$LIMIT&page=$page&tachiyomi=true"
         return GET(url, headers)
@@ -173,6 +197,17 @@ abstract class Comick(
     }
 
     /** Latest Manga **/
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        return client.newCall(latestUpdatesRequest(page))
+            .asObservable()
+            .map { response ->
+                response
+                    .takeIf { it.isSuccessful }
+                    ?.let { latestUpdatesParse(it) }
+                    ?: errorParse(response)
+            }
+    }
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/v1.0/search?sort=uploaded&limit=$LIMIT&page=$page&tachiyomi=true"
         return GET(url, headers)
