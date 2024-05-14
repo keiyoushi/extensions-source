@@ -32,9 +32,10 @@ class Beauty3600000 : ParsedHttpSource() {
 
     // Popular
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.select("img.ls_lazyimg").attr("file")
+        thumbnail_url = element.select("a img.ls_lazyimg").attr("file")
         title = element.select(".entry-title").text()
         setUrlWithoutDomain(element.select(".entry-title > a").attr("abs:href"))
+        status = SManga.COMPLETED
     }
 
     override fun popularMangaNextPageSelector() = ".next"
@@ -74,9 +75,11 @@ class Beauty3600000 : ParsedHttpSource() {
 
     // Details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".entry-title").text()
-        description = document.select(".entry-title").text()
+        val main = document.selectFirst("#main")!!
+        title = main.select(".entry-title").text()
+        description = main.select(".entry-title").text()
         genre = getGenres(document).joinToString(", ")
+        thumbnail_url = main.select(".entry-content img.ls_lazyimg").attr("file")
         status = SManga.COMPLETED
     }
 
