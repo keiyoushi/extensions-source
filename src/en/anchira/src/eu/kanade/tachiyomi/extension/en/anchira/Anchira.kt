@@ -81,7 +81,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                 SManga.create().apply {
                     url = "/g/${it.id}/${it.key}"
                     title = it.title
-                    thumbnail_url = "$cdnUrl/${it.id}/${it.key}/m/${it.thumbnailIndex + 1}"
+                    thumbnail_url = "$cdnUrl/${it.id}/${it.key}/m/${it.cover?.name}"
                     val art = it.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
                         .ifEmpty { null }
                     artist = art

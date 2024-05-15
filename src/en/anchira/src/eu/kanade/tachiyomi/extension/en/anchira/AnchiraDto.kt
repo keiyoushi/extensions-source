@@ -27,6 +27,7 @@ data class Entry(
     val tags: List<Tag> = emptyList(),
     val url: String? = null,
     val pages: Int = 1,
+    val cover: Image? = null,
     @SerialName("data")
     val images: List<Image> = emptyList(),
 )
