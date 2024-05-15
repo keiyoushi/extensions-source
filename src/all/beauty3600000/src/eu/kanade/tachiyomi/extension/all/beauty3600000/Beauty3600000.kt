@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -13,7 +14,8 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.ParseException
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
+import java.util.TimeZone
 
 class Beauty3600000 : ParsedHttpSource() {
     override val baseUrl = "https://3600000.xyz"
@@ -158,7 +160,7 @@ class Beauty3600000 : ParsedHttpSource() {
 
     private fun getDate(str: String): Long {
         return try {
-            DATE_FORMAT.parse(str).time ?: 0L
+            DATE_FORMAT.parse(str).time
         } catch (e: ParseException) {
             0L
         }
