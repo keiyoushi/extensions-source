@@ -31,7 +31,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val baseUrl = "https://www.leercapitulo.com"
+    override val baseUrl = "https://www.leercapitulo.co"
 
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
