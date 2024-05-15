@@ -60,7 +60,7 @@ class MangaRawClub : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = "ul.pagination > li:last-child > a"
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
-    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector() = ".paging .mg-pagination-chev:last-child:not(.chev-disabled)"
 
     override fun mangaDetailsParse(document: Document): SManga {
         if (document.select(".novel-header").first() == null) {
