@@ -3,7 +3,8 @@ ext {
     extClass = '.MGKomik'
     themePkg = 'madara'
     baseUrl = 'https://mgkomik.id'
-    overrideVersionCode = 12
+    overrideVersionCode = 13
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
