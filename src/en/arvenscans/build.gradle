@@ -1,7 +1,8 @@
 ext {
     extName = 'Vortex Scans'
     extClass = '.VortexScans'
-    extVersionCode = 31
+    extVersionCode = 32
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
