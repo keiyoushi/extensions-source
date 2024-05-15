@@ -27,6 +27,8 @@ data class Entry(
     val tags: List<Tag> = emptyList(),
     val url: String? = null,
     val pages: Int = 1,
+    @SerialName("data")
+    val images: List<Image> = emptyList(),
 )
 
 @Serializable
@@ -34,7 +36,6 @@ data class ImageData(
     val id: Int,
     val key: String,
     val hash: String,
-    val names: List<String>,
 )
 
 @Serializable
@@ -44,4 +45,9 @@ data class EntryKey(
     val hash: String? = null,
     val url: String? = null,
     val names: List<String> = emptyList(),
+)
+
+@Serializable
+class Image(
+    @SerialName("n") val name: String,
 )

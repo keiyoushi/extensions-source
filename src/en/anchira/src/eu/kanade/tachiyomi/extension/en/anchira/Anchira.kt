@@ -242,7 +242,7 @@ class Anchira : HttpSource(), ConfigurableSource {
                 url = "/g/${data.id}/${data.key}"
                 title = data.title
                 thumbnail_url =
-                    "$cdnUrl/${data.id}/${data.key}/b/${data.thumbnailIndex + 1}"
+                    "$cdnUrl/${data.id}/${data.key}/l/${data.images[data.thumbnailIndex].name}"
                 val art = data.tags.filter { it.namespace == 1 }.joinToString(", ") { it.name }
                     .ifEmpty { null }
                 artist = art
@@ -316,10 +316,10 @@ class Anchira : HttpSource(), ConfigurableSource {
         val data = json.decodeFromString<Entry>(response.body.string())
         val imageData = getImageData(data)
 
-        return imageData.names.mapIndexed { i, name ->
+        return data.images.mapIndexed { i, image ->
             Page(
                 i,
-                imageUrl = "$cdnUrl/${imageData.id}/${imageData.key}/${imageData.hash}/b/$name",
+                imageUrl = "$cdnUrl/${imageData.id}/${imageData.key}/${imageData.hash}/b/${image.name}",
             )
         }
     }
@@ -328,7 +328,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         val keys = anchiraData.find { it.id == entry.id }
 
         if (keys?.key != null && keys.hash != null) {
-            return ImageData(keys.id, keys.key, keys.hash, keys.names)
+            return ImageData(keys.id, keys.key, keys.hash)
         }
 
         try {
