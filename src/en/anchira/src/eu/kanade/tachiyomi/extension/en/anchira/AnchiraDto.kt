@@ -3,14 +3,16 @@ package eu.kanade.tachiyomi.extension.en.anchira
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+private val nothing = null
+
 @Serializable
-data class Tag(
+class Tag(
     var name: String,
     var namespace: Int? = null,
 )
 
 @Serializable
-data class LibraryResponse(
+class LibraryResponse(
     val entries: List<Entry> = emptyList(),
     val total: Int,
     val page: Int,
@@ -18,7 +20,7 @@ data class LibraryResponse(
 )
 
 @Serializable
-data class Entry(
+class Entry(
     val id: Int,
     val key: String,
     @SerialName("published_at") val publishedAt: Long = 0L,
@@ -33,19 +35,18 @@ data class Entry(
 )
 
 @Serializable
-data class ImageData(
+class ImageData(
     val id: Int,
     val key: String,
     val hash: String,
 )
 
 @Serializable
-data class EntryKey(
+class EntryKey(
     val id: Int,
     val key: String? = null,
     val hash: String? = null,
     val url: String? = null,
-    val names: List<String> = emptyList(),
 )
 
 @Serializable
