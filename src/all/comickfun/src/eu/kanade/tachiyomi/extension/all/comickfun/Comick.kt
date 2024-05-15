@@ -8,7 +8,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -22,11 +21,13 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 abstract class Comick(
@@ -156,10 +157,20 @@ abstract class Comick(
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(3, 1)
+        .addNetworkInterceptor(::errorInterceptor)
+        .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
 
-    private fun errorParse(response: Response): Nothing {
+    private fun errorInterceptor(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+
+        if (
+            response.isSuccessful ||
+            "application/json" !in response.header("Content-Type").orEmpty()
+        ) {
+            return response
+        }
+
         val error = try {
             response.parseAs<Error>()
         } catch (_: Exception) {
@@ -167,22 +178,11 @@ abstract class Comick(
         }
 
         error?.run {
-            throw IllegalStateException("HTTP error $statusCode: $message")
-        } ?: throw IllegalStateException("HTTP error ${response.code}")
+            throw Exception("$name error $statusCode: $message")
+        } ?: throw Exception("HTTP error ${response.code}")
     }
 
     /** Popular Manga **/
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return client.newCall(popularMangaRequest(page))
-            .asObservable()
-            .map { response ->
-                response
-                    .takeIf { it.isSuccessful }
-                    ?.let { popularMangaParse(it) }
-                    ?: errorParse(response)
-            }
-    }
-
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/v1.0/search?sort=follow&limit=$LIMIT&page=$page&tachiyomi=true"
         return GET(url, headers)
@@ -197,17 +197,6 @@ abstract class Comick(
     }
 
     /** Latest Manga **/
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return client.newCall(latestUpdatesRequest(page))
-            .asObservable()
-            .map { response ->
-                response
-                    .takeIf { it.isSuccessful }
-                    ?.let { latestUpdatesParse(it) }
-                    ?: errorParse(response)
-            }
-    }
-
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/v1.0/search?sort=uploaded&limit=$LIMIT&page=$page&tachiyomi=true"
         return GET(url, headers)
