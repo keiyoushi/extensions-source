@@ -2,8 +2,8 @@ ext {
     extName = 'Mantraz Scan'
     extClass = '.MantrazScan'
     themePkg = 'madara'
-    baseUrl = 'https://mantrazscan.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://mantrazscans.net'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
