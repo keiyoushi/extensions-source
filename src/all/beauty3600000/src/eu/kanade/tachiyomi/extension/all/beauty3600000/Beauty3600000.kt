@@ -81,6 +81,7 @@ class Beauty3600000 : ParsedHttpSource() {
         genre = getGenres(document).joinToString(", ")
         thumbnail_url = main.select(".entry-content img.ls_lazyimg").attr("file")
         status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     private fun getGenres(element: Element): List<String> {
