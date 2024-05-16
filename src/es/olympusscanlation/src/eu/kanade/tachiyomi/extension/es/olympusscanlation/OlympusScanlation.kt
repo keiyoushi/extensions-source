@@ -51,8 +51,7 @@ class OlympusScanlation : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadHomeDto>(response.body.string())
-        val popularJson = json.decodeFromString<List<MangaDto>>(result.data.popularComics)
-        val mangaList = popularJson.filter { it.type == "comic" }.map { it.toSManga() }
+        val mangaList = result.data.popularComics.filter { it.type == "comic" }.map { it.toSManga() }
         return MangasPage(mangaList, hasNextPage = false)
     }
 

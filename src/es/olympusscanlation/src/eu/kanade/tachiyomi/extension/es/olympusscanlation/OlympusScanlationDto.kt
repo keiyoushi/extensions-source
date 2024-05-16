@@ -4,6 +4,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
 import java.text.ParseException
 import java.text.SimpleDateFormat
 
@@ -14,8 +19,20 @@ class PayloadHomeDto(
 
 @Serializable
 class HomeDto(
-    @SerialName("popular_comics") val popularComics: String,
+    @SerialName("popular_comics")
+    @Serializable(with = PopularComicsSerializer::class)
+    val popularComics: List<MangaDto>,
 )
+
+object PopularComicsSerializer : JsonTransformingSerializer<List<MangaDto>>(ListSerializer(MangaDto.serializer())) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        return if (element is JsonPrimitive && element.isString) {
+            Json.parseToJsonElement(element.content)
+        } else {
+            element
+        }
+    }
+}
 
 @Serializable
 class PayloadSeriesDto(val data: PayloadSeriesDataDto)
