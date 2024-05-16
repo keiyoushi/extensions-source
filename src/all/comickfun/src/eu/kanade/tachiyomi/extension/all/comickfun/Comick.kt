@@ -21,11 +21,13 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 abstract class Comick(
@@ -155,8 +157,30 @@ abstract class Comick(
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(3, 1)
+        .addNetworkInterceptor(::errorInterceptor)
+        .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
+
+    private fun errorInterceptor(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+
+        if (
+            response.isSuccessful ||
+            "application/json" !in response.header("Content-Type").orEmpty()
+        ) {
+            return response
+        }
+
+        val error = try {
+            response.parseAs<Error>()
+        } catch (_: Exception) {
+            null
+        }
+
+        error?.run {
+            throw Exception("$name error $statusCode: $message")
+        } ?: throw Exception("HTTP error ${response.code}")
+    }
 
     /** Popular Manga **/
     override fun popularMangaRequest(page: Int): Request {

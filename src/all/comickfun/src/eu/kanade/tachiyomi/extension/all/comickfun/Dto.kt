@@ -197,3 +197,9 @@ class ChapterPageData(
 class Page(
     val url: String? = null,
 )
+
+@Serializable
+class Error(
+    val statusCode: Int,
+    val message: String,
+)
