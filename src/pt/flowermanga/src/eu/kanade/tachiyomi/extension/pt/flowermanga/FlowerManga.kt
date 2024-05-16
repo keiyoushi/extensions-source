@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class FlowerManga : Madara(
     "Flower Manga",
-    "https://flowermanga.net",
+    "https://flowermanga.com",
     "pt-BR",
     SimpleDateFormat("d 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
