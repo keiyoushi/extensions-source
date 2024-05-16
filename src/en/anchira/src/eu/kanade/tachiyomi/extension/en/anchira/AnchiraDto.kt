@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.extension.en.anchira
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-private val nothing = null
-
 @Serializable
 class Tag(
     var name: String,
