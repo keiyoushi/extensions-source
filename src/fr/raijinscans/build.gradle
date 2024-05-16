@@ -2,8 +2,8 @@ ext {
     extName = 'Raijin Scans'
     extClass = '.RaijinScans'
     themePkg = 'madara'
-    baseUrl = 'https://raijinscans.fr'
-    overrideVersionCode = 0
+    baseUrl = 'https://raijinscans.com'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
