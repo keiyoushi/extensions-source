@@ -87,13 +87,13 @@ class ArabsHentai : ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaSelector() = ".search-page .result-item article"
+    override fun searchMangaSelector() = ".search-page .result-item article:not(:has(.tvshows))"
 
     override fun searchMangaFromElement(element: Element) =
         SManga.create().apply {
             element.selectFirst(".details .title")!!.run {
                 setUrlWithoutDomain(selectFirst("a")!!.absUrl("href"))
-                title = ownText()
+                title = text()
             }
             thumbnail_url = element.selectFirst(".image .thumbnail a img")?.imgAttr()
         }
@@ -171,6 +171,7 @@ class ArabsHentai : ParsedHttpSource() {
             hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
             hasAttr("data-src") -> attr("abs:data-src")
             hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+            hasAttr("bv-data-src") -> attr("bv-data-src")
             else -> attr("abs:src")
         }
     }
