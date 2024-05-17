@@ -24,7 +24,7 @@ import kotlin.concurrent.thread
 
 class IkigaiMangas : HttpSource() {
 
-    override val baseUrl: String = "https://nocbro.xyz"
+    override val baseUrl: String = "https://visorikigai.net"
     private val apiBaseUrl: String = "https://panel.ikigaimangas.com"
 
     override val lang: String = "es"
