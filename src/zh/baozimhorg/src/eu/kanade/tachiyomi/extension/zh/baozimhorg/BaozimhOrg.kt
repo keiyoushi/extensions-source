@@ -107,10 +107,11 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
         genre = genreList.joinToString()
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val chapterPath = manga.url.replace("manga", "chapterlist")
-        return GET("$baseUrl$chapterPath", headers)
-    }
+    override fun chapterListRequest(manga: SManga) = super.chapterListRequest(
+        manga.apply {
+            url = url.replace("manga", "chapterlist")
+        },
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
