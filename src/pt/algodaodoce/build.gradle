@@ -1,0 +1,10 @@
+ext {
+    extName = 'Algodão Doce'
+    extClass = '.AlgodaoDoce'
+    themePkg = 'madara'
+    baseUrl = 'https://algodaodocescan.com.br'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
