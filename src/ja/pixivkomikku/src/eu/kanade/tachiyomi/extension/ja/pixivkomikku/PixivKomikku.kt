@@ -1,15 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.pixivkomikku
 
-import android.annotation.SuppressLint
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
-import android.webkit.ConsoleMessage
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.util.Base64
+import android.util.Log
 import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -24,10 +19,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.util.concurrent.CountDownLatch
+import java.io.ByteArrayOutputStream
 
 class PixivKomikku : HttpSource() {
     override val lang: String = "ja"
@@ -37,6 +30,7 @@ class PixivKomikku : HttpSource() {
 
     private val json: Json by injectLazy()
     private val alreadyLoadedPopularMangaIds = mutableSetOf<Int>()
+    private lateinit var shuffleKey: String
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(DataImageInterceptor())
@@ -203,159 +197,86 @@ class PixivKomikku : HttpSource() {
             super.fetchPageList(chapter)
         }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = chapter.url.substringAfterLast("/")
+        val header = headers.newBuilder()
+            .add("X-Client-Hash", "de0449d038fca450c570afa150ecf30d1bbc7cb28c6c348e2268fcaa657392e0")
+            .add("X-Client-Time", "2024-05-16T13:53:38+07:00")
+            .build()
+
+        return GET("$baseUrl/api/app/episodes/$chapterId/read_v4", header)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val episodeId = response.request.url.pathSegments.last()
+        Log.d("pagelistparse", response.peekBody(Long.MAX_VALUE).string())
+        val shuffledPages = json.decodeFromString<Pages>(response.body.string())
 
-        val handler = Handler(Looper.getMainLooper())
-        val base64ImageStrings = mutableListOf<String>()
+        return shuffledPages.data.reading_episode.pages.mapIndexed { i, page ->
+            if (i == 0) shuffleKey = page.key
 
-        val pageNumberLatch = CountDownLatch(1)
-        var pageLoadingLatch: CountDownLatch? = null
-        var pageRetrieveLatch: CountDownLatch? = null
-
-        var webView: WebView? = null
-        handler.post {
-            webView = WebView(Injekt.get<Application>()).apply {
-                settings.javaScriptEnabled = true
-
-                webViewClient = object : WebViewClient() {
-                    override fun shouldInterceptRequest(
-                        view: WebView,
-                        request: WebResourceRequest,
-                    ): WebResourceResponse? {
-                        val url = request.url.toString()
-
-                        if (url.endsWith("1648-75b5954031fcc879.js")) {
-                            val js = deshuffleScript.byteInputStream()
-
-                            return WebResourceResponse("application/javascript", "UTF-8", js)
-                        }
-
-                        if (url.endsWith("3681-984fc8a29466ea34.js")) {
-                            val js = functionToChangeScript.byteInputStream()
-
-                            return WebResourceResponse("application/javascript", "UTF-8", js)
-                        }
-
-                        return super.shouldInterceptRequest(view, request)
-                    }
-                }
-
-                webChromeClient = object : WebChromeClient() {
-                    var pageNumberNotKnown = true
-                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                        if (pageNumberNotKnown && consoleMessage.message().startsWith("pages number")) {
-                            val pageNumber = consoleMessage.message()
-                                .removePrefix("pages number: ").toInt()
-                            pageLoadingLatch = CountDownLatch(pageNumber)
-                            pageRetrieveLatch = CountDownLatch(pageNumber)
-
-                            pageNumberNotKnown = false
-                            pageNumberLatch.countDown()
-                        }
-
-                        if (consoleMessage.message().startsWith("image deshuffled")) {
-                            pageLoadingLatch!!.countDown()
-                            return super.onConsoleMessage(consoleMessage)
-                        }
-
-                        if (consoleMessage.message().startsWith("data:image/png;base64")) {
-                            base64ImageStrings.add(consoleMessage.message())
-
-                            pageRetrieveLatch!!.countDown()
-                            return super.onConsoleMessage(consoleMessage)
-                        }
-
-                        return super.onConsoleMessage(consoleMessage)
-                    }
-                }
-
-                loadUrl("https://comic.pixiv.net/viewer/stories/$episodeId")
-            }
-        }
-
-        pageNumberLatch.await()
-        pageLoadingLatch!!.await()
-        handler.postDelayed({
-            webView!!.evaluateJavascript(
-                """
-                var urls = [];
-                var count = 0;
-
-                do {
-                  var element = document.querySelector("#page-" + count);
-                  if (element !== null) {
-                    var matches = element.getAttribute("style").match(/url\("([^"]+)"\)/);
-                    var url = matches[1];
-                    urls.push(url);
-                  }
-                  count++;
-                } while (element !== null);
-
-                urls;
-                """.trimIndent(),
-            ) { urls ->
-
-                webView!!.evaluateJavascript(
-                    """
-                    async function a(urls) {
-                        var b64s = [];
-                        for(let i = 0; i < urls.length; i++) {
-                            try {
-                                const response = await fetch(urls[i]);
-                                if (!response.ok) {
-                                    throw new Error(`HTTP error!`);
-                                }
-
-                                const blob = await response.blob();
-                                const b64 = await new Promise((resolve, reject) => {
-                                    const reader = new FileReader();
-                                    reader.onload = () => resolve(reader.result);
-                                    reader.onerror = reject;
-                                    reader.readAsDataURL(blob);
-                                });
-                                b64s.push(b64);
-                            } catch (error) {
-                                console.error("Error fetching Blob data:", error);
-                                throw error;
-                            }
-                        }
-                        return b64s;
-                    }
-
-                    (async () => {
-                        try {
-                            const result = await a($urls);
-                            for(i = 0; i < result.length; i++) {
-                                console.log(result[i]);
-                            }
-
-                        } catch (error) {
-                            console.error("Error:", error);
-                        }
-                    })();
-                    """.trimIndent(),
-                ) {}
-            }
-        }, 1000,)
-
-        pageRetrieveLatch!!.await()
-        handler.post {
-            webView!!.destroy()
-        }
-
-        return base64ImageStrings.mapIndexed { i, base64 ->
-            Page(
-                url = "$baseUrl/viewer/stories/$episodeId",
-                imageUrl = "https://127.0.0.1/?image=$base64",
-                index = i,
-            )
+            Page(i, page.url)
         }
     }
 
+    override fun imageUrlRequest(page: Page): Request {
+        val header = headers.newBuilder()
+            .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", shuffleKey)
+            .build()
+
+        return GET(page.url, header)
+    }
+
+    @OptIn(ExperimentalUnsignedTypes::class)
     override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
+        Log.d("imageUrlParse", "start")
+
+        // saveImage(shuffledImageByteArray)
+        val array = response.body.sameSizeUByteArray()
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        Log.d("imageUrlParse", "canvas")
+
+        var index = 0
+        for (y in 0 until bitmap.height) {
+            for (x in 0 until bitmap.width) {
+                val alpha = array[index++]
+                val red = array[index++]
+                val green = array[index++]
+                val blue = array[index++]
+
+                canvas.drawPoint(
+                    x.toFloat(),
+                    y.toFloat(),
+                    Paint().apply {
+                        setARGB(alpha.toInt(), red.toInt(), green.toInt(), blue.toInt())
+                    },
+                )
+            }
+        }
+        Log.d("imageUrlParse", "loop")
+
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+        Log.d("imageUrlParse", "compress")
+
+        val base64 = Base64.encodeToString(out.toByteArray(), Base64.DEFAULT)
+        Log.d("imageUrlParse", "64")
+
+        // val imageByteArray = tP(shuffledImageByteArray, width = width, height = height, key = shuffleKey)
+        // Log.d("imageurlparse tp", imageByteArray.size.toString())
+
+        /*
+        val bitmap = BitmapFactory.decodeStream(imageStream)
+        Log.d("imageurlparse bytecount", bitmap.byteCount.toString())
+        Log.d("imageurlparse hw", "${bitmap.height} ${bitmap.width}")
+        Log.d("imageurlparse alpha", bitmap.hasAlpha().toString())
+         */
+
+        return "https://127.0.0.1/?image=data:image/png;base64,$base64"
+    }
+
+    override fun imageRequest(page: Page): Request {
+        return super.imageRequest(page)
     }
 
     companion object {

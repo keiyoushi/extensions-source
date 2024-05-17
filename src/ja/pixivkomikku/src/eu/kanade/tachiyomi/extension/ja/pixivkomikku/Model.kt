@@ -128,3 +128,27 @@ internal data class Chapters(
         )
     }
 }
+
+@Serializable
+internal data class Pages(
+    val data: Data,
+) {
+    @Serializable
+    internal data class Data(
+        val reading_episode: ReadingEpisode,
+    ) {
+        @Serializable
+        internal data class ReadingEpisode(
+            val pages: List<SinglePage>,
+        ) {
+            @Serializable
+            internal data class SinglePage(
+                val url: String,
+                val height: Int,
+                val width: Int,
+                val gridsize: Int,
+                val key: String,
+            )
+        }
+    }
+}
