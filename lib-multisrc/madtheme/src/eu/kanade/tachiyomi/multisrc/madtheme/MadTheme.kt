@@ -21,6 +21,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -29,24 +30,25 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 abstract class MadTheme(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyy", Locale.US),
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH),
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 1)
+        .rateLimit(1, 1, TimeUnit.SECONDS)
         .build()
 
     // TODO: better cookie sharing
     // TODO: don't count cached responses against rate limit
     private val chapterClient: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 12)
+        .rateLimit(1, 12, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder() = Headers.Builder().apply {
@@ -54,6 +56,8 @@ abstract class MadTheme(
     }
 
     private val json: Json by injectLazy()
+
+    private var genreKey = "genre[]"
 
     // Popular
     override fun popularMangaRequest(page: Int): Request =
@@ -100,7 +104,7 @@ abstract class MadTheme(
                         .filter { it.state }
                         .let { list ->
                             if (list.isNotEmpty()) {
-                                list.forEach { genre -> url.addQueryParameter("genre[]", genre.id) }
+                                list.forEach { genre -> url.addQueryParameter(genreKey, genre.id) }
                             }
                         }
                 }
@@ -120,11 +124,11 @@ abstract class MadTheme(
     override fun searchMangaSelector(): String = ".book-detailed-item"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a").first()!!.attr("abs:href"))
-        title = element.select("a").first()!!.attr("title")
-        description = element.select(".summary").first()?.text()
-        genre = element.select(".genres > *").joinToString { it.text() }
-        thumbnail_url = element.select("img").first()!!.attr("abs:data-src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("a")!!.attr("title")
+        element.selectFirst(".summary")?.text()?.let { description = it }
+        element.select(".genres > *").joinToString { it.text() }.takeIf { it.isNotEmpty() }?.let { genre = it }
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:data-src")
     }
 
     /*
@@ -135,23 +139,25 @@ abstract class MadTheme(
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select(".detail h1").first()!!.text()
+        title = document.selectFirst(".detail h1")!!.text()
         author = document.select(".detail .meta > p > strong:contains(Authors) ~ a").joinToString { it.text().trim(',', ' ') }
         genre = document.select(".detail .meta > p > strong:contains(Genres) ~ a").joinToString { it.text().trim(',', ' ') }
-        thumbnail_url = document.select("#cover img").first()!!.attr("abs:data-src")
+        thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src")
 
-        val altNames = document.select(".detail h2").first()?.text()
+        val altNames = document.selectFirst(".detail h2")?.text()
             ?.split(',', ';')
             ?.mapNotNull { it.trim().takeIf { it != title } }
             ?: listOf()
 
-        description = document.select(".summary .content").first()?.text() +
+        description = document.select(".summary .content, .summary .content ~ p").text() +
             (altNames.takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): ${it.joinToString()}" } ?: "")
 
-        val statusText = document.select(".detail .meta > p > strong:contains(Status) ~ a").first()!!.text()
-        status = when (statusText.lowercase(Locale.US)) {
+        val statusText = document.selectFirst(".detail .meta > p > strong:contains(Status) ~ a")!!.text()
+        status = when (statusText.lowercase(Locale.ENGLISH)) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
+            "on-hold" -> SManga.ON_HIATUS
+            "canceled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
     }
@@ -187,7 +193,14 @@ abstract class MadTheme(
     }
 
     override fun chapterListRequest(manga: SManga): Request =
-        GET("$baseUrl/api/manga${manga.url}/chapters?source=detail", headers)
+        MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)?.let { mangaId ->
+            val url = "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
+                .addQueryParameter("manga_id", mangaId)
+                .addQueryParameter("manga_name", manga.title)
+                .build()
+
+            GET(url, headers)
+        } ?: GET("$baseUrl/api/manga${manga.url}/chapters?source=detail", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (genresList == null) {
@@ -204,16 +217,25 @@ abstract class MadTheme(
             .absUrl("href")
             .removePrefix(baseUrl)
 
-        name = element.select(".chapter-title").first()!!.text()
-        date_upload = parseChapterDate(element.select(".chapter-update").first()?.text())
+        name = element.selectFirst(".chapter-title")!!.text()
+        date_upload = parseChapterDate(element.selectFirst(".chapter-update")?.text())
     }
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {
-        val html = document.html()
+        val mangaId = MANGA_ID_REGEX.find(document.location())?.groupValues?.get(1)
+        val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
+
+        val html = if (mangaId != null && chapterId != null) {
+            val url = GET("$baseUrl/service/backend/chapterServer/?server_id=1&chapter_id=$chapterId", headers)
+            client.newCall(url).execute().body.string()
+        } else {
+            document.html()
+        }
+        val realDocument = Jsoup.parse(html, document.location())
 
         if (!html.contains("var mainServer = \"")) {
-            val chapterImagesFromHtml = document.select("#chapter-images img")
+            val chapterImagesFromHtml = realDocument.select("#chapter-images img, .chapter-image[data-src]")
 
             // 17/03/2023: Certain hosts only embed two pages in their "#chapter-images" and leave
             // the rest to be lazily(?) loaded by javascript. Let's extract `chapImages` and compare
@@ -292,7 +314,7 @@ abstract class MadTheme(
         }
 
         return when {
-            "ago".endsWith(date) -> {
+            " ago" in date -> {
                 parseRelativeDate(date)
             }
             else -> dateFormat.tryParse(date)
@@ -300,10 +322,12 @@ abstract class MadTheme(
     }
 
     private fun parseRelativeDate(date: String): Long {
-        val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
+        val number = NUMBER_REGEX.find(date)?.groupValues?.getOrNull(0)?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
 
         return when {
+            date.contains("year") -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
+            date.contains("month") -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
             date.contains("day") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
             date.contains("hour") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
             date.contains("minute") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
@@ -314,13 +338,21 @@ abstract class MadTheme(
 
     // Dynamic genres
     private fun parseGenres(document: Document): List<Genre>? {
-        return document.select(".checkbox-group.genres").first()?.select("label")?.map {
-            Genre(it.select(".radio__label").first()!!.text(), it.select("input").`val`())
+        return document.selectFirst(".checkbox-group.genres")?.select(".checkbox-wrapper")?.run {
+            firstOrNull()?.selectFirst("input")?.attr("name")?.takeIf { it.isNotEmpty() }?.let { genreKey = it }
+            map {
+                Genre(it.selectFirst(".radio__label")!!.text(), it.selectFirst("input")!!.`val`())
+            }
         }
     }
 
     // Filters
     override fun getFilterList() = FilterList(
+        // TODO: Filters for sites that support it:
+        // excluded genres
+        // genre inclusion mode
+        // bookmarks
+        // author
         GenreFilter(getGenreList()),
         StatusFilter(),
         OrderFilter(),
@@ -352,6 +384,7 @@ abstract class MadTheme(
             Pair("Updated", "updated_at"),
             Pair("Created", "created_at"),
             Pair("Name A-Z", "name"),
+            // Pair("Number of Chapters", "total_chapters"),
             Pair("Rating", "rating"),
         ),
         state,
@@ -364,5 +397,11 @@ abstract class MadTheme(
     ) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
+    }
+
+    companion object {
+        private val MANGA_ID_REGEX = """/manga/(\d+)-""".toRegex()
+        private val CHAPTER_ID_REGEX = """chapterId\s*=\s*(\d+)""".toRegex()
+        private val NUMBER_REGEX = """\d+""".toRegex()
     }
 }
