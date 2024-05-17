@@ -26,7 +26,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -43,7 +42,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     override val baseUrl = "https://anchira.to"
 
-    private val apiUrl = "$baseUrl/api/v1"
+    private val apiUrl = "https://api.anchira.to"
 
     private val libraryUrl = "$apiUrl/library"
 
@@ -55,7 +54,6 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
-        .addInterceptor { apiInterceptor(it) }
         .build()
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -64,7 +62,9 @@ class Anchira : HttpSource(), ConfigurableSource {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun headersBuilder() = super.headersBuilder().add("X-Requested-With", "XMLHttpRequest")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "https://anchira.to/")
+        .add("Origin", "https://anchira.to")
 
     // Latest
 
@@ -428,33 +428,6 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     private val SharedPreferences.useTagGrouping
         get() = getBoolean(USE_TAG_GROUPING, false)
-
-    private fun apiInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val requestUrl = request.url.toString()
-
-        return if (requestUrl.contains("/api/v1")) {
-            val newRequestBuilder = request.newBuilder()
-
-            if (requestUrl.contains(Regex("/\\d+/\\S+"))) {
-                newRequestBuilder.header(
-                    "Referer",
-                    requestUrl.replace(libraryUrl, "$baseUrl/g"),
-                )
-            } else if (requestUrl.contains("user/favorites")) {
-                newRequestBuilder.header(
-                    "Referer",
-                    requestUrl.replace("$apiUrl/user/favorites", "$baseUrl/favorites"),
-                )
-            } else {
-                newRequestBuilder.header("Referer", requestUrl.replace(libraryUrl, baseUrl))
-            }
-
-            chain.proceed(newRequestBuilder.build())
-        } else {
-            chain.proceed(request)
-        }
-    }
 
     private fun isLoggedIn() = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).any {
         it.name == "session"
