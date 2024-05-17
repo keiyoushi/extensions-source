@@ -338,9 +338,11 @@ abstract class MadTheme(
 
     // Dynamic genres
     private fun parseGenres(document: Document): List<Genre>? {
-        return document.selectFirst(".checkbox-group.genres")?.select(".checkbox-wrapper")?.map {
-            it.selectFirst("input")?.attr("name")?.takeIf { it.isNotEmpty() }?.let { genreKey = it }
-            Genre(it.selectFirst(".radio__label")!!.text(), it.selectFirst("input")!!.`val`())
+        return document.selectFirst(".checkbox-group.genres")?.select(".checkbox-wrapper")?.run {
+            firstOrNull()?.selectFirst("input")?.attr("name")?.takeIf { it.isNotEmpty() }?.let { genreKey = it }
+            map {
+                Genre(it.selectFirst(".radio__label")!!.text(), it.selectFirst("input")!!.`val`())
+            }
         }
     }
 
