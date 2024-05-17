@@ -29,24 +29,25 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 abstract class MadTheme(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyy", Locale.US),
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH),
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 1)
+        .rateLimit(1, 1, TimeUnit.SECONDS)
         .build()
 
     // TODO: better cookie sharing
     // TODO: don't count cached responses against rate limit
     private val chapterClient: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 12)
+        .rateLimit(1, 12, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder() = Headers.Builder().apply {
@@ -120,11 +121,11 @@ abstract class MadTheme(
     override fun searchMangaSelector(): String = ".book-detailed-item"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a").first()!!.attr("abs:href"))
-        title = element.select("a").first()!!.attr("title")
-        description = element.select(".summary").first()?.text()
-        genre = element.select(".genres > *").joinToString { it.text() }
-        thumbnail_url = element.select("img").first()!!.attr("abs:data-src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("a")!!.attr("title")
+        element.selectFirst(".summary")?.text()?.let { description = it }
+        element.select(".genres > *").joinToString { it.text() }.takeIf { it.isNotEmpty() }?.let { genre = it }
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:data-src")
     }
 
     /*
@@ -135,12 +136,12 @@ abstract class MadTheme(
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select(".detail h1").first()!!.text()
+        title = document.selectFirst(".detail h1")!!.text()
         author = document.select(".detail .meta > p > strong:contains(Authors) ~ a").joinToString { it.text().trim(',', ' ') }
         genre = document.select(".detail .meta > p > strong:contains(Genres) ~ a").joinToString { it.text().trim(',', ' ') }
-        thumbnail_url = document.select("#cover img").first()!!.attr("abs:data-src")
+        thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src")
 
-        val altNames = document.select(".detail h2").first()?.text()
+        val altNames = document.selectFirst(".detail h2")?.text()
             ?.split(',', ';')
             ?.mapNotNull { it.trim().takeIf { it != title } }
             ?: listOf()
@@ -148,8 +149,8 @@ abstract class MadTheme(
         description = document.select(".summary .content").first()?.text() +
             (altNames.takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): ${it.joinToString()}" } ?: "")
 
-        val statusText = document.select(".detail .meta > p > strong:contains(Status) ~ a").first()!!.text()
-        status = when (statusText.lowercase(Locale.US)) {
+        val statusText = document.selectFirst(".detail .meta > p > strong:contains(Status) ~ a")!!.text()
+        status = when (statusText.lowercase(Locale.ENGLISH)) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
@@ -292,7 +293,7 @@ abstract class MadTheme(
         }
 
         return when {
-            "ago".endsWith(date) -> {
+            " ago" in date -> {
                 parseRelativeDate(date)
             }
             else -> dateFormat.tryParse(date)
@@ -300,10 +301,12 @@ abstract class MadTheme(
     }
 
     private fun parseRelativeDate(date: String): Long {
-        val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
+        val number = NUMBER_REGEX.find(date)?.groupValues?.getOrNull(0)?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
 
         return when {
+            date.contains("year") -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
+            date.contains("month") -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
             date.contains("day") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
             date.contains("hour") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
             date.contains("minute") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
@@ -314,8 +317,8 @@ abstract class MadTheme(
 
     // Dynamic genres
     private fun parseGenres(document: Document): List<Genre>? {
-        return document.select(".checkbox-group.genres").first()?.select("label")?.map {
-            Genre(it.select(".radio__label").first()!!.text(), it.select("input").`val`())
+        return document.selectFirst(".checkbox-group.genres")?.select(".checkbox-wrapper")?.map {
+            Genre(it.selectFirst(".radio__label")!!.text(), it.selectFirst("input")!!.`val`())
         }
     }
 
@@ -364,5 +367,9 @@ abstract class MadTheme(
     ) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
+    }
+
+    companion object {
+        private val NUMBER_REGEX = """\d+""".toRegex()
     }
 }
