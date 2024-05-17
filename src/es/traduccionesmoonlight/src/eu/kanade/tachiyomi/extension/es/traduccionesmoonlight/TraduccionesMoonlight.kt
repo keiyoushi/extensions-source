@@ -8,5 +8,5 @@ class TraduccionesMoonlight : MangaEsp(
     "es",
 ) {
     // Mangathemesia -> MangaEsp
-    override val versionId = 2
+    override val versionId = 3
 }
