@@ -24,7 +24,7 @@ import kotlin.concurrent.thread
 
 class IkigaiMangas : HttpSource() {
 
-    override val baseUrl: String = "https://visorikigai.net"
+    override val baseUrl: String = "https://nocbro.xyz"
     private val apiBaseUrl: String = "https://panel.ikigaimangas.com"
 
     override val lang: String = "es"
@@ -151,7 +151,7 @@ class IkigaiMangas : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("section > div.img > img").mapIndexed { i, element ->
+        return document.select("section div.img > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
     }
