@@ -1,9 +1,9 @@
 ext {
     extName = 'Hentai20'
     extClass = '.Hentai20'
-    themePkg = 'mangathemesia'
+    themePkg = 'madara'
     baseUrl = 'https://hentai20.io'
-    overrideVersionCode = 9
+    overrideVersionCode = 4
     isNsfw = true
 }
 
