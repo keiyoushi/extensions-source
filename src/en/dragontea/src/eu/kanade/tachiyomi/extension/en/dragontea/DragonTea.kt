@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -23,12 +22,6 @@ class DragonTea : Madara(
     override val mangaSubString = "novel"
 
     override val useNewChapterEndpoint = true
-
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".reading-content .page-break img").mapIndexed { index, element ->
-            Page(index, document.location(), element.attr("abs:data-src"))
-        }
-    }
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
