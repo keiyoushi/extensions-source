@@ -3,7 +3,7 @@ ext {
     extClass = '.DragonTea'
     themePkg = 'madara'
     baseUrl = 'https://dragontea.ink'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"
