@@ -33,7 +33,9 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
     override val baseUrl: String
+
     private val baseHttpUrl: HttpUrl
+    
     private val enableGenres: Boolean
 
     init {
