@@ -11,7 +11,6 @@ if [ -n "$(git status --porcelain)" ]; then
     git push
 
     curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.min.json
-    curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.html
 else
     echo "No changes to commit"
 fi
