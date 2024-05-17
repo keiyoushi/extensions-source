@@ -68,7 +68,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
         val builder = super.headersBuilder().apply {
             set("Referer", "$baseUrl/")
-            set("Origin", "$baseUrl/")
+            set("Origin", baseUrl)
             set("Extra", extraHeader)
         }
 
