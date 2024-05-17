@@ -112,5 +112,6 @@ with (REPO_DIR / "index.html").open("w", encoding="utf-8") as f:
     f.write('<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>apks</title>\n</head>\n<body>\n<pre>\n')
     for entry in index_data:
         apk_escaped = 'apk/' + html.escape(entry["apk"])
-        f.write(f'<a href="{apk_escaped}">{apk_escaped}</a>\n')
+        name_escaped = html.escape(entry["name"])
+        f.write(f'<a href="{apk_escaped}">{name_escaped}</a>\n')
     f.write('</pre>\n</body>\n</html>\n')
