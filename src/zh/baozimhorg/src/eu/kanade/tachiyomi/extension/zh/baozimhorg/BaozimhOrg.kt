@@ -22,15 +22,15 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 // Uses WPManga + GeneratePress/Blocksy Child
 class BaozimhOrg : HttpSource(), ConfigurableSource {
 
-    override val name get() = "包子漫画导航"
-    override val lang get() = "zh"
-    override val supportsLatest get() = true
+    override val name = "包子漫画导航"
+
+    override val lang = "zh"
+
+    override val supportsLatest = true
 
     override val baseUrl: String
     private val baseHttpUrl: HttpUrl
@@ -49,30 +49,18 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
         .addInterceptor(UrlInterceptor)
         .build()
 
-    private fun getKey(link: String): String {
-        val pathSegments = baseHttpUrl.resolve(link)!!.pathSegments
-        val fromIndex = if (pathSegments[0] == "manga") 1 else 0
-        val toIndex = if (pathSegments.last().isEmpty()) pathSegments.size - 1 else pathSegments.size
-        val list = pathSegments.subList(fromIndex, toIndex).toMutableList()
-        list[0] = list[0].split("-").take(2).joinToString("-")
-        return list.joinToString("/")
-    }
-
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/hots/page/$page/", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup().also(::parseGenres)
-        val mangas = document.select("article.wp-manga").map { element ->
+        val mangas = document.select(".cardlist .pb-2 a").map { element ->
             SManga.create().apply {
-                val link = element.selectFirst(Evaluator.Tag("h2"))!!.child(0)
-                url = getKey(link.attr("href"))
-                title = link.ownText()
-                thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.imgSrc
+                title = element.selectFirst("h3")!!.ownText()
+                thumbnail_url = element.selectFirst("img")?.imgSrc
+                setUrlWithoutDomain(element.absUrl("href"))
             }
         }
-        val hasNextPage = document.selectFirst(Evaluator.Class("next"))?.tagName() == "a" ||
-            document.selectFirst(".gb-button[aria-label=Next page]") != null
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, document.selectFirst("a[aria-label=下一頁] button") != null)
     }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/newss/page/$page/", headers)
@@ -81,33 +69,32 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
-                .addQueryParameter("s", query)
-            return Request.Builder().url(url.build()).headers(headers).build()
+            val url = "$baseUrl/s".toHttpUrl().newBuilder()
+                .addPathSegment(query)
+                .addQueryParameter("page", "$page")
+                .build()
+            return GET(url, headers)
         }
         for (filter in filters) {
-            if (filter is UriPartFilter) return GET(baseUrl + filter.toUriPart() + "page/$page/", headers)
+            if (filter is UriPartFilter) return GET("$baseUrl${filter.toUriPart()}/page/$page/", headers)
         }
         return popularMangaRequest(page)
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = manga.url
-        if (url[0] == '/') throw Exception(MIGRATE)
-        return GET("$baseUrl/manga/$url/", headers)
-    }
-
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
         title = document.selectFirst(Evaluator.Tag("h1"))!!.ownText()
-        author = document.selectFirst(Evaluator.Class("author-content"))!!.children().joinToString { it.ownText() }
-        description = document.selectFirst(".descrip_manga_info, .wp-block-stackable-text")!!.text()
-        thumbnail_url = document.selectFirst("img.wp-post-image")!!.imgSrc
+        description = document.selectFirst("p.text-medium.line-clamp-4")?.text()
+        thumbnail_url = document.selectFirst("img.object-cover.rounded-lg")?.imgSrc
+        author = document.selectFirst("div.text-small.py-1.pb-2 a:nth-child(3)")
+            ?.ownText()?.replace(",", "")?.trim()
 
-        val genreList = document.selectFirst(Evaluator.Class("genres-content"))!!
-            .children().eachText().toMutableSet()
+        val genreList = document.select("div.py-1:nth-child(4) a")
+            .map { it.ownText() }
+            .toMutableList()
+
         if ("连载中" in genreList) {
             genreList.remove("连载中")
             status = SManga.ONGOING
@@ -119,33 +106,51 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = manga.url
-        if (url[0] == '/') throw Exception(MIGRATE)
-        return GET("$baseUrl/chapterlist/$url/", headers)
+        val chapterPath = manga.url.replace("manga", "chapterlist")
+        return GET("$baseUrl$chapterPath", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.selectFirst(Evaluator.Class("version-chaps"))!!.children().map {
-            SChapter.create().apply {
-                url = getKey(it.attr("href"))
-                name = it.ownText()
-                date_upload = parseChapterDate(it.child(0).text())
-            }
-        }
-    }
+        val mid = document.selectFirst("#allchapters")!!.attr("data-mid")
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = chapter.url
-        if (url[0] == '/') throw Exception(MIGRATE)
-        return GET("$baseUrl/manga/$url/", headers)
+        val chapterURL = "$baseUrl/manga/get".toHttpUrl().newBuilder()
+            .addQueryParameter("mid", mid)
+            .addQueryParameter("mode", "all")
+            .build()
+
+        val chapterResponse = client.newCall(GET(chapterURL, headers)).execute()
+
+        val chapters = chapterResponse.asJsoup().select("#allchapterlist .chapteritem")
+            .map { element ->
+                SChapter.create().apply {
+                    val anchor = element.selectFirst("a")!!
+                    name = anchor.attr("data-ct")
+                    chapter_number = element.attr("data-index").toFloat()
+                    setUrlWithoutDomain(anchor.absUrl("href"))
+                }
+            }
+
+        return chapters.sortedBy { it.chapter_number }.reversed()
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        // Jsoup won't ignore duplicates inside <noscript> tag
-        document.select(Evaluator.Tag("noscript")).remove()
-        return document.select("img[decoding=async]").mapIndexed { index, element ->
+        val container = document.selectFirst("#chapterContent")!!
+        val host = container.attr("data-host")
+        val ms = container.attr("data-ms")
+        val cs = container.attr("data-cs")
+        val url = "$host/chapter/getcontent".toHttpUrl().newBuilder()
+            .addQueryParameter("m", ms)
+            .addQueryParameter("c", cs)
+            .build()
+
+        val chapterResponse = client.newCall(GET(url, headers)).execute()
+        if (!chapterResponse.isSuccessful) {
+            return emptyList()
+        }
+
+        return chapterResponse.asJsoup().select("#chapcontent noscript img").mapIndexed { index, element ->
             Page(index, imageUrl = element.imgSrc)
         }
     }
@@ -156,13 +161,12 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
 
     private fun parseGenres(document: Document) {
         if (!enableGenres || genres.isNotEmpty()) return
-        val box = document.selectFirst(Evaluator.Class("wp-block-navigation__container")) ?: return
-        val items = box.children()
+        val items = document.select("div h2:contains(漫畫類型) + div a")
+
         genres = buildList(items.size + 1) {
-            add(Pair("全部", "/allmanga/"))
-            items.mapTo(this) {
-                val link = it.child(0)
-                Pair(link.text(), link.attr("href"))
+            add(Pair("全部", "/allmanga"))
+            items.mapTo(this) { element ->
+                Pair(element.text(), element.attr("href"))
             }
         }.toTypedArray()
     }
@@ -201,16 +205,6 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
         private const val MIRROR_PREF = "MIRROR"
         private val MIRRORS get() = arrayOf("baozimh.org", "cn.godamanga.com")
 
-        const val MIGRATE = "请将此漫画重新迁移到本图源"
-
         val Element.imgSrc: String get() = attr("data-src").ifEmpty { attr("src") }
-
-        private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH) }
-
-        fun parseChapterDate(text: String): Long = try {
-            dateFormat.parse(text)!!.time
-        } catch (_: Throwable) {
-            0
-        }
     }
 }
