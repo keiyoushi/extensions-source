@@ -35,7 +35,7 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
     override val baseUrl: String
 
     private val baseHttpUrl: HttpUrl
-    
+
     private val enableGenres: Boolean
 
     init {
@@ -91,7 +91,7 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
         description = document.selectFirst("p.text-medium.line-clamp-4")?.text()
         thumbnail_url = document.selectFirst("img.object-cover.rounded-lg")?.imgSrc
         author = document.selectFirst("div.text-small.py-1.pb-2 a:nth-child(3)")
-            ?.ownText()?.replace(",", "")?.trim()
+            ?.text()?.replace(",", "")?.trim()
 
         val genreList = document.select("div.py-1:nth-child(4) a")
             .map { it.ownText() }
