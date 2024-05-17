@@ -223,10 +223,15 @@ abstract class Keyoapp(
     // Image list
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#pages > img:not(.hidden)").mapIndexed { index, img ->
-            Page(index, document.location(), img.imgAttr())
-        }
+        return document.select("#pages > img")
+            .map { it.imgAttr() }
+            .filter { it.contains(imgCdnRegex) }
+            .mapIndexed { index, img ->
+                Page(index, document.location(), img)
+            }
     }
+
+    private val imgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 
     override fun imageUrlParse(document: Document) = ""
 
