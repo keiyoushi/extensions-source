@@ -7,6 +7,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.createChapter
+import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.getCdn
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.getPathFromUrl
 import eu.kanade.tachiyomi.extension.en.anchira.AnchiraHelper.prepareTags
 import eu.kanade.tachiyomi.network.GET
@@ -26,6 +27,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -54,6 +56,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
+        .addInterceptor { resampledInterceptor(it) }
         .build()
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -319,7 +322,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         return data.images.mapIndexed { i, image ->
             Page(
                 i,
-                imageUrl = "$cdnUrl/${imageData.id}/${imageData.key}/${imageData.hash}/b/${image.name}",
+                imageUrl = "${getCdn(i)}/${imageData.id}/${imageData.key}/${imageData.hash}/b/${image.name}",
             )
         }
     }
@@ -429,6 +432,25 @@ class Anchira : HttpSource(), ConfigurableSource {
     private val SharedPreferences.useTagGrouping
         get() = getBoolean(USE_TAG_GROUPING, false)
 
+    private fun resampledInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url.toString()
+
+        return if (url.contains("sexo.xyz")) {
+            val response = chain.proceed(request)
+
+            if (response.isSuccessful) {
+                return response
+            } else if (url.contains("/b/")) {
+                return chain.proceed(request.newBuilder().url(url.replace("/b/", "/a/")).build())
+            }
+
+            throw IOException("An error occurred while loading the image - ${response.code}")
+        } else {
+            chain.proceed(request)
+        }
+    }
+
     private fun isLoggedIn() = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).any {
         it.name == "session"
     }
@@ -447,7 +469,7 @@ class Anchira : HttpSource(), ConfigurableSource {
         private const val OPEN_SOURCE_PREF = "use_manga_source"
         private const val USE_TAG_GROUPING = "use_tag_grouping"
         private const val DATA_JSON =
-            "https://gist.githubusercontent.com/LetrixZ/2b559cc5829d1c221c701e02ecd81411/raw/data-v5.json"
+            "https://raw.githubusercontent.com/LetrixZ/gallery-data/main/extension_data.min.json"
     }
 }
 
