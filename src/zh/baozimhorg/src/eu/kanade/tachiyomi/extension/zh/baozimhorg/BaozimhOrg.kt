@@ -38,6 +38,8 @@ class BaozimhOrg : HttpSource(), ConfigurableSource {
 
     private val enableGenres: Boolean
 
+    override val versionId: Int = 2
+
     init {
         val mirrors = MIRRORS
         val mirrorIndex = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
