@@ -198,7 +198,7 @@ abstract class PeachScan(
                 val entryIndex = splitEntryName.first().toInt()
                 val entryType = splitEntryName.last()
 
-                val imageData = if (entryType == "avif") {
+                val imageData = if (entryType == "avif" || splitEntryName.size == 1) {
                     zis.readBytes()
                 } else {
                     val svgBytes = zis.readBytes()
