@@ -6,12 +6,14 @@ import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhuaOnline : Madara(
-    "Manhua Online",
+class SamuraiScan : Madara(
+    "SamuraiScan",
     "https://blog.manhuaonline.org",
     "es",
-    SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
+    SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
 ) {
+    override val id = 5713083996691468192
+
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
@@ -20,4 +22,6 @@ class ManhuaOnline : Madara(
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
         .build()
+
+    override val mangaDetailsSelectorDescription = "div.summary_content div.manga-summary"
 }
