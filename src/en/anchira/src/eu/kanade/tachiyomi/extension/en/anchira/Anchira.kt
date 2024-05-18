@@ -44,7 +44,7 @@ class Anchira : HttpSource(), ConfigurableSource {
 
     override val baseUrl = "https://anchira.to"
 
-    private val apiUrl = "https://api.anchira.to"
+    private val apiUrl = baseUrl.replace("://", "://api.")
 
     private val libraryUrl = "$apiUrl/library"
 
@@ -66,8 +66,8 @@ class Anchira : HttpSource(), ConfigurableSource {
     }
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "https://anchira.to/")
-        .add("Origin", "https://anchira.to")
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
 
     // Latest
 
