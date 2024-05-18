@@ -50,6 +50,8 @@ object AnchiraHelper {
             }
         }
 
+    fun getCdn(page: Int) = if (page % 2 == 0) "https://kisakisexo.xyz" else "https://aronasexo.xyz"
+
     private fun String.titleCase() = replaceFirstChar {
         if (it.isLowerCase()) {
             it.titlecase(Locale.getDefault())
