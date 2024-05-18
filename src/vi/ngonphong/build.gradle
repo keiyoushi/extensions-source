@@ -1,9 +1,0 @@
-ext {
-    extName = 'Ngon Phong'
-    extClass = '.NgonPhong'
-    themePkg = 'a3manga'
-    baseUrl = 'https://www.ngonphong.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
