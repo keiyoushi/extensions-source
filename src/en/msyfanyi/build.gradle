@@ -1,0 +1,10 @@
+ext {
+    extName = 'MSY Fanyi'
+    extClass = '.MSYFanyi'
+    themePkg = 'madara'
+    baseUrl = 'https://msyfanyi.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
