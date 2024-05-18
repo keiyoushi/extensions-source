@@ -52,10 +52,7 @@ class MangaCan : MangaThemesia(
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX).not()) return super.fetchSearchManga(page, query, filters)
         val mangaPath = query.substringAfterLast(baseUrl)
-        return fetchMangaDetails(
-            SManga.create()
-                .apply { this.url = mangaPath },
-        )
+        return fetchMangaDetails(SManga.create().apply { this.url = mangaPath })
             .map {
                 it.url = mangaPath
                 MangasPage(listOf(it), false)
@@ -76,7 +73,8 @@ class MangaCan : MangaThemesia(
         }
 
         val url = if (query.isNotBlank()) {
-            baseUrl.toHttpUrl().newBuilder().addPathSegment("cari")
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("cari")
                 .addPathSegment(query.trim().replace("\\s+".toRegex(), "-").lowercase())
                 .addPathSegment("$page.html")
                 .build()
