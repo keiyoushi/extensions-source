@@ -32,7 +32,13 @@ class IkigaiMangas : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "data-saving" to "0")
+    private val cookieInterceptor = CookieInterceptor(
+        baseUrl.substringAfter("://"),
+        listOf(
+            "data-saving" to "0",
+            "nsfw-mode" to "1",
+        ),
+    )
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
@@ -151,7 +157,7 @@ class IkigaiMangas : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("section > div.img > img").mapIndexed { i, element ->
+        return document.select("section div.img > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
     }
