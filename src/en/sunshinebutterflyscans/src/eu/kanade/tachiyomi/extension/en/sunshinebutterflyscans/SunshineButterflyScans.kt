@@ -52,7 +52,7 @@ class SunshineButterflyScans : HttpSource() {
     private val chaptersData by lazy {
         client.newCall(
             GET("$baseUrl/json/chapters.json", apiHeaders),
-        ).execute().parseAs<List<Dto>>().groupBy {
+        ).execute().parseAs<List<EntryDto>>().groupBy {
             it.series
         }.values.map { it.sortedByDescending { it.num } }
     }
@@ -97,18 +97,27 @@ class SunshineButterflyScans : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         val selectedStatus = filters.filterIsInstance<StatusFilter>().first().toUriPart()
+        val selectedSort = filters.filterIsInstance<SortFilter>().first().getSelection()
 
-        val predicate: (List<Dto>) -> Boolean = { chapterList ->
-            if (query.isNotEmpty()) {
-                chapterList.first().series.contains(query, true)
-            } else {
-                chapterList.first().projectStatus.contains(selectedStatus)
+        val sortedList = if (selectedSort.first == "Name") {
+            chaptersData.sortedBy { it.first().series }
+        } else {
+            chaptersData.sortedByDescending {
+                it.first().timestamp.toLongOrNull() ?: Long.MAX_VALUE
             }
         }
 
-        val mangaList = chaptersData.sortedBy {
-            it.first().series
-        }.filter(predicate).map {
+        val filteredList = sortedList
+            .filter { it.first().series.contains(query, true) }
+            .filter { it.first().projectStatus.contains(selectedStatus) }
+
+        val reversedList = if (selectedSort.second) {
+            filteredList.reversed()
+        } else {
+            filteredList
+        }
+
+        val mangaList = reversedList.map {
             it.first().toSManga(cdnUrl)
         }
 
@@ -124,9 +133,8 @@ class SunshineButterflyScans : HttpSource() {
     // =============================== Filters ==============================
 
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("Text search ignores filters"),
-        Filter.Separator(),
         StatusFilter(),
+        SortFilter(),
     )
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
@@ -145,9 +153,27 @@ class SunshineButterflyScans : HttpSource() {
         ),
     )
 
+    class SortFilter : Filter.Sort(
+        "Sort by",
+        VALUES,
+        Selection(0, false),
+    ) {
+        fun getSelection() = Pair(VALUES[state!!.index], state!!.ascending)
+
+        companion object {
+            private val VALUES = arrayOf("Name", "Last Updated")
+        }
+    }
+
     // =========================== Manga Details ============================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        val mangaData = chaptersData.first {
+            it.first().projectName == manga.url.substringAfter("?n=")
+        }.first()
+
+        return Observable.just(mangaData.toSManga(cdnUrl))
+    }
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 

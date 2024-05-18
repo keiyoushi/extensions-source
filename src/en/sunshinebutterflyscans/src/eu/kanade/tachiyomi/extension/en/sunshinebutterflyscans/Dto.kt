@@ -6,7 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class Dto(
+class EntryDto(
     val series: String,
     val timestamp: String,
     val num: Int,
@@ -26,7 +26,7 @@ class Dto(
         thumbnail_url = cdnUrl + projectThumb
         url = "/projects?n=$projectName"
         description = buildString {
-            append(projectDesc.nonEmpty())
+            projectDesc.nonEmpty()?.let { append(it) }
             if (altName.isNotEmpty()) {
                 append("\n\n")
                 append("Alternative name: ")
