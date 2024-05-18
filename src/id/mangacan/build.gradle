@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manga Can'
+    extClass = '.MangaCan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://ngomik.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
