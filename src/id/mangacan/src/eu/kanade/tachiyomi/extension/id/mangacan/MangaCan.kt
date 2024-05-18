@@ -7,11 +7,13 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import rx.Observable
 
 class MangaCan : MangaThemesia(
     "Manga Can",
@@ -29,19 +31,13 @@ class MangaCan : MangaThemesia(
 
     override val pageSelector = "div.images img"
 
+    private var genreList: Array<Pair<String, String>> = emptyArray()
+
     override fun imageRequest(page: Page): Request {
         return super.imageRequest(page).newBuilder()
             .removeHeader("Referer")
             .addHeader("Referer", "$baseUrl/")
             .build()
-    }
-
-    private var genreList: Array<Pair<String, String>> = emptyArray()
-
-    private fun parseGenres(document: Document): Array<Pair<String, String>> {
-        return document.select(".textwidget.custom-html-widget a").map { element ->
-            element.text() to element.attr("href")
-        }.toTypedArray()
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -51,6 +47,19 @@ class MangaCan : MangaThemesia(
         }
 
         return super.searchMangaParse(response)
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(URL_SEARCH_PREFIX).not()) return super.fetchSearchManga(page, query, filters)
+        val mangaPath = query.substringAfterLast(baseUrl)
+        return fetchMangaDetails(
+            SManga.create()
+                .apply { this.url = mangaPath },
+        )
+            .map {
+                it.url = mangaPath
+                MangasPage(listOf(it), false)
+            }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -93,6 +102,12 @@ class MangaCan : MangaThemesia(
             )
         }
         return FilterList(filters)
+    }
+
+    private fun parseGenres(document: Document): Array<Pair<String, String>> {
+        return document.select(".textwidget.custom-html-widget a").map { element ->
+            element.text() to element.attr("href")
+        }.toTypedArray()
     }
 
     private class GenreFilter(
