@@ -1,9 +1,9 @@
 ext {
     extName = 'Traducciones Moonlight'
     extClass = '.TraduccionesMoonlight'
-    themePkg = 'mangathemesia'
+    themePkg = 'mangaesp'
     baseUrl = 'https://traduccionesmoonlight.com'
-    overrideVersionCode = 8
+    overrideVersionCode = 38
     isNsfw = true
 }
 
