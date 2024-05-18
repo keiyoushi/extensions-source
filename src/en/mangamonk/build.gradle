@@ -1,8 +1,8 @@
 ext {
-    extName = 'TrueManga'
-    extClass = '.TrueManga'
+    extName = 'MangaMonk'
+    extClass = '.MangaMonk'
     themePkg = 'madtheme'
-    baseUrl = 'https://truemanga.com'
+    baseUrl = 'https://mangamonk.com'
     overrideVersionCode = 0
     isNsfw = true
 }
