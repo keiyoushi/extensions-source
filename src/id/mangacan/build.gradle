@@ -2,7 +2,7 @@ ext {
     extName = 'Manga Can'
     extClass = '.MangaCan'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://ngomik.net'
+    baseUrl = 'https://mangacanblog.com'
     overrideVersionCode = 0
     isNsfw = true
 }
