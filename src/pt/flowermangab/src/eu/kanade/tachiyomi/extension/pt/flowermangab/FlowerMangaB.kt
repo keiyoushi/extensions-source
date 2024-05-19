@@ -11,7 +11,7 @@ class FlowerMangaB : Madara(
     "Flower Manga B",
     "https://flowermanga.com",
     "pt-BR",
-    SimpleDateFormat("d 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
+    SimpleDateFormat("dd MMMMM yyyy", Locale("pt", "BR")),
 ) {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
