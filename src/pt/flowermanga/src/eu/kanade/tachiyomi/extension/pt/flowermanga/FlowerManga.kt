@@ -52,7 +52,7 @@ class FlowerManga :
             summary = "%s\n Selecione um domínio - Necessário reiniciar o aplicativo"
             entries = MIRRORS
             entryValues = Array(MIRRORS.size) { it.toString() }
-            setDefaultValue(DEFAULT_MIRROR)
+            setDefaultValue("$DEFAULT_MIRROR")
         }.let(screen::addPreference)
     }
 
