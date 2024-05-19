@@ -104,8 +104,8 @@ class MangaTerra : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(slugPrefix)) {
-            val slug = query.substringAfter(slugPrefix)
+        if (query.startsWith(PREFIX_SEARCH)) {
+            val slug = query.substringAfter(PREFIX_SEARCH)
             return client.newCall(GET("$baseUrl/manga/$slug", headers))
                 .asObservableSuccess().map { response ->
                     MangasPage(listOf(mangaDetailsParse(response)), false)
@@ -237,6 +237,6 @@ class MangaTerra : ParsedHttpSource() {
 
     companion object {
         val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale("pt", "BR"))
-        val slugPrefix = "slug:"
+        const val PREFIX_SEARCH = "slug:"
     }
 }
