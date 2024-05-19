@@ -75,7 +75,7 @@ class MangaCan : MangaThemesia(
         val url = if (query.isNotBlank()) {
             baseUrl.toHttpUrl().newBuilder()
                 .addPathSegment("cari")
-                .addPathSegment(query.trim().replace("\\s+".toRegex(), "-").lowercase())
+                .addPathSegment(query.trim().replace(SPACES_REGEX, "-").lowercase())
                 .addPathSegment("$page.html")
                 .build()
         } else {
@@ -115,4 +115,8 @@ class MangaCan : MangaThemesia(
         name,
         options,
     )
+
+    companion object {
+        val SPACES_REGEX = "\\s+".toRegex()
+    }
 }
