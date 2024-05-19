@@ -67,8 +67,6 @@ class Toonily : Madara(
 
     override fun searchMangaSelector() = "div.page-item-detail.manga"
 
-    override val pageListParseSelector = "div.reading-content div"
-
     override fun parseChapterDate(date: String?): Long {
         val formattedDate = if (date?.contains("UP") == true) "today" else date
         return super.parseChapterDate(formattedDate)
