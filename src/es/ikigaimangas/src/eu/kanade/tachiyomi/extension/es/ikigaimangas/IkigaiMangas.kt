@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,13 +21,15 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.concurrent.thread
 
-class IkigaiMangas : HttpSource() {
+class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override val baseUrl: String = "https://visorikigai.net"
     private val apiBaseUrl: String = "https://panel.ikigaimangas.com"
@@ -46,6 +53,9 @@ class IkigaiMangas : HttpSource() {
         .addNetworkInterceptor(cookieInterceptor)
         .build()
 
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
@@ -57,8 +67,12 @@ class IkigaiMangas : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/swf/series/ranking-list?type=total_ranking&series_type=comic"
-        return GET(apiUrl, headers)
+        val apiUrl = "$apiBaseUrl/api/swf/series/ranking-list".toHttpUrl().newBuilder()
+            .addQueryParameter("type", "total_ranking")
+            .addQueryParameter("series_type", "comic")
+            .addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
+
+        return GET(apiUrl.build(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -68,8 +82,11 @@ class IkigaiMangas : HttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/api/swf/new-chapters?page=$page"
-        return GET(apiUrl, headers)
+        val apiUrl = "$apiBaseUrl/api/swf/new-chapters".toHttpUrl().newBuilder()
+            .addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
+            .addQueryParameter("page", page.toString())
+
+        return GET(apiUrl.build(), headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -87,6 +104,7 @@ class IkigaiMangas : HttpSource() {
 
         apiUrl.addQueryParameter("page", page.toString())
         apiUrl.addQueryParameter("type", "comic")
+        apiUrl.addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
 
         val genres = filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
             .filter(Genre::state)
@@ -221,8 +239,24 @@ class IkigaiMangas : HttpSource() {
         }
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_NSFW_PREF
+            title = SHOW_NSFW_PREF_TITLE
+            setDefaultValue(SHOW_NSFW_PREF_DEFAULT)
+        }.also { screen.addPreference(it) }
+    }
+
+    private fun SharedPreferences.showNsfwPref() = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
+
     private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
         filterIsInstance<R>().firstOrNull()
 
     private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
+
+    companion object {
+        const val SHOW_NSFW_PREF = "pref_show_nsfw"
+        const val SHOW_NSFW_PREF_TITLE = "Mostrar contenido NSFW"
+        const val SHOW_NSFW_PREF_DEFAULT = false
+    }
 }
