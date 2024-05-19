@@ -51,10 +51,10 @@ class MangaCan : MangaThemesia(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX).not()) return super.fetchSearchManga(page, query, filters)
-        val mangaPath = query.substringAfterLast(baseUrl)
-        return fetchMangaDetails(SManga.create().apply { this.url = mangaPath })
+        val url = query.substringAfter(URL_SEARCH_PREFIX)
+        return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(url) })
             .map {
-                it.url = mangaPath
+                it.apply { setUrlWithoutDomain(url) }
                 MangasPage(listOf(it), false)
             }
     }
