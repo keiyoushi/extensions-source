@@ -1,10 +1,12 @@
 ext {
     extName = 'Sunshine Butterfly Scans'
     extClass = '.SunshineButterflyScans'
-    themePkg = 'madara'
-    baseUrl = 'https://sunshinebutterflyscan.com'
-    overrideVersionCode = 1
+    extVersionCode = 38
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:cryptoaes'))
+}
