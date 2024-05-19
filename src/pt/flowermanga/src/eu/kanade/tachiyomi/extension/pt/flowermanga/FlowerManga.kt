@@ -32,8 +32,13 @@ class FlowerManga :
     override val useNewChapterEndpoint = false
 
     override val baseUrl: String by lazy {
-        val index = preference.getString(MIRROR_KEY, "$DEFAULT_MIRROR")!!.toInt().coerceAtMost(MIRRORS.size - 1)
-        MIRRORS[index]
+        when {
+            System.getenv("CI") == "true" -> MIRRORS.joinToString("#, ")
+            else -> {
+                val index = preference.getString(MIRROR_KEY, "$DEFAULT_MIRROR")!!.toInt().coerceAtMost(MIRRORS.size - 1)
+                MIRRORS[index]
+            }
+        }
     }
 
     private val preference: SharedPreferences by lazy {
