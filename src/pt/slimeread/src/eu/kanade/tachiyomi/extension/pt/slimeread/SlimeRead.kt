@@ -141,6 +141,7 @@ class SlimeRead : HttpSource() {
         title = info.name
         description = info.description
         genre = info.categories.joinToString()
+        url = "/book/${info.id}"
         status = when (info.status) {
             1 -> SManga.ONGOING
             2 -> SManga.COMPLETED
