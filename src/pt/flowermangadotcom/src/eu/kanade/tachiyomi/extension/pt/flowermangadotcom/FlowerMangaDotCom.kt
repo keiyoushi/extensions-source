@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.flowermangab
+package eu.kanade.tachiyomi.extension.pt.flowermangadotcom
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -7,8 +7,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class FlowerMangaB : Madara(
-    "Flower Manga B",
+class FlowerMangaDotCom : Madara(
+    "Flower Manga (.com)",
     "https://flowermanga.com",
     "pt-BR",
     SimpleDateFormat("dd MMMMM yyyy", Locale("pt", "BR")),

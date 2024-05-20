@@ -1,6 +1,6 @@
 ext {
-    extName = 'Flower Manga B'
-    extClass = '.FlowerMangaB'
+    extName = 'Flower Manga (.com)'
+    extClass = '.FlowerMangaDotCom'
     themePkg = 'madara'
     baseUrl = 'https://flowermanga.com'
     overrideVersionCode = 0
