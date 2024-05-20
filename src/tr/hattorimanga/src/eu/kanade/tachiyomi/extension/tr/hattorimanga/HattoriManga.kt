@@ -207,7 +207,7 @@ class HattoriManga : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(SEARCH_PREFIX)) {
             val slug = query.removePrefix(SEARCH_PREFIX)
-            return client.newCall(GET("$baseUrl/$slug", headers))
+            return client.newCall(GET("$baseUrl/manga/$slug", headers))
                 .asObservableSuccess()
                 .map {
                     MangasPage(listOf(mangaDetailsParse(it)), false)
