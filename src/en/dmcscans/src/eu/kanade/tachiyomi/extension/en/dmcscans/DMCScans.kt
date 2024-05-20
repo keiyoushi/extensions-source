@@ -21,6 +21,10 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     override val popularMangaSelectorTitle = ".post-title a"
     override val popularMangaSelectorUrl = ".post-title a"
 
+    // ============================== Search ================================
+
+    override val excludedCategories = listOf("Web Novel")
+
     // =========================== Manga Details ============================
 
     override val mangaDetailsSelectorGenres = "#labels > a[rel=tag]"
@@ -31,6 +35,18 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     // =========================== Chapter Feed =============================
 
     override val chapterFeedRegex = """.run\(["'](.*?)["']\)""".toRegex()
+
+    override fun getChapterFeedUrl(doc: Document): String {
+        val feed = chapterFeedRegex
+            .find(doc.html())
+            ?.groupValues?.get(1)
+            ?: throw Exception("Failed to find chapter feed")
+
+        return apiUrl(chapterCategory)
+            .addPathSegments(feed)
+            .addQueryParameter("max-results", maxChapterResults.toString())
+            .build().toString()
+    }
 
     // =============================== Filters ==============================
 
@@ -72,17 +88,5 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
         return imgData.select("img[src]").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))
         }
-    }
-
-    override fun getChapterFeedUrl(doc: Document): String {
-        val feed = chapterFeedRegex
-            .find(doc.html())
-            ?.groupValues?.get(1)
-            ?: throw Exception("Failed to find chapter feed")
-
-        return apiUrl(chapterCategory)
-            .addPathSegments(feed)
-            .addQueryParameter("max-results", maxChapterResults.toString())
-            .build().toString()
     }
 }
