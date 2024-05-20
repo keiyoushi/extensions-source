@@ -11,5 +11,5 @@ class Hijala : MangaThemesia(
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 ) {
     // Site moved from ZeistManga to MangaThemesia again
-    override val versionId get() = 4
+    override val versionId get() = 2
 }
