@@ -53,7 +53,17 @@ class ReaperScans : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val headers = request.headers.newBuilder()
+                .removeAll("X-Requested-With")
+                .build()
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
         .build()
+
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("X-Requested-With", randomString((1..20).random())) // For WebView, removed in interceptor
 
     // Popular
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/comics?page=$page", headers)
@@ -335,6 +345,11 @@ class ReaperScans : ParsedHttpSource() {
     }
 
     private fun Elements.imgAttr(): String = this.first()!!.imgAttr()
+
+    private fun randomString(length: Int): String {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        return List(length) { charPool.random() }.joinToString("")
+    }
 
     // Unused
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
