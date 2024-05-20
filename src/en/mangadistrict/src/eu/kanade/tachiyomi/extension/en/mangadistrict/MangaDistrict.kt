@@ -92,7 +92,7 @@ class MangaDistrict :
 
     override fun imageFromElement(element: Element): String? {
         return when {
-            element.hasAttr("data-wpfc-original-src") -> element.attr("data-wpfc-original-src")
+            element.hasAttr("data-wpfc-original-src") -> element.attr("abs:data-wpfc-original-src")
             else -> super.imageFromElement(element)
         }
     }
