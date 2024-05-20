@@ -3,7 +3,7 @@ ext {
     extClass = '.Toonily'
     themePkg = 'madara'
     baseUrl = 'https://toonily.com'
-    overrideVersionCode = 11
+    overrideVersionCode = 12
     isNsfw = true
 }
 
