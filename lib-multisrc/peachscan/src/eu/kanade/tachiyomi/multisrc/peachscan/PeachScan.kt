@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -28,6 +29,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -81,6 +83,18 @@ abstract class PeachScan(
     }
 
     override fun latestUpdatesNextPageSelector() = null
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(URL_SEARCH_PREFIX)) {
+            val manga = SManga.create().apply { url = "/${query.substringAfter(URL_SEARCH_PREFIX)}" }
+            return client.newCall(mangaDetailsRequest(manga))
+                .asObservableSuccess()
+                .map {
+                    MangasPage(listOf(mangaDetailsParse(it).apply { url = manga.url }), false)
+                }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -260,5 +274,9 @@ abstract class PeachScan(
         activityManager.getMemoryInfo(memInfo)
 
         memInfo.totalMem < 3L * 1024 * 1024 * 1024
+    }
+
+    companion object {
+        const val URL_SEARCH_PREFIX = "slug:"
     }
 }
