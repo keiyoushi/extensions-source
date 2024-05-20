@@ -116,7 +116,7 @@ class MangaDetailsDto(
 
     val thumbnailUrl get() = "${UnionMangas.apiUrl}$_thumbnailUrl"
     val genres get() = _genres.joinToString { it.name }
-    val status get() = if (_status.isNotEmpty()) toSMangaStatus(_status.first().name) else SManga.UNKNOWN
+    val status get() = toSMangaStatus(_status.firstOrNull()?.name ?: "")
 
     @Serializable
     class Prop(
