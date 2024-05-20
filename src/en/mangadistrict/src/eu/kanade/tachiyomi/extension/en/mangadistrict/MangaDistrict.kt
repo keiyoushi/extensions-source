@@ -90,6 +90,13 @@ class MangaDistrict :
         }.let(screen::addPreference)
     }
 
+    override fun imageFromElement(element: Element): String? {
+        return when {
+            element.hasAttr("data-wpfc-original-src") -> element.attr("abs:data-wpfc-original-src")
+            else -> super.imageFromElement(element)
+        }
+    }
+
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
 
