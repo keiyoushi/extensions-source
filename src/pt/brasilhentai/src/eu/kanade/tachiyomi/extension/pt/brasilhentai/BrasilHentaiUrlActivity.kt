@@ -11,11 +11,12 @@ class BrasilHentaiUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val segment = intent?.data?.lastPathSegment
-        if (segment != null) {
+        val pathSegments = intent?.data?.pathSegments
+        if (pathSegments != null && pathSegments.size >= 1) {
+            val item = pathSegments[pathSegments.size - 1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${BrasilHentai.PREFIX_SEARCH}$segment")
+                putExtra("query", "${BrasilHentai.SEARCH_PREFIX}$item")
                 putExtra("filter", packageName)
             }
 
