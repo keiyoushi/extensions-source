@@ -6,6 +6,6 @@ import java.util.concurrent.TimeUnit
 
 class Manhatok : ZeistManga("Manhatok", "https://manhatok.blogspot.com", "ar") {
     override val client = super.client.newBuilder()
-        .rateLimit(3)
+        .rateLimit(2)
         .build()
 }
