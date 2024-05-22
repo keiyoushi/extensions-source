@@ -3,7 +3,7 @@ ext {
     extClass = '.CelestialMoon'
     themePkg = 'zeistmanga'
     baseUrl = 'https://www.celestialmoonscan.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
