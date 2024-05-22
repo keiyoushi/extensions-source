@@ -188,9 +188,10 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script#clarity-reader-nav-js-extra")!!.data()
-        val pagesJson = CHAPTER_PAGES_REGEX.find(script)!!.groupValues[1]
-        val result = json.decodeFromString<PagesPayloadDto>(pagesJson)
+        val script = document.select("script")
+            .map(Element::data)
+            .firstNotNullOf(CHAPTER_PAGES_REGEX::find)
+        val result = json.decodeFromString<PagesPayloadDto>(script.groups["json"]!!.value)
         val mangaSlug = "${result.cdnUrl}/${result.mangaSlug}"
         val chapterNumber = result.chapterNumber
         return result.images.mapIndexed { i, img ->
@@ -259,7 +260,7 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
     companion object {
         private val MANGAID1_REGEX = ""","manid":"(\d+)",""".toRegex()
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
-        private val CHAPTER_PAGES_REGEX = """obj\s*=\s*(.*)\s*;""".toRegex()
+        private val CHAPTER_PAGES_REGEX = """obj\s*=\s*(?<json>.*)\s*;""".toRegex()
         private val ACTION_REGEX = """action:\s*?(['"])([^\r\n]+?)\1""".toRegex()
         private const val MAX_MANGA_RESULTS = 1000
     }
