@@ -8,7 +8,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class FlowerMangaDotCom : Madara(
-    "Flower Manga (.com)",
+    "FlowerManga.com",
     "https://flowermanga.com",
     "pt-BR",
     SimpleDateFormat("dd MMMMM yyyy", Locale("pt", "BR")),
