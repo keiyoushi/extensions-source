@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.pixivkomikku
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.util.Base64
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -20,7 +18,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import uy.kohesive.injekt.injectLazy
-import java.io.ByteArrayOutputStream
 
 class PixivKomikku : HttpSource() {
     override val lang: String = "ja"
@@ -30,7 +27,7 @@ class PixivKomikku : HttpSource() {
 
     private val json: Json by injectLazy()
     private val alreadyLoadedPopularMangaIds = mutableSetOf<Int>()
-    private lateinit var shuffleKey: String
+    private lateinit var key: String
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(DataImageInterceptor())
@@ -197,11 +194,14 @@ class PixivKomikku : HttpSource() {
             super.fetchPageList(chapter)
         }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
+        val timeAndHash = getTimeAndHash()
+
         val header = headers.newBuilder()
-            .add("X-Client-Hash", "de0449d038fca450c570afa150ecf30d1bbc7cb28c6c348e2268fcaa657392e0")
-            .add("X-Client-Time", "2024-05-16T13:53:38+07:00")
+            .add("X-Client-Time", timeAndHash.first)
+            .add("X-Client-Hash", timeAndHash.second)
             .build()
 
         return GET("$baseUrl/api/app/episodes/$chapterId/read_v4", header)
@@ -212,71 +212,27 @@ class PixivKomikku : HttpSource() {
         val shuffledPages = json.decodeFromString<Pages>(response.body.string())
 
         return shuffledPages.data.reading_episode.pages.mapIndexed { i, page ->
-            if (i == 0) shuffleKey = page.key
+            Log.d("pagelistparse", "${page.url} ${page.key}")
+            if (i == 0) key = page.key
 
             Page(i, page.url)
         }
     }
 
     override fun imageUrlRequest(page: Page): Request {
+        Log.d("imageUrlRequest", page.url)
         val header = headers.newBuilder()
-            .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", shuffleKey)
+            .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", key)
             .build()
 
         return GET(page.url, header)
     }
 
-    @OptIn(ExperimentalUnsignedTypes::class)
     override fun imageUrlParse(response: Response): String {
         Log.d("imageUrlParse", "start")
 
-        // saveImage(shuffledImageByteArray)
-        val array = response.body.sameSizeUByteArray()
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        Log.d("imageUrlParse", "canvas")
-
-        var index = 0
-        for (y in 0 until bitmap.height) {
-            for (x in 0 until bitmap.width) {
-                val alpha = array[index++]
-                val red = array[index++]
-                val green = array[index++]
-                val blue = array[index++]
-
-                canvas.drawPoint(
-                    x.toFloat(),
-                    y.toFloat(),
-                    Paint().apply {
-                        setARGB(alpha.toInt(), red.toInt(), green.toInt(), blue.toInt())
-                    },
-                )
-            }
-        }
-        Log.d("imageUrlParse", "loop")
-
-        val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
-        Log.d("imageUrlParse", "compress")
-
-        val base64 = Base64.encodeToString(out.toByteArray(), Base64.DEFAULT)
-        Log.d("imageUrlParse", "64")
-
-        // val imageByteArray = tP(shuffledImageByteArray, width = width, height = height, key = shuffleKey)
-        // Log.d("imageurlparse tp", imageByteArray.size.toString())
-
-        /*
-        val bitmap = BitmapFactory.decodeStream(imageStream)
-        Log.d("imageurlparse bytecount", bitmap.byteCount.toString())
-        Log.d("imageurlparse hw", "${bitmap.height} ${bitmap.width}")
-        Log.d("imageurlparse alpha", bitmap.hasAlpha().toString())
-         */
-
+        val base64 = response.body.toBase64ImageString(key)
         return "https://127.0.0.1/?image=data:image/png;base64,$base64"
-    }
-
-    override fun imageRequest(page: Page): Request {
-        return super.imageRequest(page)
     }
 
     companion object {
@@ -307,17 +263,5 @@ class PixivKomikku : HttpSource() {
             "読み切り",
             "その他",
         )
-    }
-
-    private val functionToChangeScript by lazy {
-        javaClass
-            .getResource("/assets/3681-984fc8a29466ea34.js")!!
-            .readText()
-    }
-
-    private val deshuffleScript by lazy {
-        javaClass
-            .getResource("/assets/1648-75b5954031fcc879.js")!!
-            .readText()
     }
 }
