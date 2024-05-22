@@ -86,7 +86,7 @@ abstract class PeachScan(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val manga = SManga.create().apply { url = "/${query.substringAfter(URL_SEARCH_PREFIX)}" }
+            val manga = SManga.create().apply { url = "/${query.substringAfter(URL_SEARCH_PREFIX)}/" }
             return client.newCall(mangaDetailsRequest(manga))
                 .asObservableSuccess()
                 .map {
