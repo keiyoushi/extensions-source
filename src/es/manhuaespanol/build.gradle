@@ -1,5 +1,5 @@
 ext {
-    extName = 'Manhua Español'
+    extName = 'Manhua Espanol'
     extClass = '.ManhuaEspanol'
     themePkg = 'madara'
     baseUrl = 'https://manhuaespanol.com'
