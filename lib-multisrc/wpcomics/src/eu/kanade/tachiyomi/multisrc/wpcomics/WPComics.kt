@@ -1,7 +1,13 @@
 package eu.kanade.tachiyomi.multisrc.wpcomics
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,21 +23,37 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
 abstract class WPComics(
     override val name: String,
-    override val baseUrl: String,
+    private val defaultBaseUrl: String,
     final override val lang: String,
     protected val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
     protected val gmtOffset: String? = "+0500",
-) : ParsedHttpSource() {
+) : ParsedHttpSource(), ConfigurableSource {
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private val prefKeyBaseUrl by lazy {
+        val packageInfo = Injekt.get<Application>()
+            .packageManager
+            .getPackageInfo(javaClass.`package`!!.name, 0)
+        val versionName = packageInfo.versionName
+        PREF_KEY_BASE_URL_PREFIX + versionName
+    }
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
+
+    override val baseUrl by lazy { preferences.getString(prefKeyBaseUrl, defaultBaseUrl)!! }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -294,5 +316,30 @@ abstract class WPComics(
     protected open class UriPartFilter(displayName: String, private val pairs: List<Pair<String?, String>>) :
         Filter.Select<String>(displayName, pairs.map { it.second }.toTypedArray()) {
         fun toUriPart() = pairs[state].first
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = prefKeyBaseUrl
+            title = TITLE_BASE_URL
+            summary = SUMMARY_BASE_URL
+
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = TITLE_BASE_URL
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+
+        const val RESTART_TACHIYOMI = "Khởi động lại Tachiyomi để áp dụng thay đổi."
+
+        const val PREF_KEY_BASE_URL_PREFIX = "override_base_url_"
+        const val TITLE_BASE_URL = "Thay đổi tên miền"
+        const val SUMMARY_BASE_URL = "Thay đổi này là tạm thời và sẽ bị xoá khi cập nhật tiện ích mở rộng."
     }
 }
