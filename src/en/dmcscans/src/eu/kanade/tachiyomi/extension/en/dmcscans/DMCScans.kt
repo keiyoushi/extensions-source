@@ -7,10 +7,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import java.util.concurrent.TimeUnit
 
 class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en") {
     override val client = super.client.newBuilder()
-        .rateLimit(2)
+        .rateLimit(1, 3, TimeUnit.SECONDS)
         .build()
 
     // ============================== Popular ===============================
@@ -19,10 +21,32 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     override val popularMangaSelectorTitle = ".post-title a"
     override val popularMangaSelectorUrl = ".post-title a"
 
+    // ============================== Search ================================
+
+    override val excludedCategories = listOf("Web Novel")
+
     // =========================== Manga Details ============================
 
     override val mangaDetailsSelectorGenres = "#labels > a[rel=tag]"
-    override val mangaDetailsSelectorInfo = ".imptdt"
+    override val mangaDetailsSelectorInfo = ".imptdts"
+    override val mangaDetailsSelectorDescription = "p"
+    override val mangaDetailsSelectorInfoDescription = "div:containsOwn(Status) > span"
+
+    // =========================== Chapter Feed =============================
+
+    override val chapterFeedRegex = """.run\(["'](.*?)["']\)""".toRegex()
+
+    override fun getChapterFeedUrl(doc: Document): String {
+        val feed = chapterFeedRegex
+            .find(doc.html())
+            ?.groupValues?.get(1)
+            ?: throw Exception("Failed to find chapter feed")
+
+        return apiUrl(chapterCategory)
+            .addPathSegments(feed)
+            .addQueryParameter("max-results", maxChapterResults.toString())
+            .build().toString()
+    }
 
     // =============================== Filters ==============================
 
@@ -47,9 +71,9 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val imgData = document.selectFirst("script:containsData(imgTags)")
+        val imgData = document.selectFirst("script:containsData(imgTag)")
             ?.data()
-            ?.substringAfter("imgTags")
+            ?.substringAfter("imgTag")
             ?.substringAfter("`")
             ?.substringBefore("`")
             ?.replace("\\\"", "\"")
@@ -57,7 +81,9 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
             ?.replace("\\/", "/")
             ?.replace("\\:", ":")
             ?.let(Jsoup::parseBodyFragment)
-            ?: return super.pageListParse(response)
+            ?: return document.select(pageListSelector).select("img[src]").mapIndexed { i, img ->
+                Page(i, "", img.attr("abs:src"))
+            }
 
         return imgData.select("img[src]").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))
