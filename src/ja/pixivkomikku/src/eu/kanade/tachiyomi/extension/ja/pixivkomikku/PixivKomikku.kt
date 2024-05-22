@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.pixivkomikku
 
-import android.os.Build
 import android.util.Log
-import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -18,16 +16,26 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import uy.kohesive.injekt.injectLazy
+import kotlin.random.Random
 
 class PixivKomikku : HttpSource() {
     override val lang: String = "ja"
     override val supportsLatest = true
-    override val name = "Pixiv Komikku"
+    override val name = "Pixivコミック"
     override val baseUrl = "https://comic.pixiv.net"
 
     private val json: Json by injectLazy()
+
+    // since there's no page option for popular manga, we use this as storage storing manga id
     private val alreadyLoadedPopularMangaIds = mutableSetOf<Int>()
-    private lateinit var key: String
+
+    /*
+    the key can be any kind of string with minimum length of 1,
+    the same key must be passed in imageUrlRequest() as header and deShuffleImage() to build hash
+     */
+    val key by lazy {
+        randomString()
+    }
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(DataImageInterceptor())
@@ -78,10 +86,15 @@ class PixivKomikku : HttpSource() {
                 setUrlWithoutDomain("/api/app/works/v5/${manga.id}")
             }
         }
-        return MangasPage(mangas, true)
+
+        if (latest.data.next_page_number != null) {
+            return MangasPage(mangas, true)
+        }
+        return MangasPage(mangas, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        // for searching with tags, all tags started with #
         if (query.startsWith("#")) {
             val tag = query.removePrefix("#")
             return GET("$baseUrl/api/app/tags/$tag/works/v2?page=$page", headers)
@@ -123,11 +136,10 @@ class PixivKomikku : HttpSource() {
             }
         }
 
-        return if (mangas.size >= 21) {
-            MangasPage(mangas, true)
-        } else {
-            MangasPage(mangas, false)
+        if (search.data.next_page_number != null) {
+            return MangasPage(mangas, true)
         }
+        return MangasPage(mangas, false)
     }
 
     override fun getFilterList() = FilterList(CategoryHeader(), Category(), TagHeader(), Tag())
@@ -171,30 +183,19 @@ class PixivKomikku : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = json.decodeFromString<Chapters>(response.body.string())
 
-        return chapters.data.episodes.mapIndexed { i, episodeInfo ->
+        return chapters.data.episodes.filter { episodeInfo ->
+            episodeInfo.episode != null
+        }.mapIndexed { i, episodeInfo ->
             SChapter.create().apply {
                 val episode = episodeInfo.episode
-                if (episode == null) {
-                    name = "※${episodeInfo.message}"
-                    url = ""
-                } else {
-                    name = episode.numbering_title.plus(": ${episode.sub_title}")
-                    url = "/viewer/stories/${episode.id}"
-                    date_upload = episode.read_start_at
-                }
+                name = episode!!.numbering_title.plus(": ${episode.sub_title}")
+                url = "/viewer/stories/${episode.id}"
+                date_upload = episode.read_start_at
                 chapter_number = i.toFloat()
             }
         }
     }
 
-    override fun fetchPageList(chapter: SChapter) =
-        if (chapter.name.contains("※") && chapter.url.isEmpty()) {
-            throw Error(chapter.name.substringAfter("※"))
-        } else {
-            super.fetchPageList(chapter)
-        }
-
-    @RequiresApi(Build.VERSION_CODES.O)
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
         val timeAndHash = getTimeAndHash()
@@ -208,19 +209,15 @@ class PixivKomikku : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        Log.d("pagelistparse", response.peekBody(Long.MAX_VALUE).string())
         val shuffledPages = json.decodeFromString<Pages>(response.body.string())
 
         return shuffledPages.data.reading_episode.pages.mapIndexed { i, page ->
-            Log.d("pagelistparse", "${page.url} ${page.key}")
-            if (i == 0) key = page.key
-
             Page(i, page.url)
         }
     }
 
     override fun imageUrlRequest(page: Page): Request {
-        Log.d("imageUrlRequest", page.url)
+        Log.d("imageUrlRequest: ", "")
         val header = headers.newBuilder()
             .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", key)
             .build()
@@ -229,9 +226,10 @@ class PixivKomikku : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String {
-        Log.d("imageUrlParse", "start")
-
+        Log.d("imageUrlParse: ", "")
         val base64 = response.body.toBase64ImageString(key)
+        Random
+
         return "https://127.0.0.1/?image=data:image/png;base64,$base64"
     }
 

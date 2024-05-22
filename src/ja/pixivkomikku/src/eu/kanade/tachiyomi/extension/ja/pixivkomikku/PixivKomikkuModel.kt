@@ -22,10 +22,11 @@ internal data class Popular(
 
 @Serializable
 internal data class Latest(
-    val data: ApiData,
+    val data: Data,
 ) {
     @Serializable
-    internal data class ApiData(
+    internal data class Data(
+        val next_page_number: Int?,
         val official_works: List<OfficialWork>,
     ) {
         @Serializable
@@ -50,6 +51,7 @@ internal data class Search(
 ) {
     @Serializable
     internal data class Data(
+        val next_page_number: Int?,
         val official_works: List<OfficialWorks>,
     ) {
         @Serializable
@@ -114,7 +116,6 @@ internal data class Chapters(
     ) {
         @Serializable
         internal data class EpisodeInfo(
-            val state: String,
             val episode: Episode?,
             val message: String?,
         )
@@ -147,7 +148,6 @@ internal data class Pages(
                 val height: Int,
                 val width: Int,
                 val gridsize: Int,
-                val key: String,
             )
         }
     }
