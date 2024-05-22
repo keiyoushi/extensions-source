@@ -34,5 +34,6 @@ class MangaTerraUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun slug(pathSegments: List<String>) = "${MangaTerra.slugPrefix}${pathSegments.last()}"
+    private fun slug(pathSegments: List<String>) =
+        "${MangaTerra.PREFIX_SEARCH}${pathSegments[pathSegments.size - 1]}"
 }
