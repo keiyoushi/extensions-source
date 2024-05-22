@@ -171,14 +171,12 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(slugPrefix)) {
-            val mangaUrl = query.substringAfter(slugPrefix)
-            return client.newCall(GET("$baseUrl/${langOption.infix}/$mangaUrl", headers))
+        if (query.startsWith(SEARCH_PREFIX)) {
+            val url = "$baseUrl/${langOption.infix}/${query.substringAfter(SEARCH_PREFIX)}"
+            return client.newCall(GET(url, headers))
                 .asObservableSuccess().map { response ->
-                    val manga = mangaDetailsParse(response).apply {
-                        url = mangaUrl
-                    }
-                    MangasPage(listOf(manga), false)
+                    val mangas = try { listOf(mangaDetailsParse(response)) } catch (_: Exception) { emptyList() }
+                    MangasPage(mangas, false)
                 }
         }
         return super.fetchSearchManga(page, query, filters)
@@ -227,10 +225,10 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     private fun mangaUrlParse(slug: String, pathSegment: String) = "/$pathSegment/$slug"
 
     companion object {
+        const val SEARCH_PREFIX = "slug:"
         val apiUrl = "https://api.unionmanga.xyz"
         val apiSeed = "8e0550790c94d6abc71d738959a88d209690dc86"
         val domain = "yaoi-chan.xyz"
-        val slugPrefix = "slug:"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
         val apiDateFormat = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
             .apply { timeZone = TimeZone.getTimeZone("GMT") }
