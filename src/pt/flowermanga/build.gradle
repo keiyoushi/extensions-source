@@ -1,5 +1,5 @@
 ext {
-    extName = 'Flower Manga (.net)'
+    extName = 'FlowerManga.net'
     extClass = '.FlowerMangaDotNet'
     themePkg = 'madara'
     baseUrl = 'https://flowermanga.net'
