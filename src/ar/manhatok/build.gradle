@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manhatok'
+    extClass = '.Manhatok'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://manhatok.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
