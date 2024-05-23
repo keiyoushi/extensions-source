@@ -1,0 +1,10 @@
+ext {
+    extName = 'FlowerManga.com'
+    extClass = '.FlowerMangaDotCom'
+    themePkg = 'madara'
+    baseUrl = 'https://flowermanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
