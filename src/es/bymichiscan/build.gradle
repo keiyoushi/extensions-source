@@ -1,0 +1,10 @@
+ext {
+    extName = 'Bymichi Scan'
+    extClass = '.BymichiScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://bymichiby.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
