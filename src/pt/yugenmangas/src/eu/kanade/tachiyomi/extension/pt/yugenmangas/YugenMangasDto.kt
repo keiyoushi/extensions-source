@@ -30,9 +30,15 @@ data class YugenMangaDto(
             "completed", "finished" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = if (cover.startsWith("/")) baseUrl + cover else cover
+
+        thumbnail_url = when {
+            cover.startsWith(listOf("/", "cover")) -> "$baseUrl/media/${cover.removePrefix("/")}"
+            else -> cover
+        }
         url = "/series/$slug"
     }
+
+    private fun String.startsWith(group: List<String>): Boolean = group.any(::startsWith)
 }
 
 @Serializable
@@ -65,11 +71,6 @@ data class YugenChapterDto(
         }
     }
 }
-
-@Serializable
-data class YugenReaderDto(
-    @SerialName("chapter_images") val images: List<String>? = emptyList(),
-)
 
 @Serializable
 data class YugenGetChaptersBySeriesDto(
