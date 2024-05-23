@@ -85,10 +85,7 @@ class PixivKomikku : HttpSource() {
             }
         }
 
-        if (latest.data.next_page_number != null) {
-            return MangasPage(mangas, true)
-        }
-        return MangasPage(mangas, false)
+        return MangasPage(mangas, latest.data.next_page_number != null)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -134,10 +131,7 @@ class PixivKomikku : HttpSource() {
             }
         }
 
-        if (search.data.next_page_number != null) {
-            return MangasPage(mangas, true)
-        }
-        return MangasPage(mangas, false)
+        return MangasPage(mangas, search.data.next_page_number != null)
     }
 
     override fun getFilterList() = FilterList(CategoryHeader(), Category(), TagHeader(), Tag())
