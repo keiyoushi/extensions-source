@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.pixivkomikku
 
-import android.util.Log
 import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -16,7 +15,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import uy.kohesive.injekt.injectLazy
-import kotlin.random.Random
 
 class PixivKomikku : HttpSource() {
     override val lang: String = "ja"
@@ -217,7 +215,6 @@ class PixivKomikku : HttpSource() {
     }
 
     override fun imageUrlRequest(page: Page): Request {
-        Log.d("imageUrlRequest: ", "")
         val header = headers.newBuilder()
             .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", key)
             .build()
@@ -226,9 +223,7 @@ class PixivKomikku : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String {
-        Log.d("imageUrlParse: ", "")
         val base64 = response.body.toBase64ImageString(key)
-        Random
 
         return "https://127.0.0.1/?image=data:image/png;base64,$base64"
     }
