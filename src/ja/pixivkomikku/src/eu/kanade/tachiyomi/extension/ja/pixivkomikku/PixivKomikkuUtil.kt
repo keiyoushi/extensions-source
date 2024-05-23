@@ -17,7 +17,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 internal fun randomString(): String {
-    //the average length of key
+    // the average length of key
     val length = (30..40).random()
 
     return buildString(length) {
