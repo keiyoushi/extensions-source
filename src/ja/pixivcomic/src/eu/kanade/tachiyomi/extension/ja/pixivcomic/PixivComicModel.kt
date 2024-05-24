@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.pixivcomic
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -15,19 +16,23 @@ internal class Popular(
     internal class RankingItem(
         val id: Int,
         val title: String,
-        val main_image_url: String,
+        @SerialName("main_image_url")
+        val mainImageUrl: String,
     )
 }
 
 @Serializable
 internal class Latest(
-    val next_page_number: Int?,
-    val official_works: List<OfficialWork>,
+    @SerialName("next_page_number")
+    val nextPageNumber: Int?,
+    @SerialName("official_works")
+    val officialWorks: List<OfficialWork>,
 )
 
 @Serializable
 internal class Manga(
-    val official_work: OfficialWork,
+    @SerialName("official_work")
+    val officialWork: OfficialWork,
 )
 
 @Serializable
@@ -68,15 +73,19 @@ internal class Chapters(
     @Serializable
     internal class Episode(
         val id: Int,
-        val numbering_title: String,
-        val sub_title: String,
-        val read_start_at: Long,
+        @SerialName("numbering_title")
+        val numberingTitle: String,
+        @SerialName("sub_title")
+        val subTitle: String,
+        @SerialName("read_start_at")
+        val readStartAt: Long,
     )
 }
 
 @Serializable
 internal class Pages(
-    val reading_episode: ReadingEpisode,
+    @SerialName("reading_episode")
+    val readingEpisode: ReadingEpisode,
 ) {
     @Serializable
     internal class ReadingEpisode(

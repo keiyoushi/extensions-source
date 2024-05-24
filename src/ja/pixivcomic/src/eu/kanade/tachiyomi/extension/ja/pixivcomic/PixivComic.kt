@@ -72,7 +72,7 @@ class PixivComic : HttpSource() {
         }.map { manga ->
             SManga.create().apply {
                 title = manga.title
-                thumbnail_url = manga.main_image_url
+                thumbnail_url = manga.mainImageUrl
                 url = "/api/app/works/v5/${manga.id}"
 
                 alreadyLoadedPopularMangaIds.add(manga.id)
@@ -94,7 +94,7 @@ class PixivComic : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val latest = json.decodeFromString<ApiResponse<Latest>>(response.body.string())
 
-        val mangas = latest.data.official_works.map { manga ->
+        val mangas = latest.data.officialWorks.map { manga ->
             SManga.create().apply {
                 title = manga.name
                 thumbnail_url = manga.image.main
@@ -102,7 +102,7 @@ class PixivComic : HttpSource() {
             }
         }
 
-        return MangasPage(mangas, latest.data.next_page_number != null)
+        return MangasPage(mangas, latest.data.nextPageNumber != null)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -181,7 +181,7 @@ class PixivComic : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
-        val mangaInfo = manga.data.official_work
+        val mangaInfo = manga.data.officialWork
 
         return SManga.create().apply {
             description = Jsoup.parse(mangaInfo.description).wholeText()
@@ -222,9 +222,9 @@ class PixivComic : HttpSource() {
                     .addPathSegment("read_v4")
                     .build()
 
-                name = episode.numbering_title.plus(": ${episode.sub_title}")
+                name = episode.numberingTitle.plus(": ${episode.subTitle}")
                 url = chapterUrl.toString()
-                date_upload = episode.read_start_at
+                date_upload = episode.readStartAt
                 chapter_number = i.toFloat()
             }
         }
@@ -253,7 +253,7 @@ class PixivComic : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val shuffledPages = json.decodeFromString<ApiResponse<Pages>>(response.body.string())
 
-        return shuffledPages.data.reading_episode.pages.mapIndexed { i, page ->
+        return shuffledPages.data.readingEpisode.pages.mapIndexed { i, page ->
             Page(i, imageUrl = page.url)
         }
     }
