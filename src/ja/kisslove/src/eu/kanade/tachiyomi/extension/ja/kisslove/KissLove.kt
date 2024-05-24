@@ -82,7 +82,7 @@ class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
         val charactersLength = characters.length
         var result = ""
         for (i in 0..length) {
-            result += characters.[(0 until charactersLength).random()]
+            result += characters[(0 until charactersLength).random()]
         }
 
         return result
