@@ -3,7 +3,7 @@ ext {
     extClass = '.KissLove'
     themePkg = 'fmreader'
     baseUrl = 'https://klz9.com'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = true
 }
 
