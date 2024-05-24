@@ -22,7 +22,7 @@ class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
             ?.groupValues?.get(1)
             ?: throw Exception("Could not find manga id")
 
-        val xhrUrl = "$baseUrl/app/manga/controllers/cont.listChapter.php".toHttpUrl().newBuilder()
+        val xhrUrl = "$baseUrl/${generateRandomStr(25)}.lstc".toHttpUrl().newBuilder()
             .addQueryParameter("slug", mangaId)
             .build()
 
@@ -70,11 +70,22 @@ class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
             ?.`val`()
             ?: throw Exception("Could not find chapter id")
 
-        val xhrUrl = "$baseUrl/app/manga/controllers/cont.listImg.php".toHttpUrl().newBuilder()
+        val xhrUrl = "$baseUrl/${generateRandomString(30)}.iog".toHttpUrl().newBuilder()
             .addQueryParameter("cid", chapterId)
             .build()
 
         return GET(xhrUrl, headers)
+    }
+
+    private fun generateRandomStr(length: Int): String {
+        val characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        val charactersLength = characters.length;
+        var result = "";
+        for (i in 0..length) {
+            result += characters.[(0 until charactersLength).random()];
+        }
+
+        return result;
     }
 
     companion object {
