@@ -70,7 +70,7 @@ class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
             ?.`val`()
             ?: throw Exception("Could not find chapter id")
 
-        val xhrUrl = "$baseUrl/${generateRandomString(30)}.iog".toHttpUrl().newBuilder()
+        val xhrUrl = "$baseUrl/${generateRandomStr(30)}.iog".toHttpUrl().newBuilder()
             .addQueryParameter("cid", chapterId)
             .build()
 
