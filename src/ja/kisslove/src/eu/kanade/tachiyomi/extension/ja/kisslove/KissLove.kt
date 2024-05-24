@@ -78,14 +78,14 @@ class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
     }
 
     private fun generateRandomStr(length: Int): String {
-        val characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        val charactersLength = characters.length;
-        var result = "";
+        val characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        val charactersLength = characters.length
+        var result = ""
         for (i in 0..length) {
-            result += characters.[(0 until charactersLength).random()];
+            result += characters.[(0 until charactersLength).random()]
         }
 
-        return result;
+        return result
     }
 
     companion object {
