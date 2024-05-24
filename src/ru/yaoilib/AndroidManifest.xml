@@ -15,8 +15,8 @@
 
                 <!-- LibUrlActivity sites can be added here. -->
                 <data
-                    android:host="v2.slashlib.me"
-                    android:pathPattern="/..*/v..*"
+                    android:host="slashlib.me"
+                    android:pathPattern="/ru/manga/..*"
                     android:scheme="https" />
             </intent-filter>
         </activity>

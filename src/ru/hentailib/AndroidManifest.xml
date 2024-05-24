@@ -15,8 +15,8 @@
 
                 <!-- LibUrlActivity sites can be added here. -->
                 <data
-                    android:host="v1.hentailib.org"
-                    android:pathPattern="/..*/v..*"
+                    android:host="hentailib.me"
+                    android:pathPattern="/ru/manga/..*"
                     android:scheme="https" />
             </intent-filter>
         </activity>
