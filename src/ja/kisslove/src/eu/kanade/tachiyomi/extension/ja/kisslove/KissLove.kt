@@ -78,17 +78,11 @@ class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
     }
 
     private fun generateRandomStr(length: Int): String {
-        val characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-        val charactersLength = characters.length
-        var result = ""
-        for (i in 0..length) {
-            result += characters[(0 until charactersLength).random()]
-        }
-
-        return result
+        return (1..length).map { TO_PATH_CHARACTERS.random() }.joinToString("")
     }
 
     companion object {
+        private val TO_PATH_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
         private val MID_URL_REGEX = "-([^.]+).html".toRegex()
     }
 }
