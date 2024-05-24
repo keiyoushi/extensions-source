@@ -1,6 +1,5 @@
-package eu.kanade.tachiyomi.extension.ja.pixivkomikku
+package eu.kanade.tachiyomi.extension.ja.pixivcomic
 
-import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,12 +10,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import uy.kohesive.injekt.injectLazy
 
-class PixivKomikku : HttpSource() {
+class PixivComic : HttpSource() {
     override val lang: String = "ja"
     override val supportsLatest = true
     override val name = "Pixivコミック"
@@ -27,16 +28,23 @@ class PixivKomikku : HttpSource() {
     // since there's no page option for popular manga, we use this as storage storing manga id
     private val alreadyLoadedPopularMangaIds = mutableSetOf<Int>()
 
-    /*
-    the key can be any kind of string with minimum length of 1,
-    the same key must be passed in imageUrlRequest() as header and deShuffleImage() to build hash
+    // used to determine if popular manga has next page or not
+    private var popularMangaCountRequested = 0
+
+    /**
+     * the key can be any kind of string with minimum length of 1,
+     * the same key must be passed in [imageRequest] and [ShuffledImageInterceptor]
      */
-    val key by lazy {
+    private val key by lazy {
         randomString()
     }
 
+    private val timeAndHash by lazy {
+        getTimeAndHash()
+    }
+
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(DataImageInterceptor())
+        .addInterceptor(ShuffledImageInterceptor(key))
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -45,16 +53,19 @@ class PixivKomikku : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         if (page == 1) alreadyLoadedPopularMangaIds.clear()
+        popularMangaCountRequested = POPULAR_MANGA_COUNT_PER_PAGE * page
 
-        return GET(
-            "$baseUrl/api/app/rankings/popularity?label=総合&count=${
-            POPULAR_MANGA_COUNT_PER_PAGE * page}",
-            headers,
-        )
+        val url = apiBuilder()
+            .addPathSegments("rankings/popularity")
+            .addQueryParameter("label", "総合")
+            .addQueryParameter("count", popularMangaCountRequested.toString())
+            .build()
+
+        return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val popular = json.decodeFromString<Popular>(response.body.string())
+        val popular = json.decodeFromString<ApiResponse<Popular>>(response.body.string())
 
         val mangas = popular.data.ranking.filterNot {
             alreadyLoadedPopularMangaIds.contains(it.id)
@@ -62,26 +73,32 @@ class PixivKomikku : HttpSource() {
             SManga.create().apply {
                 title = manga.title
                 thumbnail_url = manga.main_image_url
-                setUrlWithoutDomain("/api/app/works/v5/${manga.id}")
+                url = "/api/app/works/v5/${manga.id}"
 
                 alreadyLoadedPopularMangaIds.add(manga.id)
             }
         }
-        return MangasPage(mangas, true)
+
+        return MangasPage(mangas, popular.data.ranking.size == popularMangaCountRequested)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/api/app/works/recent_updates?page=$page", headers)
+        val url = apiBuilder()
+            .addPathSegments("works/recent_updates")
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return GET(url, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val latest = json.decodeFromString<Latest>(response.body.string())
+        val latest = json.decodeFromString<ApiResponse<Latest>>(response.body.string())
 
         val mangas = latest.data.official_works.map { manga ->
             SManga.create().apply {
                 title = manga.name
                 thumbnail_url = manga.image.main
-                setUrlWithoutDomain("/api/app/works/v5/${manga.id}")
+                url = "/api/app/works/v5/${manga.id}"
             }
         }
 
@@ -92,47 +109,54 @@ class PixivKomikku : HttpSource() {
         // for searching with tags, all tags started with #
         if (query.startsWith("#")) {
             val tag = query.removePrefix("#")
-            return GET("$baseUrl/api/app/tags/$tag/works/v2?page=$page", headers)
+            val url = apiBuilder()
+                .addPathSegment("tags")
+                .addPathSegment(tag)
+                .addPathSegments("works/v2")
+                .addQueryParameter("page", page.toString())
+                .build()
+
+            return GET(url, headers)
         }
 
         filters.forEach { filter ->
             when (filter) {
                 is Category ->
                     if (filter.state != 0) {
-                        return GET(
-                            "$baseUrl/api/app/categories/${
-                            filter.values[filter.state]}/works?page=$page",
-                            headers,
-                        )
+                        val url = apiBuilder()
+                            .addPathSegment("categories")
+                            .addPathSegment(filter.values[filter.state])
+                            .addPathSegments("works")
+                            .addQueryParameter("page", page.toString())
+                            .build()
+
+                        return GET(url, headers)
                     }
                 is Tag ->
                     if (filter.state.isNotBlank()) {
-                        return GET(
-                            "$baseUrl/api/app/tags/${
-                            filter.state}/works/v2?page=$page",
-                            headers,
-                        )
+                        val url = apiBuilder()
+                            .addPathSegment("tags")
+                            .addPathSegment(filter.state)
+                            .addPathSegments("works/v2")
+                            .addQueryParameter("page", page.toString())
+                            .build()
+
+                        return GET(url, headers)
                     }
                 else -> {}
             }
         }
 
-        return GET("$baseUrl/api/app/works/search/v2/$query?page=$page", headers)
+        val url = apiBuilder()
+            .addPathSegments("works/search/v2")
+            .addPathSegment(query)
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return GET(url.toString(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val search = json.decodeFromString<Search>(response.body.string())
-
-        val mangas = search.data.official_works.map { manga ->
-            SManga.create().apply {
-                title = manga.name
-                thumbnail_url = manga.image.main
-                setUrlWithoutDomain("/api/app/works/v5/${manga.id}")
-            }
-        }
-
-        return MangasPage(mangas, search.data.next_page_number != null)
-    }
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
     override fun getFilterList() = FilterList(CategoryHeader(), Category(), TagHeader(), Tag())
 
@@ -147,19 +171,24 @@ class PixivKomikku : HttpSource() {
     override fun getMangaUrl(manga: SManga): String {
         val mangaId = manga.url.substringAfterLast("/")
 
-        return "$baseUrl/works/$mangaId"
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("works")
+            .addPathSegment(mangaId)
+            .build()
+
+        return url.toString()
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = json.decodeFromString<Manga>(response.body.string())
+        val manga = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
         val mangaInfo = manga.data.official_work
 
         return SManga.create().apply {
             description = Jsoup.parse(mangaInfo.description).wholeText()
             author = mangaInfo.author
 
-            val categories = mangaInfo.categories.map { it.name }
-            val tags = mangaInfo.tags.map { "#${it.name}" }
+            val categories = mangaInfo.categories?.map { it.name } ?: listOf()
+            val tags = mangaInfo.tags?.map { "#${it.name}" } ?: listOf()
 
             val genreString = categories.plus(tags).joinToString(", ")
             genre = genreString
@@ -169,57 +198,82 @@ class PixivKomikku : HttpSource() {
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfterLast("/")
 
-        return GET("$baseUrl/api/app/works/$mangaId/episodes/v2?order=desc", headers)
+        val url = apiBuilder()
+            .addPathSegment("works")
+            .addPathSegment(mangaId)
+            .addPathSegments("episodes/v2")
+            .addQueryParameter("order", "desc")
+            .build()
+
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = json.decodeFromString<Chapters>(response.body.string())
+        val chapters = json.decodeFromString<ApiResponse<Chapters>>(response.body.string())
 
         return chapters.data.episodes.filter { episodeInfo ->
             episodeInfo.episode != null
         }.mapIndexed { i, episodeInfo ->
             SChapter.create().apply {
-                val episode = episodeInfo.episode
-                name = episode!!.numbering_title.plus(": ${episode.sub_title}")
-                url = "/viewer/stories/${episode.id}"
+                val episode = episodeInfo.episode!!
+                val chapterUrl = apiBuilder()
+                    .addPathSegment("episodes")
+                    .addPathSegment(episode.id.toString())
+                    .addPathSegment("read_v4")
+                    .build()
+
+                name = episode.numbering_title.plus(": ${episode.sub_title}")
+                url = chapterUrl.toString()
                 date_upload = episode.read_start_at
                 chapter_number = i.toFloat()
             }
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast("/")
-        val timeAndHash = getTimeAndHash()
+    override fun getChapterUrl(chapter: SChapter): String {
+        val chapterId = chapter.url.substringBeforeLast("/").substringAfterLast("/")
 
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("viewer/stories")
+            .addPathSegment(chapterId)
+            .build()
+
+        return url.toString()
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
         val header = headers.newBuilder()
             .add("X-Client-Time", timeAndHash.first)
             .add("X-Client-Hash", timeAndHash.second)
             .build()
 
-        return GET("$baseUrl/api/app/episodes/$chapterId/read_v4", header)
+        return GET(chapter.url, header)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val shuffledPages = json.decodeFromString<Pages>(response.body.string())
+        val shuffledPages = json.decodeFromString<ApiResponse<Pages>>(response.body.string())
 
         return shuffledPages.data.reading_episode.pages.mapIndexed { i, page ->
-            Page(i, page.url)
+            Page(i, imageUrl = page.url)
         }
     }
 
-    override fun imageUrlRequest(page: Page): Request {
+    override fun imageUrlParse(response: Response): String {
+        throw UnsupportedOperationException()
+    }
+
+    override fun imageRequest(page: Page): Request {
         val header = headers.newBuilder()
             .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", key)
             .build()
 
-        return GET(page.url, header)
+        return GET(page.imageUrl!!, header)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        val base64 = response.body.toBase64ImageString(key)
-
-        return "https://127.0.0.1/?image=data:image/png;base64,$base64"
+    private fun apiBuilder(): HttpUrl.Builder {
+        return baseUrl.toHttpUrl()
+            .newBuilder()
+            .addPathSegments("api/app")
     }
 
     companion object {

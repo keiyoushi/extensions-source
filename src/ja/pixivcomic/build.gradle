@@ -1,6 +1,6 @@
 ext {
-    extName = 'PixivKomikku'
-    extClass = '.PixivKomikku'
+    extName = 'Pixiv Comic'
+    extClass = '.PixivComic'
     extVersionCode = 1
 }
 
