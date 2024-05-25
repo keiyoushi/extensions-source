@@ -15,9 +15,9 @@
 
                 <!-- LibUrlActivity sites can be added here. -->
                 <data
-                    android:host="mangalib.me"
+                    android:host="${SOURCEHOST}"
                     android:pathPattern="/ru/manga/..*"
-                    android:scheme="https" />
+                    android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
     </application>

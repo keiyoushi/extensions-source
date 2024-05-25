@@ -7,7 +7,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class LibGroupConstantsDto(
+class Data<T>(
+    val data: T,
+)
+
+@Serializable
+class Constants(
     @SerialName("ageRestriction") val ageRestrictions: List<IdLabelSiteType>,
     @SerialName("format") val formats: List<IdNameSiteType>,
     val genres: List<IdNameSiteType>,
@@ -18,21 +23,21 @@ data class LibGroupConstantsDto(
     val types: List<IdLabelSiteType>,
 ) {
     @Serializable
-    data class IdLabelSiteType(
+    class IdLabelSiteType(
         val id: Int,
         val label: String,
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
     @Serializable
-    data class IdNameSiteType(
+    class IdNameSiteType(
         val id: Int,
         val name: String,
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
     @Serializable
-    data class ImageServer(
+    class ImageServer(
         val id: String,
         val label: String,
         val url: String,
@@ -56,129 +61,124 @@ data class LibGroupConstantsDto(
 }
 
 @Serializable
-data class MangaPageDto(
+class MangasPageDto(
     val data: List<MangaShort>,
     val meta: MangaPageMeta,
 ) {
     @Serializable
-    data class MangaPageMeta(
+    class MangaPageMeta(
         @SerialName("has_next_page") val hasNextPage: Boolean,
     )
 
     fun mapToSManga(isEng: String): List<SManga> {
         return this.data.map { it.toSManga(isEng) }
     }
+}
 
+@Serializable
+class MangaShort(
+    val name: String,
+    @SerialName("rus_name") val rusName: String?,
+    @SerialName("eng_name") val engName: String?,
+    @SerialName("slug_url") val slugUrl: String,
+    val cover: Cover,
+) {
     @Serializable
-    data class MangaShort(
-        val name: String,
-        @SerialName("rus_name") val rusName: String?,
-        @SerialName("eng_name") val engName: String?,
-        @SerialName("slug_url") val slugUrl: String,
-        val cover: Cover,
-    ) {
-        @Serializable
-        data class Cover(
-            val default: String?,
-        )
+    data class Cover(
+        val default: String?,
+    )
 
-        fun toSManga(isEng: String) = SManga.create().apply {
-            title = getSelectedLanguage(isEng, rusName, engName, name)
-            thumbnail_url = cover.default.orEmpty()
-            url = "/$slugUrl"
-        }
+    fun toSManga(isEng: String) = SManga.create().apply {
+        title = getSelectedLanguage(isEng, rusName, engName, name)
+        thumbnail_url = cover.default.orEmpty()
+        url = "/$slugUrl"
     }
 }
 
 @Serializable
-data class MangaDetailsDto(
-    val data: Manga,
+class Manga(
+    val type: LabelType,
+    val ageRestriction: LabelType,
+    val rating: Rating,
+    val genres: List<NameType>,
+    val tags: List<NameType>,
+    @SerialName("rus_name") val rusName: String?,
+    @SerialName("eng_name") val engName: String?,
+    val name: String,
+    val cover: MangaShort.Cover,
+    val authors: List<NameType>,
+    val artists: List<NameType>,
+    val status: LabelType,
+    val scanlateStatus: LabelType,
+    @SerialName("is_licensed") val isLicensed: Boolean,
+    val otherNames: List<String>,
+    val summary: String,
 ) {
     @Serializable
-    data class LabelType(
+    class LabelType(
         val label: String,
     )
 
     @Serializable
-    data class NameType(
+    class NameType(
         val name: String,
     )
 
     @Serializable
-    data class Manga(
-        val type: LabelType,
-        val ageRestriction: LabelType,
-        val rating: Rating,
-        val genres: List<NameType>,
-        val tags: List<NameType>,
-        @SerialName("rus_name") val rusName: String?,
-        @SerialName("eng_name") val engName: String?,
-        val name: String,
-        val cover: MangaPageDto.MangaShort.Cover,
-        val authors: List<NameType>,
-        val artists: List<NameType>,
-        val status: LabelType,
-        val scanlateStatus: LabelType,
-        @SerialName("is_licensed") val isLicensed: Boolean,
-        val otherNames: List<String>,
-        val summary: String,
-    ) {
-        @Serializable
-        data class Rating(
-            val average: Float,
-            val votes: Int,
-        )
+    class Rating(
+        val average: Float,
+        val votes: Int,
+    )
 
-        fun toSManga(isEng: String): SManga = SManga.create().apply {
-            title = getSelectedLanguage(isEng, rusName, engName, name)
-            thumbnail_url = cover.default
-            author = authors.joinToString { it.name }
-            artist = artists.joinToString { it.name }
-            status = parseStatus(isLicensed, scanlateStatus.label, this@Manga.status.label)
-            genre = type.label.ifBlank { "Манга" } + ", " + ageRestriction.label + ", " +
-                genres.joinToString { it.name.trim() } + ", " + tags.joinToString { it.name.trim() }
-            description = getOppositeLanguage(isEng, rusName, engName) + rating.average.parseAverage() + " " + rating.average +
-                " (голосов: " + rating.votes + ")\n" + otherNames.joinAltNames() + summary
-        }
+    fun toSManga(isEng: String): SManga = SManga.create().apply {
+        title = getSelectedLanguage(isEng, rusName, engName, name)
+        thumbnail_url = cover.default
+        author = authors.joinToString { it.name }
+        artist = artists.joinToString { it.name }
+        status = parseStatus(isLicensed, scanlateStatus.label, this@Manga.status.label)
+        genre = type.label.ifBlank { "Манга" } + ", " + ageRestriction.label + ", " +
+            genres.joinToString { it.name.trim() } + ", " + tags.joinToString { it.name.trim() }
+        description = getOppositeLanguage(isEng, rusName, engName) + rating.average.parseAverage() + " " + rating.average +
+            " (голосов: " + rating.votes + ")\n" + otherNames.joinAltNames() + summary
+    }
 
-        private fun Float.parseAverage(): String {
-            return when {
-                this > 9.5 -> "★★★★★"
-                this > 8.5 -> "★★★★✬"
-                this > 7.5 -> "★★★★☆"
-                this > 6.5 -> "★★★✬☆"
-                this > 5.5 -> "★★★☆☆"
-                this > 4.5 -> "★★✬☆☆"
-                this > 3.5 -> "★★☆☆☆"
-                this > 2.5 -> "★✬☆☆☆"
-                this > 1.5 -> "★☆☆☆☆"
-                this > 0.5 -> "✬☆☆☆☆"
-                else -> "☆☆☆☆☆"
-            }
+    private fun Float.parseAverage(): String {
+        return when {
+            this > 9.5 -> "★★★★★"
+            this > 8.5 -> "★★★★✬"
+            this > 7.5 -> "★★★★☆"
+            this > 6.5 -> "★★★✬☆"
+            this > 5.5 -> "★★★☆☆"
+            this > 4.5 -> "★★✬☆☆"
+            this > 3.5 -> "★★☆☆☆"
+            this > 2.5 -> "★✬☆☆☆"
+            this > 1.5 -> "★☆☆☆☆"
+            this > 0.5 -> "✬☆☆☆☆"
+            else -> "☆☆☆☆☆"
         }
+    }
 
-        private fun parseStatus(isLicensed: Boolean, statusTranslate: String, statusTitle: String): Int = when {
-            isLicensed -> SManga.LICENSED
-            statusTranslate == "Завершён" && statusTitle == "Приостановлен" || statusTranslate == "Заморожен" || statusTranslate == "Заброшен" -> SManga.ON_HIATUS
-            statusTranslate == "Завершён" && statusTitle == "Выпуск прекращён" -> SManga.CANCELLED
-            statusTranslate == "Продолжается" -> SManga.ONGOING
-            statusTranslate == "Выходит" -> SManga.ONGOING
-            statusTranslate == "Завершён" -> SManga.COMPLETED
-            statusTranslate == "Вышло" -> SManga.PUBLISHING_FINISHED
-            else -> when (statusTitle) {
-                "Онгоинг" -> SManga.ONGOING
-                "Анонс" -> SManga.ONGOING
-                "Завершён" -> SManga.COMPLETED
-                "Приостановлен" -> SManga.ON_HIATUS
-                "Выпуск прекращён" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
+    private fun parseStatus(isLicensed: Boolean, statusTranslate: String, statusTitle: String): Int = when {
+        isLicensed -> SManga.LICENSED
+        statusTranslate == "Завершён" && statusTitle == "Приостановлен" || statusTranslate == "Заморожен" || statusTranslate == "Заброшен" -> SManga.ON_HIATUS
+        statusTranslate == "Завершён" && statusTitle == "Выпуск прекращён" -> SManga.CANCELLED
+        statusTranslate == "Продолжается" -> SManga.ONGOING
+        statusTranslate == "Выходит" -> SManga.ONGOING
+        statusTranslate == "Завершён" -> SManga.COMPLETED
+        statusTranslate == "Вышло" -> SManga.PUBLISHING_FINISHED
+        else -> when (statusTitle) {
+            "Онгоинг" -> SManga.ONGOING
+            "Анонс" -> SManga.ONGOING
+            "Завершён" -> SManga.COMPLETED
+            "Приостановлен" -> SManga.ON_HIATUS
+            "Выпуск прекращён" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
         }
+    }
 
-        private fun List<String>.joinAltNames(): String = when {
-            this.isNotEmpty() -> "Альтернативные названия:\n" + this.joinToString(" / ") + "\n\n"
-            else -> ""
-        }
+    private fun List<String>.joinAltNames(): String = when {
+        this.isNotEmpty() -> "Альтернативные названия:\n" + this.joinToString(" / ") + "\n\n"
+        else -> ""
     }
 }
 
@@ -195,89 +195,70 @@ private fun getOppositeLanguage(isEng: String, rusName: String?, engName: String
 }
 
 @Serializable
-data class ChaptersDto(
-    val data: List<Chapter>,
+class Chapter(
+    val id: Int,
+    @SerialName("branches_count") val branchesCount: Int,
+    val branches: List<Branch>,
+    val name: String?,
+    val number: String,
+    val volume: String,
+    @SerialName("item_number") val itemNumber: Float?,
 ) {
     @Serializable
-    data class Chapter(
-        val id: Int,
-        @SerialName("branches_count") val branchesCount: Int,
-        val branches: List<Branch>,
-        val name: String?,
-        val number: String,
-        val volume: String,
-        @SerialName("item_number") val itemNumber: Float?,
+    class Branch(
+        @SerialName("branch_id") val branchId: Int?,
+        @SerialName("created_at") val createdAt: String,
+        val teams: List<Team>,
+        val user: User,
     ) {
         @Serializable
-        data class Branch(
-            @SerialName("branch_id") val branchId: Int?,
-            @SerialName("created_at") val createdAt: String,
-            val teams: List<Team>,
-            val user: User,
-        ) {
-            @Serializable
-            data class Team(
-                val name: String,
-            )
+        class Team(
+            val name: String,
+        )
 
-            @Serializable
-            data class User(
-                val username: String,
-            )
-        }
-
-        private fun first(branchId: Int? = null): Branch? {
-            return runCatching { if (branchId != null) branches.first { it.branchId == branchId } else branches.first() }.getOrNull()
-        }
-
-        private fun getTeamName(branchId: Int? = null): String? {
-            return runCatching { first(branchId)!!.teams.first().name }.getOrNull()
-        }
-
-        private fun getUserName(branchId: Int? = null): String? {
-            return runCatching { first(branchId)!!.user.username }.getOrNull()
-        }
-
-        fun toSChapter(slugUrl: String, branchId: Int? = null, isScanUser: Boolean): SChapter = SChapter.create().apply {
-            val chapterName = "Том $volume. Глава $number"
-            name = if (this@Chapter.name.isNullOrBlank()) chapterName else "$chapterName - ${this@Chapter.name}"
-            val branchStr = if (branchId != null) "&branch_id=$branchId" else ""
-            url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"
-            scanlator = getTeamName(branchId) ?: if (isScanUser) getUserName(branchId) else null
-            date_upload = runCatching { LibGroup.simpleDateFormat.parse(first(branchId)!!.createdAt)!!.time }.getOrDefault(0L)
-            chapter_number = itemNumber ?: -1f
-        }
-    }
-}
-
-@Serializable
-data class BranchesDto(
-    val data: List<Branch>,
-) {
-    @Serializable
-    data class Branch(
-        val id: Int,
-    )
-}
-
-@Serializable
-data class PagesDto(
-    val data: Chapter,
-) {
-    @Serializable
-    data class Chapter(
-        val pages: List<Page>,
-    ) {
         @Serializable
-        data class Page(
-            val slug: Int,
-            val url: String,
+        class User(
+            val username: String,
         )
     }
-    fun toPageList(): List<Page> = data.pages.map { Page(it.slug, it.url) }
+
+    private fun first(branchId: Int? = null): Branch? {
+        return runCatching { if (branchId != null) branches.first { it.branchId == branchId } else branches.first() }.getOrNull()
+    }
+
+    private fun getTeamName(branchId: Int? = null): String? {
+        return runCatching { first(branchId)!!.teams.first().name }.getOrNull()
+    }
+
+    private fun getUserName(branchId: Int? = null): String? {
+        return runCatching { first(branchId)!!.user.username }.getOrNull()
+    }
+
+    fun toSChapter(slugUrl: String, branchId: Int? = null, isScanUser: Boolean): SChapter = SChapter.create().apply {
+        val chapterName = "Том $volume. Глава $number"
+        name = if (this@Chapter.name.isNullOrBlank()) chapterName else "$chapterName - ${this@Chapter.name}"
+        val branchStr = if (branchId != null) "&branch_id=$branchId" else ""
+        url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"
+        scanlator = getTeamName(branchId) ?: if (isScanUser) getUserName(branchId) else null
+        date_upload = runCatching { LibGroup.simpleDateFormat.parse(first(branchId)!!.createdAt)!!.time }.getOrDefault(0L)
+        chapter_number = itemNumber ?: -1f
+    }
 }
 
 @Serializable
-data class MangaSlugShortDto(
-    val data: MangaPageDto.MangaShort,
+class Branch(
+    val id: Int,
 )
+
+@Serializable
+class Pages(
+    val pages: List<MangaPage>,
+) {
+    @Serializable
+    class MangaPage(
+        val slug: Int,
+        val url: String,
+    )
+
+    fun toPageList(): List<Page> = pages.map { Page(it.slug, it.url) }
+}

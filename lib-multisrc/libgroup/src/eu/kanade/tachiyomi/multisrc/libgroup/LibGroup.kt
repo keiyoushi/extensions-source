@@ -6,7 +6,6 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -35,11 +34,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import rx.Single
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
@@ -61,6 +60,7 @@ abstract class LibGroup(
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+            .migrateOldImageServer()
     }
 
     override val supportsLatest = true
@@ -70,6 +70,7 @@ abstract class LibGroup(
         .connectTimeout(5, TimeUnit.MINUTES)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
+        .addInterceptor { checkForToken(it) }
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             if (response.code == 419) {
@@ -96,44 +97,39 @@ abstract class LibGroup(
         add("Accept", "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         add("Referer", baseUrl)
         add("Site-Id", siteId.toString())
-
-        if (bearerToken?.isNotEmpty() == true) {
-            add("Authorization", bearerToken.orEmpty())
-        } else {
-            getToken().subscribe {
-                if (it != null) {
-                    val str: String = if (it.first() == '"' && it.last() == '"') {
-                        it.substringAfter("\"").substringBeforeLast("\"").replace("\\", "")
-                    } else {
-                        it.replace("\\", "")
-                    }
-                    val token = json.decodeFromString<JsonObject>(str).jsonObject["token"]
-                    bearerToken = token!!.jsonObject["token_type"]!!.jsonPrimitive.content + " " + token.jsonObject["access_token"]!!.jsonPrimitive.content
-                }
-            }
-        }
     }
 
-    private fun apiHeaders(): Headers = headersBuilder().build()
-
-    private var _constants: LibGroupConstantsDto? = null
-    private fun getConstants(): LibGroupConstantsDto {
+    private var _constants: Constants? = null
+    private fun getConstants(): Constants {
         if (_constants == null) {
             try {
                 _constants = client.newCall(
-                    GET("https://api.$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", apiHeaders()),
-                ).execute().body.string().substringAfter("\"data\":").substringBeforeLast("}").parseAs<LibGroupConstantsDto>()
-                return _constants as LibGroupConstantsDto
+                    GET("https://api.$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", headersBuilder().build()),
+                ).execute().parseAs<Data<Constants>>().data
+                return _constants!!
             } catch (ex: SerializationException) {
                 throw Exception("Ошибка сериализации. Проверьте сайт.")
             }
         }
-        return _constants as LibGroupConstantsDto
+        return _constants!!
+    }
+
+    private fun checkForToken(chain: Interceptor.Chain): Response {
+        val req = chain.request().newBuilder()
+        if (chain.request().url.toString().contains("api.$apiDomain")) {
+            if (bearerToken.isNullOrBlank()) {
+                launchIO { getToken() }
+            }
+            req.apply {
+                addHeader("Authorization", bearerToken.orEmpty())
+            }
+        }
+        return chain.proceed(req.build())
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Suppress("NAME_SHADOWING")
-    private fun getToken(): Observable<String?> = Single.create<String?> { subscriber ->
+    private fun getToken() {
         Handler(Looper.getMainLooper()).post {
             val webView = WebView(Injekt.get<Application>())
             with(webView.settings) {
@@ -148,18 +144,21 @@ abstract class LibGroup(
                     view.evaluateJavascript(script) {
                         view.stopLoading()
                         view.destroy()
-                        val token = if (it == "null") {
-                            null
-                        } else {
-                            it
+                        if (!it.isNullOrBlank() && it != "null") {
+                            val str: String = if (it.first() == '"' && it.last() == '"') {
+                                it.substringAfter("\"").substringBeforeLast("\"").replace("\\", "")
+                            } else {
+                                it.replace("\\", "")
+                            }
+                            val token = str.parseAs<JsonObject>().jsonObject["token"]
+                            bearerToken = token!!.jsonObject["token_type"]!!.jsonPrimitive.content + " " + token.jsonObject["access_token"]!!.jsonPrimitive.content
                         }
-                        subscriber.onSuccess(token)
                     }
                 }
             }
             webView.loadUrl(baseUrl)
         }
-    }.toObservable()
+    }
 
     override fun getMangaUrl(manga: SManga): String {
         return "$baseUrl/ru/manga${manga.url}"
@@ -169,7 +168,7 @@ abstract class LibGroup(
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "https://api.$apiDomain/api/latest-updates".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-        return GET(url.build(), apiHeaders())
+        return GET(url.build(), headersBuilder().build())
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -179,11 +178,11 @@ abstract class LibGroup(
         val url = "https://api.$apiDomain/api/manga".toHttpUrl().newBuilder()
             .addQueryParameter("site_id[]", siteId.toString())
             .addQueryParameter("page", page.toString())
-        return GET(url.build(), apiHeaders())
+        return GET(url.build(), headersBuilder().build())
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<MangaPageDto>()
+        val data = response.parseAs<MangasPageDto>()
         val popularMangas = data.mapToSManga(isEng!!)
         if (popularMangas.isNotEmpty()) {
             return MangasPage(popularMangas, data.meta.hasNextPage)
@@ -211,10 +210,10 @@ abstract class LibGroup(
             .addQueryParameter("fields[]", "status_id")
             .addQueryParameter("fields[]", "artists")
 
-        return GET(url.build(), apiHeaders())
+        return GET(url.build(), headersBuilder().build())
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsDto>().data.toSManga(isEng!!)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Data<Manga>>().data.toSManga(isEng!!)
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return client.newCall(mangaDetailsRequest(manga))
@@ -233,27 +232,23 @@ abstract class LibGroup(
         // throw exception if old url
         if (!manga.url.contains("--")) throw Exception(urlChangedError(name))
 
-        return GET("https://api.$apiDomain/api/manga${manga.url}/chapters", apiHeaders())
+        return GET("https://api.$apiDomain/api/manga${manga.url}/chapters", headersBuilder().build())
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-    private fun getDefaultBranch(id: String): BranchesDto {
-        val response = client.newCall(GET("https://api.$apiDomain/api/branches/$id", apiHeaders())).execute()
-        return response.parseAs<BranchesDto>()
-    }
+    private fun getDefaultBranch(id: String): List<Branch> =
+        client.newCall(GET("https://api.$apiDomain/api/branches/$id", headersBuilder().build())).execute().parseAs<Data<List<Branch>>>().data
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slugUrl = response.request.url.toString().substringAfter("manga/").substringBefore("/chapters")
-        val chaptersData = response.parseAs<ChaptersDto>()
+        val chaptersData = response.parseAs<Data<List<Chapter>>>()
         if (chaptersData.data.isEmpty()) {
             throw Exception("Нет глав")
         }
 
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
-        val defaultBranchId = runCatching { getDefaultBranch(slugUrl.substringBefore("-")).data.first().id }.getOrNull()
+        val defaultBranchId = runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
 
         val chapters = mutableListOf<SChapter>()
         for (it in chaptersData.data.withIndex()) {
@@ -274,7 +269,7 @@ abstract class LibGroup(
             }
         }
 
-        return chapters
+        return chapters.reversed()
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -297,11 +292,11 @@ abstract class LibGroup(
         // throw exception if old url
         if (!chapter.url.contains("--")) throw Exception(urlChangedError(name))
 
-        return GET("https://api.$apiDomain/api/manga${chapter.url}", apiHeaders())
+        return GET("https://api.$apiDomain/api/manga${chapter.url}", headersBuilder().build())
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapter = response.parseAs<PagesDto>().toPageList().toMutableList()
+        val chapter = response.parseAs<Data<Pages>>().data.toPageList().toMutableList()
         chapter.sortBy { it.index }
         return chapter
     }
@@ -309,11 +304,6 @@ abstract class LibGroup(
     override fun fetchImageUrl(page: Page): Observable<String> {
         if (page.imageUrl != null) {
             return Observable.just(page.imageUrl)
-        }
-        // api changed id of servers, remap old to new
-        if (isServer == "fourth") {
-            isServer = "secondary"
-            preferences.edit().putString(SERVER_PREF, isServer).apply()
         }
         val server = getConstants().getServer(isServer, siteId).url
         return Observable.just("$server${page.url}")
@@ -331,18 +321,13 @@ abstract class LibGroup(
         return GET(page.imageUrl!!, imageHeader.build())
     }
 
-    // Workaround to allow "Open in browser" use the
-    private fun searchMangaByIdRequest(id: String): Request {
-        return GET("$baseUrl/ru/manga/$id", apiHeaders())
-    }
-
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
-            client.newCall(GET("https://api.$apiDomain/api/manga/$realQuery", apiHeaders()))
+            client.newCall(GET("https://api.$apiDomain/api/manga/$realQuery", headersBuilder().build()))
                 .asObservableSuccess()
                 .map { response ->
-                    val details = response.parseAs<MangaSlugShortDto>().data.toSManga(isEng!!)
+                    val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng!!)
                     MangasPage(listOf(details), false)
                 }
         } else {
@@ -424,7 +409,7 @@ abstract class LibGroup(
                 else -> {}
             }
         }
-        return GET(url.build(), apiHeaders())
+        return GET(url.build(), headersBuilder().build())
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -597,5 +582,12 @@ abstract class LibGroup(
                 true
             }
         }
+    }
+
+    // api changed id of servers, remap SERVER_PREF old("fourth") to new("secondary")
+    private fun SharedPreferences.migrateOldImageServer(): SharedPreferences {
+        if (getString(SERVER_PREF, "main") != "fourth") return this
+        edit().putString(SERVER_PREF, "secondary").apply()
+        return this
     }
 }

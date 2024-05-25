@@ -14,8 +14,8 @@ class MangaLib : LibGroup("MangaLib", "https://mangalib.me", "ru") {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private var domain: String? = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
-    override val baseUrl: String = domain.toString()
+    private var domain: String = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
+    override val baseUrl: String = domain
 
     override val siteId: Int = 1 // Important in api calls
 
