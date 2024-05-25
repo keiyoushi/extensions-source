@@ -1,9 +1,9 @@
 ext {
-    extName = 'Siimanga'
-    extClass = '.Siimanga'
+    extName = 'Siikomik'
+    extClass = '.Siikomik'
     themePkg = 'madara'
-    baseUrl = 'https://siimanga.cyou'
-    overrideVersionCode = 0
+    baseUrl = 'https://siikomik.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
