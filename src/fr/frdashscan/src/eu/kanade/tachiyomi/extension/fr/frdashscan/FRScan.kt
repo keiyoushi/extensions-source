@@ -25,10 +25,9 @@ class FRScan : Madara("FR-Scan", "https://fr-scan.com", "fr", dateFormat = Simpl
         val chapterPreloaded = document.selectFirst("#chapter_preloaded_images")
             ?: return super.pageListParse(document)
 
-        val pagesUrl = chapterPreloaded.parseAs<List<String>>()
-        return pagesUrl.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
-        }
+        return chapterPreloaded
+            .parseAs<List<String>>()
+            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
     private inline fun <reified T> Element.parseAs(): T {
