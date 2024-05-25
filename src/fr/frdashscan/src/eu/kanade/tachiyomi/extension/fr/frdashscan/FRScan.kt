@@ -33,11 +33,11 @@ class FRScan : Madara("FR-Scan", "https://fr-scan.com", "fr", dateFormat = Simpl
 
     private inline fun <reified T> Element.parseAs(): T {
         return json.decodeFromString(
-            CHAPTER_PAGES_REGEX.find(data())?.groups?.get("chapters")!!.value,
+            CHAPTER_PAGES_REGEX.find(data())?.groups?.get("pages")!!.value,
         )
     }
 
     companion object {
-        val CHAPTER_PAGES_REGEX = """=\s+(?<chapters>\[.+\])""".toRegex()
+        val CHAPTER_PAGES_REGEX = """=\s+(?<pages>\[.+\])""".toRegex()
     }
 }
