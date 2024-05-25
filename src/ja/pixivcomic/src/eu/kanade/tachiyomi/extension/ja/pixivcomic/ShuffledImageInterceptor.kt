@@ -21,25 +21,24 @@ private const val GRID_SIZE = 32
 internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        return if (request.headers["X-Cobalt-Thumber-Parameter-GridShuffle-Key"] != null) {
-            val imageByteArray = chain.proceed(chain.request()).toDeShuffledImageByteArray(key)
-
-            Response.Builder().body(imageByteArray.toResponseBody("image/png".toMediaType()))
-                .request(chain.request())
-                .protocol(Protocol.HTTP_1_0)
-                .code(200)
-                .message("")
-                .build()
-        } else {
-            chain.proceed(chain.request())
+        val response =  chain.proceed(request)
+        
+        if (request.headers["X-Cobalt-Thumber-Parameter-GridShuffle-Key"] == null) {
+            return response
         }
+        
+        val imageBody = response.body.byteStream()
+	    .toDeShuffledImage(key)
+	    
+	return response.newBuilder()
+	    .body(imageBody)
+	    .build()
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
-    private fun Response.toDeShuffledImageByteArray(key: String): ByteArray {
+    private fun InputStream.toDeShuffledImage(key: String): ResponseBody {
         // get the image color data
-        val bytes = this.body.bytes()
-        val shuffledImageBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val shuffledImageBitmap = BitmapFactory.decodeStream(this)
 
         val width = shuffledImageBitmap.width
         val height = shuffledImageBitmap.height
@@ -89,10 +88,10 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
             }
         }
 
-        val outStream = ByteArrayOutputStream()
-        deShuffledImageBitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream)
-
-        return outStream.toByteArray()
+       return Buffer().run {
+           deShuffledImageBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream())
+           toResponseBody("image/png".toMediaType())
+       }
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
