@@ -1,0 +1,9 @@
+ext {
+    extName = 'Dream Scan'
+    extClass = '.DreamScan'
+    themePkg = 'madara'
+    baseUrl = 'https://dreamscan.com.br'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
