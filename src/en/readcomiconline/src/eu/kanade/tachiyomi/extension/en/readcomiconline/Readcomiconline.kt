@@ -28,6 +28,7 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -55,7 +56,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val location = response.header("Location")
         if (location?.startsWith("/Special/AreYouHuman") == true) {
             captchaUrl = "$baseUrl/Special/AreYouHuman"
-            throw Exception("Solve captcha in WebView")
+            throw IOException("Solve captcha in WebView")
         }
 
         return response

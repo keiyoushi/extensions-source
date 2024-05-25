@@ -27,6 +27,7 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.IOException
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -182,8 +183,8 @@ abstract class Comick(
         }
 
         error?.run {
-            throw Exception("$name error $statusCode: $message")
-        } ?: throw Exception("HTTP error ${response.code}")
+            throw IOException("$name error $statusCode: $message")
+        } ?: throw IOException("HTTP error ${response.code}")
     }
 
     /** Popular Manga **/

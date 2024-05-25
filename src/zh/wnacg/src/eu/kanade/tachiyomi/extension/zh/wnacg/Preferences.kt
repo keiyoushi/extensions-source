@@ -75,7 +75,7 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
             response.close()
             Result.success(response)
         } catch (e: Throwable) {
-            if (chain.call().isCanceled()) throw e
+            if (chain.call().isCanceled()) throw IOException(e.message, e)
             Result.failure(e)
         }
 

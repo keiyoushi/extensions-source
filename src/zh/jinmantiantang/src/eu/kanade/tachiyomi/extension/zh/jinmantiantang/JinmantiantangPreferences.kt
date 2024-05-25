@@ -131,7 +131,7 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
             response.close()
             Result.success(response)
         } catch (e: Throwable) {
-            if (chain.call().isCanceled() || e.message?.contains("Cloudflare") == true) throw e
+            if (chain.call().isCanceled() || e.message?.contains("Cloudflare") == true) throw IOException(e.message, e)
             Result.failure(e)
         }
 
