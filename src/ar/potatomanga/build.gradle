@@ -1,9 +1,0 @@
-ext {
-    extName = 'PotatoManga'
-    extClass = '.PotatoManga'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://ar.potatomanga.xyz'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
