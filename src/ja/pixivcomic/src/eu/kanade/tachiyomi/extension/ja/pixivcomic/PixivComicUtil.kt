@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.pixivcomic
 
 import android.os.Build
+import okhttp3.Interceptor
+import okhttp3.Response
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -9,6 +11,18 @@ import java.util.TimeZone
 import kotlin.math.abs
 
 private const val TIME_SALT = "mAtW1X8SzGS880fsjEXlM73QpS1i4kUMBhyhdaYySk8nWz533nrEunaSplg63fzT"
+
+private class NoSuchTagException(message: String) : Exception(message)
+
+internal fun tagInterceptor(chain: Interceptor.Chain): Response {
+    val request = chain.request()
+    val response = chain.proceed(request)
+
+    if (request.url.pathSegments.contains("tags") && response.code == 404) {
+        throw NoSuchTagException("The inputted tag doesn't exist")
+    }
+    return response
+}
 
 internal fun randomString(): String {
     // the average length of key

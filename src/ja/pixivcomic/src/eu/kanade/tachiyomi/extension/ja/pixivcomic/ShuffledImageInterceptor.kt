@@ -6,10 +6,11 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Protocol
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import java.io.InputStream
 import java.security.MessageDigest
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -21,18 +22,18 @@ private const val GRID_SIZE = 32
 internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response =  chain.proceed(request)
-        
+        val response = chain.proceed(request)
+
         if (request.headers["X-Cobalt-Thumber-Parameter-GridShuffle-Key"] == null) {
             return response
         }
-        
+
         val imageBody = response.body.byteStream()
-	    .toDeShuffledImage(key)
-	    
-	return response.newBuilder()
-	    .body(imageBody)
-	    .build()
+            .toDeShuffledImage(key)
+
+        return response.newBuilder()
+            .body(imageBody)
+            .build()
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
@@ -46,8 +47,8 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
         val shuffledImageArray = UByteArray(width * height * BYTES_PER_PIXEL)
 
         var index = 0
-        for (y in 0 until shuffledImageBitmap.height) {
-            for (x in 0 until shuffledImageBitmap.width) {
+        for (y in 0 until height) {
+            for (x in 0 until width) {
                 val pixel = shuffledImageBitmap.getPixel(x, y)
 
                 val alpha = pixel shr 24 and 0xff
@@ -70,8 +71,8 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
         val canvas = Canvas(deShuffledImageBitmap)
 
         index = 0
-        for (y in 0 until deShuffledImageBitmap.height) {
-            for (x in 0 until deShuffledImageBitmap.width) {
+        for (y in 0 until height) {
+            for (x in 0 until width) {
                 // it's rgba
                 val red = deShuffledImageArray[index++]
                 val green = deShuffledImageArray[index++]
@@ -88,10 +89,10 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
             }
         }
 
-       return Buffer().run {
-           deShuffledImageBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream())
-           toResponseBody("image/png".toMediaType())
-       }
+        return Buffer().run {
+            deShuffledImageBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream())
+            asResponseBody("image/png".toMediaType())
+        }
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
