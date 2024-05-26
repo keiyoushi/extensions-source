@@ -40,7 +40,7 @@ class SlimeRead : HttpSource() {
     override val supportsLatest = true
 
     override val client by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .rateLimitHost(apiUrl.toHttpUrl(), 1)
             .build()
