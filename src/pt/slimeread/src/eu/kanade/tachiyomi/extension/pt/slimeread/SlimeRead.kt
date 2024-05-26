@@ -51,7 +51,7 @@ class SlimeRead : HttpSource() {
     private val json: Json by injectLazy()
 
     private fun getApiUrlFromPage(): String {
-        val initClient = network.client
+        val initClient = network.cloudflareClient
         val document = initClient.newCall(GET(baseUrl, headers)).execute().asJsoup()
         val scriptUrl = document.selectFirst("script[src*=pages/_app]")?.attr("abs:src")
             ?: throw Exception("Could not find script URL")
