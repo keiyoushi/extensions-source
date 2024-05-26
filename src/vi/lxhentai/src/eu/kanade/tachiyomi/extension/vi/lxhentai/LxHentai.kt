@@ -23,7 +23,7 @@ class LxHentai : ParsedHttpSource() {
 
     override val name = "LXHentai"
 
-    override val baseUrl = "https://lxmanga.club"
+    override val baseUrl = "https://lxmanga.icu"
 
     override val lang = "vi"
 
@@ -58,12 +58,9 @@ class LxHentai : ParsedHttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return when {
             query.startsWith(PREFIX_ID_SEARCH) -> {
-                val id = query.removePrefix(PREFIX_ID_SEARCH).trim()
-                fetchMangaDetails(
-                    SManga.create().apply {
-                        url = "/truyen/$id"
-                    },
-                )
+                val slug = query.substringAfter(PREFIX_ID_SEARCH)
+                val mangaUrl = "/truyen/$slug"
+                fetchMangaDetails(SManga.create().apply { url = mangaUrl })
                     .map { MangasPage(listOf(it), false) }
             }
             else -> super.fetchSearchManga(page, query, filters)
@@ -157,6 +154,8 @@ class LxHentai : ParsedHttpSource() {
             "Đang tiến hành" -> SManga.ONGOING
             else -> SManga.UNKNOWN
         }
+
+        setUrlWithoutDomain(document.location())
     }
 
     override fun chapterListSelector(): String = "ul.overflow-y-auto.overflow-x-hidden a"
