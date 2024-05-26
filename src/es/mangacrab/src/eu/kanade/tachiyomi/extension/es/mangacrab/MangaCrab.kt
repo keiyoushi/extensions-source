@@ -18,7 +18,7 @@ import java.util.Locale
 class MangaCrab :
     Madara(
         "Manga Crab",
-        "https://visorcrab.com",
+        "https://wikicrab.xyz",
         "es",
         SimpleDateFormat("dd/MM/yyyy", Locale("es")),
     ),
@@ -36,6 +36,7 @@ class MangaCrab :
         .build()
 
     override val mangaSubString = "series"
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun chapterListSelector() = "div.listing-chapters_wrap > ul > li"
     override val mangaDetailsSelectorDescription = "div.c-page__content div.modal-contenido"
