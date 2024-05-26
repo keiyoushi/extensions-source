@@ -5,8 +5,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class StellarSaber : MangaThemesia(
-    "StellarSaber",
+    "السيف النجمي",
     "https://stellarsaber.pro",
     "ar",
-    dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 )
