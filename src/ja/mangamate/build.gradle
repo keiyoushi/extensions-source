@@ -3,8 +3,12 @@ ext {
     extClass = '.MangaMate'
     themePkg = 'mangathemesia'
     baseUrl = 'https://manga-mate.org'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib:randomua')
+}
