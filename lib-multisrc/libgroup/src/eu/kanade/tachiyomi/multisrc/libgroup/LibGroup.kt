@@ -104,7 +104,7 @@ abstract class LibGroup(
         if (_constants == null) {
             try {
                 _constants = client.newCall(
-                    GET("https://api.$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", headersBuilder().build()),
+                    GET("https://api.$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", headers),
                 ).execute().parseAs<Data<Constants>>().data
                 return _constants!!
             } catch (ex: SerializationException) {
@@ -168,7 +168,7 @@ abstract class LibGroup(
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "https://api.$apiDomain/api/latest-updates".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-        return GET(url.build(), headersBuilder().build())
+        return GET(url.build(), headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -178,7 +178,7 @@ abstract class LibGroup(
         val url = "https://api.$apiDomain/api/manga".toHttpUrl().newBuilder()
             .addQueryParameter("site_id[]", siteId.toString())
             .addQueryParameter("page", page.toString())
-        return GET(url.build(), headersBuilder().build())
+        return GET(url.build(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -210,7 +210,7 @@ abstract class LibGroup(
             .addQueryParameter("fields[]", "status_id")
             .addQueryParameter("fields[]", "artists")
 
-        return GET(url.build(), headersBuilder().build())
+        return GET(url.build(), headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Data<Manga>>().data.toSManga(isEng!!)
@@ -232,13 +232,13 @@ abstract class LibGroup(
         // throw exception if old url
         if (!manga.url.contains("--")) throw Exception(urlChangedError(name))
 
-        return GET("https://api.$apiDomain/api/manga${manga.url}/chapters", headersBuilder().build())
+        return GET("https://api.$apiDomain/api/manga${manga.url}/chapters", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     private fun getDefaultBranch(id: String): List<Branch> =
-        client.newCall(GET("https://api.$apiDomain/api/branches/$id", headersBuilder().build())).execute().parseAs<Data<List<Branch>>>().data
+        client.newCall(GET("https://api.$apiDomain/api/branches/$id", headers)).execute().parseAs<Data<List<Branch>>>().data
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slugUrl = response.request.url.toString().substringAfter("manga/").substringBefore("/chapters")
@@ -292,7 +292,7 @@ abstract class LibGroup(
         // throw exception if old url
         if (!chapter.url.contains("--")) throw Exception(urlChangedError(name))
 
-        return GET("https://api.$apiDomain/api/manga${chapter.url}", headersBuilder().build())
+        return GET("https://api.$apiDomain/api/manga${chapter.url}", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -324,7 +324,7 @@ abstract class LibGroup(
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
-            client.newCall(GET("https://api.$apiDomain/api/manga/$realQuery", headersBuilder().build()))
+            client.newCall(GET("https://api.$apiDomain/api/manga/$realQuery", headers))
                 .asObservableSuccess()
                 .map { response ->
                     val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng!!)
@@ -409,7 +409,7 @@ abstract class LibGroup(
                 else -> {}
             }
         }
-        return GET(url.build(), headersBuilder().build())
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)

@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class YaoiLib : LibGroup("YaoiLib", "https://slashlib.me/", "ru") {
+class YaoiLib : LibGroup("YaoiLib", "https://slashlib.me", "ru") {
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
