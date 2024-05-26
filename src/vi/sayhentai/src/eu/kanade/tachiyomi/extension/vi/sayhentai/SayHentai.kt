@@ -8,4 +8,6 @@ class SayHentai : ManhwaZ(
     "vi",
     mangaDetailsAuthorHeading = "Tác giả",
     mangaDetailsStatusHeading = "Trạng thái",
-)
+) {
+    override fun popularMangaSelector() = "#slide-top > .item:contains(a)"
+}
