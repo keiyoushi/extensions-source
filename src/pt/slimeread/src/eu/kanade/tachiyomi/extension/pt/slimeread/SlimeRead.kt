@@ -40,7 +40,7 @@ class SlimeRead : HttpSource() {
     override val supportsLatest = true
 
     override val client by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .rateLimitHost(apiUrl.toHttpUrl(), 1)
             .build()
@@ -51,7 +51,7 @@ class SlimeRead : HttpSource() {
     private val json: Json by injectLazy()
 
     private fun getApiUrlFromPage(): String {
-        val initClient = network.client
+        val initClient = network.cloudflareClient
         val document = initClient.newCall(GET(baseUrl, headers)).execute().asJsoup()
         val scriptUrl = document.selectFirst("script[src*=pages/_app]")?.attr("abs:src")
             ?: throw Exception("Could not find script URL")
