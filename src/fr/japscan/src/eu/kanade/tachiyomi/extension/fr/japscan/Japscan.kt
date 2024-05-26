@@ -88,11 +88,15 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        element.select("a").first()!!.let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.text()
-            manga.thumbnail_url = "$baseUrl/imgs/${it.attr("href").replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
+        element.select("a").first()?.let { anchorElement ->
+            manga.setUrlWithoutDomain(anchorElement.attr("href"))
+            manga.title = anchorElement.select("strong.name").text()
+            anchorElement.select("img").first()?.let { imgElement ->
+                val imageUrl = imgElement.attr("abs:data-src").ifEmpty { imgElement.attr("abs:src") }
+                manga.thumbnail_url = imageUrl.lowercase(Locale.ROOT)
+            }
         }
+
         return manga
     }
 
