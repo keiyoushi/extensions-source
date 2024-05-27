@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.es.eternalmangas
+package eu.kanade.tachiyomi.extension.all.eternalmangas
 
 import android.app.Application
 import android.content.SharedPreferences
