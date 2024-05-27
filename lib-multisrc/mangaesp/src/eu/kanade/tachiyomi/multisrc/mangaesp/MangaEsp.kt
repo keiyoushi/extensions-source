@@ -228,7 +228,7 @@ abstract class MangaEsp(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun Element.imgAttr(): String = when {
+    protected open fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
