@@ -3,7 +3,7 @@ ext {
     extClass = '.FRScan'
     themePkg = 'madara'
     baseUrl = 'https://fr-scan.com'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
 }
 
 apply from: "$rootDir/common.gradle"
