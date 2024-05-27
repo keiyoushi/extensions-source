@@ -183,7 +183,7 @@ abstract class LibGroup(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<MangasPageDto>()
-        val popularMangas = data.mapToSManga(isEng!!)
+        val popularMangas = data.mapToSManga(isEng())
         if (popularMangas.isNotEmpty()) {
             return MangasPage(popularMangas, data.meta.hasNextPage)
         }
@@ -213,7 +213,7 @@ abstract class LibGroup(
         return GET(url.build(), headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Data<Manga>>().data.toSManga(isEng!!)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Data<Manga>>().data.toSManga(isEng())
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return client.newCall(mangaDetailsRequest(manga))
@@ -255,17 +255,17 @@ abstract class LibGroup(
             if (it.value.branchesCount > 1) {
                 for (currentBranch in it.value.branches.withIndex()) {
                     if (currentBranch.value.branchId == defaultBranchId && sortingList == "ms_mixing") { // ms_mixing with default branch from api
-                        chapters.add(it.value.toSChapter(slugUrl, defaultBranchId, isScanUser == true))
+                        chapters.add(it.value.toSChapter(slugUrl, defaultBranchId, isScanUser()))
                     } else if (defaultBranchId == null && sortingList == "ms_mixing") { // ms_mixing with first branch in chapter
                         if (chapters.any { chpIt -> chpIt.chapter_number == it.value.itemNumber }) {
-                            chapters.add(it.value.toSChapter(slugUrl, currentBranch.value.branchId, isScanUser == true))
+                            chapters.add(it.value.toSChapter(slugUrl, currentBranch.value.branchId, isScanUser()))
                         }
                     } else if (sortingList == "ms_combining") { // ms_combining
-                        chapters.add(it.value.toSChapter(slugUrl, currentBranch.value.branchId, isScanUser == true))
+                        chapters.add(it.value.toSChapter(slugUrl, currentBranch.value.branchId, isScanUser()))
                     }
                 }
             } else {
-                chapters.add(it.value.toSChapter(slugUrl, isScanUser = isScanUser == true))
+                chapters.add(it.value.toSChapter(slugUrl, isScanUser = isScanUser()))
             }
         }
 
@@ -305,7 +305,7 @@ abstract class LibGroup(
         if (page.imageUrl != null) {
             return Observable.just(page.imageUrl)
         }
-        val server = getConstants().getServer(isServer, siteId).url
+        val server = getConstants().getServer(isServer(), siteId).url
         return Observable.just("$server${page.url}")
     }
 
@@ -327,7 +327,7 @@ abstract class LibGroup(
             client.newCall(GET("https://api.$apiDomain/api/manga/$realQuery", headers))
                 .asObservableSuccess()
                 .map { response ->
-                    val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng!!)
+                    val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
                     MangasPage(listOf(details), false)
                 }
         } else {
@@ -509,10 +509,10 @@ abstract class LibGroup(
         val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US) }
     }
 
-    private var isServer: String? = preferences.getString(SERVER_PREF, "main")
-    private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
-    private var groupTranslates: String = preferences.getString(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT)!!
-    private var isScanUser: Boolean? = preferences.getBoolean(IS_SCAN_USER, false)
+    private fun isServer(): String = preferences.getString(SERVER_PREF, "main")!!
+    private fun isEng(): String = preferences.getString(LANGUAGE_PREF, "eng")!!
+    private fun groupTranslates(): String = preferences.getString(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT)!!
+    private fun isScanUser(): Boolean = preferences.getBoolean(IS_SCAN_USER, false)
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val serverPref = ListPreference(screen.context).apply {
             key = SERVER_PREF
@@ -523,10 +523,6 @@ abstract class LibGroup(
                 "По умолчанию «Первый». \n\n" +
                 "ⓘВыбор другого помогает при долгой автоматической смене/загрузке изображений текущего."
             setDefaultValue("main")
-            setOnPreferenceChangeListener { _, newValue ->
-                isServer = newValue.toString()
-                true
-            }
         }
 
         val sortingPref = ListPreference(screen.context).apply {
@@ -545,10 +541,6 @@ abstract class LibGroup(
             title = IS_SCAN_USER_TITLE
             summary = "Отображает Ник переводчика если Группа не указана явно."
             setDefaultValue(false)
-            setOnPreferenceChangeListener { _, newValue ->
-                isScanUser = newValue as Boolean
-                true
-            }
         }
         val titleLanguagePref = ListPreference(screen.context).apply {
             key = LANGUAGE_PREF
@@ -557,8 +549,7 @@ abstract class LibGroup(
             entryValues = arrayOf("eng", "rus")
             summary = "%s"
             setDefaultValue("eng")
-            setOnPreferenceChangeListener { _, newValue ->
-                isEng = newValue as String
+            setOnPreferenceChangeListener { _, _ ->
                 val warning = "Если язык обложки не изменился очистите базу данных в приложении (Настройки -> Дополнительно -> Очистить базу данных)"
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
@@ -566,7 +557,7 @@ abstract class LibGroup(
         }
         screen.addPreference(serverPref)
         screen.addPreference(sortingPref)
-        screen.addPreference(screen.editTextPreference(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT, groupTranslates))
+        screen.addPreference(screen.editTextPreference(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT, groupTranslates()))
         screen.addPreference(scanlatorUsername)
         screen.addPreference(titleLanguagePref)
     }
