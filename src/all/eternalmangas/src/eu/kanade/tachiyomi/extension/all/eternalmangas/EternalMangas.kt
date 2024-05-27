@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.eternalmangas
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangaesp.MangaEsp
 import eu.kanade.tachiyomi.multisrc.mangaesp.SeriesDto
+import eu.kanade.tachiyomi.multisrc.mangaesp.TopSeriesDto
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
@@ -15,27 +12,47 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
-class EternalMangas :
-    MangaEsp(
-        "EternalMangas",
-        "https://eternalmangas.com",
-        "all",
-    ),
-    ConfigurableSource {
+open class EternalMangas(
+    lang: String,
+    private val internalLang: String,
+) : MangaEsp(
+    "EternalMangas",
+    "https://eternalmangas.com",
+    lang,
+) {
 
-    override val id = 1533901034425595323
+    override fun popularMangaParse(response: Response): MangasPage {
+        val body = response.body.string()
+        val responseData = json.decodeFromString<TopSeriesDto>(body)
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val topDaily = responseData.response.topDaily.flatten().map { it.data }
+        val topWeekly = responseData.response.topWeekly.flatten().map { it.data }
+        val topMonthly = responseData.response.topMonthly.flatten().map { it.data }
+
+        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }
+            .filter { it.language == internalLang }
+            .map { it.toSManga() }
+
+        return MangasPage(mangas, false)
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseData = json.decodeFromString<LatestUpdatesDto>(response.body.string())
-        val language = preferences.getLatestLanguage()
-        val mangas = responseData.updates[language]?.flatten()?.map { it.toSManga() } ?: emptyList()
+        val mangas = responseData.updates[internalLang]?.flatten()?.map { it.toSManga() } ?: emptyList()
         return MangasPage(mangas, false)
+    }
+
+    override fun searchMangaParse(response: Response, page: Int, query: String, filters: FilterList): MangasPage {
+        val document = response.asJsoup()
+        val script = document.select("script:containsData(self.__next_f.push)").joinToString { it.data() }
+        val jsonString = MANGA_LIST_REGEX.find(script)?.groupValues?.get(1)
+            ?: throw Exception(intl["comics_list_error"])
+        val unescapedJson = jsonString.unescape()
+        comicsList = json.decodeFromString<List<SeriesDto>>(unescapedJson)
+            .filter { it.language == internalLang }
+            .toMutableList()
+        return parseComicsList(page, query, filters)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -58,28 +75,8 @@ class EternalMangas :
         }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = LATEST_LANGUAGE_PREF
-            title = LATEST_LANGUAGE_TITLE
-            entries = LATEST_LANGUAGE_ENTRIES
-            entryValues = LATEST_LANGUAGE_VALUES
-            setDefaultValue(LATEST_LANGUAGE_DEFAULT)
-        }.also { screen.addPreference(it) }
-    }
-
-    private fun SharedPreferences.getLatestLanguage() = getString(LATEST_LANGUAGE_PREF, LATEST_LANGUAGE_DEFAULT)!!
-
     @Serializable
     class LatestUpdatesDto(
         val updates: Map<String, List<List<SeriesDto>>>,
     )
-
-    companion object {
-        const val LATEST_LANGUAGE_PREF = "latest_language_pref"
-        const val LATEST_LANGUAGE_TITLE = "Language of latest updates"
-        val LATEST_LANGUAGE_ENTRIES = listOf("Spanish", "English", "Portuguese").toTypedArray()
-        val LATEST_LANGUAGE_VALUES = listOf("es", "en", "pt").toTypedArray()
-        const val LATEST_LANGUAGE_DEFAULT = "es"
-    }
 }

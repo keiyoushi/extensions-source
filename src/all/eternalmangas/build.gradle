@@ -1,9 +1,9 @@
 ext {
     extName = 'EternalMangas'
-    extClass = '.EternalMangas'
+    extClass = '.EternalMangasFactory'
     themePkg = 'mangaesp'
     baseUrl = 'https://eternalmangas.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = true
 }
 
