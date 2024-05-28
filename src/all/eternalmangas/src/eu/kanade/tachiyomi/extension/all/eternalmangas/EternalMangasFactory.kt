@@ -10,9 +10,6 @@ class EternalMangasFactory : SourceFactory {
     )
 }
 
-class EternalMangasES : EternalMangas("es", "es") {
-    override val id = 1533901034425595323
-}
-
+class EternalMangasES : EternalMangas("es", "es")
 class EternalMangasEN : EternalMangas("en", "en")
 class EternalMangasPTBR : EternalMangas("pt-BR", "pt")
