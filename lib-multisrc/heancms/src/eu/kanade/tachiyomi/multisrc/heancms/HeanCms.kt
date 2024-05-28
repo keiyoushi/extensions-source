@@ -76,7 +76,7 @@ abstract class HeanCms(
 
     protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ", Locale.US)
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
