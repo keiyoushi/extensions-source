@@ -13,6 +13,7 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.util.Calendar
 
 class TuManhwas : ParsedHttpSource() {
     override val name: String = "TuManhwas"
@@ -99,6 +100,7 @@ class TuManhwas : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst(".chapternum")!!.text()
+        date_upload = parseRelativeDate(element.selectFirst(".chapterdate")?.text() ?: "")
         setUrlWithoutDomain(element.attr("href"))
     }
 
@@ -113,6 +115,16 @@ class TuManhwas : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = ""
 
     private val Element.imgSrc: String get() = attr("abs:data-src").ifEmpty { attr("abs:src") }
+
+    private fun parseRelativeDate(date: String): Long {
+        val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
+        val cal = Calendar.getInstance()
+        return when {
+            date.contains("mes", ignoreCase = true) -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
+            date.contains("año", ignoreCase = true) -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
+            else -> 0
+        }
+    }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
