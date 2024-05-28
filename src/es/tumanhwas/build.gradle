@@ -1,0 +1,9 @@
+ext {
+    extName = 'TuManhwas'
+    extClass = '.TuManhwas'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://tumanhwas.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
