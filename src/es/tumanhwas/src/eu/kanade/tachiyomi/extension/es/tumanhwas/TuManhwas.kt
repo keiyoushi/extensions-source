@@ -60,12 +60,8 @@ class TuManhwas : MangaThemesia(
         return GET(url, headers)
     }
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("a")!!.let {
-            title = it.selectFirst(".tt")!!.text()
-            thumbnail_url = it.selectFirst("img")?.imgAttr()
-            setUrlWithoutDomain(it.attr("href"))
-        }
+    override fun searchMangaFromElement(element: Element) = super.searchMangaFromElement(element).apply {
+        title = element.selectFirst(".tt")!!.text()
     }
 
     override fun getFilterList() = FilterList()
