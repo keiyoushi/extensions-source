@@ -15,5 +15,5 @@ class WebtoonHatti : Madara(
     // Skip fake image
     // OK: <div class="page-break no-gaps">
     // NG: <div style="display:none" class="page-break no-gaps">
-    override val pageListParseSelector = "div.page-break:not([style*=\"display:\"])"
+    override val pageListParseSelector = "div.page-break:not([style*=display:]):not([style*=visibility:])"
 }
