@@ -43,6 +43,7 @@ class GoDaManhua : BaozimhOrg("GoDa漫画", "", "zh"), ConfigurableSource {
     }
 
     override fun pageListRequest(mangaId: String, chapterId: String): Request {
+        if (mangaId.isEmpty() || chapterId.isEmpty()) throw Exception("请刷新漫画")
         return GET("https://api-get.mgsearcher.com/api/chapter/getinfo?m=$mangaId&c=$chapterId", headers)
     }
 

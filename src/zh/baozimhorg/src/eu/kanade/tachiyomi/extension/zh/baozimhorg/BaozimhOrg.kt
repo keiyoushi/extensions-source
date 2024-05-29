@@ -124,7 +124,7 @@ open class BaozimhOrg(
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/" + chapter.url.substringBeforeLast('#')
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url.substringAfterLast('#')
+        val id = chapter.url.substringAfterLast('#', "")
         val mangaId = id.substringBefore('/')
         val chapterId = id.substringAfter('/')
         return pageListRequest(mangaId, chapterId)
