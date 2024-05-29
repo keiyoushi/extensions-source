@@ -1,6 +1,6 @@
 ext {
-    extName = 'Baozimh.org'
-    extClass = '.BaozimhOrg'
+    extName = 'GoDa'
+    extClass = '.GoDaFactory'
     extVersionCode = 29
 }
 
