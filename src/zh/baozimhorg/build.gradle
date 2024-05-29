@@ -1,6 +1,6 @@
 ext {
     extName = 'GoDa'
-    extClass = '.GoDaFactory'
+    extClass = '.GoDaManhua'
     extVersionCode = 29
 }
 
