@@ -24,7 +24,7 @@ open class BaozimhOrg(
 
     override val supportsLatest get() = true
 
-    private val enableGenres get() = true
+    private val enableGenres = true
 
     override val client = network.cloudflareClient
 
