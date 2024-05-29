@@ -26,6 +26,8 @@ open class BaozimhOrg(
 
     private val enableGenres = true
 
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+
     override val client = network.cloudflareClient
 
     private fun getKey(link: String): String {
@@ -147,7 +149,7 @@ open class BaozimhOrg(
         val items = box.select("a")
         genres = Array(items.size) { i ->
             val item = items[i]
-            Pair(item.attr("href"), item.text().removePrefix("#"))
+            Pair(item.text().removePrefix("#"), item.attr("href"))
         }
     }
 

@@ -38,13 +38,11 @@ class GoDaManhua : BaozimhOrg("GoDa漫画", "", "zh"), ConfigurableSource {
     private val json: Json = Injekt.get()
 
     override fun fetchChapterList(mangaId: String): List<SChapter> {
-        val headers = headersBuilder().add("Referer", "$baseUrl/").build()
         val response = client.newCall(GET("https://api-get.mgsearcher.com/api/manga/get?mid=$mangaId&mode=all", headers)).execute()
         return json.decodeFromString<ResponseDto<ChapterListDto>>(response.body.string()).data.toChapterList()
     }
 
     override fun pageListRequest(mangaId: String, chapterId: String): Request {
-        val headers = headersBuilder().add("Referer", "$baseUrl/").build()
         return GET("https://api-get.mgsearcher.com/api/chapter/getinfo?m=$mangaId&c=$chapterId", headers)
     }
 
