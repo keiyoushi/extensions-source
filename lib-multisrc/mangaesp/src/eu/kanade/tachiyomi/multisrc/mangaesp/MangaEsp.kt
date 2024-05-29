@@ -73,7 +73,7 @@ abstract class MangaEsp(
         return MangasPage(mangas, false)
     }
 
-    private var comicsList = mutableListOf<SeriesDto>()
+    protected var comicsList = mutableListOf<SeriesDto>()
 
     override fun fetchSearchManga(
         page: Int,
@@ -93,7 +93,7 @@ abstract class MangaEsp(
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    private fun searchMangaParse(response: Response, page: Int, query: String, filters: FilterList): MangasPage {
+    protected open fun searchMangaParse(response: Response, page: Int, query: String, filters: FilterList): MangasPage {
         val document = response.asJsoup()
         val script = document.select("script:containsData(self.__next_f.push)").joinToString { it.data() }
         val jsonString = MANGA_LIST_REGEX.find(script)?.groupValues?.get(1)
@@ -105,7 +105,7 @@ abstract class MangaEsp(
 
     private var filteredList = mutableListOf<SeriesDto>()
 
-    private fun parseComicsList(page: Int, query: String, filterList: FilterList): MangasPage {
+    protected open fun parseComicsList(page: Int, query: String, filterList: FilterList): MangasPage {
         if (page == 1) {
             filteredList.clear()
 
@@ -228,21 +228,21 @@ abstract class MangaEsp(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun Element.imgAttr(): String = when {
+    protected open fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
         else -> attr("abs:src")
     }
 
-    private fun String.unescape(): String {
+    fun String.unescape(): String {
         return UNESCAPE_REGEX.replace(this, "$1")
     }
 
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
-        private val MANGA_LIST_REGEX = """self\.__next_f\.push\(.*data\\":(\[.*trending.*])\}""".toRegex()
+        val MANGA_LIST_REGEX = """self\.__next_f\.push\(.*data\\":(\[.*trending.*])\}""".toRegex()
         private val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*\\"numFollow""".toRegex()
-        private const val MANGAS_PER_PAGE = 15
+        const val MANGAS_PER_PAGE = 15
     }
 }
