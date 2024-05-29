@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import uy.kohesive.injekt.Injekt
@@ -15,7 +14,7 @@ import java.util.Locale
 class Mangalink :
     Madara(
         "مانجا لينك",
-        "https://manga-link.com",
+        "https://link-manga.com",
         "ar",
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
@@ -23,7 +22,7 @@ class Mangalink :
 
     override val chapterUrlSuffix = ""
     override val useLoadMoreRequest = LoadMoreStrategy.Always
-    private val defaultBaseUrl = "https://manga-link.com"
+    private val defaultBaseUrl = "https://link-manga.com"
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val preferences: SharedPreferences by lazy {
@@ -33,7 +32,7 @@ class Mangalink :
     companion object {
         private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
         private const val BASE_URL_PREF_TITLE = "تعديل الرابط"
-        private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
+        private const val BASE_URL_PREF = "overrideBaseUrl_v38"
         private const val BASE_URL_PREF_SUMMARY = ".للاستخدام المؤقت. تحديث التطبيق سيؤدي الى حذف الإعدادات"
     }
 
