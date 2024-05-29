@@ -84,7 +84,7 @@ open class ComicGamma(
         }
     }
 
-    override fun chapterListSelector() = ".read__area > .read__outer > a:not([href=#comics])"
+    override fun chapterListSelector() = ".read__area .read__outer > a:not([href=#comics])"
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         url = element.attr("href").toOldChapterUrl()
         val number = url.removeSuffix("/").substringAfterLast('/').replace('_', '.')
