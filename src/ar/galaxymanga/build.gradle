@@ -2,7 +2,7 @@ ext {
     extName = 'Galaxy Manga'
     extClass = '.GalaxyManga'
     themePkg = 'flixscans'
-    baseUrl = 'https://flixscans.com'
+    baseUrl = 'https://flixscans.net'
     overrideVersionCode = 27
 }
 
