@@ -121,7 +121,7 @@ class TuManhwas : ParsedHttpSource() {
     }
 
     private fun parseRelativeDate(date: String): Long {
-        val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
+        val number = RELATIVE_DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
         return when {
             date.contains("mes", ignoreCase = true) -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
@@ -132,5 +132,6 @@ class TuManhwas : ParsedHttpSource() {
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
+        val RELATIVE_DATE_REGEX = """(\d+)""".toRegex()
     }
 }
