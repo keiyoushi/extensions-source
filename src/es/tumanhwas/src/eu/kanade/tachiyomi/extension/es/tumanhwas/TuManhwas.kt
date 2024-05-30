@@ -30,7 +30,7 @@ class TuManhwas : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst(".tt")!!.text()
-        thumbnail_url = element.selectFirst("img")?.imgSrc
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
@@ -89,7 +89,7 @@ class TuManhwas : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.selectFirst(".main-info")!!.let {
             title = it.selectFirst("h1")!!.text()
-            thumbnail_url = it.selectFirst("img")?.imgSrc
+            thumbnail_url = it.selectFirst("img")?.imgAttr()
             description = it.selectFirst(".summary p")?.text()
             genre = it.select(".genres-container a")
                 .map { it.text() }
@@ -108,13 +108,18 @@ class TuManhwas : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("#chapter_imgs img").mapIndexed { index, element ->
-            Page(index, document.location(), imageUrl = element.imgSrc)
+            Page(index, document.location(), imageUrl = element.imgAttr())
         }
     }
 
     override fun imageUrlParse(document: Document) = ""
 
-    private val Element.imgSrc: String get() = attr("abs:data-src").ifEmpty { attr("abs:src") }
+    private fun Element.imgAttr(): String {
+        return when {
+            hasAttr("data-src") -> absUrl("data-src")
+            else -> absUrl("src")
+        }
+    }
 
     private fun parseRelativeDate(date: String): Long {
         val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
