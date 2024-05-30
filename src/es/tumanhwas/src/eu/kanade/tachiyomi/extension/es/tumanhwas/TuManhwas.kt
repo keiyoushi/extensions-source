@@ -92,8 +92,7 @@ class TuManhwas : ParsedHttpSource() {
             thumbnail_url = it.selectFirst("img")?.imgAttr()
             description = it.selectFirst(".summary p")?.text()
             genre = it.select(".genres-container a")
-                .map { it.text() }
-                .joinToString()
+                .joinToString { it.text() }
             setUrlWithoutDomain(document.location())
         }
     }
