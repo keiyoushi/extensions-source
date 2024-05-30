@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.multisrc.libgroup
 import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
-import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
@@ -44,6 +43,7 @@ import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 abstract class LibGroup(
@@ -77,7 +77,7 @@ abstract class LibGroup(
                 throw IOException("HTTP error ${response.code}. Проверьте сайт. Для завершения авторизации необходимо перезапустить приложение с полной остановкой.")
             }
             if (response.code == 404) {
-                throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView\uD83C\uDF0E︎ и обновите список.")
+                throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView\uD83C\uDF0E︎ и обновите список. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
             }
             return@addInterceptor response
         }
@@ -118,10 +118,12 @@ abstract class LibGroup(
         val req = chain.request().newBuilder()
         if (chain.request().url.toString().contains("api.$apiDomain")) {
             if (bearerToken.isNullOrBlank()) {
-                launchIO { getToken() }
+                getToken()
             }
-            req.apply {
-                addHeader("Authorization", bearerToken.orEmpty())
+            if (bearerToken != "none") {
+                req.apply {
+                    addHeader("Authorization", bearerToken.orEmpty())
+                }
             }
         }
         return chain.proceed(req.build())
@@ -130,6 +132,7 @@ abstract class LibGroup(
     @SuppressLint("SetJavaScriptEnabled")
     @Suppress("NAME_SHADOWING")
     private fun getToken() {
+        val latch = CountDownLatch(1)
         Handler(Looper.getMainLooper()).post {
             val webView = WebView(Injekt.get<Application>())
             with(webView.settings) {
@@ -138,7 +141,7 @@ abstract class LibGroup(
                 databaseEnabled = true
             }
             webView.webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                override fun onPageFinished(view: WebView?, url: String?) {
                     val view = view!!
                     val script = "javascript:localStorage['auth']"
                     view.evaluateJavascript(script) {
@@ -146,18 +149,24 @@ abstract class LibGroup(
                         view.destroy()
                         if (!it.isNullOrBlank() && it != "null") {
                             val str: String = if (it.first() == '"' && it.last() == '"') {
-                                it.substringAfter("\"").substringBeforeLast("\"").replace("\\", "")
+                                it.substringAfter("\"").substringBeforeLast("\"")
+                                    .replace("\\", "")
                             } else {
                                 it.replace("\\", "")
                             }
                             val token = str.parseAs<JsonObject>().jsonObject["token"]
-                            bearerToken = token!!.jsonObject["token_type"]!!.jsonPrimitive.content + " " + token.jsonObject["access_token"]!!.jsonPrimitive.content
+                            bearerToken =
+                                token!!.jsonObject["token_type"]!!.jsonPrimitive.content + " " + token.jsonObject["access_token"]!!.jsonPrimitive.content
+                        } else {
+                            bearerToken = "none"
                         }
+                        latch.countDown()
                     }
                 }
             }
             webView.loadUrl(baseUrl)
         }
+        latch.await(20, TimeUnit.SECONDS)
     }
 
     override fun getMangaUrl(manga: SManga): String {
