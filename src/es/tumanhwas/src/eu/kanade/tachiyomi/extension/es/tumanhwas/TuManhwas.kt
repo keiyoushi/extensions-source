@@ -75,9 +75,8 @@ class TuManhwas : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element).apply {
-        val chapterNumber = "-${url.substringAfterLast("-")}"
         url = url.replace("news", "manga")
-            .removeSuffix(chapterNumber)
+            .substringBeforeLast("-")
     }
 
     override fun latestUpdatesNextPageSelector() = null
