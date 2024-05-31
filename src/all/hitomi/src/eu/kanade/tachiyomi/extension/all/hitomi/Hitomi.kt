@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.all.hitomi
 
 import android.app.Application
 import android.content.SharedPreferences
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -62,10 +62,7 @@ class Hitomi(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private var iconified = when (preferences.getString(PREF_TAG_GENDER_ICON, "text")) {
-        "text" -> false
-        else -> true
-    }
+    private var iconified = preferences.getBoolean(PREF_TAG_GENDER_ICON, false)
 
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
@@ -460,7 +457,7 @@ class Hitomi(
             parodys?.joinToString { it.formatted }?.let {
                 append("Parodies: ", it, "\n")
             }
-            append("Pages: ", files.size)
+            append("Pages: ", files.size, "\n")
             append("Language: ", language)
         }
         status = SManga.COMPLETED
@@ -617,19 +614,14 @@ class Hitomi(
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_TAG_GENDER_ICON
-            title = "Show gender as text or icon (requires refresh):"
-            entries = arrayOf("Text", "Icon")
-            entryValues = arrayOf("text", "icon")
-            summary = "Show as %s"
-            setDefaultValue("text")
+            title = "Show gender as text or icon in tags (requires refresh)"
+            summaryOff = "Show gender as text"
+            summaryOn = "Show gender as icon"
 
             setOnPreferenceChangeListener { _, newValue ->
-                iconified = when (newValue) {
-                    "text" -> false
-                    else -> true
-                }
+                iconified = newValue == true
                 true
             }
         }.also(screen::addPreference)
