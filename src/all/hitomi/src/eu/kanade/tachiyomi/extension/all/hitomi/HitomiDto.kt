@@ -65,8 +65,6 @@ data class Parody(
     val formatted get() = parody.toCamelCase()
 }
 
-typealias OrderType = Pair<String?, String>
-
 private fun String.toCamelCase(): String {
     val result = StringBuilder(length)
     var capitalize = true

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.hitomi
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -75,56 +74,14 @@ class Hitomi(
 
     private lateinit var searchResponse: List<Int>
 
-    private fun filterToTag(query: StringBuilder, tag: String, filterState: String) {
-        filterState
-            .trim()
-            .split(',')
-            .filter { it.isNotBlank() }
-            .forEach {
-                val trimmed = it.trim()
-                query.append(" ${if (trimmed.startsWith("-")) "-" else ""}$tag:${trimmed.removePrefix("-").replace(" ", "_")}")
-            }
-    }
-
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        val filterQueries = StringBuilder()
-        var order: OrderType = Pair("date", "added")
-
-        filters.forEach { filter ->
-            when (filter) {
-                is SortFilter -> {
-                    order = filter.getOrder()
-                }
-                is ArtistFilter -> {
-                    filterToTag(filterQueries, "artist", filter.state)
-                }
-                is CharacterFilter -> {
-                    filterToTag(filterQueries, "character", filter.state)
-                }
-                is GroupFilter -> {
-                    filterToTag(filterQueries, "group", filter.state)
-                }
-                is SeriesFilter -> {
-                    filterToTag(filterQueries, "series", filter.state)
-                }
-                is FemaleTagFilter -> {
-                    filterToTag(filterQueries, "female", filter.state)
-                }
-                is MaleTagFilter -> {
-                    filterToTag(filterQueries, "male", filter.state)
-                }
-                is GenericTagFilter -> {
-                    filterToTag(filterQueries, "tag", filter.state)
-                }
-                else -> { /* Do Nothing */ }
-            }
-        }
+        val parsedFilter = parseFilters(filters)
 
         runBlocking {
             if (page == 1) {
                 searchResponse = hitomiSearch(
-                    "$query$filterQueries".trim(),
-                    order,
+                    "$query${parsedFilter.first}".trim(),
+                    parsedFilter.second,
                     nozomiLang,
                 ).toList()
             }
@@ -137,52 +94,7 @@ class Hitomi(
         }
     }
 
-    private class OrderFilter(val name: String, val order: OrderType) {
-        val getFilterName: String
-            get() = name
-        val getOrder: OrderType
-            get() = order
-    }
-
-    private class SortFilter : UriPartFilter(
-        "Sort By",
-        arrayOf(
-            OrderFilter("Date Added", Pair(null, "index")),
-            OrderFilter("Date Published", Pair("date", "published")),
-            OrderFilter("Popular: Today", Pair("popular", "today")),
-            OrderFilter("Popular: Week", Pair("popular", "week")),
-            OrderFilter("Popular: Month", Pair("popular", "month")),
-            OrderFilter("Popular: Year", Pair("popular", "year")),
-        ),
-    )
-
-    private open class UriPartFilter(displayName: String, val vals: Array<OrderFilter>) :
-        Filter.Select<String>(displayName, vals.map { it.getFilterName }.toTypedArray()) {
-        fun getOrder() = vals[state].getOrder
-    }
-
-    private class ArtistFilter(name: String) : Filter.Text(name)
-    private class CharacterFilter(name: String) : Filter.Text(name)
-
-    private class GroupFilter(name: String) : Filter.Text(name)
-    private class SeriesFilter(name: String) : Filter.Text(name)
-    private class FemaleTagFilter(name: String) : Filter.Text(name)
-    private class MaleTagFilter(name: String) : Filter.Text(name)
-    private class GenericTagFilter(name: String) : Filter.Text(name)
-
-    override fun getFilterList(): FilterList = FilterList(
-        SortFilter(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        ArtistFilter("Artist(s)"),
-        CharacterFilter("Character(s)"),
-        GroupFilter("Group(s)"),
-        SeriesFilter("Series"),
-        FemaleTagFilter("Female Tag(s)"),
-        MaleTagFilter("Male Tag(s)"),
-        Filter.Header("Don't put Female/Male tags here, they won't work!"),
-        GenericTagFilter("Tag(s)"),
-    )
+    override fun getFilterList(): FilterList = getFilterListInternal()
 
     private fun Int.nextPageRange(): LongRange {
         val byteOffset = ((this - 1) * 25) * 4L
