@@ -62,7 +62,7 @@ class Hitomi(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private var iconified = when (preferences.getString(TITLE_PREF, "text")) {
+    private var iconified = when (preferences.getString(PREF_TAG_GENDER_ICON, "text")) {
         "text" -> false
         else -> true
     }
@@ -73,9 +73,8 @@ class Hitomi(
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         runBlocking {
-            val entries =
-                getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
-                    .toMangaList()
+            val entries = getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
+                .toMangaList()
 
             MangasPage(entries, entries.size >= 24)
         }
@@ -92,11 +91,7 @@ class Hitomi(
 
     private lateinit var searchResponse: List<Int>
 
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> = Observable.fromCallable {
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList, ): Observable<MangasPage> = Observable.fromCallable {
         runBlocking {
             if (page == 1) {
                 searchResponse = hitomiSearch(
@@ -623,8 +618,8 @@ class Hitomi(
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
-            key = TITLE_PREF
-            title = TITLE_PREF
+            key = PREF_TAG_GENDER_ICON
+            title = "Show gender as text or icon (requires refresh):"
             entries = arrayOf("Text", "Icon")
             entryValues = arrayOf("text", "icon")
             summary = "Show as %s"
@@ -649,6 +644,6 @@ class Hitomi(
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
-        private const val TITLE_PREF = "Show gender as text or icon (requires refresh):"
+        private const val PREF_TAG_GENDER_ICON = "pref_tag_gender_icon"
     }
 }
