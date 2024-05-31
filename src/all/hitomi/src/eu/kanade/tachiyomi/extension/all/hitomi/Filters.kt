@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 typealias OrderType = Pair<String?, String>
 typealias ParsedFilter = Pair<String, OrderType>
 
-private fun parseFilter(query: StringBuilder, tag: String, filterState: String) {
+private fun parseFilter(query: StringBuilder, area: String, filterState: String) {
     filterState
         .trim()
         .split(',')
@@ -14,7 +14,7 @@ private fun parseFilter(query: StringBuilder, tag: String, filterState: String) 
         .forEach {
             val trimmed = it.trim()
             val negativePrefix = if (trimmed.startsWith("-")) "-" else ""
-            query.append(" $negativePrefix$tag:${trimmed.removePrefix("-").replace(" ", "_")}")
+            query.append(" $negativePrefix$area:${trimmed.removePrefix("-").replace(" ", "_")}")
         }
 }
 
@@ -26,8 +26,8 @@ fun parseFilters(filters: FilterList): ParsedFilter {
             is SortFilter -> {
                 order = filter.getOrder
             }
-            is CategoryFilter -> {
-                parseFilter(query, filter.getTagName, filter.state)
+            is AreaFilter -> {
+                parseFilter(query, filter.getAreaName, filter.state)
             }
             else -> { /* Do Nothing */ }
         }
@@ -60,22 +60,22 @@ private open class UriPartFilter(displayName: String, val vals: Array<OrderFilte
         get() = vals[state].getOrder
 }
 
-private class CategoryFilter(displayName: String, val tagName: String) :
+private class AreaFilter(displayName: String, val areaName: String) :
     Filter.Text(displayName) {
-    val getTagName: String
-        get() = tagName
+    val getAreaName: String
+        get() = areaName
 }
 
 fun getFilterListInternal(): FilterList = FilterList(
     SortFilter(),
     Filter.Header("Separate tags with commas (,)"),
     Filter.Header("Prepend with dash (-) to exclude"),
-    CategoryFilter("Artist(s)", "artist"),
-    CategoryFilter("Character(s)", "character"),
-    CategoryFilter("Group(s)", "group"),
-    CategoryFilter("Series", "series"),
-    CategoryFilter("Female Tag(s)", "female"),
-    CategoryFilter("Male Tag(s)", "male"),
+    AreaFilter("Artist(s)", "artist"),
+    AreaFilter("Character(s)", "character"),
+    AreaFilter("Group(s)", "group"),
+    AreaFilter("Series", "series"),
+    AreaFilter("Female Tag(s)", "female"),
+    AreaFilter("Male Tag(s)", "male"),
     Filter.Header("Don't put Female/Male tags here, they won't work!"),
-    CategoryFilter("Tag(s)", "tag"),
+    AreaFilter("Tag(s)", "tag"),
 )
