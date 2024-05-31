@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.hitomi
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -22,6 +27,8 @@ import okhttp3.Call
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -35,7 +42,7 @@ import kotlin.math.min
 class Hitomi(
     override val lang: String,
     private val nozomiLang: String,
-) : HttpSource() {
+) : ConfigurableSource, HttpSource() {
 
     override val name = "Hitomi"
 
@@ -51,14 +58,24 @@ class Hitomi(
 
     override val client = network.cloudflareClient
 
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private var iconified = when (preferences.getString(TITLE_PREF, "text")) {
+        "text" -> false
+        else -> true
+    }
+
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         runBlocking {
-            val entries = getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
-                .toMangaList()
+            val entries =
+                getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
+                    .toMangaList()
 
             MangasPage(entries, entries.size >= 24)
         }
@@ -75,7 +92,11 @@ class Hitomi(
 
     private lateinit var searchResponse: List<Int>
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = Observable.fromCallable {
         runBlocking {
             if (page == 1) {
                 searchResponse = hitomiSearch(
@@ -429,7 +450,7 @@ class Hitomi(
         url = galleryurl
         author = groups?.joinToString { it.formatted }
         artist = artists?.joinToString { it.formatted }
-        genre = tags?.joinToString { it.formatted }
+        genre = tags?.joinToString { it.getFormatted(iconified) }
         thumbnail_url = files.first().let {
             val hash = it.hash
             val imageId = imageIdFromHash(hash)
@@ -445,6 +466,7 @@ class Hitomi(
                 append("Parodies: ", it, "\n")
             }
             append("Pages: ", files.size)
+            append("Language: ", language)
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -598,9 +620,35 @@ class Hitomi(
 
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = TITLE_PREF
+            title = TITLE_PREF
+            entries = arrayOf("Text", "Icon")
+            entryValues = arrayOf("text", "icon")
+            summary = "Show as %s"
+            setDefaultValue("text")
+
+            setOnPreferenceChangeListener { _, newValue ->
+                iconified = when (newValue) {
+                    "text" -> false
+                    else -> true
+                }
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+        throw UnsupportedOperationException()
+
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    companion object {
+        private const val TITLE_PREF = "Show gender as text or icon (requires refresh):"
+    }
 }

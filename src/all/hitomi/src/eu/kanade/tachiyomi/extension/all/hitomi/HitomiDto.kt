@@ -9,6 +9,7 @@ data class Gallery(
     val title: String,
     val date: String,
     val type: String,
+    val language: String,
     val tags: List<Tag>?,
     val artists: List<Artist>?,
     val groups: List<Group>?,
@@ -28,10 +29,10 @@ data class Tag(
     val male: JsonPrimitive?,
     val tag: String,
 ) {
-    val formatted get() = if (female?.content == "1") {
-        "${tag.toCamelCase()} (Female)"
+    fun getFormatted(iconified: Boolean) = if (female?.content == "1") {
+        "${tag.toCamelCase()} " + if (iconified) "♀" else "(Female)"
     } else if (male?.content == "1") {
-        "${tag.toCamelCase()} (Male)"
+        "${tag.toCamelCase()} " + if (iconified) "♂" else "(Male)"
     } else {
         tag.toCamelCase()
     }
