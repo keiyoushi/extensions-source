@@ -58,7 +58,9 @@ abstract class PeachScan(
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/todas-as-obras/", headers)
+    private val mangaCollection: String = "todas-as-obras"
+
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/$mangaCollection/", headers)
 
     override fun popularMangaSelector() = ".comics__all__box"
 
@@ -85,7 +87,7 @@ abstract class PeachScan(
     override fun latestUpdatesNextPageSelector() = null
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(URL_SEARCH_PREFIX)) {
+        if (query.startsWith(URL_SEARCH_PREFIX) && query.contains(mangaCollection, ignoreCase = true).not()) {
             val manga = SManga.create().apply { url = query.substringAfter(URL_SEARCH_PREFIX) }
             return client.newCall(mangaDetailsRequest(manga))
                 .asObservableSuccess()
