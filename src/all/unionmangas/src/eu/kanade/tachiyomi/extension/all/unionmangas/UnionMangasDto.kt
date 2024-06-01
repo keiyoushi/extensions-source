@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.unionmangas
 
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -14,56 +13,51 @@ class NextData<T>(val props: Props<T>, val query: QueryDto) {
 class Props<T>(val pageProps: T)
 
 @Serializable
-class PopularMangaProps(@SerialName("data_popular") val mangas: List<PopularMangaDto>)
+class PopularMangaDto(
+    @SerialName("data") val mangas: List<MangaDto>,
+    override var currentPage: Int,
+    override var totalPage: Int,
+) : Pageable()
 
 @Serializable
 class LatestUpdateProps(@SerialName("data_lastuppdate") val latestUpdateDto: MangaListDto)
 
 @Serializable
-class MangaDetailsProps(@SerialName("dataManga") val mangaDetailsDto: MangaDetailsDto)
+class MangaDetailsProps(
+    @SerialName("infoDoc") val mangaDetailsDto: MangaDto,
+)
 
 @Serializable
 class ChaptersProps(@SerialName("data") val pageListData: String)
 
 @Serializable
-abstract class Pageable {
-    abstract var currentPage: String?
-    abstract var totalPage: Int
-
+open class Pageable1<T>(
+    var currentPage: Int,
+    var totalPage: Int,
+    val data: T,
+) {
     fun hasNextPage() =
-        try { (currentPage!!.toInt() + 1) < totalPage } catch (_: Exception) { false }
+        try { (currentPage + 1) <= totalPage } catch (_: Exception) { false }
 }
 
 @Serializable
-class ChapterPageDto(
-    val totalRecode: Int = 0,
-    override var currentPage: String?,
-    override var totalPage: Int,
-    @SerialName("data") val chapters: List<ChapterDto> = emptyList(),
-) : Pageable() {
-    fun toSChapter(langOption: LanguageOption): List<SChapter> =
-        chapters.map { chapter ->
-            SChapter.create().apply {
-                name = chapter.name
-                date_upload = chapter.date.toDate()
-                url = "/${langOption.infix}${chapter.toChapterUrl(langOption.chpPrefix)}"
-            }
-        }
+abstract class Pageable {
+    abstract var currentPage: Int
+    abstract var totalPage: Int
 
-    private fun String.toDate(): Long =
-        try { UnionMangas.dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
-
-    private fun ChapterDto.toChapterUrl(prefix: String) = "/${this.slugManga}/$prefix-${this.id}"
+    fun hasNextPage() =
+        try { (currentPage + 1) < totalPage } catch (_: Exception) { false }
 }
 
 @Serializable
 class ChapterDto(
     val date: String,
-    val slug: String,
     @SerialName("idDoc") val slugManga: String,
     @SerialName("idDetail") val id: String,
     @SerialName("nameChapter") val name: String,
-)
+) {
+    fun toChapterUrl(lang: String) = "/$lang/${this.slugManga}/$id"
+}
 
 @Serializable
 class QueryDto(
@@ -72,7 +66,7 @@ class QueryDto(
 
 @Serializable
 class MangaListDto(
-    override var currentPage: String?,
+    override var currentPage: Int,
     override var totalPage: Int,
     @SerialName("data") val mangas: List<MangaDto>,
 ) : Pageable() {
@@ -88,20 +82,14 @@ class MangaListDto(
 }
 
 @Serializable
-class PopularMangaDto(
-    @SerialName("document") val details: MangaDto,
-)
-
-@Serializable
 class MangaDto(
     @SerialName("name") val title: String,
     @SerialName("image") private val _thumbnailUrl: String,
     @SerialName("idDoc") val slug: String,
-    @SerialName("genres") private val _genres: String,
+    @SerialName("genresName") val genres: String,
     @SerialName("status") val _status: String,
 ) {
     val thumbnailUrl get() = "${UnionMangas.apiUrl}$_thumbnailUrl"
-    val genres get() = _genres.split(",").joinToString { it.trim() }
     val status get() = toSMangaStatus(_status)
 }
 
