@@ -44,9 +44,10 @@ class Mangago : ParsedHttpSource() {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2)
         .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
+            val request = chain.request()
+            val response = chain.proceed(request)
 
-            val fragment = response.request.url.fragment ?: return@addInterceptor response
+            val fragment = request.url.fragment ?: return@addInterceptor response
 
             // desckey=...&cols=...
             val key = fragment.substringAfter("desckey=").substringBefore("&")
@@ -226,9 +227,7 @@ class Mangago : ParsedHttpSource() {
             // This usually means that the list is already unscrambled.
         }
 
-        val cols = deobfChapterJs
-            .substringAfter("var widthnum=heightnum=")
-            .substringBefore(";")
+        val cols = colsRegex.find(deobfChapterJs)?.groupValues?.get(1) ?: ""
 
         return imageList
             .split(",")
@@ -457,6 +456,9 @@ class Mangago : ParsedHttpSource() {
     private val imgSrcsRegex by lazy {
         Regex("""var imgsrcs\s*=\s*['"]([a-zA-Z0-9+=/]+)['"]""")
     }
+
+    private val colsRegex =
+        Regex("""var\s*widthnum\s*=\s*heightnum\s*=\s*(\d+);""")
 
     private val replacePosBytecode by lazy {
         QuickJs.create().use {
