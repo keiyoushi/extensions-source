@@ -1,7 +1,7 @@
 ext {
     extName = 'Vortex Scans'
     extClass = '.VortexScans'
-    extVersionCode = 32
+    extVersionCode = 33
     isNsfw = false
 }
 

@@ -19,7 +19,7 @@ class VortexScans : HttpSource() {
 
     override val name = "Vortex Scans"
 
-    override val baseUrl = "https://vortexscans.com"
+    override val baseUrl = "https://vortexscans.org"
 
     override val lang = "en"
 
