@@ -24,8 +24,8 @@ class DemonSect : Madara(
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
-            val request = response.request
-            if (request.url.toString().contains("login", ignoreCase = true)) {
+            val pathSegments = response.request.url.pathSegments
+            if (pathSegments.contains("login")) {
                 throw IOException("Faça o login na WebView para acessar o contéudo")
             }
             response
