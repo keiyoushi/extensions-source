@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.zh.baozimhorg
 import android.app.Application
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.multisrc.goda.GoDa
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,7 +17,7 @@ import okio.IOException
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class GoDaManhua : BaozimhOrg("GoDa漫画", "", "zh"), ConfigurableSource {
+class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
 
     override val id get() = 774030471139699415
 

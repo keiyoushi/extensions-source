@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.zh.baozimhorg
+package eu.kanade.tachiyomi.multisrc.goda
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -13,10 +13,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import org.jsoup.nodes.Entities
 import rx.Observable
 
-open class BaozimhOrg(
+open class GoDa(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
@@ -77,29 +78,33 @@ open class BaozimhOrg(
         return GET(getMangaUrl(manga), headers)
     }
 
-    private fun Document.getMangaId() = selectFirst("#mangachapters")!!.attr("data-mid")
+    private fun Element.getMangaId() = selectFirst("#mangachapters")!!.attr("data-mid")
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+        val document = response.asJsoup().selectFirst("main")!!
         val titleElement = document.selectFirst("h1")!!
         val elements = titleElement.parent()!!.parent()!!.children()
         check(elements.size == 6)
 
         title = titleElement.ownText()
-        status = SManga.UNKNOWN // Everything is marked as ongoing
+        status = when (titleElement.child(0).text()) {
+            "連載中", "Ongoing" -> SManga.ONGOING
+            "完結" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
         author = Entities.unescape(elements[1].children().drop(1).joinToString { it.text().removeSuffix(" ,") })
         genre = buildList {
             elements[2].children().drop(1).mapTo(this) { it.text().removeSuffix(" ,") }
             elements[3].children().mapTo(this) { it.text().removePrefix("#") }
         }.joinToString()
-        description = elements[4].text() + "\n\nID: ${document.getMangaId()}"
+        description = (elements[4].text() + "\n\nID: ${document.getMangaId()}").trim()
         thumbnail_url = document.selectFirst("img.object-cover")!!.attr("src")
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val mangaId = manga.description
-            ?.substringAfterLast("\nID: ", "")
-            ?.takeIf { it.isNotEmpty() && it.all(Character::isDigit) }
+            ?.substringAfterLast("ID: ", "")
+            ?.takeIf { it.toIntOrNull() != null }
             ?: client.newCall(mangaDetailsRequest(manga)).execute().asJsoup().getMangaId()
 
         fetchChapterList(mangaId)
@@ -125,8 +130,8 @@ open class BaozimhOrg(
 
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.substringAfterLast('#', "")
-        val mangaId = id.substringBefore('/')
-        val chapterId = id.substringAfter('/')
+        val mangaId = id.substringBefore('/', "")
+        val chapterId = id.substringAfter('/', "")
         return pageListRequest(mangaId, chapterId)
     }
 
@@ -134,8 +139,8 @@ open class BaozimhOrg(
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("noscript > img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.attr("src"))
+        return document.select("#chapcontent > div > img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.attr("data-src").ifEmpty { element.attr("src") })
         }
     }
 
