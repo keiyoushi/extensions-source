@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.hitomi
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -76,11 +75,13 @@ class Hitomi(
     private lateinit var searchResponse: List<Int>
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
+        val parsedFilter = parseFilters(filters)
+
         runBlocking {
             if (page == 1) {
                 searchResponse = hitomiSearch(
-                    query.trim(),
-                    filters.filterIsInstance<SortFilter>().firstOrNull()?.state == 1,
+                    "$query${parsedFilter.first}".trim(),
+                    parsedFilter.second,
                     nozomiLang,
                 ).toList()
             }
@@ -93,11 +94,7 @@ class Hitomi(
         }
     }
 
-    private class SortFilter : Filter.Select<String>("Sort By", arrayOf("Updated", "Popularity"))
-
-    override fun getFilterList(): FilterList {
-        return FilterList(SortFilter())
-    }
+    override fun getFilterList(): FilterList = getFilterListInternal()
 
     private fun Int.nextPageRange(): LongRange {
         val byteOffset = ((this - 1) * 25) * 4L
@@ -117,7 +114,7 @@ class Hitomi(
 
     private suspend fun hitomiSearch(
         query: String,
-        sortByPopularity: Boolean = false,
+        order: OrderType,
         language: String = "all",
     ): Set<Int> =
         coroutineScope {
@@ -126,9 +123,6 @@ class Hitomi(
                 .replace(Regex("""^\?"""), "")
                 .lowercase()
                 .split(Regex("\\s+"))
-                .map {
-                    it.replace('_', ' ')
-                }
 
             val positiveTerms = LinkedList<String>()
             val negativeTerms = LinkedList<String>()
@@ -144,7 +138,7 @@ class Hitomi(
             val positiveResults = positiveTerms.map {
                 async {
                     runCatching {
-                        getGalleryIDsForQuery(it, language)
+                        getGalleryIDsForQuery(it, language, order)
                     }.getOrDefault(emptySet())
                 }
             }
@@ -152,14 +146,13 @@ class Hitomi(
             val negativeResults = negativeTerms.map {
                 async {
                     runCatching {
-                        getGalleryIDsForQuery(it, language)
+                        getGalleryIDsForQuery(it, language, order)
                     }.getOrDefault(emptySet())
                 }
             }
 
             val results = when {
-                sortByPopularity -> getGalleryIDsFromNozomi(null, "popular", language)
-                positiveTerms.isEmpty() -> getGalleryIDsFromNozomi(null, "index", language)
+                positiveTerms.isEmpty() -> getGalleryIDsFromNozomi(order.first, order.second, language)
                 else -> emptySet()
             }.toMutableSet()
 
@@ -191,6 +184,7 @@ class Hitomi(
     private suspend fun getGalleryIDsForQuery(
         query: String,
         language: String = "all",
+        order: OrderType,
     ): Set<Int> {
         query.replace("_", " ").let {
             if (it.indexOf(':') > -1) {
@@ -211,6 +205,20 @@ class Hitomi(
                         lang = tag
                         tag = "index"
                     }
+                }
+
+                if (area != null) {
+                    if (order.first != null) {
+                        area = "$area/${order.first}"
+                        if (tag.isBlank()) {
+                            tag = order.second
+                        } else {
+                            area = "$area/${order.second}"
+                        }
+                    }
+                } else {
+                    area = order.first
+                    tag = order.second
                 }
 
                 return getGalleryIDsFromNozomi(area, tag, lang)
