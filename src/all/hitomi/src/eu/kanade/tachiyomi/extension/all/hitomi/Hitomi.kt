@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.hitomi
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,6 +26,8 @@ import okhttp3.Call
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -34,7 +41,7 @@ import kotlin.math.min
 class Hitomi(
     override val lang: String,
     private val nozomiLang: String,
-) : HttpSource() {
+) : ConfigurableSource, HttpSource() {
 
     override val name = "Hitomi"
 
@@ -49,6 +56,12 @@ class Hitomi(
     private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private var iconified = preferences.getBoolean(PREF_TAG_GENDER_ICON, false)
 
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
@@ -437,7 +450,7 @@ class Hitomi(
         url = galleryurl
         author = groups?.joinToString { it.formatted }
         artist = artists?.joinToString { it.formatted }
-        genre = tags?.joinToString { it.formatted }
+        genre = tags?.joinToString { it.getFormatted(iconified) }
         thumbnail_url = files.first().let {
             val hash = it.hash
             val imageId = imageIdFromHash(hash)
@@ -452,7 +465,8 @@ class Hitomi(
             parodys?.joinToString { it.formatted }?.let {
                 append("Parodies: ", it, "\n")
             }
-            append("Pages: ", files.size)
+            append("Pages: ", files.size, "\n")
+            append("Language: ", language)
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -606,9 +620,28 @@ class Hitomi(
 
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_TAG_GENDER_ICON
+            title = "Show gender as text or icon in tags (requires refresh)"
+            summaryOff = "Show gender as text"
+            summaryOn = "Show gender as icon"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                iconified = newValue == true
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    companion object {
+        private const val PREF_TAG_GENDER_ICON = "pref_tag_gender_icon"
+    }
 }
