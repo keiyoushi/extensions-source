@@ -17,7 +17,7 @@ import java.io.ByteArrayOutputStream
 
 class FlameComics : MangaThemesia(
     "Flame Comics",
-    "https://flamecomics.com",
+    "https://flamecomics.me",
     "en",
     mangaUrlDirectory = "/series",
 ) {
