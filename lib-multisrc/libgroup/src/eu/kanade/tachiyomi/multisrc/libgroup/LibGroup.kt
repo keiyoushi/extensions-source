@@ -27,10 +27,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -70,7 +68,7 @@ abstract class LibGroup(
         .connectTimeout(5, TimeUnit.MINUTES)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
-        .addInterceptor { checkForToken(it) }
+        .addInterceptor(::checkForToken)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             if (response.code == 419) {
@@ -116,9 +114,10 @@ abstract class LibGroup(
 
     private fun checkForToken(chain: Interceptor.Chain): Response {
         val req = chain.request().newBuilder()
-        if (chain.request().url.toString().contains("api.$apiDomain")) {
+        val url = chain.request().url.toString()
+        if (url.contains("api.$apiDomain") && !url.contains("/api/auth/me")) {
             if (bearerToken.isNullOrBlank()) {
-                getToken()
+                bearerToken = loadToken()
             }
             if (bearerToken != "none") {
                 req.apply {
@@ -129,10 +128,34 @@ abstract class LibGroup(
         return chain.proceed(req.build())
     }
 
+    @SuppressLint("ApplySharedPref")
+    private fun loadToken(): String {
+        try {
+            val token = preferences.getString(TOKEN_STORE, "")!!.parseAs<AuthToken>()
+            if (token.isExpired() || !isUserTokenValid(token.getToken())) {
+                val refreshedToken: AuthToken? = refreshToken()
+                if (refreshedToken != null) {
+                    val str = json.encodeToString(refreshedToken)
+                    preferences.edit().putString(TOKEN_STORE, str).commit()
+                }
+            }
+            return token.getToken()
+        } catch (ex: SerializationException) {
+            val refreshedToken: AuthToken? = refreshToken()
+            if (refreshedToken != null) {
+                val str = json.encodeToString(refreshedToken)
+                preferences.edit().putString(TOKEN_STORE, str).commit()
+                return refreshedToken.getToken()
+            }
+        }
+        return "none"
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     @Suppress("NAME_SHADOWING")
-    private fun getToken() {
+    private fun refreshToken(): AuthToken? {
         val latch = CountDownLatch(1)
+        var returnValue: AuthToken? = null
         Handler(Looper.getMainLooper()).post {
             val webView = WebView(Injekt.get<Application>())
             with(webView.settings) {
@@ -154,11 +177,7 @@ abstract class LibGroup(
                             } else {
                                 it.replace("\\", "")
                             }
-                            val token = str.parseAs<JsonObject>().jsonObject["token"]
-                            bearerToken =
-                                token!!.jsonObject["token_type"]!!.jsonPrimitive.content + " " + token.jsonObject["access_token"]!!.jsonPrimitive.content
-                        } else {
-                            bearerToken = "none"
+                            returnValue = str.parseAs<AuthToken>()
                         }
                         latch.countDown()
                     }
@@ -167,6 +186,21 @@ abstract class LibGroup(
             webView.loadUrl(baseUrl)
         }
         latch.await(20, TimeUnit.SECONDS)
+
+        return returnValue
+    }
+
+    private fun isUserTokenValid(token: String): Boolean {
+        val headers = Headers.Builder().apply {
+            add("Accept", "application/json")
+            add("Authorization", token)
+        }.build()
+        client.newCall(GET("https://api.$apiDomain/api/auth/me", headers)).execute().also { response ->
+            return when (response.code) {
+                401 -> throw Exception("Попробуйте авторизоваться через WebView\uD83C\uDF0E\uFE0E. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
+                else -> true
+            }
+        }
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -514,6 +548,8 @@ abstract class LibGroup(
 
         private const val LANGUAGE_PREF = "MangaLibTitleLanguage"
         private const val LANGUAGE_PREF_TITLE = "Выбор языка на обложке"
+
+        private const val TOKEN_STORE = "TokenStore"
 
         val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US) }
     }

@@ -262,3 +262,24 @@ class Pages(
 
     fun toPageList(): List<Page> = pages.map { Page(it.slug, it.url) }
 }
+
+@Serializable
+class AuthToken(
+    private val token: Token,
+) {
+    @Serializable
+    class Token(
+        val timestamp: Long,
+        @SerialName("expires_in") val expiresIn: Long,
+        @SerialName("token_type") val tokenType: String,
+        @SerialName("access_token") val accessToken: String,
+    )
+
+    fun isExpired(): Boolean {
+        val currentTime = System.currentTimeMillis()
+        val expiresIn = token.timestamp + (token.expiresIn * 1000)
+        return expiresIn < currentTime
+    }
+
+    fun getToken(): String = "${token.tokenType} ${token.accessToken}"
+}
