@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.ladroncorps
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +11,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONArray
@@ -18,9 +20,16 @@ import org.jsoup.nodes.Element
 
 class LadronCorps : HttpSource() {
     override val name: String = "Ladron Corps"
+
     override val baseUrl: String = "https://www.ladroncorps.com"
+
     override val lang: String = "es"
+
     override val supportsLatest: Boolean = false
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
 
     private val authorization: String by lazy {
         val response = client.newCall(GET("$baseUrl/_api/v2/dynamicmodel", headers)).execute()
