@@ -58,7 +58,7 @@ class SlimeRead : HttpSource() {
         val script = initClient.newCall(GET(scriptUrl, headers)).execute().body.string()
         val apiUrl = FUNCTION_REGEX.find(script)?.value?.let { function ->
             BASEURL_VAL_REGEX.find(function)?.groupValues?.get(1)?.let { baseUrlVar ->
-                val regex = """let.*?$baseUrlVar\s*=.*?(?=\n)""".toRegex(RegexOption.DOT_MATCHES_ALL)
+                val regex = """let.*?$baseUrlVar\s*=.*?(?=,\s*\w\s*=)""".toRegex(RegexOption.DOT_MATCHES_ALL)
                 regex.find(function)?.value?.let { varBlock ->
                     try {
                         QuickJs.create().use {
