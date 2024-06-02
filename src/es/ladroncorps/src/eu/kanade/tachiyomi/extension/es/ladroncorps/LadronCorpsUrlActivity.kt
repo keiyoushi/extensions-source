@@ -5,10 +5,10 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import eu.kanade.tachiyomi.extension.es.thesecretcorps.TheSecretCorps
+import eu.kanade.tachiyomi.extension.es.ladroncorps.LadronCorps
 import kotlin.system.exitProcess
 
-class TheSecretCorpsUrlActivity : Activity() {
+class LadronCorpsUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -19,7 +19,7 @@ class TheSecretCorpsUrlActivity : Activity() {
             val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${TheSecretCorps.URL_SEARCH_PREFIX}$item")
+                putExtra("query", "${LadronCorps.URL_SEARCH_PREFIX}$item")
                 putExtra("filter", packageName)
             }
 

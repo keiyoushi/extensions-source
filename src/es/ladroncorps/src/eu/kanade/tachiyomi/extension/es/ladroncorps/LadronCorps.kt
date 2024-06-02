@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.es.thesecretcorps
+package eu.kanade.tachiyomi.extension.es.ladroncorps
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -16,7 +16,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Element
 
-class TheSecretCorps : HttpSource() {
+class LadronCorps : HttpSource() {
     override val name: String = "Ladron Corps"
     override val baseUrl: String = "https://www.ladroncorps.com"
     override val lang: String = "es"

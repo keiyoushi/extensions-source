@@ -1,6 +1,6 @@
 ext {
     extName = 'Ladron Corps'
-    extClass = '.TheSecretCorps'
+    extClass = '.LadronCorps'
     extVersionCode = 1
 }
 
