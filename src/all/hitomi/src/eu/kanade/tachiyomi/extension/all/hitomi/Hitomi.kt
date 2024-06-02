@@ -36,7 +36,6 @@ import java.text.SimpleDateFormat
 import java.util.LinkedList
 import java.util.Locale
 import kotlin.math.min
-import kotlin.random.Random
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Hitomi(
@@ -64,13 +63,15 @@ class Hitomi(
 
     private var iconified = preferences.getBoolean(PREF_TAG_GENDER_ICON, false)
 
+    private var popularY = preferences.getBoolean(PREF_POPULAR, false)
+
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         runBlocking {
-            val entries = getGalleryIDsFromNozomi("popular", "year", nozomiLang, page.nextPageRange())
+            val entries = getGalleryIDsFromNozomi("popular", if (popularY) "year" else "today", nozomiLang, page.nextPageRange())
                 .toMangaList()
 
             MangasPage(entries, entries.size >= 24)
@@ -95,7 +96,7 @@ class Hitomi(
                     query.trim(),
                     filters,
                     nozomiLang,
-                ).toList()
+                )
             }
 
             val end = min(page * 25, searchResponse.size)
@@ -127,19 +128,19 @@ class Hitomi(
         query: String,
         filters: FilterList,
         language: String = "all",
-    ): Set<Int> =
+    ): List<Int> =
         coroutineScope {
             var sortBy: Pair<String?, String> = Pair(null, "index")
             var random = false
 
-            var terms = query
+            val terms = query
                 .trim()
                 .replace(Regex("""^\?"""), "")
                 .lowercase()
                 .split(Regex("\\s+"))
                 .map {
                     it.replace('_', ' ')
-                }
+                }.toMutableList()
 
             filters.forEach {
                 when (it) {
@@ -150,7 +151,7 @@ class Hitomi(
 
                     is TypeFilter -> {
                         val (activeFilter, inactiveFilters) = it.state.partition { stIt -> stIt.state }
-                        terms = terms + when {
+                        terms += when {
                             inactiveFilters.size < 5 -> inactiveFilters.map { fil -> "-type:${fil.value}" }
                             inactiveFilters.size == 5 -> listOf("type:${activeFilter[0].value}")
                             else -> listOf("type: none")
@@ -159,10 +160,9 @@ class Hitomi(
 
                     is TextFilter -> {
                         if (it.state.isNotEmpty()) {
-                            val tagType = it.tagType().split(" ")[0].lowercase().removeSuffix(if (it.tagType() != "Series") "s" else "") + ":"
-                            terms = terms + it.state.split(",").map { tag ->
+                            terms += it.state.split(",").map { tag ->
                                 val trimmed = tag.trim()
-                                (if (trimmed.startsWith("-")) "-" else "") + tagType + trimmed.lowercase().removePrefix("-")
+                                (if (trimmed.startsWith("-")) "-" else "") + it.type + ":" + trimmed.lowercase().removePrefix("-")
                             }
                         }
                     }
@@ -200,7 +200,7 @@ class Hitomi(
             var results = when {
                 positiveTerms.isEmpty() -> getGalleryIDsFromNozomi(sortBy.first, sortBy.second, language)
                 else -> emptySet()
-            }.toMutableSet()
+            }.toMutableList()
 
             fun filterPositive(newResults: Set<Int>) {
                 when {
@@ -223,18 +223,9 @@ class Hitomi(
                 filterNegative(it.await())
             }
 
-            if (random) results = results.shuffle()
+            if (random) results = results.shuffled().toMutableList()
             results
         }
-
-    private fun <T> MutableSet<T>.shuffle(): MutableSet<T> {
-        val list = this.toMutableList()
-        for (i in list.size - 1 downTo 1) {
-            val j = Random.nextInt(i + 1)
-            list[i] = list[j].also { list[j] = list[i] }
-        }
-        return list.toMutableSet()
-    }
 
     // search.js
     private suspend fun getGalleryIDsForQuery(
@@ -253,11 +244,6 @@ class Hitomi(
                     "female", "male" -> {
                         area = "tag"
                         tag = it
-                    }
-
-                    "tag", "artist", "group", "series", "type", "character" -> {
-                        area = ns
-                        tag = sides[1]
                     }
 
                     "language" -> {
@@ -500,7 +486,7 @@ class Hitomi(
             }
             append("Type: ", type, "\n")
             append("Pages: ", files.size, "\n")
-            append("Language: ", language ?: "N/A")
+            language?.let { append("Language: ", language) }
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -666,6 +652,18 @@ class Hitomi(
                 true
             }
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_POPULAR
+            title = "Popular Section: Today or Year"
+            summaryOff = "Use popular comic of the day for the popular section"
+            summaryOn = "Use popular comic of the year for the popular section"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                popularY = newValue == true
+                true
+            }
+        }.also(screen::addPreference)
     }
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
@@ -674,5 +672,6 @@ class Hitomi(
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
     companion object {
         private const val PREF_TAG_GENDER_ICON = "pref_tag_gender_icon"
+        private const val PREF_POPULAR = "pref_popular"
     }
 }
