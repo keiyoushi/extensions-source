@@ -229,7 +229,7 @@ class Akuma(
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) = with (document) {
+    override fun mangaDetailsParse(document: Document) = with(document) {
         SManga.create().apply {
             title = select(".entry-title").text()
             thumbnail_url = select(".img-thumbnail").attr("abs:src")
