@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.OkHttpClient
+import okio.IOException
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -21,6 +22,14 @@ class DemonSect : Madara(
     override val id: Long = 8168108118738519332
 
     override val client: OkHttpClient = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            val pathSegments = response.request.url.pathSegments
+            if (pathSegments.contains("login")) {
+                throw IOException("Faça o login na WebView para acessar o contéudo")
+            }
+            response
+        }
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 

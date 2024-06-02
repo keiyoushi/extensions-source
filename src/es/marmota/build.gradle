@@ -1,0 +1,9 @@
+ext {
+    extName = 'Marmota'
+    extClass = '.Marmota'
+    themePkg = 'madara'
+    baseUrl = 'https://marmota.me'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
