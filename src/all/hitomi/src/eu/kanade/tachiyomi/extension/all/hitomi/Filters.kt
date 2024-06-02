@@ -10,20 +10,18 @@ fun getFilters(): FilterList {
         Filter.Separator(),
         Filter.Header("Separate tags with commas (,)"),
         Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Groups"),
-        TextFilter("Artists"),
-        TextFilter("Series"),
-        TextFilter("Characters"),
-        TextFilter("Male Tags"),
-        TextFilter("Female Tags"),
+        TextFilter("Groups", "group"),
+        TextFilter("Artists", "artist"),
+        TextFilter("Series", "series"),
+        TextFilter("Characters", "character"),
+        TextFilter("Male Tags", "male"),
+        TextFilter("Female Tags", "female"),
         Filter.Header("Please don't put Female/Male tags here, they won't work!"),
-        TextFilter("Tags"),
+        TextFilter("Tags", "tag"),
     )
 }
 
-internal open class TextFilter(name: String) : Filter.Text(name) {
-    fun tagType() = name
-}
+internal open class TextFilter(name: String, val type: String) : Filter.Text(name)
 internal open class SelectFilter(name: String, val vals: List<Triple<String, String?, String>>, state: Int = 0) :
     Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
     fun getArea() = vals[state].second
