@@ -21,8 +21,6 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
 
     override val versionId: Int = 2
 
-    private val cdnDomain = "https://hentaimanga.to"
-
     private val cdnHeaders = super.headersBuilder()
         .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         .build()
@@ -31,7 +29,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
-            if (url.startsWith("$cdnDomain/wp-content/uploads/")) {
+            if (url.contains("/wp-content/uploads/")) {
                 return@addInterceptor chain.proceed(request.newBuilder().headers(cdnHeaders).build())
             }
             chain.proceed(request)
