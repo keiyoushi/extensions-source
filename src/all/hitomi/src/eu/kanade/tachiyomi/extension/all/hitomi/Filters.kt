@@ -3,79 +3,52 @@ package eu.kanade.tachiyomi.extension.all.hitomi
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-typealias OrderType = Pair<String?, String>
-typealias ParsedFilter = Pair<String, OrderType>
-
-private fun parseFilter(query: StringBuilder, area: String, filterState: String) {
-    filterState
-        .trim()
-        .split(',')
-        .filter { it.isNotBlank() }
-        .forEach {
-            val trimmed = it.trim()
-            val negativePrefix = if (trimmed.startsWith("-")) "-" else ""
-            query.append(" $negativePrefix$area:${trimmed.removePrefix("-").replace(" ", "_")}")
-        }
+fun getFilters(): FilterList {
+    return FilterList(
+        SelectFilter("Sort by", getSortsList),
+        TypeFilter("Types"),
+        Filter.Separator(),
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        TextFilter("Groups"),
+        TextFilter("Artists"),
+        TextFilter("Series"),
+        TextFilter("Characters"),
+        TextFilter("Male Tags"),
+        TextFilter("Female Tags"),
+        Filter.Header("Please don't put Female/Male tags here, they won't work!"),
+        TextFilter("Tags"),
+    )
 }
 
-fun parseFilters(filters: FilterList): ParsedFilter {
-    val query = StringBuilder()
-    var order: OrderType = Pair("date", "added")
-    filters.forEach { filter ->
-        when (filter) {
-            is SortFilter -> {
-                order = filter.getOrder
-            }
-            is AreaFilter -> {
-                parseFilter(query, filter.getAreaName, filter.state)
-            }
-            else -> { /* Do Nothing */ }
-        }
-    }
-    return Pair(query.toString(), order)
+internal open class TextFilter(name: String) : Filter.Text(name) {
+    fun tagType() = name
 }
-
-private class OrderFilter(val name: String, val order: OrderType) {
-    val getFilterName: String
-        get() = name
-    val getOrder: OrderType
-        get() = order
+internal open class SelectFilter(name: String, val vals: List<Triple<String, String?, String>>, state: Int = 0) :
+    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+    fun getArea() = vals[state].second
+    fun getValue() = vals[state].third
 }
+internal class TypeFilter(name: String) :
+    Filter.Group<CheckBoxFilter>(
+        name,
+        listOf(
+            Pair("Anime", "anime"),
+            Pair("Artist CG", "artistcg"),
+            Pair("Doujinshi", "doujinshi"),
+            Pair("Game CG", "gamecg"),
+            Pair("Image Set", "imageset"),
+            Pair("Manga", "manga"),
+        ).map { CheckBoxFilter(it.first, it.second, true) },
+    )
+internal open class CheckBoxFilter(name: String, val value: String, state: Boolean) : Filter.CheckBox(name, state)
 
-private class SortFilter : UriPartFilter(
-    "Sort By",
-    arrayOf(
-        OrderFilter("Date Added", Pair(null, "index")),
-        OrderFilter("Date Published", Pair("date", "published")),
-        OrderFilter("Popular: Today", Pair("popular", "today")),
-        OrderFilter("Popular: Week", Pair("popular", "week")),
-        OrderFilter("Popular: Month", Pair("popular", "month")),
-        OrderFilter("Popular: Year", Pair("popular", "year")),
-    ),
-)
-
-private open class UriPartFilter(displayName: String, val vals: Array<OrderFilter>) :
-    Filter.Select<String>(displayName, vals.map { it.getFilterName }.toTypedArray()) {
-    val getOrder: OrderType
-        get() = vals[state].getOrder
-}
-
-private class AreaFilter(displayName: String, val areaName: String) :
-    Filter.Text(displayName) {
-    val getAreaName: String
-        get() = areaName
-}
-
-fun getFilterListInternal(): FilterList = FilterList(
-    SortFilter(),
-    Filter.Header("Separate tags with commas (,)"),
-    Filter.Header("Prepend with dash (-) to exclude"),
-    AreaFilter("Artist(s)", "artist"),
-    AreaFilter("Character(s)", "character"),
-    AreaFilter("Group(s)", "group"),
-    AreaFilter("Series", "series"),
-    AreaFilter("Female Tag(s)", "female"),
-    AreaFilter("Male Tag(s)", "male"),
-    Filter.Header("Don't put Female/Male tags here, they won't work!"),
-    AreaFilter("Tag(s)", "tag"),
+private val getSortsList: List<Triple<String, String?, String>> = listOf(
+    Triple("Date Added", null, "index"),
+    Triple("Date Published", "date", "published"),
+    Triple("Popular: Today", "popular", "today"),
+    Triple("Popular: Week", "popular", "week"),
+    Triple("Popular: Month", "popular", "month"),
+    Triple("Popular: Year", "popular", "year"),
+    Triple("Random", "popular", "year"),
 )

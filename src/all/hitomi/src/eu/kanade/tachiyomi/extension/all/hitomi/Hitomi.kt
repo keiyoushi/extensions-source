@@ -36,6 +36,7 @@ import java.text.SimpleDateFormat
 import java.util.LinkedList
 import java.util.Locale
 import kotlin.math.min
+import kotlin.random.Random
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Hitomi(
@@ -69,7 +70,7 @@ class Hitomi(
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         runBlocking {
-            val entries = getGalleryIDsFromNozomi("popular", "today", nozomiLang, page.nextPageRange())
+            val entries = getGalleryIDsFromNozomi("popular", "year", nozomiLang, page.nextPageRange())
                 .toMangaList()
 
             MangasPage(entries, entries.size >= 24)
@@ -88,13 +89,11 @@ class Hitomi(
     private lateinit var searchResponse: List<Int>
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        val parsedFilter = parseFilters(filters)
-
         runBlocking {
             if (page == 1) {
                 searchResponse = hitomiSearch(
-                    "$query${parsedFilter.first}".trim(),
-                    parsedFilter.second,
+                    query.trim(),
+                    filters,
                     nozomiLang,
                 ).toList()
             }
@@ -102,12 +101,11 @@ class Hitomi(
             val end = min(page * 25, searchResponse.size)
             val entries = searchResponse.subList((page - 1) * 25, end)
                 .toMangaList()
-
-            MangasPage(entries, end != searchResponse.size)
+            MangasPage(entries, end < searchResponse.size)
         }
     }
 
-    override fun getFilterList(): FilterList = getFilterListInternal()
+    override fun getFilterList() = getFilters()
 
     private fun Int.nextPageRange(): LongRange {
         val byteOffset = ((this - 1) * 25) * 4L
@@ -127,15 +125,50 @@ class Hitomi(
 
     private suspend fun hitomiSearch(
         query: String,
-        order: OrderType,
+        filters: FilterList,
         language: String = "all",
     ): Set<Int> =
         coroutineScope {
-            val terms = query
+            var sortBy: Pair<String?, String> = Pair(null, "index")
+            var random = false
+
+            var terms = query
                 .trim()
                 .replace(Regex("""^\?"""), "")
                 .lowercase()
                 .split(Regex("\\s+"))
+                .map {
+                    it.replace('_', ' ')
+                }
+
+            filters.forEach {
+                when (it) {
+                    is SelectFilter -> {
+                        sortBy = Pair(it.getArea(), it.getValue())
+                        random = (it.vals[it.state].first == "Random")
+                    }
+
+                    is TypeFilter -> {
+                        val (activeFilter, inactiveFilters) = it.state.partition { stIt -> stIt.state }
+                        terms = terms + when {
+                            inactiveFilters.size < 5 -> inactiveFilters.map { fil -> "-type:${fil.value}" }
+                            inactiveFilters.size == 5 -> listOf("type:${activeFilter[0].value}")
+                            else -> listOf("type: none")
+                        }
+                    }
+
+                    is TextFilter -> {
+                        if (it.state.isNotEmpty()) {
+                            val tagType = it.tagType().split(" ")[0].lowercase().removeSuffix(if (it.tagType() != "Series") "s" else "") + ":"
+                            terms = terms + it.state.split(",").map { tag ->
+                                val trimmed = tag.trim()
+                                (if (trimmed.startsWith("-")) "-" else "") + tagType + trimmed.lowercase().removePrefix("-")
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+            }
 
             val positiveTerms = LinkedList<String>()
             val negativeTerms = LinkedList<String>()
@@ -151,7 +184,7 @@ class Hitomi(
             val positiveResults = positiveTerms.map {
                 async {
                     runCatching {
-                        getGalleryIDsForQuery(it, language, order)
+                        getGalleryIDsForQuery(it, language)
                     }.getOrDefault(emptySet())
                 }
             }
@@ -159,13 +192,13 @@ class Hitomi(
             val negativeResults = negativeTerms.map {
                 async {
                     runCatching {
-                        getGalleryIDsForQuery(it, language, order)
+                        getGalleryIDsForQuery(it, language)
                     }.getOrDefault(emptySet())
                 }
             }
 
-            val results = when {
-                positiveTerms.isEmpty() -> getGalleryIDsFromNozomi(order.first, order.second, language)
+            var results = when {
+                positiveTerms.isEmpty() -> getGalleryIDsFromNozomi(sortBy.first, sortBy.second, language)
                 else -> emptySet()
             }.toMutableSet()
 
@@ -190,14 +223,23 @@ class Hitomi(
                 filterNegative(it.await())
             }
 
+            if (random) results = results.shuffle()
             results
         }
+
+    private fun <T> MutableSet<T>.shuffle(): MutableSet<T> {
+        val list = this.toMutableList()
+        for (i in list.size - 1 downTo 1) {
+            val j = Random.nextInt(i + 1)
+            list[i] = list[j].also { list[j] = list[i] }
+        }
+        return list.toMutableSet()
+    }
 
     // search.js
     private suspend fun getGalleryIDsForQuery(
         query: String,
         language: String = "all",
-        order: OrderType,
     ): Set<Int> {
         query.replace("_", " ").let {
             if (it.indexOf(':') > -1) {
@@ -213,25 +255,16 @@ class Hitomi(
                         tag = it
                     }
 
+                    "tag", "artist", "group", "series", "type", "character" -> {
+                        area = ns
+                        tag = sides[1]
+                    }
+
                     "language" -> {
                         area = null
                         lang = tag
                         tag = "index"
                     }
-                }
-
-                if (area != null) {
-                    if (order.first != null) {
-                        area = "$area/${order.first}"
-                        if (tag.isBlank()) {
-                            tag = order.second
-                        } else {
-                            area = "$area/${order.second}"
-                        }
-                    }
-                } else {
-                    area = order.first
-                    tag = order.second
                 }
 
                 return getGalleryIDsFromNozomi(area, tag, lang)
@@ -459,14 +492,15 @@ class Hitomi(
             "https://${subDomain}tn.$domain/webpbigtn/${thumbPathFromHash(hash)}/$hash.webp"
         }
         description = buildString {
-            characters?.joinToString { it.formatted }?.let {
-                append("Characters: ", it, "\n")
-            }
             parodys?.joinToString { it.formatted }?.let {
-                append("Parodies: ", it, "\n")
+                append("Series: ", it, "\n")
             }
+            characters?.joinToString { it.formatted }?.let {
+                append("Characters: ", it, "\n\n")
+            }
+            append("Type: ", type, "\n")
             append("Pages: ", files.size, "\n")
-            append("Language: ", language)
+            append("Language: ", language ?: "N/A")
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -620,7 +654,6 @@ class Hitomi(
 
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_TAG_GENDER_ICON
@@ -634,13 +667,11 @@ class Hitomi(
             }
         }.also(screen::addPreference)
     }
-
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     companion object {
         private const val PREF_TAG_GENDER_ICON = "pref_tag_gender_icon"
     }
