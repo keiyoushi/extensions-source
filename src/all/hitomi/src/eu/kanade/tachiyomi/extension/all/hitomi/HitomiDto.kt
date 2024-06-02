@@ -30,9 +30,9 @@ data class Tag(
     val tag: String,
 ) {
     fun getFormatted(iconified: Boolean) = if (female?.content == "1") {
-        "${tag.toCamelCase()} " + if (iconified) "♀" else "(Female)"
+        tag.toCamelCase() + if (iconified) " ♀" else " (Female)"
     } else if (male?.content == "1") {
-        "${tag.toCamelCase()} " + if (iconified) "♂" else "(Male)"
+        tag.toCamelCase() + if (iconified) " ♂" else " (Male)"
     } else {
         tag.toCamelCase()
     }
