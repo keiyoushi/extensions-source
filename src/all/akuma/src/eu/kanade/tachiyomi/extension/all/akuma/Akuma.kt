@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.akuma
 
 import android.app.Application
 import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -53,12 +52,11 @@ class Akuma(
     }
 
     private var iconified = preferences.getBoolean(PREF_TAG_GENDER_ICON, false)
-    private var rateLimit = preferences.getString(RATE_LIMIT, "2")?.toIntOrNull() ?: 2
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ddosGuardIntercept)
         .addInterceptor(::tokenInterceptor)
-        .rateLimit(rateLimit)
+        .rateLimit(2)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -182,12 +180,6 @@ class Akuma(
             append(query)
             if (lang != "all") {
                 append(" language:", akumaLang, "$")
-            }
-            filters.filterIsInstance<SyntaxFilter>().firstOrNull()?.let {
-                if (it.state.isNotBlank()) {
-                    append(it.state)
-                    return@buildString
-                }
             }
             filters.filterIsInstance<TextFilter>().forEach { filter ->
                 if (filter.state.isBlank()) return@forEach
@@ -314,10 +306,6 @@ class Akuma(
         TextFilter("Pages", "pages"),
         Filter.Header("Search in favorites, read, or commented"),
         OptionFilter(),
-
-        Filter.Separator(),
-        Filter.Header("Use syntax to search. If not blank, other filters will be ignored"),
-        SyntaxFilter(),
     )
 
     private class CategoryFilter : Filter.Group<CategoryFilter.TagTriState>("Categories", values()) {
@@ -338,24 +326,10 @@ class Akuma(
         }
     }
     private class TextFilter(placeholder: String, val identifier: String) : Filter.Text(placeholder)
-    private class SyntaxFilter : Filter.Text("Syntax")
     private class OptionFilter :
         Filter.Select<String>("Options", options.map { it.first }.toTypedArray())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = RATE_LIMIT
-            title = "Max requests per minute"
-            summary = "Requires restart. Value should be integer. Current value: $rateLimit"
-            setDefaultValue(rateLimit.toString())
-            setOnPreferenceChangeListener { _, newValue ->
-                null != newValue.toString().toIntOrNull()?.also {
-                    rateLimit = it
-                    summary = "Requires restart. Value should be integer. Current value: $it"
-                }
-            }
-        }.also(screen::addPreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_TAG_GENDER_ICON
             title = "Show gender as text or icon in tags (requires refresh)"
@@ -372,7 +346,6 @@ class Akuma(
     companion object {
         const val PREFIX_ID = "id:"
         private const val PREF_TAG_GENDER_ICON = "pref_tag_gender_icon"
-        private const val RATE_LIMIT = "rate_limit"
         private val options = listOf(
             "None" to "",
             "Favorited only" to "favorited",
