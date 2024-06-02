@@ -180,9 +180,24 @@ class Akuma(
 
         val finalQuery = buildString {
             append(query)
+            if (lang != "all") {
+                append(" language:", akumaLang, "$")
+            }
+            filters.filterIsInstance<SyntaxFilter>().firstOrNull()?.let {
+                if (it.state.isNotBlank()) {
+                    append(it.state)
+                    return@buildString
+                }
+            }
             filters.filterIsInstance<TextFilter>().forEach { filter ->
-                if (filter.state.isNotBlank()) {
-                    append(" ", filter.identifier, ":\"", filter.state, "\"$")
+                if (filter.state.isBlank()) return@forEach
+                filter.state.split(",").forEach {
+                    // append like `a:"eye-covering bang"$`
+                    if (it.startsWith("-")) {
+                        append(" -", filter.identifier, ":", it.trim().substring(1))
+                    } else {
+                        append(" ", filter.identifier, ":", it.trim())
+                    }
                 }
             }
             filters.filterIsInstance<OptionFilter>().firstOrNull()?.let {
@@ -191,8 +206,12 @@ class Akuma(
                     append(" opt:", filter)
                 }
             }
-            if (lang != "all") {
-                append(" language:", akumaLang, "$")
+            filters.filterIsInstance<CategoryFilter>().firstOrNull()?.state?.forEach {
+                if (it.isIncluded()) {
+                    append(" category:\"", it.name, "\"$")
+                } else if (it.isExcluded()) {
+                    append(" -category:\"", it.name, "\"$")
+                }
             }
         }
 
@@ -210,41 +229,45 @@ class Akuma(
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".entry-title").text()
-        thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
+    override fun mangaDetailsParse(document: Document) = with (document) {
+        SManga.create().apply {
+            title = select(".entry-title").text()
+            thumbnail_url = select(".img-thumbnail").attr("abs:src")
 
-        author = document.select(".group + span.value").text()
-        artist = document.select(".artist + span.value").text()
+            author = select(".group~.value").eachText().joinToString()
+            artist = select(".artist~.value").eachText().joinToString()
 
-        val characters = document.select(".character ~ span.value").map(Element::text)
-        val parodies = document.select(".parody ~ span.value").map(Element::text)
-        val males = document.select(".male ~ span.value")
-            .map { it.text() + if (iconified) " ♂" else " (male)" }
-        val females = document.select(".female ~ span.value")
-            .map { it.text() + if (iconified) " ♀" else " (female)" }
-        // show all in tags for quickly searching
-        genre = (characters + parodies + males + females).joinToString()
-        description = buildString {
-            append(
-                "Full English and Japanese title: \n",
-                document.select(".entry-title").text(),
-                "\n",
-                document.select(".entry-title + span").text(),
-                "\n\n",
-            )
+            val characters = select(".character~.value").eachText()
+            val parodies = select(".parody~.value").eachText()
+            val males = select(".male~.value")
+                .map { it.text() + if (iconified) " ♂" else " (male)" }
+            val females = select(".female~.value")
+                .map { it.text() + if (iconified) " ♀" else " (female)" }
+            // show all in tags for quickly searching
 
-            // translated should show up in the description
-            append("Language: ", document.select(".language ~ span.value").joinToString(), "\n")
-            append("Pages: ", document.select(".pages span.value").text(), "\n")
-            append("Categories: ", document.select(".category + span.value"), "\n\n")
+            genre = (characters + parodies + males + females).joinToString()
+            description = buildString {
+                append(
+                    "Full English and Japanese title: \n",
+                    select(".entry-title").text(),
+                    "\n",
+                    select(".entry-title+span").text(),
+                    "\n\n",
+                )
 
-            // show followings for easy to reference
-            append("Parodies: ", parodies.joinToString(), "\n")
-            append("Characters: ", characters.joinToString(), "\n")
+                // translated should show up in the description
+                append("Language: ", select(".language~.value").text(), "\n")
+                append("Pages: ", select(".pages .value").text(), "\n")
+                append("Upload Date: ", select(".date .value>time").text(), "\n")
+                append("Categories: ", selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
+
+                // show followings for easy to reference
+                append("Parodies: ", parodies.joinToString(), "\n")
+                append("Characters: ", characters.joinToString(), "\n")
+            }
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.UNKNOWN
         }
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        status = SManga.UNKNOWN
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -280,21 +303,42 @@ class Akuma(
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Separate tags with commas (,)"),
         Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Tags", "tag"),
-        TextFilter("Categories", "category"),
+        TextFilter("Female Tags", "female"),
+        TextFilter("Male Tags", "male"),
+        CategoryFilter(),
         TextFilter("Groups", "group"),
         TextFilter("Artists", "artist"),
         TextFilter("Parody", "parody"),
-        TextFilter("Characters", "characters"),
+        TextFilter("Characters", "character"),
         Filter.Header("Filter by pages, for example: (>20)"),
         TextFilter("Pages", "pages"),
-
-        Filter.Separator(),
         Filter.Header("Search in favorites, read, or commented"),
         OptionFilter(),
+
+        Filter.Separator(),
+        Filter.Header("Use syntax to search. If not blank, other filters will be ignored"),
+        SyntaxFilter(),
     )
 
+    private class CategoryFilter : Filter.Group<CategoryFilter.TagTriState>("Categories", values()) {
+        class TagTriState(name: String) : TriState(name)
+        private companion object {
+            fun values() = listOf(
+                TagTriState("doujinshi"),
+                TagTriState("manga"),
+                TagTriState("artist cg"),
+                TagTriState("game cg"),
+                TagTriState("west"),
+                TagTriState("non-h"),
+                TagTriState("gallery"),
+                TagTriState("cosplay"),
+                TagTriState("asian pron"),
+                TagTriState("misc"),
+            )
+        }
+    }
     private class TextFilter(placeholder: String, val identifier: String) : Filter.Text(placeholder)
+    private class SyntaxFilter : Filter.Text("Syntax")
     private class OptionFilter :
         Filter.Select<String>("Options", options.map { it.first }.toTypedArray())
 
