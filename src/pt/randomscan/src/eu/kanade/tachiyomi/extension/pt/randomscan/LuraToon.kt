@@ -16,7 +16,7 @@ import uy.kohesive.injekt.api.get
 class LuraToon :
     PeachScan(
         "Lura Toon",
-        "https://lura-toons.com",
+        "https://luratoons.com",
         "pt-BR",
     ),
     ConfigurableSource {
