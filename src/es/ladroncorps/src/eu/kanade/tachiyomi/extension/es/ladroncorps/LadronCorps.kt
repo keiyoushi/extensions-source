@@ -17,6 +17,7 @@ import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Element
+import rx.Observable
 
 class LadronCorps : HttpSource() {
     override val name: String = "Ladron Corps"
@@ -75,6 +76,8 @@ class LadronCorps : HttpSource() {
 
         genre = document.select("#post-footer li a")
             .joinToString { it.text() }
+
+        setUrlWithoutDomain(document.location())
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -148,6 +151,19 @@ class LadronCorps : HttpSource() {
             .addQueryParameter("q", query)
             .build()
         return GET(url, apiHeaders())
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(URL_SEARCH_PREFIX)) {
+            val manga = SManga.create().apply {
+                url = "/post/${query.substringAfter(URL_SEARCH_PREFIX)}"
+            }
+            return fetchMangaDetails(manga).asObservable().map {
+                MangasPage(listOf(it), false)
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
     }
 
     private inline fun <R> JSONArray.map(transform: (JSONObject) -> R): List<R> {

@@ -13,7 +13,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="ladroncorps.com"
+                    android:host="www.ladroncorps.com"
                     android:pathPattern="/post/..*"
                     android:scheme="https" />
             </intent-filter>
