@@ -10,12 +10,11 @@ import kotlin.system.exitProcess
 class PeachScanUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-
-        if (pathSegments != null && pathSegments.size >= 1) {
+        val path = intent?.data?.path
+        if (path != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${slug(pathSegments)}")
+                putExtra("query", "${PeachScan.URL_SEARCH_PREFIX}$path")
                 putExtra("filter", packageName)
             }
             try {
@@ -29,14 +28,5 @@ class PeachScanUrlActivity : Activity() {
 
         finish()
         exitProcess(0)
-    }
-
-    private fun slug(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 1) {
-            val slug = pathSegments[0]
-            "${PeachScan.URL_SEARCH_PREFIX}$slug"
-        } else {
-            null
-        }
     }
 }
