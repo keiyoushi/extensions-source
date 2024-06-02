@@ -12,10 +12,9 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class TheSecretCorps : HttpSource() {
     override val name: String = "Ladron Corps"
@@ -23,12 +22,11 @@ class TheSecretCorps : HttpSource() {
     override val lang: String = "es"
     override val supportsLatest: Boolean = false
 
-    val authorization: String by lazy {
+    private val authorization: String by lazy {
         val response = client.newCall(GET("$baseUrl/_api/v2/dynamicmodel", headers)).execute()
         val json = JSONObject(response.body.string())
         val tokens = json.getJSONObject("apps")
-        val keys = tokens.keys()
-            .iterator()
+        val keys = tokens.keys().iterator()
             .asSequence()
             .toList()
 
@@ -89,21 +87,19 @@ class TheSecretCorps : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val jsonObject = JSONObject(response.body.string())
-        val posts = jsonObject.getJSONObject("postFeedPage").getJSONObject("posts")
-        val mangaArray = posts.getJSONArray("posts")
-        var currentIndex = 0
-        val mangas = mutableListOf<SManga>()
-        while (currentIndex < mangaArray.length()) {
-            val mangaObject = mangaArray.getJSONObject(currentIndex)
-            mangas += SManga.create().apply {
-                title = mangaObject.getString("title")
-                thumbnail_url = mangaObject.getJSONObject("coverMedia")
+        val posts = jsonObject
+            .getJSONObject("postFeedPage")
+            .getJSONObject("posts")
+            .getJSONArray("posts")
+
+        val mangas = posts.map {
+            SManga.create().apply {
+                title = it.getString("title")
+                thumbnail_url = it.getJSONObject("coverMedia")
                     .getJSONObject("image")
                     .getString("url")
-
-                url = mangaObject.getJSONObject("url").getString("path")
+                url = it.getJSONObject("url").getString("path")
             }
-            currentIndex++
         }
 
         return MangasPage(mangas, mangas.isNotEmpty())
@@ -117,26 +113,22 @@ class TheSecretCorps : HttpSource() {
             .addQueryParameter("pageSize", "20")
             .addQueryParameter("type", "ALL_POSTS")
             .build()
-        return GET(url, headers)
+        return GET(url, apiHeaders())
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val jsonObject = JSONObject(response.body.string())
-        val mangaArray = jsonObject.getJSONArray("posts")
-        val mangas = mutableListOf<SManga>()
-        var currentIndex = 0
-        while (currentIndex < mangaArray.length()) {
-            val mangaObject = mangaArray.getJSONObject(currentIndex)
-            mangas += SManga.create().apply {
-                title = mangaObject.getString("title")
-                val imagePath = mangaObject.getJSONObject("coverImage")
+        val posts = jsonObject.getJSONArray("posts")
+        val mangas = posts.map {
+            SManga.create().apply {
+                title = it.getString("title")
+                val cover = it.getJSONObject("coverImage")
                     .getJSONObject("src")
-                    .getString("file_name")
-                thumbnail_url = "$STATIC_MEDIA_URL/$imagePath"
-                val slug = mangaObject.getString("seoTitle")
-                url = "$baseUrl/post/$slug"
+
+                thumbnail_url = "$STATIC_MEDIA_URL/${cover.imgSrc()}"
+
+                url = "/post/${it.getString("seoTitle")}"
             }
-            currentIndex++
         }
 
         return MangasPage(mangas, false)
@@ -149,8 +141,23 @@ class TheSecretCorps : HttpSource() {
         return GET(url, apiHeaders())
     }
 
+    private inline fun <R> JSONArray.map(transform: (JSONObject) -> R): List<R> {
+        var currentIndex = 0
+        val collection = mutableListOf<R>()
+        while (currentIndex < length()) {
+            collection += transform(getJSONObject(currentIndex))
+            currentIndex++
+        }
+        return collection
+    }
+
+    private fun JSONObject.imgSrc() = when {
+        has("id") -> getString("id")
+        else -> getString("file_name")
+    }
+
     companion object {
-        val STATIC_MEDIA_URL = "https://static.wixstatic.com/media"
+        const val STATIC_MEDIA_URL = "https://static.wixstatic.com/media"
         const val URL_SEARCH_PREFIX = "slug:"
     }
 }
