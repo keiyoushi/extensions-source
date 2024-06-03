@@ -5,7 +5,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import eu.kanade.tachiyomi.extension.es.ladroncorps.LadronCorps
 import kotlin.system.exitProcess
 
 class LadronCorpsUrlActivity : Activity() {
