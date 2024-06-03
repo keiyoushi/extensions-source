@@ -60,12 +60,13 @@ class SearchMangaDto(
     private val slugs: List<String>,
 ) {
     val slug: String get() = slugs.first()
+    val url: String get() = "/post/$slug"
 
     @Serializable
     class CoverDto(
         private val src: SrcDto,
     ) {
-        val url: String get() = "$src"
+        val url: String get() = "$STATIC_MEDIA_URL/$src"
     }
 
     /*
@@ -80,5 +81,9 @@ class SearchMangaDto(
         override fun toString(): String {
             return id ?: file_name ?: ""
         }
+    }
+
+    companion object {
+        const val STATIC_MEDIA_URL = "https://static.wixstatic.com/media"
     }
 }

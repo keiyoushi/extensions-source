@@ -93,8 +93,8 @@ class LadronCorps : HttpSource() {
         val mangas = posts.map {
             SManga.create().apply {
                 title = it.title
-                thumbnail_url = "$STATIC_MEDIA_URL/${it.cover.url}"
-                url = "/post/${it.slug}"
+                thumbnail_url = it.cover.url
+                url = it.url
             }
         }
         return MangasPage(mangas, false)
@@ -189,7 +189,6 @@ class LadronCorps : HttpSource() {
     }
 
     companion object {
-        const val STATIC_MEDIA_URL = "https://static.wixstatic.com/media"
         const val URL_SEARCH_PREFIX = "slug:"
 
         val RELATIVE_DATE_REGEX = """(\d+)""".toRegex()
