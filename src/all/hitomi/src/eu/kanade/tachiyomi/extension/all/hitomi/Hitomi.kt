@@ -133,6 +133,7 @@ class Hitomi(
 
             val terms = query
                 .trim()
+                .let { if (language != "all") query + " language:$nozomiLang" else query }
                 .replace(Regex("""^\?"""), "")
                 .lowercase()
                 .split(Regex("\\s+"))
@@ -229,7 +230,7 @@ class Hitomi(
         query: String,
         language: String = "all",
     ): MutableList<Int> {
-        query.let { if (language != "all") query + " language:$nozomiLang" else query }.replace("_", " ").let {
+        query.replace("_", " ").let {
             if (it.indexOf(':') > -1) {
                 val sides = it.split(":")
                 val ns = sides[0]
