@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -34,6 +35,9 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override val client = network.client.newBuilder()
         .rateLimit(5, 2, TimeUnit.SECONDS)
         .build()
+
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
