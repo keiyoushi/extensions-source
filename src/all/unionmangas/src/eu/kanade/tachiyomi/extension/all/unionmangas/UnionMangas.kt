@@ -90,23 +90,15 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         return Observable.just(chapters)
     }
 
-    private fun fetchChapterListPageable(manga: SManga, page: Int): Pageable1<List<ChapterDto>> {
+    private fun fetchChapterListPageable(manga: SManga, page: Int): Pageable<List<ChapterDto>> {
         val maxResult = 16
         val url = "$newApiUrl/${langOption.infix}/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
         return client.newCall(GET(url, headers)).execute()
-            .parseAs<Pageable1<List<ChapterDto>>>()
+            .parseAs<Pageable<List<ChapterDto>>>()
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         return MangasPage(emptyList(), false)
-//        val nextData = response.parseNextData<LatestUpdateProps>()
-//        val dto = nextData.data.latestUpdateDto
-//        val mangas = dto.mangas.map { mangaParse(it, "nextData.query") }
-//
-//        return MangasPage(
-//            mangas = mangas,
-//            hasNextPage = dto.hasNextPage(),
-//        )
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -117,41 +109,16 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val nextData = response.parseAs<Pageable1<MangaDetailsProps>>()
+        val nextData = response.parseAs<Pageable<MangaDetailsProps>>()
         return mangaParse(nextData.data.mangaDetailsDto)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         return emptyList()
-//        val chaptersDto = decryptChapters(response)
-//        return chaptersDto.images.mapIndexed { index, imageUrl ->
-//            Page(index, imageUrl = imageUrl)
-//        }
     }
 
-//    private fun decryptChapters(response: Response): ChaptersDto {
-//        val document = response.asJsoup()
-//        val password = findChapterPassword(document)
-//        val pageListData = document.parseNextData<ChaptersProps>().data.pageListData
-//        val decodedData = CryptoAES.decrypt(pageListData, password)
-//        return ChaptersDto(
-//            data = json.decodeFromString<ChaptersDto>(decodedData).data,
-//            delimiter = langOption.pageDelimiter,
-//        )
-//    }
-
-//    private fun findChapterPassword(document: Document): String {
-//        val regxPasswordUrl = """\/pages\/%5Btype%5D\/%5Bidmanga%5D\/%5Biddetail%5D-.+\.js""".toRegex()
-//        val regxFindPassword = """AES\.decrypt\(\w+,"(?<password>[^"]+)"\)""".toRegex(RegexOption.MULTILINE)
-//        val jsDecryptUrl = document.select("script")
-//            .map { it.absUrl("src") }
-//            .first { regxPasswordUrl.find(it) != null }
-//        val jsDecrypt = client.newCall(GET(jsDecryptUrl, headers)).execute().asJsoup().html()
-//        return regxFindPassword.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
-//    }
-
     override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<Pageable1<List<MangaDto>>>()
+        val dto = response.parseAs<Pageable<List<MangaDto>>>()
         val mangas = dto.data.map(::mangaParse)
         return MangasPage(
             mangas = mangas,
@@ -187,15 +154,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override fun imageUrlParse(response: Response): String = ""
 
     override fun searchMangaParse(response: Response): MangasPage {
-        return latestUpdatesParse(response)
-//        val mangasDto = response.parseAs<MangaListDto>().apply {
-//            currentPage = response.request.url.pathSegments.last()
-//        }
-//
-//        return MangasPage(
-//            mangas = mangasDto.toSManga(langOption.infix),
-//            hasNextPage = mangasDto.hasNextPage(),
-//        )
+        TODO()
     }
 
     private inline fun <reified T> Response.parseNextData() = asJsoup().parseNextData<T>()
