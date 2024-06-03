@@ -61,13 +61,13 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
             .parseAs<Pageable<ChapterDto>>()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        TODO()
-    }
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/${langOption.infix}/latest-releases".toHttpUrl().newBuilder()
-            .addQueryParameter("page", "$page")
+        val maxResult = 24
+        val url = "$apiUrl/${langOption.infix}/HomeLastUpdate".toHttpUrl().newBuilder()
+            .addPathSegment("$maxResult")
+            .addPathSegment("${page - 1}")
             .build()
         return GET(url, headers)
     }
