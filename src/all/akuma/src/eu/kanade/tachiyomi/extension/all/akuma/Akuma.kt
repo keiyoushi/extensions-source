@@ -1,8 +1,14 @@
 package eu.kanade.tachiyomi.extension.all.akuma
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -20,15 +26,18 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 
-class Akuma : ParsedHttpSource() {
+class Akuma(
+    override val lang: String,
+    private val akumaLang: String,
+) : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "Akuma"
 
     override val baseUrl = "https://akuma.moe"
-
-    override val lang = "all"
 
     override val supportsLatest = false
 
@@ -37,6 +46,12 @@ class Akuma : ParsedHttpSource() {
     private var storedToken: String? = null
 
     private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private var iconified = preferences.getBoolean(PREF_TAG_GENDER_ICON, false)
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ddosGuardIntercept)
@@ -102,12 +117,19 @@ class Akuma : ParsedHttpSource() {
             .add("view", "3")
             .build()
 
-        return if (page == 1) {
+        val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
+
+        if (page == 1) {
             nextHash = null
-            POST(baseUrl, headers, payload)
         } else {
-            POST("$baseUrl/?cursor=$nextHash", headers, payload)
+            url.addQueryParameter("cursor", nextHash)
         }
+        if (lang != "all") {
+            // append like `q=language:english$`
+            url.addQueryParameter("q", "language:$akumaLang$")
+        }
+
+        return POST(url.toString(), headers, payload)
     }
 
     override fun popularMangaSelector() = ".post-loop li"
@@ -154,8 +176,39 @@ class Akuma : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val request = popularMangaRequest(page)
 
+        val finalQuery = buildString {
+            append(query)
+            if (lang != "all") {
+                append(" language:", akumaLang, "$")
+            }
+            filters.filterIsInstance<TextFilter>().forEach { filter ->
+                if (filter.state.isBlank()) return@forEach
+                filter.state.split(",").forEach {
+                    // append like `a:"eye-covering bang"$`
+                    if (it.startsWith("-")) {
+                        append(" -", filter.identifier, ":", it.trim().substring(1))
+                    } else {
+                        append(" ", filter.identifier, ":", it.trim())
+                    }
+                }
+            }
+            filters.filterIsInstance<OptionFilter>().firstOrNull()?.let {
+                val filter = options[it.state].second
+                if (filter.isNotBlank()) {
+                    append(" opt:", filter)
+                }
+            }
+            filters.filterIsInstance<CategoryFilter>().firstOrNull()?.state?.forEach {
+                if (it.isIncluded()) {
+                    append(" category:\"", it.name, "\"$")
+                } else if (it.isExcluded()) {
+                    append(" -category:\"", it.name, "\"$")
+                }
+            }
+        }
+
         val url = request.url.newBuilder()
-            .addQueryParameter("q", query.trim())
+            .setQueryParameter("q", finalQuery)
             .build()
 
         return request.newBuilder()
@@ -168,14 +221,45 @@ class Akuma : ParsedHttpSource() {
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".entry-title").text()
-        thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
-        author = document.select("li.meta-data  > span.artist + span.value").text()
-        genre = document.select(".info-list a").joinToString { it.text() }
-        description = document.select(".pages span.value").text() + " Pages"
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        status = SManga.COMPLETED
+    override fun mangaDetailsParse(document: Document) = with(document) {
+        SManga.create().apply {
+            title = select(".entry-title").text()
+            thumbnail_url = select(".img-thumbnail").attr("abs:src")
+
+            author = select(".group~.value").eachText().joinToString()
+            artist = select(".artist~.value").eachText().joinToString()
+
+            val characters = select(".character~.value").eachText()
+            val parodies = select(".parody~.value").eachText()
+            val males = select(".male~.value")
+                .map { it.text() + if (iconified) " ♂" else " (male)" }
+            val females = select(".female~.value")
+                .map { it.text() + if (iconified) " ♀" else " (female)" }
+            // show all in tags for quickly searching
+
+            genre = (characters + parodies + males + females).joinToString()
+            description = buildString {
+                append(
+                    "Full English and Japanese title: \n",
+                    select(".entry-title").text(),
+                    "\n",
+                    select(".entry-title+span").text(),
+                    "\n\n",
+                )
+
+                // translated should show up in the description
+                append("Language: ", select(".language~.value").text(), "\n")
+                append("Pages: ", select(".pages .value").text(), "\n")
+                append("Upload Date: ", select(".date .value>time").text(), "\n")
+                append("Categories: ", selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
+
+                // show followings for easy to reference
+                append("Parodies: ", parodies.joinToString(), "\n")
+                append("Characters: ", characters.joinToString(), "\n")
+            }
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.UNKNOWN
+        }
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -208,8 +292,66 @@ class Akuma : ParsedHttpSource() {
         return document.select(".entry-content img").attr("abs:src")
     }
 
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        TextFilter("Female Tags", "female"),
+        TextFilter("Male Tags", "male"),
+        CategoryFilter(),
+        TextFilter("Groups", "group"),
+        TextFilter("Artists", "artist"),
+        TextFilter("Parody", "parody"),
+        TextFilter("Characters", "character"),
+        Filter.Header("Filter by pages, for example: (>20)"),
+        TextFilter("Pages", "pages"),
+        Filter.Header("Search in favorites, read, or commented"),
+        OptionFilter(),
+    )
+
+    private class CategoryFilter : Filter.Group<CategoryFilter.TagTriState>("Categories", values()) {
+        class TagTriState(name: String) : TriState(name)
+        private companion object {
+            fun values() = listOf(
+                TagTriState("doujinshi"),
+                TagTriState("manga"),
+                TagTriState("artist cg"),
+                TagTriState("game cg"),
+                TagTriState("west"),
+                TagTriState("non-h"),
+                TagTriState("gallery"),
+                TagTriState("cosplay"),
+                TagTriState("asian pron"),
+                TagTriState("misc"),
+            )
+        }
+    }
+    private class TextFilter(placeholder: String, val identifier: String) : Filter.Text(placeholder)
+    private class OptionFilter :
+        Filter.Select<String>("Options", options.map { it.first }.toTypedArray())
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_TAG_GENDER_ICON
+            title = "Show gender as text or icon in tags (requires refresh)"
+            summaryOff = "Show gender as text"
+            summaryOn = "Show gender as icon"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                iconified = newValue == true
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
     companion object {
         const val PREFIX_ID = "id:"
+        private const val PREF_TAG_GENDER_ICON = "pref_tag_gender_icon"
+        private val options = listOf(
+            "None" to "",
+            "Favorited only" to "favorited",
+            "Read only" to "read",
+            "Commented only" to "commented",
+        )
     }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
