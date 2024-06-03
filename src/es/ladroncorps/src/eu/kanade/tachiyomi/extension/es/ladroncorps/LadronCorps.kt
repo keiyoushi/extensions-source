@@ -72,7 +72,7 @@ class LadronCorps : HttpSource() {
         val document = response.asJsoup()
         title = document.selectFirst("h1")!!.text()
         description = document.select("div[data-hook='post-description'] p > span")
-            .joinToString("\n") { it.text() }
+            .joinToString("\n".repeat(2)) { it.text() }
 
         genre = document.select("#post-footer li a")
             .joinToString { it.text() }
@@ -139,7 +139,7 @@ class LadronCorps : HttpSource() {
 
                 thumbnail_url = "$STATIC_MEDIA_URL/${cover.imgSrc()}"
 
-                url = "/post/${it.getString("seoTitle")}"
+                url = "/post/${it.getJSONArray("slugs").getString(0)}"
             }
         }
 
