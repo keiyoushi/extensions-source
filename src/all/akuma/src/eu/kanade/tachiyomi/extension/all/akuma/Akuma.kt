@@ -260,7 +260,7 @@ class Akuma(
 
                 // show followings for easy to reference
                 parodies.takeIf { it.isNotEmpty() }?.let { append("Parodies: ", parodies.joinToString(), "\n") }
-                characters.takeIf { it.isNotEmpty( ) }?.let { append("Characters: ", characters.joinToString(), "\n") }
+                characters.takeIf { it.isNotEmpty() }?.let { append("Characters: ", characters.joinToString(), "\n") }
             }
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             status = SManga.UNKNOWN
