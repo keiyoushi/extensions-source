@@ -177,6 +177,7 @@ open class MangaFire(
             val element = elements[i]
             val number = element.attr("data-number").toFloatOrNull() ?: -1f
             if (chapter.chapter_number != number) throw Exception("Chapter number doesn't match. Try updating again.")
+            chapter.name = element.select(Evaluator.Tag("span"))[0].ownText()
             val date = element.select(Evaluator.Tag("span"))[1].ownText()
             chapter.date_upload = try {
                 dateFormat.parse(date)!!.time
