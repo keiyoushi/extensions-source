@@ -19,7 +19,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override val lang = langOption.lang
@@ -33,7 +32,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     private val json: Json by injectLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(5, 2, TimeUnit.SECONDS)
+        .rateLimit(2)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -72,6 +71,16 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         val url = "$apiUrl/${langOption.infix}/HomeLastUpdate".toHttpUrl().newBuilder()
             .addPathSegment("$maxResult")
             .addPathSegment("${page - 1}")
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun getMangaUrl(manga: SManga) =
+        baseUrl + manga.url.replace(langOption.infix, langOption.mangaSubstring)
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = "$apiUrl/${langOption.infix}/getInfoManga".toHttpUrl().newBuilder()
+            .addPathSegment(manga.slug())
             .build()
         return GET(url, headers)
     }
