@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
@@ -45,7 +46,7 @@ class LadronCorps : HttpSource() {
     }
 
     private val apiHeaders: Headers by lazy {
-         headers.newBuilder()
+        headers.newBuilder()
             .set("Authorization", authorization)
             .build()
     }
@@ -133,6 +134,8 @@ class LadronCorps : HttpSource() {
 
         genre = document.select("#post-footer li a")
             .joinToString { it.text() }
+        
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
 
         setUrlWithoutDomain(document.location())
     }
