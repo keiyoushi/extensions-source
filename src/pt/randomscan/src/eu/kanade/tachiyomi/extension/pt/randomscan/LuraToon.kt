@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.peachscan.PeachScan
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.SChapter
+import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -35,5 +37,17 @@ class LuraToon :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
+    }
+
+    override fun chapterFromElement(element: Element): SChapter {
+        val mangaUrl = element.ownerDocument()!!.location()
+
+        return super.chapterFromElement(element).apply {
+            val num = url.removeSuffix("/")
+                .substringAfterLast("/")
+            val chapUrl = mangaUrl.removeSuffix("/") + "/$num/"
+
+            setUrlWithoutDomain(chapUrl)
+        }
     }
 }
