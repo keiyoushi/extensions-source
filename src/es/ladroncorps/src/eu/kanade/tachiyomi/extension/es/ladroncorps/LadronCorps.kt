@@ -194,7 +194,7 @@ class LadronCorps : HttpSource() {
         val number = RELATIVE_DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
         return when {
-            date.contains("días", ignoreCase = true) -> cal.apply { add(Calendar.DATE, -number) }.timeInMillis
+            date.contains("día", ignoreCase = true) -> cal.apply { add(Calendar.DATE, -number) }.timeInMillis
             date.contains("mes", ignoreCase = true) -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
             date.contains("año", ignoreCase = true) -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
             else -> 0
