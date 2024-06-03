@@ -100,7 +100,7 @@ class LadronCorps : HttpSource() {
                 val cover = it.getJSONObject("coverImage")
                     .getJSONObject("src")
 
-                thumbnail_url = "$STATIC_MEDIA_URL/${cover.imgSrc()}"
+                thumbnail_url = "$STATIC_MEDIA_URL/${cover.imgAttr()}"
 
                 url = "/post/${it.getJSONArray("slugs").getString(0)}"
             }
@@ -178,7 +178,7 @@ class LadronCorps : HttpSource() {
         return collection
     }
 
-    private fun JSONObject.imgSrc() = when {
+    private fun JSONObject.imgAttr() = when {
         has("id") -> getString("id")
         else -> getString("file_name")
     }
