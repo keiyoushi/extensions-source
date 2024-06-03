@@ -25,7 +25,7 @@ import java.io.IOException
 class Akuma(
     override val lang: String,
     private val akumaLang: String,
-): ParsedHttpSource() {
+) : ParsedHttpSource() {
 
     override val name = "Akuma"
 
