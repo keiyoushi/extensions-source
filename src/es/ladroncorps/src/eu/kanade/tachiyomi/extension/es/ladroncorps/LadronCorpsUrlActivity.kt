@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.es.tumanhwas
+package eu.kanade.tachiyomi.extension.es.ladroncorps
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
