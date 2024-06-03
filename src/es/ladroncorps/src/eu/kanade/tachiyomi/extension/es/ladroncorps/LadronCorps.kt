@@ -140,6 +140,8 @@ class LadronCorps : HttpSource() {
 
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
 
+        status = SManga.COMPLETED
+
         setUrlWithoutDomain(document.location())
     }
 
