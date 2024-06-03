@@ -12,7 +12,7 @@ class MangaRawPlus : Madara("MANGARAW+", "https://newmangaraw.net", "ja") {
             element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
             element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ")
             element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
-            else -> element.attr("abs:src")
+            else -> super.imageFromElement(element)
         }
     }
     override val useNewChapterEndpoint = false
