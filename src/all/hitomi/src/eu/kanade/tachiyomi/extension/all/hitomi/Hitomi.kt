@@ -191,7 +191,7 @@ class Hitomi(
                         getGalleryIDsForQuery(it, language)
                     } catch (e: IllegalArgumentException) {
                         if (e.message?.equals("HTTP error 404") == true) {
-                            throw Exception("Unknown query: $it")
+                            throw Exception("Unknown query: \"$it\"")
                         } else {
                             throw e
                         }
