@@ -164,11 +164,10 @@ class LadronCorps : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
+    override fun imageUrlParse(response: Response): String =
         throw UnsupportedOperationException()
-    }
 
-    private inline fun <R> JSONArray.map(transform: (JSONObject) -> R): List<R> {
+    private fun <R> JSONArray.map(transform: (JSONObject) -> R): List<R> {
         var currentIndex = 0
         val collection = mutableListOf<R>()
         while (currentIndex < length()) {
@@ -188,9 +187,8 @@ class LadronCorps : HttpSource() {
         else -> absUrl("src")
     }
 
-    private fun parseDate(date: String): Long {
-        return try { dateFormat.parse(dateSanitilize(date))!!.time } catch (_: Exception) { parseRelativeDate(date) }
-    }
+    private fun parseDate(date: String): Long =
+        try { dateFormat.parse(dateSanitize(date))!!.time } catch (_: Exception) { parseRelativeDate(date) }
 
     private fun parseRelativeDate(date: String): Long {
         val number = RELATIVE_DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
@@ -203,9 +201,8 @@ class LadronCorps : HttpSource() {
         }
     }
 
-    private fun dateSanitilize(date: String): String {
-        return if (D_MMM_REGEX.matches(date)) "$date ${Calendar.getInstance().get(Calendar.YEAR)}" else date
-    }
+    private fun dateSanitize(date: String): String =
+        if (D_MMM_REGEX.matches(date)) "$date ${Calendar.getInstance().get(Calendar.YEAR)}" else date
 
     companion object {
         const val STATIC_MEDIA_URL = "https://static.wixstatic.com/media"
