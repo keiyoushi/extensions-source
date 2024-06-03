@@ -12,6 +12,8 @@ class ArgosComics : Madara(
     "pt-BR",
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 ) {
+    override val mangaSubString = "comics"
+
     override fun latestUpdatesSelector() = "div.wp-block-wp-manga-gutenberg-manga-sliders-block:nth-child(2)"
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
