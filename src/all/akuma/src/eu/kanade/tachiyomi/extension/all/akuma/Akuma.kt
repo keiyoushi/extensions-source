@@ -1,13 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.akuma
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -25,14 +20,12 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 
 class Akuma(
     override val lang: String,
     private val akumaLang: String,
-) : ConfigurableSource, ParsedHttpSource() {
+): ParsedHttpSource() {
 
     override val name = "Akuma"
 
@@ -45,12 +38,6 @@ class Akuma(
     private var storedToken: String? = null
 
     private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
-
-    private var iconified = preferences.getBoolean(PREF_TAG_GENDER_ICON, false)
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ddosGuardIntercept)
@@ -235,11 +222,11 @@ class Akuma(
             val characters = select(".character~.value").eachText()
             val parodies = select(".parody~.value").eachText()
             val males = select(".male~.value")
-                .map { it.text() + if (iconified) " ♂" else " (male)" }
+                .map { "${it.text()} ♂" }
             val females = select(".female~.value")
-                .map { it.text() + if (iconified) " ♀" else " (female)" }
+                .map { "${it.text()} ♀" }
             val others = select(".other~.value")
-                .map { it.text() + if (iconified) " ◊" else " (other)" }
+                .map { "${it.text()} ◊" }
             // show all in tags for quickly searching
 
             genre = (males + females + others).joinToString()
@@ -299,23 +286,8 @@ class Akuma(
 
     override fun getFilterList(): FilterList = getFilters()
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_TAG_GENDER_ICON
-            title = "Show gender as text or icon in tags (requires refresh)"
-            summaryOff = "Show gender as text"
-            summaryOn = "Show gender as icon"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                iconified = newValue == true
-                true
-            }
-        }.also(screen::addPreference)
-    }
-
     companion object {
         const val PREFIX_ID = "id:"
-        private const val PREF_TAG_GENDER_ICON = "pref_tag_gender_icon"
     }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
