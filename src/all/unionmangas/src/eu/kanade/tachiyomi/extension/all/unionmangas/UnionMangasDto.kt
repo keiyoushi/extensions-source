@@ -7,12 +7,12 @@ import kotlinx.serialization.Serializable
 @Serializable
 class MangaDetailsDto(private val data: Props) {
     val details: MangaDto get() = data.details
+
     @Serializable
     class Props(
         @SerialName("infoDoc") val details: MangaDto,
     )
 }
-
 
 @Serializable
 open class Pageable<T>(
