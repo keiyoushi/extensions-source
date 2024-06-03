@@ -5,15 +5,20 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class MangaDetailsProps(
-    @SerialName("infoDoc") val mangaDetailsDto: MangaDto,
-)
+class MangaDetailsDto(private val data: Props) {
+    val details: MangaDto get() = data.details
+    @Serializable
+    class Props(
+        @SerialName("infoDoc") val details: MangaDto,
+    )
+}
+
 
 @Serializable
 open class Pageable<T>(
     var currentPage: Int,
     var totalPage: Int,
-    val data: T,
+    val data: List<T>,
 ) {
     fun hasNextPage() =
         try { (currentPage + 1) <= totalPage } catch (_: Exception) { false }

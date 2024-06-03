@@ -54,11 +54,11 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         return Observable.just(chapters)
     }
 
-    private fun fetchChapterListPageable(manga: SManga, page: Int): Pageable<List<ChapterDto>> {
+    private fun fetchChapterListPageable(manga: SManga, page: Int): Pageable<ChapterDto> {
         val maxResult = 16
         val url = "$apiUrl/${langOption.infix}/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
         return client.newCall(GET(url, headers)).execute()
-            .parseAs<Pageable<List<ChapterDto>>>()
+            .parseAs<Pageable<ChapterDto>>()
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -73,8 +73,8 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val nextData = response.parseAs<Pageable<MangaDetailsProps>>()
-        return mangaParse(nextData.data.mangaDetailsDto)
+        val dto = response.parseAs<MangaDetailsDto>()
+        return mangaParse(dto.details)
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -92,7 +92,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<Pageable<List<MangaDto>>>()
+        val dto = response.parseAs<Pageable<MangaDto>>()
         val mangas = dto.data.map(::mangaParse)
         return MangasPage(
             mangas = mangas,
