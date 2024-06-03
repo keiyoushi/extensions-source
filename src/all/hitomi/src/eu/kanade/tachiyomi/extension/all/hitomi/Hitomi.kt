@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Request
 import okhttp3.Response
@@ -107,7 +108,8 @@ class Hitomi(
                 .build()
         }
 
-        return client.newCall(GET(url, rangeHeaders)).awaitSuccess().use { it.body.bytes() }
+        return client.newCall(GET(url, rangeHeaders, CacheControl.FORCE_NETWORK))
+            .awaitSuccess().use { it.body.bytes() }
     }
 
     private suspend fun hitomiSearch(
@@ -127,10 +129,6 @@ class Hitomi(
                 .map {
                     it.replace('_', ' ')
                 }.toMutableList()
-
-            if (language != "all") {
-                terms += "language:$language"
-            }
 
             filters.forEach {
                 when (it) {
@@ -158,6 +156,10 @@ class Hitomi(
                     }
                     else -> {}
                 }
+            }
+
+            if (language != "all" && sortBy == Pair(null, "index")) {
+                terms += "language:$language"
             }
 
             val positiveTerms = LinkedList<String>()
