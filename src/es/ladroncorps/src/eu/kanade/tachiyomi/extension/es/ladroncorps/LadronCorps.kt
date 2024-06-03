@@ -44,58 +44,17 @@ class LadronCorps : HttpSource() {
             .getString("instance")
     }
 
-    private fun apiHeaders(): Headers {
-        return headers.newBuilder()
+    private val apiHeaders: Headers by lazy {
+         headers.newBuilder()
             .set("Authorization", authorization)
             .build()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return listOf(
-            SChapter.create().apply {
-                name = "Capitulo único"
-                setUrlWithoutDomain(document.location())
-            },
-        )
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override fun latestUpdatesRequest(page: Int): Request =
         throw UnsupportedOperationException()
-    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
+    override fun latestUpdatesParse(response: Response): MangasPage =
         throw UnsupportedOperationException()
-    }
-
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst("h1")!!.text()
-        description = document.select("div[data-hook='post-description'] p > span")
-            .joinToString("\n".repeat(2)) { it.text() }
-
-        genre = document.select("#post-footer li a")
-            .joinToString { it.text() }
-
-        setUrlWithoutDomain(document.location())
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val selectors = "figure[data-hook='imageViewer'] img, img[data-hook='gallery-item-image-img']"
-        return document.select(selectors).mapIndexed { index, element ->
-            Page(index, document.location(), imageUrl = element.imgAttr())
-        }
-    }
-
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
-
-    fun Element.imgAttr(): String = when {
-        hasAttr("data-pin-media") -> absUrl("data-pin-media")
-        else -> absUrl("src")
-    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val jsonObject = JSONObject(response.body.string())
@@ -125,7 +84,7 @@ class LadronCorps : HttpSource() {
             .addQueryParameter("pageSize", "20")
             .addQueryParameter("type", "ALL_POSTS")
             .build()
-        return GET(url, apiHeaders())
+        return GET(url, apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -150,7 +109,7 @@ class LadronCorps : HttpSource() {
         val url = "$baseUrl/_api/communities-blog-node-api/_api/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .build()
-        return GET(url, apiHeaders())
+        return GET(url, apiHeaders)
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -166,6 +125,40 @@ class LadronCorps : HttpSource() {
         return super.fetchSearchManga(page, query, filters)
     }
 
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        title = document.selectFirst("h1")!!.text()
+        description = document.select("div[data-hook='post-description'] p > span")
+            .joinToString("\n".repeat(2)) { it.text() }
+
+        genre = document.select("#post-footer li a")
+            .joinToString { it.text() }
+
+        setUrlWithoutDomain(document.location())
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return listOf(
+            SChapter.create().apply {
+                name = "Capitulo único"
+                setUrlWithoutDomain(document.location())
+            },
+        )
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val selectors = "figure[data-hook='imageViewer'] img, img[data-hook='gallery-item-image-img']"
+        return document.select(selectors).mapIndexed { index, element ->
+            Page(index, document.location(), imageUrl = element.imgAttr())
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String {
+        throw UnsupportedOperationException()
+    }
+
     private inline fun <R> JSONArray.map(transform: (JSONObject) -> R): List<R> {
         var currentIndex = 0
         val collection = mutableListOf<R>()
@@ -179,6 +172,11 @@ class LadronCorps : HttpSource() {
     private fun JSONObject.imgSrc() = when {
         has("id") -> getString("id")
         else -> getString("file_name")
+    }
+
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-pin-media") -> absUrl("data-pin-media")
+        else -> absUrl("src")
     }
 
     companion object {
