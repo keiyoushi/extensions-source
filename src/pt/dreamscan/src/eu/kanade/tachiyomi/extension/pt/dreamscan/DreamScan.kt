@@ -7,8 +7,10 @@ import java.util.Locale
 class DreamScan : Madara(
     "Dream Scan",
     "https://dreamscan.com.br",
-    "pt-br",
-    SimpleDateFormat("MMMM d, yyyy", Locale("pt", "br")),
+    "pt-BR",
+    SimpleDateFormat("MMMM d, yyyy", Locale("pt", "BR")),
 ) {
+    override val id: Long = 2058412298484770949
+
     override val useNewChapterEndpoint = true
 }
