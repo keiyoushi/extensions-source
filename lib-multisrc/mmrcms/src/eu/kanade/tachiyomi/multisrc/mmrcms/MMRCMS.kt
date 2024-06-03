@@ -211,8 +211,9 @@ constructor(
     protected fun parseSearchDirectory(page: Int): MangasPage {
         val manga = searchDirectory.subList((page - 1) * 24, min(page * 24, searchDirectory.size))
             .map {
+                val itemPathUsed = if (itemPath.isEmpty()) "$itemPath/" else ""
                 SManga.create().apply {
-                    url = "/$itemPath/${it.data}"
+                    url = "/$itemPathUsed${it.data}"
                     title = it.value
                     thumbnail_url = guessCover(url, null)
                 }

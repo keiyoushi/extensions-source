@@ -6,5 +6,6 @@ class ScanVF : MMRCMS(
     "Scan VF",
     "https://www.scan-vf.net",
     "fr",
+    itemPath = "",
     supportsAdvancedSearch = false,
 )
