@@ -63,15 +63,13 @@ class Hitomi(
 
     private var iconified = preferences.getBoolean(PREF_TAG_GENDER_ICON, false)
 
-    private var popularY = preferences.getBoolean(PREF_POPULAR, false)
-
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         runBlocking {
-            val entries = getGalleryIDsFromNozomi("popular", if (popularY) "year" else "today", nozomiLang, page.nextPageRange())
+            val entries = getGalleryIDsFromNozomi("popular", "year", nozomiLang, page.nextPageRange())
                 .toMangaList()
 
             MangasPage(entries, entries.size >= 24)
@@ -185,7 +183,7 @@ class Hitomi(
                 async {
                     runCatching {
                         getGalleryIDsForQuery(it, language)
-                    }.getOrDefault(emptySet())
+                    }.getOrDefault(ArrayList())
                 }
             }
 
@@ -193,23 +191,23 @@ class Hitomi(
                 async {
                     runCatching {
                         getGalleryIDsForQuery(it, language)
-                    }.getOrDefault(emptySet())
+                    }.getOrDefault(ArrayList())
                 }
             }
 
-            var results = when {
+            val results = when {
                 positiveTerms.isEmpty() -> getGalleryIDsFromNozomi(sortBy.first, sortBy.second, language)
-                else -> emptySet()
-            }.toMutableList()
+                else -> ArrayList()
+            }
 
-            fun filterPositive(newResults: Set<Int>) {
+            fun filterPositive(newResults: Collection<Int>) {
                 when {
                     results.isEmpty() -> results.addAll(newResults)
                     else -> results.retainAll(newResults)
                 }
             }
 
-            fun filterNegative(newResults: Set<Int>) {
+            fun filterNegative(newResults: Collection<Int>) {
                 results.removeAll(newResults)
             }
 
@@ -223,15 +221,14 @@ class Hitomi(
                 filterNegative(it.await())
             }
 
-            if (random) results = results.shuffled().toMutableList()
-            results
+            if (random) results.shuffled() else results
         }
 
     // search.js
     private suspend fun getGalleryIDsForQuery(
         query: String,
         language: String = "all",
-    ): Set<Int> {
+    ): MutableList<Int> {
         query.replace("_", " ").let {
             if (it.indexOf(':') > -1) {
                 val sides = it.split(":")
@@ -258,13 +255,13 @@ class Hitomi(
 
             val key = hashTerm(it)
             val node = getGalleryNodeAtAddress(0)
-            val data = bSearch(key, node) ?: return emptySet()
+            val data = bSearch(key, node) ?: return ArrayList()
 
             return getGalleryIDsFromData(data)
         }
     }
 
-    private suspend fun getGalleryIDsFromData(data: Pair<Long, Int>): Set<Int> {
+    private suspend fun getGalleryIDsFromData(data: Pair<Long, Int>): MutableList<Int> {
         val url = "$ltnUrl/galleriesindex/galleries.$galleriesIndexVersion.data"
         val (offset, length) = data
         require(length in 1..100000000) {
@@ -273,7 +270,7 @@ class Hitomi(
 
         val inbuf = getRangedResponse(url, offset.until(offset + length))
 
-        val galleryIDs = mutableSetOf<Int>()
+        val galleryIDs = mutableListOf<Int>()
 
         val buffer =
             ByteBuffer
@@ -362,14 +359,14 @@ class Hitomi(
         tag: String,
         language: String,
         range: LongRange? = null,
-    ): Set<Int> {
+    ): MutableList<Int> {
         val nozomiAddress = when (area) {
             null -> "$ltnUrl/$tag-$language.nozomi"
             else -> "$ltnUrl/$area/$tag-$language.nozomi"
         }
 
         val bytes = getRangedResponse(nozomiAddress, range)
-        val nozomi = mutableSetOf<Int>()
+        val nozomi = mutableListOf<Int>()
 
         val arrayBuffer = ByteBuffer
             .wrap(bytes)
@@ -652,18 +649,6 @@ class Hitomi(
                 true
             }
         }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_POPULAR
-            title = "Popular Section: Today or Year"
-            summaryOff = "Use popular comic of the day for the popular section"
-            summaryOn = "Use popular comic of the year for the popular section"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                popularY = newValue == true
-                true
-            }
-        }.also(screen::addPreference)
     }
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
@@ -672,6 +657,5 @@ class Hitomi(
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
     companion object {
         private const val PREF_TAG_GENDER_ICON = "pref_tag_gender_icon"
-        private const val PREF_POPULAR = "pref_popular"
     }
 }
