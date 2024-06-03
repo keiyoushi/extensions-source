@@ -17,7 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
@@ -59,12 +58,7 @@ class LadronCorps : HttpSource() {
         throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val posts = json.decodeFromString<List<PopularMangaDto>>(
-            response.parseAsObject()
-                .getJSONObject("postFeedPage")
-                .getJSONObject("posts")
-                .getString("posts"),
-        )
+        val posts = response.parseAs<PopularMangaContainerDto>().posts
 
         val mangas = posts.map {
             SManga.create().apply {
@@ -182,10 +176,6 @@ class LadronCorps : HttpSource() {
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromString(body.string())
-    }
-
-    private fun Response.parseAsObject(): JSONObject = use {
-        JSONObject(body.string())
     }
 
     companion object {

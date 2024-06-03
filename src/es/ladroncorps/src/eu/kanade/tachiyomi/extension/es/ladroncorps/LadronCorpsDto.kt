@@ -20,6 +20,17 @@ class AuthDto(
 }
 
 @Serializable
+class PopularMangaContainerDto(val postFeedPage: Post) {
+    val posts: List<PopularMangaDto> get() = postFeedPage.posts.posts
+
+    @Serializable
+    class Post(val posts: Posts)
+
+    @Serializable
+    class Posts(val posts: List<PopularMangaDto>)
+}
+
+@Serializable
 class PopularMangaDto(
     var title: String,
     @SerialName("coverMedia")
