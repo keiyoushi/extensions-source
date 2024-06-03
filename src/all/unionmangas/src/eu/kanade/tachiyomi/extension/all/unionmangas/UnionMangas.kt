@@ -9,21 +9,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
@@ -37,39 +31,9 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    val langApiInfix = when (lang) {
-        "it" -> langOption.infix
-        else -> "v3/po"
-    }
-
     override val client = network.client.newBuilder()
         .rateLimit(5, 2, TimeUnit.SECONDS)
         .build()
-
-    private fun apiHeaders(url: String): Headers {
-        val date = apiDateFormat.format(Date())
-        val path = url.toUrlWithoutDomain()
-
-        return headersBuilder()
-            .add("_hash", authorization(apiSeed, domain, date))
-            .add("_tranId", authorization(apiSeed, domain, date, path))
-            .add("_date", date)
-            .add("_domain", domain)
-            .add("_path", path)
-            .add("Origin", baseUrl)
-            .add("Host", apiUrl.removeProtocol())
-            .add("Referer", "$baseUrl/")
-            .build()
-    }
-
-    private fun authorization(vararg payloads: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        val bytes = payloads.joinToString("").toByteArray()
-        val digest = md.digest(bytes)
-        return digest
-            .fold("") { str, byte -> str + "%02x".format(byte) }
-            .padStart(32, '0')
-    }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
@@ -82,7 +46,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
                 SChapter.create().apply {
                     name = chapter.name
                     date_upload = chapter.date.toDate()
-                    url = "/${langOption.infix}${chapter.toChapterUrl(langOption.infix)}"
+                    url = chapter.toChapterUrl(langOption.infix)
                 }
             }
             currentPage++
@@ -92,13 +56,13 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     private fun fetchChapterListPageable(manga: SManga, page: Int): Pageable<List<ChapterDto>> {
         val maxResult = 16
-        val url = "$newApiUrl/${langOption.infix}/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
+        val url = "$apiUrl/${langOption.infix}/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
         return client.newCall(GET(url, headers)).execute()
             .parseAs<Pageable<List<ChapterDto>>>()
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        return MangasPage(emptyList(), false)
+        TODO()
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -113,8 +77,18 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         return mangaParse(nextData.data.mangaDetailsDto)
     }
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterSlug = chapter.url.substringAfter(langOption.infix)
+        val url = "$apiUrl/${langOption.infix}/GetImageChapter$chapterSlug"
+        return GET(url, headers)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        return emptyList()
+        val location = response.request.url.toString()
+        val dto = response.parseAs<PageDto>()
+        return dto.pages.mapIndexed { index, url ->
+            Page(index, location, imageUrl = url)
+        }
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -127,16 +101,17 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$newApiUrl/${langOption.infix}/HomeTopFllow/24/${page - 1}")
+        val maxResult = 24
+        return GET("$apiUrl/${langOption.infix}/HomeTopFllow/$maxResult/${page - 1}")
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val maxResult = 6
-        val url = "$apiUrl/api/${langOption.infix}/searchforms/$maxResult/".toHttpUrl().newBuilder()
+        val maxResult = 20
+        val url = "$apiUrl/${langOption.infix}/QuickSearch/".toHttpUrl().newBuilder()
             .addPathSegment(query)
-            .addPathSegment("${page - 1}")
+            .addPathSegment("$maxResult")
             .build()
-        return GET(url, apiHeaders(url.toString()))
+        return GET(url, headers)
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -154,25 +129,17 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override fun imageUrlParse(response: Response): String = ""
 
     override fun searchMangaParse(response: Response): MangasPage {
-        TODO()
-    }
-
-    private inline fun <reified T> Response.parseNextData() = asJsoup().parseNextData<T>()
-
-    private inline fun <reified T> Document.parseNextData(): NextData<T> {
-        val jsonContent = selectFirst("script#__NEXT_DATA__")!!.html()
-        return json.decodeFromString<NextData<T>>(jsonContent)
+        val dto = response.parseAs<SearchDto>()
+        return MangasPage(
+            dto.mangas.map(::mangaParse),
+            false,
+        )
     }
 
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString(body.string())
     }
-
-    private fun String.removeProtocol() = trim().replace("https://", "")
-
     private fun SManga.slug() = this.url.split("/").last()
-
-    private fun String.toUrlWithoutDomain() = trim().replace(apiUrl, "")
 
     private fun mangaParse(dto: MangaDto): SManga {
         return SManga.create().apply {
@@ -190,12 +157,8 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     companion object {
         const val SEARCH_PREFIX = "slug:"
-        val apiUrl = "https://api.unionmanga.xyz"
-        val newApiUrl = "https://app.unionmanga.xyz/api"
-        val apiSeed = "8e0550790c94d6abc71d738959a88d209690dc86"
-        val domain = "yaoi-chan.xyz"
+        val apiUrl = "https://app.unionmanga.xyz/api"
+        val oldApiUrl = "https://api.unionmanga.xyz"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ENGLISH)
-        val apiDateFormat = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
-            .apply { timeZone = TimeZone.getTimeZone("GMT") }
     }
 }

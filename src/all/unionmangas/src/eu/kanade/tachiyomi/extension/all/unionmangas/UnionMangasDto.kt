@@ -5,15 +5,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class NextData<T>(val props: Props<T>) {
-    val data get() = props.pageProps
-}
-
-@Serializable
-class Props<T>(val pageProps: T)
-
-
-@Serializable
 class MangaDetailsProps(
     @SerialName("infoDoc") val mangaDetailsDto: MangaDto,
 )
@@ -46,11 +37,28 @@ class MangaDto(
     @SerialName("genresName") val genres: String,
     @SerialName("status") val _status: String,
 ) {
-    val thumbnailUrl get() = "${UnionMangas.apiUrl}$_thumbnailUrl"
+    val thumbnailUrl get() = "${UnionMangas.oldApiUrl}$_thumbnailUrl"
 
     val status get() = when (_status) {
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
+}
+
+@Serializable
+class SearchDto(
+    @SerialName("data")
+    val mangas: List<MangaDto>,
+)
+
+@Serializable
+class PageDto(val `data`: Data) {
+    val pages: List<String> get() = `data`.lsDetail.source.split("#")
+
+    @Serializable
+    class Data(val lsDetail: LsDetail)
+
+    @Serializable
+    class LsDetail(val source: String)
 }
