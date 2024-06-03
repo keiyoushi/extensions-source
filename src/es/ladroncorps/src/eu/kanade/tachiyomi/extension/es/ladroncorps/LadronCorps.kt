@@ -10,15 +10,17 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -36,16 +38,12 @@ class LadronCorps : HttpSource() {
         .rateLimit(3)
         .build()
 
+    private val json by injectLazy<Json>()
+
     private val authorization: String by lazy {
         val response = client.newCall(GET("$baseUrl/_api/v2/dynamicmodel", headers)).execute()
-        val json = JSONObject(response.body.string())
-        val tokens = json.getJSONObject("apps")
-        val keys = tokens.keys().iterator()
-            .asSequence()
-            .toList()
-
-        tokens.getJSONObject(keys[(0..keys.size).random()])
-            .getString("instance")
+        val authDto = response.parseAs<AuthDto>()
+        authDto.randomToken()
     }
 
     private val apiHeaders: Headers by lazy {
@@ -61,22 +59,20 @@ class LadronCorps : HttpSource() {
         throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val jsonObject = JSONObject(response.body.string())
-        val posts = jsonObject
-            .getJSONObject("postFeedPage")
-            .getJSONObject("posts")
-            .getJSONArray("posts")
+        val posts = json.decodeFromString<List<PopularMangaDto>>(
+            response.parseAsObject()
+                .getJSONObject("postFeedPage")
+                .getJSONObject("posts")
+                .getString("posts"),
+        )
 
         val mangas = posts.map {
             SManga.create().apply {
-                title = it.getString("title")
-                thumbnail_url = it.getJSONObject("coverMedia")
-                    .getJSONObject("image")
-                    .getString("url")
-                url = it.getJSONObject("url").getString("path")
+                title = it.title
+                thumbnail_url = "${it.cover.url}"
+                url = "${it.url}"
             }
         }
-
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
@@ -92,20 +88,15 @@ class LadronCorps : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val jsonObject = JSONObject(response.body.string())
-        val posts = jsonObject.getJSONArray("posts")
+        val posts = response.parseAs<SearchDto>().posts
+
         val mangas = posts.map {
             SManga.create().apply {
-                title = it.getString("title")
-                val cover = it.getJSONObject("coverImage")
-                    .getJSONObject("src")
-
-                thumbnail_url = "$STATIC_MEDIA_URL/${cover.imgAttr()}"
-
-                url = "/post/${it.getJSONArray("slugs").getString(0)}"
+                title = it.title
+                thumbnail_url = "$STATIC_MEDIA_URL/${it.cover.url}"
+                url = "/post/${it.slug}"
             }
         }
-
         return MangasPage(mangas, false)
     }
 
@@ -167,21 +158,6 @@ class LadronCorps : HttpSource() {
     override fun imageUrlParse(response: Response): String =
         throw UnsupportedOperationException()
 
-    private fun <R> JSONArray.map(transform: (JSONObject) -> R): List<R> {
-        var currentIndex = 0
-        val collection = mutableListOf<R>()
-        while (currentIndex < length()) {
-            collection += transform(getJSONObject(currentIndex))
-            currentIndex++
-        }
-        return collection
-    }
-
-    private fun JSONObject.imgAttr() = when {
-        has("id") -> getString("id")
-        else -> getString("file_name")
-    }
-
     private fun Element.imgAttr(): String = when {
         hasAttr("data-pin-media") -> absUrl("data-pin-media")
         else -> absUrl("src")
@@ -203,6 +179,14 @@ class LadronCorps : HttpSource() {
 
     private fun dateSanitize(date: String): String =
         if (D_MMM_REGEX.matches(date)) "$date ${Calendar.getInstance().get(Calendar.YEAR)}" else date
+
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(body.string())
+    }
+
+    private fun Response.parseAsObject(): JSONObject = use {
+        JSONObject(body.string())
+    }
 
     companion object {
         const val STATIC_MEDIA_URL = "https://static.wixstatic.com/media"
