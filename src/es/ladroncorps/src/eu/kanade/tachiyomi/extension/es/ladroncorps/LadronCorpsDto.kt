@@ -53,7 +53,7 @@ class PopularMangaDto(
         private val path: String?,
     ) {
         override fun toString(): String {
-            return url ?: path ?: ""
+            return url ?: path!!
         }
     }
 }
@@ -90,7 +90,7 @@ class SearchMangaDto(
         private val file_name: String?,
     ) {
         override fun toString(): String {
-            return id ?: file_name ?: ""
+            return id ?: file_name!!
         }
     }
 
