@@ -4,7 +4,6 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://argoscomics.com'
     overrideVersionCode = 2
-    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
