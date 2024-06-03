@@ -19,6 +19,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class LadronCorps : HttpSource() {
     override val name: String = "Ladron Corps"
@@ -134,7 +137,7 @@ class LadronCorps : HttpSource() {
 
         genre = document.select("#post-footer li a")
             .joinToString { it.text() }
-        
+
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
 
         setUrlWithoutDomain(document.location())
@@ -145,6 +148,7 @@ class LadronCorps : HttpSource() {
         return listOf(
             SChapter.create().apply {
                 name = "Capitulo único"
+                date_upload = parseDate(document.selectFirst("span[data-hook='time-ago']")?.text() ?: "")
                 setUrlWithoutDomain(document.location())
             },
         )
@@ -182,8 +186,32 @@ class LadronCorps : HttpSource() {
         else -> absUrl("src")
     }
 
+    private fun parseDate(date: String): Long {
+        return try { dateFormat.parse(dateSanitilize(date))!!.time } catch (_: Exception) { parseRelativeDate(date) }
+    }
+
+    private fun parseRelativeDate(date: String): Long {
+        val number = RELATIVE_DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
+        val cal = Calendar.getInstance()
+        return when {
+            date.contains("días", ignoreCase = true) -> cal.apply { add(Calendar.DATE, -number) }.timeInMillis
+            date.contains("mes", ignoreCase = true) -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
+            date.contains("año", ignoreCase = true) -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
+            else -> 0
+        }
+    }
+
+    private fun dateSanitilize(date: String): String {
+        return if (D_MMM_REGEX.matches(date)) "$date ${Calendar.getInstance().get(Calendar.YEAR)}" else date
+    }
+
     companion object {
         const val STATIC_MEDIA_URL = "https://static.wixstatic.com/media"
         const val URL_SEARCH_PREFIX = "slug:"
+
+        val RELATIVE_DATE_REGEX = """(\d+)""".toRegex()
+        val D_MMM_REGEX = """\d+ \w+$""".toRegex()
+
+        val dateFormat = SimpleDateFormat("d MMM yyyy", Locale("es"))
     }
 }
