@@ -21,6 +21,7 @@ class AkumaFactory : SourceFactory {
         Akuma("it", "italian"),
         Akuma("hi", "hindi"),
         Akuma("hu", "hungarian"),
+        Akuma("nl", "dutch"),
         Akuma("pl", "polish"),
         Akuma("pt", "portuguese"),
         Akuma("vi", "vietnamese"),
