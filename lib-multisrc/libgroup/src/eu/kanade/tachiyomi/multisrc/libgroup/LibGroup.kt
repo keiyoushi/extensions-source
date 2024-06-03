@@ -131,12 +131,13 @@ abstract class LibGroup(
     @SuppressLint("ApplySharedPref")
     private fun loadToken(): String {
         try {
-            val token = preferences.getString(TOKEN_STORE, "")!!.parseAs<AuthToken>()
+            var token = preferences.getString(TOKEN_STORE, "")!!.parseAs<AuthToken>()
             if (token.isExpired() || !isUserTokenValid(token.getToken())) {
                 val refreshedToken: AuthToken? = refreshToken()
                 if (refreshedToken != null) {
                     val str = json.encodeToString(refreshedToken)
                     preferences.edit().putString(TOKEN_STORE, str).commit()
+                    token = refreshedToken
                 }
             }
             return token.getToken()
