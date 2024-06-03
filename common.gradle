@@ -63,6 +63,7 @@ android {
         release {
             signingConfig signingConfigs.release
             minifyEnabled false
+            vcsInfo.include false
         }
     }
 
@@ -72,6 +73,10 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+
+    packaging {
+        resources.excludes.add("kotlin-tooling-metadata.json")
     }
 
     compileOptions {
