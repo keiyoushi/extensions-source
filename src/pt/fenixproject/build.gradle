@@ -1,0 +1,10 @@
+ext {
+    extName = 'Fenix Project'
+    extClass = '.FenixProject'
+    themePkg = 'madara'
+    baseUrl = 'https://fenixproject.xyz'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
