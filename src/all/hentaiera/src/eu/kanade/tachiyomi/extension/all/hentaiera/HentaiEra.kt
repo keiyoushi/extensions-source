@@ -38,7 +38,7 @@ class HentaiEra(
 
     override fun popularMangaRequest(page: Int): Request {
         // Only for query string or multiple tags
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
             addQueryParameter("pp", "1")
 
             getLanguageURIs().forEach { pair ->
@@ -50,7 +50,8 @@ class HentaiEra(
 
             addPageUri(page)
         }
-        return GET(url.build())
+
+        return GET(url.build(), headers)
     }
 
     /* Details */
