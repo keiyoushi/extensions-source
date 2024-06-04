@@ -165,12 +165,15 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
      * Keeps compatibility with pt-BR previous version
      * */
     private fun getURLCompatibility(url: String): String {
-        val oldSlug = url.substringAfter("manga-br")
+        val slugSuffix = "-br"
+        val mangaSubString = "manga-br"
+
+        val oldSlug = url.substringAfter(mangaSubString)
             .substring(1)
             .split("/")
             .first()
 
-        val newSlug = oldSlug.substringBeforeLast(LANG_PT_BR_SUFFIX)
+        val newSlug = oldSlug.substringBeforeLast(slugSuffix)
 
         return url.replace(oldSlug, newSlug)
     }
@@ -197,7 +200,6 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     companion object {
         const val SEARCH_PREFIX = "slug:"
-        const val LANG_PT_BR_SUFFIX = "-br"
         val apiUrl = "https://app.unionmanga.xyz/api"
         val oldApiUrl = "https://api.unionmanga.xyz"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ENGLISH)
