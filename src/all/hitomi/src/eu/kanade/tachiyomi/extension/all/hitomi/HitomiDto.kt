@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
-data class Gallery(
+class Gallery(
     val galleryurl: String,
     val title: String,
     val date: String,
@@ -19,49 +19,49 @@ data class Gallery(
 )
 
 @Serializable
-data class ImageFile(
+class ImageFile(
     val hash: String,
 )
 
 @Serializable
-data class Tag(
-    val female: JsonPrimitive?,
-    val male: JsonPrimitive?,
-    val tag: String,
+class Tag(
+    private val female: JsonPrimitive?,
+    private val male: JsonPrimitive?,
+    private val tag: String,
 ) {
-    fun getFormatted(iconified: Boolean) = if (female?.content == "1") {
-        tag.toCamelCase() + if (iconified) " ♀" else " (Female)"
+    val formatted get() = if (female?.content == "1") {
+        tag.toCamelCase() + " ♀"
     } else if (male?.content == "1") {
-        tag.toCamelCase() + if (iconified) " ♂" else " (Male)"
+        tag.toCamelCase() + " ♂"
     } else {
         tag.toCamelCase()
     }
 }
 
 @Serializable
-data class Artist(
-    val artist: String,
+class Artist(
+    private val artist: String,
 ) {
     val formatted get() = artist.toCamelCase()
 }
 
 @Serializable
-data class Group(
-    val group: String,
+class Group(
+    private val group: String,
 ) {
     val formatted get() = group.toCamelCase()
 }
 
 @Serializable
-data class Character(
-    val character: String,
+class Character(
+    private val character: String,
 ) {
     val formatted get() = character.toCamelCase()
 }
 
 @Serializable
-data class Parody(
-    val parody: String,
+class Parody(
+    private val parody: String,
 ) {
     val formatted get() = parody.toCamelCase()
 }
