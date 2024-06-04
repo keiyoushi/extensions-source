@@ -208,12 +208,11 @@ constructor(
 
     override fun searchMangaNextPageSelector(): String? = ".pagination a[rel=next]"
 
-    protected fun parseSearchDirectory(page: Int): MangasPage {
+    protected open fun parseSearchDirectory(page: Int): MangasPage {
         val manga = searchDirectory.subList((page - 1) * 24, min(page * 24, searchDirectory.size))
             .map {
-                val itemPathUsed = if (itemPath.isEmpty()) "$itemPath/" else ""
                 SManga.create().apply {
-                    url = "/$itemPathUsed${it.data}"
+                    url = "/$itemPath/${it.data}"
                     title = it.value
                     thumbnail_url = guessCover(url, null)
                 }
