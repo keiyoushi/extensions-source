@@ -20,8 +20,7 @@ open class Pageable<T>(
     var totalPage: Int,
     val data: List<T>,
 ) {
-    fun hasNextPage() =
-        try { (currentPage + 1) <= totalPage } catch (_: Exception) { false }
+    fun hasNextPage() = (currentPage + 1) <= totalPage
 }
 
 @Serializable
