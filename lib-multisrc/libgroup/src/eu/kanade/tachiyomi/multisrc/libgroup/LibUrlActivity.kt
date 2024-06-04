@@ -19,7 +19,7 @@ class LibUrlActivity : Activity() {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 0) {
-            val titleid = pathSegments[0]
+            val titleid = pathSegments[2]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 putExtra("query", "${LibGroup.PREFIX_SLUG_SEARCH}$titleid")
