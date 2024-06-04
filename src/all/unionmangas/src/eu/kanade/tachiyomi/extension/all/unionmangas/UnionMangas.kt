@@ -80,8 +80,11 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val mangaUrl = manga.url.replace(langOption.infix, langOption.mangaSubstring)
-        return baseUrl + getURLCompatibility(mangaUrl)
+        manga.apply {
+            url = getURLCompatibility(url)
+        }
+
+        return baseUrl + manga.url.replace(langOption.infix, langOption.mangaSubstring)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
