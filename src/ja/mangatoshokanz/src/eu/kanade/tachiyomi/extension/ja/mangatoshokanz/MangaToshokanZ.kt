@@ -50,10 +50,7 @@ class MangaToshokanZ : HttpSource() {
 
         // open access to R18 section
         if (request.url.host == "r18.mangaz.com" && isR18.not()) {
-            val url = baseUrl.toHttpUrl().newBuilder()
-                .host("r18.mangaz.com")
-                .addPathSegments("attention/r18/yes")
-                .build()
+            val url = "https://r18.mangaz.com/attention/r18/yes"
 
             val r18Request = Request.Builder()
                 .url(url)
@@ -61,7 +58,7 @@ class MangaToshokanZ : HttpSource() {
                 .build()
 
             isR18 = true
-            client.newCall(r18Request).execute()
+            client.newCall(r18Request).execute().close()
         }
 
         return response
@@ -155,7 +152,7 @@ class MangaToshokanZ : HttpSource() {
                 status = when {
                     li.selectFirst(".iconContinues") != null -> SManga.ONGOING
                     li.selectFirst("iconEnd") != null -> SManga.COMPLETED
-                    else -> { SManga.UNKNOWN }
+                    else -> SManga.UNKNOWN
                 }
             }
         }
@@ -276,9 +273,11 @@ class MangaToshokanZ : HttpSource() {
             .head()
             .build()
 
-        runCatching {
-            client.newCall(ticketRequest).execute()
-        }.getOrNull() ?: throw Exception("Fail to retrieve ticket")
+        try {
+            client.newCall(ticketRequest).execute().close()
+        } catch (_: Exception) {
+            throw Exception("Fail to retrieve ticket")
+        }
 
         return client.cookieJar.loadForRequest(ticketUrl).find { cookie ->
             cookie.name == "virgo!__ticket"
@@ -290,9 +289,11 @@ class MangaToshokanZ : HttpSource() {
             .addPathSegment("app.js")
             .build()
 
-        val response = runCatching {
+        val response = try {
             client.newCall(GET(url, headers)).execute()
-        }.getOrNull() ?: throw Exception("Fail to retrieve serial")
+        } catch (_: Exception) {
+            throw Exception("Fail to retrieve serial")
+        }
 
         val appJsString = response.body.string()
         return appJsString.substringAfter("__serial = \"").substringBefore("\";")
