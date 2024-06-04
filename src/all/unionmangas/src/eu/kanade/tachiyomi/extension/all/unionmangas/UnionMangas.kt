@@ -29,8 +29,6 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     override val supportsLatest = true
 
-    override val versionId: Int = 2
-
     private val json: Json by injectLazy()
 
     override val client = network.client.newBuilder()
@@ -60,6 +58,10 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     private fun fetchChapterListPageable(manga: SManga, page: Int): Pageable<ChapterDto> {
+        manga.apply {
+            url = getURLCompatibility(url)
+        }
+
         val maxResult = 16
         val url = "$apiUrl/${langOption.infix}/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
         return client.newCall(GET(url, headers)).execute()
@@ -77,10 +79,16 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun getMangaUrl(manga: SManga) =
-        baseUrl + manga.url.replace(langOption.infix, langOption.mangaSubstring)
+    override fun getMangaUrl(manga: SManga): String {
+        val mangaUrl = manga.url.replace(langOption.infix, langOption.mangaSubstring)
+        return baseUrl + getURLCompatibility(mangaUrl)
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
+        manga.apply {
+            url = getURLCompatibility(url)
+        }
+
         val url = "$apiUrl/${langOption.infix}/getInfoManga".toHttpUrl().newBuilder()
             .addPathSegment(manga.slug())
             .build()
@@ -93,7 +101,9 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterSlug = chapter.url.substringAfter(langOption.infix)
+        val chapterSlug = getURLCompatibility(chapter.url)
+            .substringAfter(langOption.infix)
+
         val url = "$apiUrl/${langOption.infix}/GetImageChapter$chapterSlug"
         return GET(url, headers)
     }
@@ -151,9 +161,24 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         )
     }
 
+    /*
+     * Keeps compatibility with pt-BR previous version
+     * */
+    private fun getURLCompatibility(url: String): String {
+        val oldSlug = url.substringAfter("manga-br")
+            .substring(1)
+            .split("/")
+            .first()
+
+        val newSlug = oldSlug.substringBeforeLast(LANG_PT_BR_SUFFIX)
+
+        return url.replace(oldSlug, newSlug)
+    }
+
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString(body.string())
     }
+
     private fun SManga.slug() = this.url.split("/").last()
 
     private fun mangaParse(dto: MangaDto): SManga {
@@ -172,6 +197,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     companion object {
         const val SEARCH_PREFIX = "slug:"
+        const val LANG_PT_BR_SUFFIX = "-br"
         val apiUrl = "https://app.unionmanga.xyz/api"
         val oldApiUrl = "https://api.unionmanga.xyz"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ENGLISH)
