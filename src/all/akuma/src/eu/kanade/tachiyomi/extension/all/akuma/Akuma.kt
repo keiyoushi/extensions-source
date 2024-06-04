@@ -240,9 +240,9 @@ class Akuma(
                 )
 
                 // translated should show up in the description
-                append("Language: ", select(".language~.value").text(), "\n")
+                append("Language: ", select(".language~.value").eachText().joinToString(), "\n")
                 append("Pages: ", select(".pages .value").text(), "\n")
-                append("Upload Date: ", select(".date .value>time").text(), "\n")
+                append("Upload Date: ", select(".date .value>time").text().replace(" ", ", ") + " UTC", "\n")
                 append("Categories: ", selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
 
                 // show followings for easy to reference
@@ -260,6 +260,9 @@ class Akuma(
                 SChapter.create().apply {
                     url = "${manga.url}/1"
                     name = "Chapter"
+                    date_upload = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }.parse(client.newCall(chapterListRequest(manga)).execute().asJsoup().select(".date .value>time").text())?.time!!
                 },
             ),
         )
