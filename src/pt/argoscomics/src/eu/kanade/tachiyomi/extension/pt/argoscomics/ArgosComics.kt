@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.argoscomics
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
-import okhttp3.Request
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -12,9 +11,9 @@ class ArgosComics : Madara(
     "pt-BR",
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 ) {
-    override fun latestUpdatesSelector() = "div.wp-block-wp-manga-gutenberg-manga-sliders-block:nth-child(2)"
+    override val mangaSubString = "comics"
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun latestUpdatesNextPageSelector() = null
+    override val client = super.client.newBuilder()
+        .rateLimit(3)
+        .build()
 }
