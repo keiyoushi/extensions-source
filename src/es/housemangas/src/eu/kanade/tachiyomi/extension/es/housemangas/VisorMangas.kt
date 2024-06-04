@@ -6,11 +6,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class HouseMangas : Madara(
-    "HouseMangas",
-    "https://housemangas.com",
+class VisorMangas : Madara(
+    "Visor Mangas",
+    "https://visormanga.xyz",
     "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
 ) {
     override val client = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
@@ -19,5 +19,5 @@ class HouseMangas : Madara(
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Estado) > div.summary-content"
+    override val popularMangaUrlSelector = "div.post-title a[href^=$baseUrl]"
 }
