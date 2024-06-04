@@ -171,22 +171,22 @@ class Akuma(
         if (lang != "all") {
             finalQuery.add("language: $akumaLang$")
         }
-        filters.forEach { fIt ->
-            when (fIt) {
+        filters.forEach { filter ->
+            when (filter) {
                 is TextFilter -> {
-                    if (fIt.state.isNotEmpty()) {
+                    if (filter.state.isNotEmpty()) {
                         finalQuery.addAll(
-                            fIt.state.split(",").map {
-                                (if (it.trim().startsWith("-")) "-" else "") + "${fIt.tag}:\"${it.trim().replace("-", "")}\""
+                            filter.state.split(",").map {
+                                (if (it.trim().startsWith("-")) "-" else "") + "${filter.tag}:\"${it.trim().replace("-", "")}\""
                             },
                         )
                     }
                 }
                 is OptionFilter -> {
-                    if (fIt.state > 0) finalQuery.add("opt:${fIt.getValue()}")
+                    if (filter.state > 0) finalQuery.add("opt:${filter.getValue()}")
                 }
                 is CategoryFilter -> {
-                    fIt.state.forEach {
+                    filter.state.forEach {
                         when {
                             it.isIncluded() -> finalQuery.add("category:\"${it.name}\"")
                             it.isExcluded() -> finalQuery.add("-category:\"${it.name}\"")
