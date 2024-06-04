@@ -29,6 +29,8 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     override val supportsLatest = true
 
+    override val versionId: Int = 2
+
     private val json: Json by injectLazy()
 
     override val client = network.client.newBuilder()
