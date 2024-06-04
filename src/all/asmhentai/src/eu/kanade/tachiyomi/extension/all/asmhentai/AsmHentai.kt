@@ -18,16 +18,21 @@ class AsmHentai(
     lang = lang,
 ) {
     override val supportsLatest = mangaLang.isNotBlank()
+    override val supportSpeechless: Boolean = true
+
+    override fun Element.mangaLang() =
+        select("a:has(.flag)").attr("href")
+            .removeSuffix("/").substringAfterLast("/")
+            .let {
+                // Include Speechless in search results
+                if (it == LANGUAGE_SPEECHLESS) mangaLang else it
+            }
 
     override fun Element.mangaUrl() =
         selectFirst(".image a")?.attr("abs:href")
 
     override fun Element.mangaThumbnail() =
         selectFirst(".image img")?.imgAttr()
-
-    override fun Element.mangaLang() =
-        select("a:has(.flag)").attr("href")
-            .removeSuffix("/").substringAfterLast("/")
 
     override fun popularMangaSelector() = ".preview_item"
 

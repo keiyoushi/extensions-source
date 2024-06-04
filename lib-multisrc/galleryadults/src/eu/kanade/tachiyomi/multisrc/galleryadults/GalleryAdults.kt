@@ -294,7 +294,7 @@ abstract class GalleryAdults(
         val categoryFilters = filters.filterIsInstance<CategoryFilters>().firstOrNull()
 
         // Only for query string or multiple tags
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
             getSortOrderURIs().forEachIndexed { index, pair ->
                 addQueryParameter(pair.second, toBinary(sortOrderFilter?.state == index))
             }
@@ -310,7 +310,7 @@ abstract class GalleryAdults(
             addEncodedQueryParameter(intermediateSearchKey, buildQueryString(selectedGenres.map { it.name }, query))
             addPageUri(page)
         }
-        return GET(url.build())
+        return GET(url.build(), headers)
     }
 
     protected open val advancedSearchKey = "key"
@@ -331,7 +331,7 @@ abstract class GalleryAdults(
         // Advanced search
         val advancedSearchFilters = filters.filterIsInstance<AdvancedTextFilter>()
 
-        val url = "$baseUrl/$advancedSearchUri".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/$advancedSearchUri/".toHttpUrl().newBuilder().apply {
             getSortOrderURIs().forEachIndexed { index, pair ->
                 addQueryParameter(pair.second, toBinary(sortOrderFilter?.state == index))
             }
@@ -379,7 +379,7 @@ abstract class GalleryAdults(
             addEncodedQueryParameter(advancedSearchKey, keys.joinToString("+"))
             addPageUri(page)
         }
-        return GET(url.build())
+        return GET(url.build(), headers)
     }
 
     /**
