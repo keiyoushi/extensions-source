@@ -138,13 +138,13 @@ open class MangaFire(
     override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
         val result = json.decodeFromString<ResponseDto<String>>(response.body.string()).result
         val document = Jsoup.parse(result)
-
-        val elements = document.select("ul li")
+        val selector = if (isVolume) "div.unit" else "ul li"
+        val elements = document.select(selector)
         if (elements.size > 0) {
             val linkToFirstChapter = elements[0].selectFirst(Evaluator.Tag("a"))!!.attr("href")
             val mangaId = linkToFirstChapter.toString().substringAfter('.').substringBefore('/')
-
-            val request = GET("$baseUrl/ajax/read/$mangaId/chapter/$langCode", headers)
+            val type = if (isVolume) volumeType else chapterType
+            val request = GET("$baseUrl/ajax/read/$mangaId/$type/$langCode", headers)
             val response = client.newCall(request).execute()
             val res = json.decodeFromString<ResponseDto<ChapterIdsDto>>(response.body.string()).result.html
             val chapterInfoDocument = Jsoup.parse(res)
