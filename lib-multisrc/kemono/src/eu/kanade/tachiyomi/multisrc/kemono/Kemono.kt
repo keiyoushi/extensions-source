@@ -197,7 +197,7 @@ open class Kemono(
 
         if (!preferences.getBoolean("USE_LOW_RES_IMG", false)) return GET(imageUrl, headers)
 
-        val index = imageUrl.indexOf('/',  8)
+        val index = imageUrl.indexOf('/', 8)
         val url = buildString {
             append(imageUrl, 0, index)
             append("/thumbnail/data")
