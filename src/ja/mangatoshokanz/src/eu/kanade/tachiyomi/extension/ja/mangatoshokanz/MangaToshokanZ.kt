@@ -16,7 +16,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
 import java.lang.StringBuilder
 import java.security.KeyPair
 
@@ -46,7 +45,6 @@ class MangaToshokanZ : HttpSource() {
 
     private fun r18Interceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
 
         // open access to R18 section
         if (request.url.host == "r18.mangaz.com" && isR18.not()) {
@@ -61,21 +59,13 @@ class MangaToshokanZ : HttpSource() {
             client.newCall(r18Request).execute().close()
         }
 
-        return response
+        return chain.proceed(request)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addEncodedPathSegments("ranking/views")
-            .build()
-
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/ranking/views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.selectFirst(".itemList")!!.children().mangasFromListElements()
-
+        val mangas = response.toMangas(".itemList")
         return MangasPage(mangas, false)
     }
 
@@ -95,22 +85,28 @@ class MangaToshokanZ : HttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.selectFirst("body")!!.children().mangasFromListElements()
-
-        return MangasPage(mangas, mangas.size == LATEST_MANGA_COUNT_PER_PAGE)
+        val mangas = response.toMangas("body")
+        return MangasPage(mangas, mangas.size == 50)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val header = headers.newBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+
         val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("title/index")
+            .addPathSegments("title/addpage_renewal")
             .addQueryParameter("query", query)
+            .addQueryParameter("page", page.toString())
 
         filters.forEach { filter ->
             when (filter) {
                 is Category -> {
                     if (filter.state != 0) {
                         url.addQueryParameter("category", categories[filter.state].lowercase())
+                    }
+                    if (filter.state == 5) {
+                        url.host("r18.mangaz.com")
                     }
                 }
                 is Sort -> {
@@ -120,20 +116,15 @@ class MangaToshokanZ : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        return GET(url.build(), header)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.selectFirst(".itemList")!!.children().filter { child ->
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+
+    private fun Response.toMangas(selector: String): List<SManga> {
+        return asJsoup().selectFirst(selector)!!.children().filter { child ->
             child.`is`("li")
-        }.mangasFromListElements()
-
-        return MangasPage(mangas, false)
-    }
-
-    private fun List<Element>.mangasFromListElements(): List<SManga> {
-        return filterNot { li ->
+        }.filterNot { li ->
             // discard manga that in the middle of asking for license progress, it can't be read
             li.selectFirst(".iconConsent") != null
         }.map { li ->
@@ -142,17 +133,8 @@ class MangaToshokanZ : HttpSource() {
                 url = a.attr("href").substringAfterLast("/")
                 title = a.text()
 
-                val img = li.selectFirst("a > img")!!
-                thumbnail_url = if (img.hasAttr("src")) {
-                    img.attr("src")
-                } else {
-                    img.attr("data-src")
-                }
-
-                status = when {
-                    li.selectFirst(".iconContinues") != null -> SManga.ONGOING
-                    li.selectFirst("iconEnd") != null -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
+                thumbnail_url = li.selectFirst("a > img")!!.attr("data-src").ifBlank {
+                    li.selectFirst("a > img")!!.attr("src")
                 }
             }
         }
@@ -166,9 +148,21 @@ class MangaToshokanZ : HttpSource() {
 
     // in this manga details section we use book/detail/id since it have tags over series/detail/id
     override fun mangaDetailsRequest(manga: SManga): Request {
+        // normally manga published by the website has the same id in it's series and book
+        // example: https://www.mangaz.com/series/detail/202371 (series)
+        //          https://www.mangaz.com/book/detail/202371 (book)
+        // strangely manga published by registered user has different id in it's series and book
+        // example: https://www.mangaz.com/series/detail/224931 (series)
+        //          https://www.mangaz.com/book/detail/224932 (book)
+
+        // so in here we want the id from the manga thumbnail url since it contain the book id
+        // instead of manga url that contain series id which used for the chapter section later
+        // example: https://www.mangaz.com/series/detail/224931 (manga url)
+        //          https://books.j-comi.jp/Books/224/224932/thumb160_1713230205.jpg (thumbnail url)
+        val bookId = manga.thumbnail_url!!.substringBeforeLast("/").substringAfterLast("/")
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("book/detail")
-            .addPathSegment(manga.url)
+            .addPathSegment(bookId)
             .build()
 
         return GET(url, headers)
@@ -198,6 +192,11 @@ class MangaToshokanZ : HttpSource() {
             }
             description = document.selectFirst(".wordbreak")?.text()
             genre = document.select(".inductionTags a").joinToString { it.text() }
+            status = when {
+                document.selectFirst("p.iconContinues") != null -> SManga.ONGOING
+                document.selectFirst("p.iconEnd") != null -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
         }
     }
 
@@ -323,7 +322,6 @@ class MangaToshokanZ : HttpSource() {
     }
 
     companion object {
-        const val LATEST_MANGA_COUNT_PER_PAGE = 50
         private val categories = arrayOf(
             "All",
             "Mens",

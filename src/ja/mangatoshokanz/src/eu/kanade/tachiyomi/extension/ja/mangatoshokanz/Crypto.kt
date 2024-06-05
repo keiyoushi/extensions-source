@@ -17,9 +17,6 @@ import javax.crypto.Cipher
 
 private val json: Json by injectLazy()
 
-private const val BEGIN_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----"
-private const val END_PUBLIC_KEY = "-----END PUBLIC KEY-----"
-
 internal fun getKeys(): KeyPair {
     return KeyPairGenerator.getInstance("RSA").run {
         initialize(RSAKeyGenParameterSpec(512, RSAKeyGenParameterSpec.F4))
@@ -30,10 +27,10 @@ internal fun getKeys(): KeyPair {
 internal fun PublicKey.toPem(): String {
     val base64Encoded = Base64.encodeToString(encoded, Base64.DEFAULT)
 
-    return StringBuilder(BEGIN_PUBLIC_KEY)
+    return StringBuilder("-----BEGIN PUBLIC KEY-----")
         .appendLine()
         .append(base64Encoded)
-        .append(END_PUBLIC_KEY)
+        .append("-----END PUBLIC KEY-----")
         .toString()
 }
 
