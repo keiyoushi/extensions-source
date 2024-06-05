@@ -36,7 +36,7 @@ abstract class Senkuro(
     override val supportsLatest = false
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Tachiyomi (+https://github.com/mihonapp/mihon)")
+        .add("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
         .add("Content-Type", "application/json")
 
     override val client: OkHttpClient =
