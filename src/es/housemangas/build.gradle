@@ -1,9 +1,9 @@
 ext {
-    extName = 'HouseMangas'
-    extClass = '.HouseMangas'
+    extName = 'Visor Mangas'
+    extClass = '.VisorMangas'
     themePkg = 'madara'
-    baseUrl = 'https://housemangas.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://visormanga.xyz'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
