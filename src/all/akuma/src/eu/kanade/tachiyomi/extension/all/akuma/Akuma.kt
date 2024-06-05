@@ -179,7 +179,7 @@ class Akuma(
                 is TextFilter -> {
                     if (filter.state.isNotEmpty()) {
                         finalQuery.addAll(
-                            filter.state.split(",").map {
+                            filter.state.split(",").filter { it.isNotBlank() }.map {
                                 (if (it.trim().startsWith("-")) "-" else "") + "${filter.tag}:\"${it.trim().replace("-", "")}\""
                             },
                         )
@@ -257,17 +257,15 @@ class Akuma(
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    url = "${manga.url}/1"
-                    name = "Chapter"
-                    date_upload = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
-                        timeZone = TimeZone.getTimeZone("UTC")
-                    }.parse(client.newCall(chapterListRequest(manga)).execute().asJsoup().select(".date .value>time").text())?.time!!
-                },
-            ),
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return listOf(
+            SChapter.create().apply {
+                url = "${response.request.url}/1"
+                name = "Chapter"
+                date_upload = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.parse(response.asJsoup().select(".date .value>time").text())?.time!!
+            },
         )
     }
 
