@@ -2,8 +2,8 @@ ext {
     extName = 'Aqua Manga'
     extClass = '.AquaManga'
     themePkg = 'madara'
-    baseUrl = 'https://aquamanga.org'
-    overrideVersionCode = 8
+    baseUrl = 'https://aquareader.net'
+    overrideVersionCode = 9
 }
 
 apply from: "$rootDir/common.gradle"
