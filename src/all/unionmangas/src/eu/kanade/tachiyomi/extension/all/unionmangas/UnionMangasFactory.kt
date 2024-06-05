@@ -7,9 +7,9 @@ class UnionMangasFactory : SourceFactory {
     override fun createSources(): List<Source> = languages.map { UnionMangas(it) }
 }
 
-class LanguageOption(val lang: String, val infix: String = lang, val chpPrefix: String, val pageDelimiter: String)
+class LanguageOption(val lang: String, val infix: String = lang, val mangaSubstring: String = infix)
 
 val languages = listOf(
-    LanguageOption("it", "italy", "leer", ","),
-    LanguageOption("pt-BR", "manga-br", "cap", "#"),
+    LanguageOption("pt-BR", "manga-br"),
+    LanguageOption("ru", "manga-ru", "mangas"),
 )
