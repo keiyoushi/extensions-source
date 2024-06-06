@@ -263,7 +263,7 @@ class Akuma(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        
+
         return listOf(
             SChapter.create().apply {
                 url = "${response.request.url}/1"
