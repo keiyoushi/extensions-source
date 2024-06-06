@@ -3,7 +3,7 @@ ext {
     extClass = '.LuaScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://luascans.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"

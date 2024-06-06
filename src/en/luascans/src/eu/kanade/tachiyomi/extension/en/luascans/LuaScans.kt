@@ -30,12 +30,13 @@ class LuaScans : MangaThemesia(
         return if (document.selectFirst("script:containsData(wafff)") != null) {
             val script = document.selectFirst("script:containsData(wafff)")!!.data()
 
-            val cookie = script.substringAfter("document.cookie=\"")
-                .substringBefore("\"")
+            val cookie = waffRegex.find(script)?.groups?.get("waff")?.value
+                ?.let { Cookie.parse(request.url, it) }
+                ?: return response
 
             client.cookieJar.saveFromResponse(
                 request.url,
-                listOfNotNull(Cookie.parse(request.url, cookie)),
+                listOf(cookie),
             )
 
             response.close()
@@ -45,4 +46,6 @@ class LuaScans : MangaThemesia(
             response
         }
     }
+
+    private val waffRegex = Regex("""document\.cookie\s*=\s*['"](?<waff>.*)['"]""")
 }
