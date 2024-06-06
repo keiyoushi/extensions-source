@@ -194,12 +194,14 @@ open class Kemono(
 
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl!!
+
         if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return GET(imageUrl, headers)
-        val index = imageUrl.indexOf('/', startIndex = 8) // https://
+
+        val index = imageUrl.indexOf('/', 8)
         val url = buildString {
             append(imageUrl, 0, index)
-            append("/thumbnail")
-            append(imageUrl, index, imageUrl.length)
+            append("/thumbnail/data")
+            append(imageUrl.substring(index))
         }
         return GET(url, headers)
     }
