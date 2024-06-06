@@ -21,6 +21,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.io.IOException
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -261,11 +262,17 @@ class Akuma(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        
         return listOf(
             SChapter.create().apply {
                 url = "${response.request.url}/1"
                 name = "Chapter"
-                date_upload = dateFormat.parse(response.asJsoup().select(".date .value>time").text())?.time!!
+                date_upload = try {
+                    dateFormat.parse(document.select(".date .value>time").text())!!.time
+                } catch (_: ParseException) {
+                    0L
+                }
             },
         )
     }
