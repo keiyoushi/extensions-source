@@ -265,8 +265,14 @@ class Pages(
 
 @Serializable
 class AuthToken(
+    private val auth: Auth,
     private val token: Token,
 ) {
+    @Serializable
+    class Auth(
+        val id: Int,
+    )
+
     @Serializable
     class Token(
         val timestamp: Long,
@@ -282,4 +288,6 @@ class AuthToken(
     }
 
     fun getToken(): String = "${token.tokenType} ${token.accessToken}"
+
+    fun getUserId(): Int = auth.id
 }
