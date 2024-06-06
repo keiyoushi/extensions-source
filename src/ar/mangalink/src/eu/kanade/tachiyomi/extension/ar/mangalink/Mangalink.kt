@@ -22,7 +22,6 @@ class Mangalink :
 
     override val chapterUrlSuffix = ""
     override val useLoadMoreRequest = LoadMoreStrategy.Always
-    private val defaultBaseUrl = "https://link-manga.com"
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val preferences: SharedPreferences by lazy {
@@ -32,7 +31,8 @@ class Mangalink :
     companion object {
         private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
         private const val BASE_URL_PREF_TITLE = "تعديل الرابط"
-        private const val BASE_URL_PREF = "overrideBaseUrl_v38"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val BASE_URL_PREF_SUMMARY = ".للاستخدام المؤقت. تحديث التطبيق سيؤدي الى حذف الإعدادات"
     }
 
@@ -41,9 +41,9 @@ class Mangalink :
             key = BASE_URL_PREF
             title = BASE_URL_PREF_TITLE
             summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(defaultBaseUrl)
+            this.setDefaultValue(super.baseUrl)
             dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
+            dialogMessage = "Default: ${super.baseUrl}"
 
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
@@ -52,5 +52,16 @@ class Mangalink :
         }
         screen.addPreference(baseUrlPref)
     }
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != super.baseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, super.baseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
+                    .apply()
+            }
+        }
+    }
 }
