@@ -73,6 +73,8 @@ class DarkScience : HttpSource() {
 
         var archivePage: Document? = client.newCall(GET(archiveUrl, headers)).execute().asJsoup()
 
+        var chLast = 0.0F
+
         while (archivePage != null) {
             val nextArchivePageUrl = archivePage.selectFirst("""#nav-below .nav-previous > a""")?.attr("href")
             val nextArchivePage = if (nextArchivePageUrl != null) {
@@ -84,15 +86,21 @@ class DarkScience : HttpSource() {
                 val chLink = it.attr("href")
                 val chDateMatch = chapterDateRegex.find(chLink)!!
                 val chNumMatch = chapterNumberRegex.find(chTitle)
+                val chDate = DATE_FMT.parse(chDateMatch.groupValues[1])?.time ?: 0L
+                val chNum = chNumMatch?.groupValues?.getOrNull(1)?.toFloat() ?: (chLast + 0.01F)
 
                 chapters.add(
                     SChapter.create().apply {
                         name = chTitle
-                        chapter_number = chNumMatch?.groupValues?.getOrNull(1)?.toFloat() ?: 0.0F
-                        date_upload = DATE_FMT.parse(chDateMatch.groupValues[1])?.time ?: 0L
+                        chapter_number = chNum
+                        date_upload = chDate
                         setUrlWithoutDomain(chLink)
                     },
                 )
+
+                // This is a hack to make the app not think there’s missing chapters after
+                // a title page.
+                chLast = chNum
             }
 
             archivePage = nextArchivePage
