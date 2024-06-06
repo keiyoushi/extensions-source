@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
@@ -26,11 +25,7 @@ class DarkScience : HttpSource() {
     override val supportsLatest = false
 
     private val archiveUrl = "$baseUrl/category/darkscience/"
-    private val thumbnailUrl = "https://dresdencodak.com/wp-content/uploads/2019/03/DC_CastIcon_Kimiko.png"
-    private val patreonUrl = "https://www.patreon.com/dresdencodak"
-    private val seriesTitle = name
     private val authorName = "Sen (A. Senna Diaz)"
-    private val seriesGenre = "Science Fiction, Mystery, LGBT+"
     private val seriesDescription = "" +
         "Scientist Kimiko Ross has a problem: " +
         "her money’s gone and a bank exploded her house. " +
@@ -42,18 +37,17 @@ class DarkScience : HttpSource() {
         "the bureaucratic behemoth with a little “help” " +
         "from her “friends.” And what exactly is " +
         "Dark Science anyway?\n" +
-        "Support the comic on Patreon: $patreonUrl"
+        "Support the comic on Patreon: https://www.patreon.com/dresdencodak"
 
     private fun initTheManga(manga: SManga): SManga = manga.apply {
         url = archiveUrl
-        thumbnail_url = thumbnailUrl
-        title = seriesTitle
+        thumbnail_url = "https://dresdencodak.com/wp-content/uploads/2019/03/DC_CastIcon_Kimiko.png"
+        title = name
         author = authorName
         artist = authorName
         description = seriesDescription
-        genre = seriesGenre
+        genre = "Science Fiction, Mystery, LGBT+"
         status = SManga.ONGOING
-        update_strategy = UpdateStrategy.ALWAYS_UPDATE
         initialized = true
     }
 
@@ -120,11 +114,8 @@ class DarkScience : HttpSource() {
         return Observable.just(listOf(Page(0, chapter.url)))
     }
 
-    override fun fetchImageUrl(page: Page): Observable<String> {
-        val comicPage = client.newCall(GET(baseUrl + page.url, headers)).execute().asJsoup()
-        val imageUrl = comicPage.selectFirst("article.post img.aligncenter")!!.attr("src")
-        return Observable.just(imageUrl)
-    }
+    override fun imageUrlParse(response: Response): String =
+        response.asJsoup().selectFirst("article.post img.aligncenter")!!.attr("src")
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -147,8 +138,6 @@ class DarkScience : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private val DATE_FMT = SimpleDateFormat("yyyy/MM/dd", Locale.US)
