@@ -42,6 +42,9 @@ class Akuma(
 
     private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
 
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ddosGuardIntercept)
         .addInterceptor(::tokenInterceptor)
@@ -262,9 +265,7 @@ class Akuma(
             SChapter.create().apply {
                 url = "${response.request.url}/1"
                 name = "Chapter"
-                date_upload = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }.parse(response.asJsoup().select(".date .value>time").text())?.time!!
+                date_upload = dateFormat.parse(response.asJsoup().select(".date .value>time").text())?.time!!
             },
         )
     }
