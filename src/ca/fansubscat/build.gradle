@@ -1,6 +1,6 @@
 ext {
     extName = 'Fansubs.cat'
-    extClass = '.FansubsCatMain'
+    extClass = '.FansubsCat'
     themePkg = 'fansubscat'
     baseUrl = 'https://manga.fansubs.cat'
     overrideVersionCode = 0

@@ -1,8 +1,8 @@
 ext {
-    extName = 'Fansubs.cat - Hentai'
-    extClass = '.FansubsCatHentai'
+    extName = 'Hentai.cat'
+    extClass = '.HentaiCat'
     themePkg = 'fansubscat'
-    baseUrl = 'https://hentai.fansubs.cat/manga'
+    baseUrl = 'https://manga.hentai.cat'
     overrideVersionCode = 0
     isNsfw = true
 }

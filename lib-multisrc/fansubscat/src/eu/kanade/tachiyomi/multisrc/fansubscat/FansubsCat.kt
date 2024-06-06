@@ -30,10 +30,9 @@ abstract class FansubsCat(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
+    val apiBaseUrl: String,
     val isHentaiSite: Boolean,
 ) : HttpSource() {
-
-    private val apiBaseUrl = "https://api.fansubs.cat"
 
     override val supportsLatest = true
 
@@ -91,7 +90,7 @@ abstract class FansubsCat(
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiBaseUrl/manga/popular/$page?hentai=$isHentaiSite", headers)
+        return GET("$apiBaseUrl/manga/popular/$page", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = parseMangaFromJson(response)
@@ -99,7 +98,7 @@ abstract class FansubsCat(
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiBaseUrl/manga/recent/$page?hentai=$isHentaiSite", headers)
+        return GET("$apiBaseUrl/manga/recent/$page", headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaFromJson(response)
@@ -110,13 +109,15 @@ abstract class FansubsCat(
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val mangaTypeFilter = filterList.find { it is MangaTypeFilter } as MangaTypeFilter
         val stateFilter = filterList.find { it is StateFilter } as StateFilter
-        val demographyFilter = filterList.find { it is DemographyFilter } as DemographyFilter
         val genreFilter = filterList.find { it is GenreTagFilter } as GenreTagFilter
         val themeFilter = filterList.find { it is ThemeTagFilter } as ThemeTagFilter
-        val builder = "$apiBaseUrl/manga/search/$page?hentai=$isHentaiSite".toHttpUrl().newBuilder()
+        val builder = "$apiBaseUrl/manga/search/$page".toHttpUrl().newBuilder()
         mangaTypeFilter.addQueryParameter(builder)
         stateFilter.addQueryParameter(builder)
-        demographyFilter.addQueryParameter(builder)
+        if (!isHentaiSite) {
+            val demographyFilter = filterList.find { it is DemographyFilter } as DemographyFilter
+            demographyFilter.addQueryParameter(builder)
+        }
         genreFilter.addQueryParameter(builder)
         themeFilter.addQueryParameter(builder)
         if (query.isNotBlank()) {
@@ -131,7 +132,7 @@ abstract class FansubsCat(
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         return GET(
-            "$apiBaseUrl/manga/details/${manga.url.substringAfterLast('/')}?hentai=$isHentaiSite",
+            "$apiBaseUrl/manga/details/${manga.url.substringAfterLast('/')}",
             headers,
         )
     }
@@ -166,7 +167,7 @@ abstract class FansubsCat(
 
     override fun chapterListRequest(manga: SManga): Request {
         return GET(
-            "$apiBaseUrl/manga/chapters/${manga.url.substringAfterLast('/')}?hentai=$isHentaiSite",
+            "$apiBaseUrl/manga/chapters/${manga.url.substringAfterLast('/')}",
             headers,
         )
     }
@@ -178,7 +179,7 @@ abstract class FansubsCat(
 
     override fun pageListRequest(chapter: SChapter): Request {
         return GET(
-            "$apiBaseUrl/manga/pages/${chapter.url.substringAfterLast('/')}?hentai=$isHentaiSite",
+            "$apiBaseUrl/manga/pages/${chapter.url.substringAfterLast('/')}",
             headers,
         )
     }
