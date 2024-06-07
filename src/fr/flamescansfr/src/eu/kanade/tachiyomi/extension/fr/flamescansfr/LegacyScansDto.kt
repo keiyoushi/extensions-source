@@ -7,9 +7,7 @@ class MangaDto(
     val cover: String?,
     val slug: String,
     val title: String,
-) {
-    fun isCoverPresent(): Boolean = cover != null
-}
+)
 
 @Serializable
 class SearchDto(

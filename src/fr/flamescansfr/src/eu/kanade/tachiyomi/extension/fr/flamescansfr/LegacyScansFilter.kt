@@ -106,8 +106,6 @@ val genresList = listOf(
     "h",
     "Smut",
     "démons",
-    "655bbef5f0599f6198dd7b73",
     "Virtuel world",
-    "665d02bd6356105ec136902f",
     "Vengeance",
 )
