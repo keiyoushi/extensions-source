@@ -32,11 +32,10 @@ class LuaScans : MangaThemesia(
 
             val cookie = waffRegex.find(script)?.groups?.get("waff")?.value
                 ?.let { Cookie.parse(request.url, it) }
-                ?: return response
 
             client.cookieJar.saveFromResponse(
                 request.url,
-                listOf(cookie),
+                listOfNotNull(cookie),
             )
 
             response.close()
