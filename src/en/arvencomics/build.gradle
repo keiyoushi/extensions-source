@@ -1,0 +1,10 @@
+ext {
+    extName = 'Arven Scans'
+    extClass = '.ArvenComics'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://arvencomics.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
