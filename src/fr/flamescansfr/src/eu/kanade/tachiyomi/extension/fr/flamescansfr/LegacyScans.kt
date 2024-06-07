@@ -42,7 +42,7 @@ class LegacyScans : HttpSource() {
     override fun popularMangaRequest(page: Int) = GET("$apiUrl/misc/views/all", headers)
 
     override fun popularMangaParse(response: Response) =
-        mangasPageParse(response.parseAs<List<MangaDto>>()).copy(hasNextPage = false)
+        mangasPageParse(response.parseAs<List<MangaDto>>(), false)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val offset = pageOffset(page)
@@ -61,11 +61,10 @@ class LegacyScans : HttpSource() {
                 url = "/comics/${query.substringAfter(URL_SEARCH_PREFIX)}"
             }
             client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().map { response ->
-                val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-                // Avoid null pointer
+                val document = response.asJsoup()
                 when {
                     isMangaPage(document) -> {
-                        MangasPage(listOf(mangaDetailsParse(response)), false)
+                        MangasPage(listOf(mangaDetailsParse(document)), false)
                     }
                     else -> MangasPage(emptyList(), false)
                 }
@@ -116,26 +115,16 @@ class LegacyScans : HttpSource() {
             pathSegments.contains("comic") -> {
                 mangasPageParse(response.parseAs<SearchDto>().comics)
             }
-            else -> mangasPageParse(response.parseAs<SearchQueryDto>().results).copy(hasNextPage = false)
-        }
-    }
-
-    val mangaDetailsDescriptionSelector = ".serieDescription"
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return with(document.selectFirst(".serieContainer")!!) {
-            SManga.create().apply {
-                title = selectFirst("h1")!!.text()
-                thumbnail_url = selectFirst("img")?.absUrl("src")
-                genre = select(".serieGenre span").joinToString { it.text() }
-                description = selectFirst("$mangaDetailsDescriptionSelector p")?.text()
-                author = selectFirst(".serieAdd p:contains(produit) strong")?.text()
-                artist = selectFirst(".serieAdd p:contains(Auteur) strong")?.text()
-                setUrlWithoutDomain(document.location())
+            else -> {
+                mangasPageParse(response.parseAs<SearchQueryDto>().results, false)
             }
         }
     }
+
+    val mangaDetailsDescriptionSelector = ".serieDescription p"
+
+    override fun mangaDetailsParse(response: Response): SManga =
+        mangaDetailsParse(response.asJsoup())
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -166,23 +155,35 @@ class LegacyScans : HttpSource() {
         )
     }
 
+    private fun mangaDetailsParse(document: Document): SManga {
+        return with(document.selectFirst(".serieContainer")!!) {
+            SManga.create().apply {
+                title = selectFirst("h1")!!.text()
+                thumbnail_url = selectFirst("img")?.absUrl("src")
+                genre = select(".serieGenre span").joinToString { it.text() }
+                description = selectFirst(mangaDetailsDescriptionSelector)?.text()
+                author = selectFirst(".serieAdd p:contains(produit) strong")?.text()
+                artist = selectFirst(".serieAdd p:contains(Auteur) strong")?.text()
+                setUrlWithoutDomain(document.location())
+            }
+        }
+    }
+
     private fun pageOffset(page: Int, max: Int = 27): Pair<Int, Int> {
         val start = max * (page - 1) + 1
         val end = max * page
         return start to end
     }
 
-    private fun mangasPageParse(dto: List<MangaDto>): MangasPage {
+    private fun mangasPageParse(dto: List<MangaDto>, hasNextPage: Boolean = true): MangasPage {
         val mangas = dto.map {
             SManga.create().apply {
                 title = it.title
-                if (it.isCoverPresent()) {
-                    thumbnail_url = "$apiUrl/${it.cover}"
-                }
+                thumbnail_url = it.cover?.let {cover -> "$apiUrl/${cover}" }
                 url = "/comics/${it.slug}"
             }
         }
-        return MangasPage(mangas, mangas.isNotEmpty())
+        return MangasPage(mangas, hasNextPage && mangas.isNotEmpty())
     }
 
     private inline fun <reified T> Response.parseAs(): T =
