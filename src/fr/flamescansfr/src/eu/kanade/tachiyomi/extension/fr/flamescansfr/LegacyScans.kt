@@ -15,7 +15,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
@@ -182,7 +181,7 @@ class LegacyScans : HttpSource() {
         val mangas = dto.map {
             SManga.create().apply {
                 title = it.title
-                thumbnail_url = it.cover?.let {cover -> "$apiUrl/${cover}" }
+                thumbnail_url = it.cover?.let { cover -> "$apiUrl/$cover" }
                 url = "/comics/${it.slug}"
             }
         }
