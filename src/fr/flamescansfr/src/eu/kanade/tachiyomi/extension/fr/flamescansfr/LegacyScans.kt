@@ -70,8 +70,9 @@ class LegacyScans : HttpSource() {
                     else -> MangasPage(emptyList(), false)
                 }
             }
+        } else {
+            super.fetchSearchManga(page, query, filters)
         }
-        else super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -113,9 +114,9 @@ class LegacyScans : HttpSource() {
         val pathSegments = response.request.url.pathSegments
         return when {
             pathSegments.contains("comic") -> {
-                mangasPageParse(response.parseAs<SearchDto>().comics).copy(hasNextPage = false)
+                mangasPageParse(response.parseAs<SearchDto>().comics)
             }
-            else -> mangasPageParse(response.parseAs<SearchQueryDto>().results)
+            else -> mangasPageParse(response.parseAs<SearchQueryDto>().results).copy(hasNextPage = false)
         }
     }
 
