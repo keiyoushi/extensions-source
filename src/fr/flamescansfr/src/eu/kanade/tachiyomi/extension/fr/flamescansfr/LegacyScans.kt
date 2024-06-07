@@ -53,7 +53,8 @@ class LegacyScans : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        mangasPageParse(response.parseAs<List<MangaDto>>())
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(URL_SEARCH_PREFIX)) {
@@ -82,7 +83,9 @@ class LegacyScans : HttpSource() {
             return GET(url, headers)
         }
 
-        val offset = pageOffset(page)
+        val defaultSearchOffSet = 18
+
+        val offset = pageOffset(page, defaultSearchOffSet)
 
         val url = "$apiUrl/misc/comic/search/query".toHttpUrl().newBuilder()
             .addQueryParameter("start", "${offset.first}")
@@ -169,7 +172,7 @@ class LegacyScans : HttpSource() {
         }
     }
 
-    private fun pageOffset(page: Int, max: Int = 27): Pair<Int, Int> {
+    private fun pageOffset(page: Int, max: Int = 28): Pair<Int, Int> {
         val start = max * (page - 1) + 1
         val end = max * page
         return start to end
