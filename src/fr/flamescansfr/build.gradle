@@ -1,9 +1,7 @@
 ext {
     extName = 'Legacy Scans'
     extClass = '.LegacyScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://legacy-scans.com'
-    overrideVersionCode = 0
+    extVersionCode = 31
 }
 
 apply from: "$rootDir/common.gradle"
