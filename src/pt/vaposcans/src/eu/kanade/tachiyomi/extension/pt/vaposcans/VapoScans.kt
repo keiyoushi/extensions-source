@@ -132,7 +132,7 @@ class VapoScans : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<PagesDto>()
-        val chapterUrl = "$baseUrl/series/${dto.chapter_code}"
+        val chapterUrl = "$baseUrl/reader/${dto.chapter_code}"
         return dto.images.mapIndexed { index, image ->
             Page(index, chapterUrl, "$apiUrl/$image")
         }
