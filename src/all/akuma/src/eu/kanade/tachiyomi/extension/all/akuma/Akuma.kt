@@ -266,7 +266,7 @@ class Akuma(
 
         return listOf(
             SChapter.create().apply {
-                url = "${response.request.url}/1"
+                setUrlWithoutDomain("${response.request.url}/1")
                 name = "Chapter"
                 date_upload = try {
                     dateFormat.parse(document.select(".date .value>time").text())!!.time
@@ -288,6 +288,8 @@ class Akuma(
         for (i in 1..totalPages) {
             pageList.add(Page(i, "$url/$i"))
         }
+
+        pageList[0].imageUrl = imageUrlParse(document)
 
         return pageList
     }
