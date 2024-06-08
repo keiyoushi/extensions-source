@@ -45,8 +45,10 @@ class UzayManga : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/search?page=$page&search=&order=4")
+
     override fun popularMangaNextPageSelector() =
         "section[aria-label='navigation'] li:has(a[class~='!text-gray-800']) + li > a:not([href~='#'])"
+
     override fun popularMangaSelector() = "section[aria-label='series area'] .card"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
@@ -54,6 +56,7 @@ class UzayManga : ParsedHttpSource() {
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
+
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/search?page=$page&search=&order=3")
 
