@@ -40,6 +40,8 @@ class VapoScans : HttpSource() {
     // Keeps the behavior of the web page
     private val emptyPayload = "{}".toRequestBody()
 
+    private var popularMangaCache: List<SManga> = mutableListOf()
+
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)
         .set("Referer", "$baseUrl/")
@@ -50,7 +52,10 @@ class VapoScans : HttpSource() {
     override fun popularMangaParse(response: Response) =
         MangasPage(
             response.parseAs<List<MangaDto>>()
-                .map(::sMangaParse),
+                .map(::sMangaParse)
+                .also {
+                    popularMangaCache = it
+                },
             false,
         )
 
@@ -74,14 +79,22 @@ class VapoScans : HttpSource() {
                 MangasPage(listOf(it), false)
             }
         }
+
+        if (popularMangaCache.isNotEmpty()) {
+            return Observable.just(findMangaByTitle(query))
+        }
+
         return super.fetchSearchManga(page, query, filters)
     }
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+        POST("$apiUrl/api/series/#$query", headers, emptyPayload)
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val mangas = popularMangaParse(response).mangas
+        val query = response.request.url.toString().substringAfter("#")
+        return findMangaByTitle(query, mangas)
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
@@ -139,6 +152,13 @@ class VapoScans : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) = ""
+
+    private fun findMangaByTitle(query: String, collection: List<SManga> = popularMangaCache): MangasPage {
+        val mangas = collection
+            .filter { it.title.contains(query, ignoreCase = true) }
+
+        return MangasPage(mangas, false)
+    }
 
     private inline fun <reified T> Response.parseAs(): T =
         json.decodeFromString(body.string())
