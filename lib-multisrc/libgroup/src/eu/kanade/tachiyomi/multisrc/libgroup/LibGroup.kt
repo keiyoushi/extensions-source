@@ -549,8 +549,8 @@ abstract class LibGroup(
     private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
 
     private fun urlChangedError(sourceName: String): String =
-        "URL серии изменился. Перенесите с $sourceName " +
-            "на $sourceName, чтобы обновить URL-адрес."
+        "URL серии изменился. Перенесите/мигрируйте с $sourceName " +
+            "на $sourceName, чтобы список глав обновился."
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
@@ -588,7 +588,7 @@ abstract class LibGroup(
             entryValues = arrayOf("main", "secondary", "compress")
             summary = "%s \n\nВыбор приоритетного сервера изображений. \n" +
                 "По умолчанию «Первый». \n\n" +
-                "ⓘВыбор другого сервера помогает при ошибках загрузки изображений."
+                "ⓘВыбор другого сервера помогает при ошибках и медленной загрузки изображений глав."
             setDefaultValue("main")
         }
 
