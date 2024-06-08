@@ -44,6 +44,9 @@ class VapoScans : HttpSource() {
         .set("Origin", baseUrl)
         .set("Referer", "$baseUrl/")
 
+    override fun popularMangaRequest(page: Int) =
+        POST("$apiUrl/api/series/", headers, emptyPayload)
+
     override fun popularMangaParse(response: Response) =
         MangasPage(
             response.parseAs<List<MangaDto>>()
@@ -51,8 +54,8 @@ class VapoScans : HttpSource() {
             false,
         )
 
-    override fun popularMangaRequest(page: Int) =
-        POST("$apiUrl/api/series/", headers, emptyPayload)
+    override fun latestUpdatesRequest(page: Int) =
+        POST("$apiUrl/api/recent-chapters/", headers, emptyPayload)
 
     override fun latestUpdatesParse(response: Response) =
         MangasPage(
@@ -60,9 +63,6 @@ class VapoScans : HttpSource() {
                 .map { sMangaParse(it.mangaDto) },
             false,
         )
-
-    override fun latestUpdatesRequest(page: Int) =
-        POST("$apiUrl/api/recent-chapters/", headers, emptyPayload)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
