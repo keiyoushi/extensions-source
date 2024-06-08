@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -65,6 +66,7 @@ abstract class LibGroup(
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
+        .rateLimitHost("https://api.lib.social".toHttpUrl(), 1)
         .connectTimeout(5, TimeUnit.MINUTES)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
@@ -84,6 +86,8 @@ abstract class LibGroup(
     private val userAgentMobile = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.3"
 
     private var bearerToken: String? = null
+
+    private var userId: Int? = null
 
     abstract val siteId: Int // Important in api calls
 
@@ -117,7 +121,13 @@ abstract class LibGroup(
         val url = chain.request().url.toString()
         if (url.contains("api.$apiDomain") && !url.contains("/api/auth/me")) {
             if (bearerToken.isNullOrBlank()) {
-                bearerToken = loadToken()
+                val token = loadToken()
+                if (token != null) {
+                    bearerToken = token.getToken()
+                    userId = token.getUserId()
+                } else {
+                    bearerToken = "none"
+                }
             }
             if (bearerToken != "none") {
                 req.apply {
@@ -129,7 +139,7 @@ abstract class LibGroup(
     }
 
     @SuppressLint("ApplySharedPref")
-    private fun loadToken(): String {
+    private fun loadToken(): AuthToken? {
         try {
             var token = preferences.getString(TOKEN_STORE, "")!!.parseAs<AuthToken>()
             if (token.isExpired() || !isUserTokenValid(token.getToken())) {
@@ -140,16 +150,16 @@ abstract class LibGroup(
                     token = refreshedToken
                 }
             }
-            return token.getToken()
+            return token
         } catch (ex: SerializationException) {
             val refreshedToken: AuthToken? = refreshToken()
             if (refreshedToken != null) {
                 val str = json.encodeToString(refreshedToken)
                 preferences.edit().putString(TOKEN_STORE, str).commit()
-                return refreshedToken.getToken()
+                return refreshedToken
             }
         }
-        return "none"
+        return null
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -279,7 +289,16 @@ abstract class LibGroup(
         return GET("https://api.$apiDomain/api/manga${manga.url}/chapters", headers)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slugUrl = chapter.url.substringAfter("/").substringBefore("/")
+        val volume = chapter.url.substringAfter("volume=").substringBefore("&")
+        val number = chapter.url.substringAfter("number=").substringBefore("&")
+        val branchId = chapter.url.substringAfter("branch_id=", "").substringBefore("&")
+        val branchStr = if (branchId.isNotBlank()) "&bid=$branchId" else ""
+        val userStr = if (userId != null) "&ui=$userId" else ""
+
+        return "$baseUrl/ru/$slugUrl/read/v$volume/c$number?$branchStr$userStr"
+    }
 
     private fun getDefaultBranch(id: String): List<Branch> =
         client.newCall(GET("https://api.$apiDomain/api/branches/$id", headers)).execute().parseAs<Data<List<Branch>>>().data
@@ -567,7 +586,7 @@ abstract class LibGroup(
             entryValues = arrayOf("main", "secondary", "compress")
             summary = "%s \n\nВыбор приоритетного сервера изображений. \n" +
                 "По умолчанию «Первый». \n\n" +
-                "ⓘВыбор другого помогает при долгой автоматической смене/загрузке изображений текущего."
+                "ⓘВыбор другого сервера помогает при ошибках загрузки изображений."
             setDefaultValue("main")
         }
 
