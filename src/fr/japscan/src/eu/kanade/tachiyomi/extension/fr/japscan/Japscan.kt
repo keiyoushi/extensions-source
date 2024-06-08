@@ -5,9 +5,11 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import eu.kanade.tachiyomi.extension.R
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -35,10 +37,14 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class Japscan : ConfigurableSource, ParsedHttpSource() {
 
@@ -230,12 +236,12 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         val interfaceName = randomString()
         val zjsElement = document.selectFirst("script[src*=/zjs/]")
             ?: throw Exception("ZJS not found")
-        val dataElement = document.selectFirst("[id^=data]")
+        val dataElement = document.select(selector("dLqEgOqeqp/72OXDYKI5lA=="))
             ?: throw Exception("Chapter data not found")
         val minDoc = Document.createShell(document.location())
         val minDocBody = minDoc.body()
 
-        minDocBody.appendChild(dataElement)
+        minDocBody.appendChildren(dataElement)
         minDocBody.append(
             """
             <script>
@@ -288,6 +294,25 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             .mapIndexed { i, url ->
                 Page(i, imageUrl = url)
             }
+    }
+
+    private fun selector(encrypted: String): String {
+        val secretKey = run {
+            val crypto = ((R.mipmap.ic_launcher ushr 87895464) * (456123 ushr 42) - 16 / 4 * -3)
+                .toString()
+                .toByteArray(Charsets.UTF_32BE)
+
+            MessageDigest.getInstance("SHA-1")
+                .digest(crypto)
+                .take(16)
+        }.toByteArray()
+
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        val key = SecretKeySpec(secretKey, "AES")
+        val iv = IvParameterSpec(Base64.decode("totally not some plaintxt".toByteArray(), Base64.DEFAULT))
+        cipher.init(Cipher.DECRYPT_MODE, key, iv)
+
+        return String(cipher.doFinal(Base64.decode(encrypted, Base64.DEFAULT)))
     }
 
     override fun imageUrlParse(document: Document): String = ""
