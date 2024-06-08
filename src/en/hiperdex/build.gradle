@@ -3,8 +3,12 @@ ext {
     extClass = '.Hiperdex'
     themePkg = 'madara'
     baseUrl = 'https://hiperdex.com'
-    overrideVersionCode = 11
+    overrideVersionCode = 12
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib:randomua')
+}

@@ -5,6 +5,10 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,6 +34,10 @@ class Hiperdex :
 
     override val client = super.client.newBuilder()
         .addInterceptor(::domainChangeIntercept)
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .build()
 
     private var lastDomain = ""
@@ -102,6 +110,7 @@ class Hiperdex :
             }
         }
         screen.addPreference(baseUrlPref)
+        addRandomUAPreferenceToScreen(screen)
     }
 
     private var SharedPreferences.baseUrlHost
