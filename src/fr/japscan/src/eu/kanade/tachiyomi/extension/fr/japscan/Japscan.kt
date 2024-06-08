@@ -236,12 +236,12 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         val interfaceName = randomString()
         val zjsElement = document.selectFirst("script[src*=/zjs/]")
             ?: throw Exception("ZJS not found")
-        val dataElement = document.selectFirst(selector("n5C97vqqui4A/NVAqZH3kw=="))
+        val dataElement = document.select(selector("dLqEgOqeqp/72OXDYKI5lA=="))
             ?: throw Exception("Chapter data not found")
         val minDoc = Document.createShell(document.location())
         val minDocBody = minDoc.body()
 
-        minDocBody.appendChild(dataElement)
+        minDocBody.appendChildren(dataElement)
         minDocBody.append(
             """
             <script>
