@@ -63,6 +63,7 @@ class ChapterGroup(
 class Chapter(
     @ProtoNumber(1) val id: Int,
     @ProtoNumber(2) val title: String,
+    @ProtoNumber(5) val points: Point,
     @ProtoNumber(8) private val date: String = "",
 ) {
     val timestamp get() = try {
@@ -73,6 +74,11 @@ class Chapter(
 }
 
 private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH)
+
+@Serializable
+class Point(
+    @ProtoNumber(2) ammount = 0
+)
 
 @Serializable
 class MangaViewerRequest(
