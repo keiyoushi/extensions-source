@@ -97,17 +97,11 @@ class UzayManga : ParsedHttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        TODO()
-    }
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String? {
-        TODO("Not yet implemented")
-    }
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector(): String {
-        TODO("Not yet implemented")
-    }
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         with(document.selectFirst("#content")!!) {
