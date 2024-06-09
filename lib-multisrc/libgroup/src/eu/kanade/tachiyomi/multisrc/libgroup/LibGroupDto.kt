@@ -245,7 +245,7 @@ class Chapter(
     }
 }
 
-fun List<Chapter>.getBranchCount(): Int? = this.maxOfOrNull { chapter -> chapter.branches.size }
+fun List<Chapter>.getBranchCount(): Int? = this.maxOf{ chapter -> chapter.branches.size }
 
 @Serializable
 class Branch(
