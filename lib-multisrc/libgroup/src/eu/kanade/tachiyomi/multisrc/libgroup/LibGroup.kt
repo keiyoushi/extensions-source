@@ -311,10 +311,12 @@ abstract class LibGroup(
         }
 
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
-        var defaultBranchId: Int? = null
-        if (chaptersData.data.filter { it.branchesCount > 1 }.isNotEmpty()) { // excess request if branchesCount is only alone = slow update library witch rateLimitHost(apiDomain.toHttpUrl(), 1)
-            defaultBranchId = runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
+        val defaultBranchId = if (chaptersData.data.getBranchCount()!! > 1) { // excess request if branchesCount is only alone = slow update library witch rateLimitHost(apiDomain.toHttpUrl(), 1)
+            runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
+        } else {
+            null
         }
+
         val chapters = mutableListOf<SChapter>()
         for (it in chaptersData.data.withIndex()) {
             if (it.value.branchesCount > 1) {
