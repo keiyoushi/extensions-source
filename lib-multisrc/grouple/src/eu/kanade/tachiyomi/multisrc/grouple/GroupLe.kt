@@ -48,7 +48,7 @@ abstract class GroupLe(
         .addNetworkInterceptor { chain ->
             val originalRequest = chain.request()
             val response = chain.proceed(originalRequest)
-            if (originalRequest.url.toString().contains(baseUrl) && (
+            if (originalRequest.url.toString().contains(baseUrl) && !originalRequest.url.toString().contains("/list?") && (
                 originalRequest.url.toString()
                     .contains("internal/redirect") or (response.code == 301)
                 )
