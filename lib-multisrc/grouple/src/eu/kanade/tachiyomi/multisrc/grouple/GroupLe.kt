@@ -53,7 +53,13 @@ abstract class GroupLe(
                     .contains("internal/redirect") or (response.code == 301)
                 )
             ) {
-                throw IOException("Ссылка на мангу была изменена. Перемигрируйте мангу на тот же (или смежный с GroupLe) источник или передобавьте из Поисковика/Каталога.")
+                if (originalRequest.url.toString().contains("/list?")) {
+                    throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙\uFE0F")
+                }
+                throw IOException(
+                    "URL серии изменился. Перенесите/мигрируйте с $name " +
+                        "на $name (или смежный с GroupLe), чтобы список глав обновился",
+                )
             }
             response
         }
