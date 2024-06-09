@@ -12,7 +12,7 @@ import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class AllHentai : GroupLe("AllHentai", "https://z.allhen.online", "ru") {
+class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
 
     override val id: Long = 1809051393403180443
 
@@ -289,6 +289,6 @@ class AllHentai : GroupLe("AllHentai", "https://z.allhen.online", "ru") {
 
     companion object {
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://z.allhen.online"
+        private const val DOMAIN_DEFAULT = "https://z.ahen.me"
     }
 }
