@@ -245,6 +245,8 @@ class Chapter(
     }
 }
 
+fun List<Chapter>.getBranchCount(): Int = this.maxOf { chapter -> chapter.branches.size }
+
 @Serializable
 class Branch(
     val id: Int,

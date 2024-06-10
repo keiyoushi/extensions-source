@@ -64,9 +64,19 @@ abstract class LibGroup(
 
     override val supportsLatest = true
 
+    private val userAgentMobile = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.3"
+
+    private var bearerToken: String? = null
+
+    private var userId: Int? = null
+
+    abstract val siteId: Int // Important in api calls
+
+    private val apiDomain: String = "https://api.lib.social"
+
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
-        .rateLimitHost("https://api.lib.social".toHttpUrl(), 1)
+        .rateLimitHost(apiDomain.toHttpUrl(), 1)
         .connectTimeout(5, TimeUnit.MINUTES)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
@@ -83,16 +93,6 @@ abstract class LibGroup(
         }
         .build()
 
-    private val userAgentMobile = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.3"
-
-    private var bearerToken: String? = null
-
-    private var userId: Int? = null
-
-    abstract val siteId: Int // Important in api calls
-
-    private val apiDomain: String = "lib.social"
-
     override fun headersBuilder() = Headers.Builder().apply {
         // User-Agent required for authorization through third-party accounts (mobile version for correct display in WebView)
         add("User-Agent", userAgentMobile)
@@ -106,7 +106,7 @@ abstract class LibGroup(
         if (_constants == null) {
             try {
                 _constants = client.newCall(
-                    GET("https://api.$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", headers),
+                    GET("$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", headers),
                 ).execute().parseAs<Data<Constants>>().data
                 return _constants!!
             } catch (ex: SerializationException) {
@@ -119,7 +119,7 @@ abstract class LibGroup(
     private fun checkForToken(chain: Interceptor.Chain): Response {
         val req = chain.request().newBuilder()
         val url = chain.request().url.toString()
-        if (url.contains("api.$apiDomain") && !url.contains("/api/auth/me")) {
+        if (url.contains(apiDomain) && !url.contains("/api/auth/me")) {
             if (bearerToken.isNullOrBlank()) {
                 val token = loadToken()
                 if (token != null) {
@@ -206,7 +206,7 @@ abstract class LibGroup(
             add("Accept", "application/json")
             add("Authorization", token)
         }.build()
-        client.newCall(GET("https://api.$apiDomain/api/auth/me", headers)).execute().also { response ->
+        client.newCall(GET("$apiDomain/api/auth/me", headers)).execute().also { response ->
             return when (response.code) {
                 401 -> throw Exception("Попробуйте авторизоваться через WebView\uD83C\uDF0E\uFE0E. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
                 else -> true
@@ -220,7 +220,7 @@ abstract class LibGroup(
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "https://api.$apiDomain/api/latest-updates".toHttpUrl().newBuilder()
+        val url = "$apiDomain/api/latest-updates".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
         return GET(url.build(), headers)
     }
@@ -229,7 +229,7 @@ abstract class LibGroup(
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        val url = "https://api.$apiDomain/api/manga".toHttpUrl().newBuilder()
+        val url = "$apiDomain/api/manga".toHttpUrl().newBuilder()
             .addQueryParameter("site_id[]", siteId.toString())
             .addQueryParameter("page", page.toString())
         return GET(url.build(), headers)
@@ -249,7 +249,7 @@ abstract class LibGroup(
         // throw exception if old url
         if (!manga.url.contains("--")) throw Exception(urlChangedError(name))
 
-        val url = "https://api.$apiDomain/api/manga${manga.url}".toHttpUrl().newBuilder()
+        val url = "$apiDomain/api/manga${manga.url}".toHttpUrl().newBuilder()
             .addQueryParameter("fields[]", "eng_name")
             .addQueryParameter("fields[]", "otherNames")
             .addQueryParameter("fields[]", "summary")
@@ -286,7 +286,7 @@ abstract class LibGroup(
         // throw exception if old url
         if (!manga.url.contains("--")) throw Exception(urlChangedError(name))
 
-        return GET("https://api.$apiDomain/api/manga${manga.url}/chapters", headers)
+        return GET("$apiDomain/api/manga${manga.url}/chapters", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -301,7 +301,7 @@ abstract class LibGroup(
     }
 
     private fun getDefaultBranch(id: String): List<Branch> =
-        client.newCall(GET("https://api.$apiDomain/api/branches/$id", headers)).execute().parseAs<Data<List<Branch>>>().data
+        client.newCall(GET("$apiDomain/api/branches/$id", headers)).execute().parseAs<Data<List<Branch>>>().data
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slugUrl = response.request.url.toString().substringAfter("manga/").substringBefore("/chapters")
@@ -311,7 +311,11 @@ abstract class LibGroup(
         }
 
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
-        val defaultBranchId = runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
+        val defaultBranchId = if (chaptersData.data.getBranchCount() > 1) { // excess request if branchesCount is only alone = slow update library witch rateLimitHost(apiDomain.toHttpUrl(), 1)
+            runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
+        } else {
+            null
+        }
 
         val chapters = mutableListOf<SChapter>()
         for (it in chaptersData.data.withIndex()) {
@@ -355,7 +359,7 @@ abstract class LibGroup(
         // throw exception if old url
         if (!chapter.url.contains("--")) throw Exception(urlChangedError(name))
 
-        return GET("https://api.$apiDomain/api/manga${chapter.url}", headers)
+        return GET("$apiDomain/api/manga${chapter.url}", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -387,7 +391,7 @@ abstract class LibGroup(
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
-            client.newCall(GET("https://api.$apiDomain/api/manga/$realQuery", headers))
+            client.newCall(GET("$apiDomain/api/manga/$realQuery", headers))
                 .asObservableSuccess()
                 .map { response ->
                     val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
@@ -404,7 +408,7 @@ abstract class LibGroup(
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "https://api.$apiDomain/api/manga".toHttpUrl().newBuilder()
+        val url = "$apiDomain/api/manga".toHttpUrl().newBuilder()
         url.addQueryParameter("page", page.toString())
         url.addQueryParameter("site_id[]", siteId.toString())
         if (query.isNotEmpty()) {
@@ -547,8 +551,8 @@ abstract class LibGroup(
     private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
 
     private fun urlChangedError(sourceName: String): String =
-        "URL серии изменился. Перенесите с $sourceName " +
-            "на $sourceName, чтобы обновить URL-адрес."
+        "URL серии изменился. Перенесите/мигрируйте с $sourceName " +
+            "на $sourceName, чтобы список глав обновился."
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
@@ -586,7 +590,7 @@ abstract class LibGroup(
             entryValues = arrayOf("main", "secondary", "compress")
             summary = "%s \n\nВыбор приоритетного сервера изображений. \n" +
                 "По умолчанию «Первый». \n\n" +
-                "ⓘВыбор другого сервера помогает при ошибках загрузки изображений."
+                "ⓘВыбор другого сервера помогает при ошибках и медленной загрузки изображений глав."
             setDefaultValue("main")
         }
 
