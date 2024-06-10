@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.darkscience
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,13 +9,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Call
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+@Suppress("unused")
 class DarkScience : HttpSource() {
     private val chapterDateRegex = """/(\d\d\d\d/\d\d/\d\d)/""".toRegex()
     private val chapterNumberRegex = """Dark Science #(\d+)""".toRegex()
@@ -24,7 +27,6 @@ class DarkScience : HttpSource() {
     override val lang = "en"
     override val supportsLatest = false
 
-    private val archiveUrl = "$baseUrl/category/darkscience/"
     private val authorName = "Sen (A. Senna Diaz)"
     private val seriesDescription = "" +
         "Scientist Kimiko Ross has a problem: " +
@@ -40,7 +42,7 @@ class DarkScience : HttpSource() {
         "Support the comic on Patreon: https://www.patreon.com/dresdencodak"
 
     private fun initTheManga(manga: SManga): SManga = manga.apply {
-        url = archiveUrl
+        url = "/category/darkscience/"
         thumbnail_url = "https://dresdencodak.com/wp-content/uploads/2019/03/DC_CastIcon_Kimiko.png"
         title = name
         author = authorName
@@ -62,60 +64,23 @@ class DarkScience : HttpSource() {
     // backup restore. And in a backup, only `url` and `title` are preserved.
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(initTheManga(manga))
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapters = mutableListOf<SChapter>()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        accumulateChapters(Triple(client.newCall(chapterListRequest(manga)), 0.0F, Observable.empty())).concatMap { it.third.toList() }
 
-        var archivePage: Document? = client.newCall(GET(archiveUrl, headers)).execute().asJsoup()
+    override fun pageListParse(response: Response): List<Page> =
+        listOf(
+            Page(
+                0,
+                "",
+                response
+                    .asJsoup()
+                    .selectFirst("article.post img.aligncenter")!!
+                    .attr("src"),
+            ),
+        )
 
-        var chLast = 0.0F
-
-        while (archivePage != null) {
-            val nextArchivePageUrl = archivePage.selectFirst("""#nav-below .nav-previous > a""")?.attr("href")
-            val nextArchivePage = if (nextArchivePageUrl != null) {
-                client.newCall(GET(nextArchivePageUrl, headers)).execute().asJsoup()
-            } else { null }
-
-            archivePage.select("""#content article header > h2 > a""").forEach {
-                val chTitle = it.text()
-                val chLink = it.attr("href")
-                val chDateMatch = chapterDateRegex.find(chLink)!!
-                val chNumMatch = chapterNumberRegex.find(chTitle)
-                val chDate = DATE_FMT.parse(chDateMatch.groupValues[1])?.time ?: 0L
-                val chNum = chNumMatch?.groupValues?.getOrNull(1)?.toFloat() ?: (chLast + 0.01F)
-
-                chapters.add(
-                    SChapter.create().apply {
-                        name = chTitle
-                        chapter_number = chNum
-                        date_upload = chDate
-                        setUrlWithoutDomain(chLink)
-                    },
-                )
-
-                // This is a hack to make the app not think there’s missing chapters after
-                // a title page.
-                chLast = chNum
-            }
-
-            archivePage = nextArchivePage
-        }
-
-        return Observable.just(chapters)
-    }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        // It would’ve been cleaner and neater to extract chapter information from the archive feed.
-        // Alas, the website provides no structured way of extracting that information. We’d have
-        // to iterate over all »chapters« so far, picking the ones for which the chapter number
-        // regex fails, *guessing* they’re chapter title pages, and then demote all other chapters
-        // to pages of these. As i don’t see a clean way to cache the »chapter« list we’ve fetched
-        // so far, that whole endeavour seems not worth the effort.
-        // So here it is: Each »chapter« having just 1 page.
-        return Observable.just(listOf(Page(0, chapter.url)))
-    }
-
-    override fun imageUrlParse(response: Response): String =
-        response.asJsoup().selectFirst("article.post img.aligncenter")!!.attr("src")
+    override fun imageUrlParse(page: Response): String =
+        page.asJsoup().selectFirst("article.post img.aligncenter")!!.attr("src")
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -133,11 +98,56 @@ class DarkScience : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    private fun parseChapter(ch: Element, chLast: Float): SChapter {
+        val chTitle = ch.text()
+        val chLink = ch.attr("href")
+        val chDateMatch = chapterDateRegex.find(chLink)!!
+        val chNumMatch = chapterNumberRegex.find(chTitle)
+        val chDate = DATE_FMT.parse(chDateMatch.groupValues[1])?.time ?: 0L
+        val chNum = chNumMatch?.groupValues?.getOrNull(1)?.toFloat() ?: (chLast - 0.01F)
+
+        return SChapter.create().apply {
+            name = chTitle
+            chapter_number = chNum
+            date_upload = chDate
+            setUrlWithoutDomain(chLink)
+        }
+    }
+
+    private fun accumulateChapters(state: Triple<Call?, Float, Observable<SChapter>>): Observable<Triple<Call?, Float, Observable<SChapter>>> {
+        val archivePageFetch = state.first
+        var chLast = state.second
+        val archivePages = state.third
+
+        return if (archivePageFetch == null) {
+            Observable.just(state)
+        } else {
+            archivePageFetch
+                .asObservableSuccess()
+                .map {
+                    val archivePage = it.asJsoup()
+                    val nextPageUrl = archivePage.selectFirst("""#nav-below .nav-previous > a""")?.attr("href")
+                    val nextCall = if (nextPageUrl != null) {
+                        client.newCall(GET(nextPageUrl, headers))
+                    } else {
+                        null
+                    }
+                    val nextPages = Observable.from(
+                        archivePage
+                            .select("""#content article header > h2 > a""")
+                            .map {
+                                val ch = parseChapter(it, chLast)
+                                chLast = ch.chapter_number
+                                ch
+                            },
+                    )
+                    Triple(nextCall, chLast, archivePages.concatWith(nextPages))
+                }
+                .concatMap { accumulateChapters(it) }
+        }
+    }
 
     companion object {
         private val DATE_FMT = SimpleDateFormat("yyyy/MM/dd", Locale.US)
