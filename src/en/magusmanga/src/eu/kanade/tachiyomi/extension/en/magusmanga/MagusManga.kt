@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.magusmanga
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MagusManga : MangaThemesia(
+class MagusManga : MangaThemesiaAlt(
     "Magus Manga",
     "https://dmvdepot.com",
     "en",
