@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.hentainexus
 
 import android.util.Base64
+import kotlin.experimental.xor
 
 object HentaiNexusUtils {
     fun decryptData(data: String): String = decryptData(Base64.decode(data, Base64.DEFAULT))
@@ -8,6 +9,12 @@ object HentaiNexusUtils {
     private val primeNumbers = intArrayOf(2, 3, 5, 7, 11, 13, 17, 19)
 
     private fun decryptData(data: ByteArray): String {
+        val hostname = "hentainexus.com"
+
+        for (i in hostname.indices) {
+            data[i] = data[i] xor hostname[i].code.toByte()
+        }
+
         val keyStream = data.slice(0 until 64).map { it.toUByte().toInt() }
         val ciphertext = data.slice(64 until data.size).map { it.toUByte().toInt() }
         val digest = (0..255).toMutableList()
