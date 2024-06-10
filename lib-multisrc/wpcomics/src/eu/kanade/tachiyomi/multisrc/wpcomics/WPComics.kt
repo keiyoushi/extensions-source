@@ -173,15 +173,8 @@ abstract class WPComics(
                 val calendar = Calendar.getInstance()
 
                 when {
-                    yearWords.doesInclude(trimmedDate[1]) -> calendar.apply {
-                        add(Calendar.YEAR, -trimmedDate[0].toInt())
-                        set(Calendar.DAY_OF_MONTH, 1)
-                        set(Calendar.MONTH, Calendar.JANUARY)
-                    }
-                    monthWords.doesInclude(trimmedDate[1]) -> calendar.apply {
-                        add(Calendar.MONTH, -trimmedDate[0].toInt())
-                        set(Calendar.DAY_OF_MONTH, 1)
-                    }
+                    yearWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
+                    monthWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
                     dayWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
                     hourWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
                     minuteWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
