@@ -163,6 +163,8 @@ abstract class WPComics(
         val minuteWords = listOf("minute", "phút")
         val hourWords = listOf("hour", "giờ")
         val dayWords = listOf("day", "ngày")
+        val monthWords = listOf("month", "tháng")
+        val yearWords = listOf("year", "năm")
         val agoWords = listOf("ago", "trước")
 
         return try {
@@ -171,6 +173,8 @@ abstract class WPComics(
                 val calendar = Calendar.getInstance()
 
                 when {
+                    yearWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
+                    monthWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
                     dayWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
                     hourWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
                     minuteWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
