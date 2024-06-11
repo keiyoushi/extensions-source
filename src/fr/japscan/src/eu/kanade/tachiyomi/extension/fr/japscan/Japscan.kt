@@ -91,7 +91,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         element.selectFirst("a")!!.let { anchorElement ->
             manga.setUrlWithoutDomain(anchorElement.attr("href"))
             manga.title = anchorElement.select("strong.name").text()
-            anchorElement.select("img").first()?.let { imgElement ->
+            anchorElement.selectFirst("img")?.let { imgElement ->
                 val imageUrl = imgElement.attr("abs:data-src").ifEmpty { imgElement.attr("abs:src") }
                 manga.thumbnail_url = imageUrl.lowercase(Locale.ROOT)
             }
