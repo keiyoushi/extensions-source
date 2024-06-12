@@ -100,7 +100,6 @@ class ComicFuz : HttpSource(), ConfigurableSource {
             ),
             query = query.trim(),
             pageIndexOfMangas = page,
-            pageIndexOfBooks = page,
         ).toRequestBody()
 
         return POST("$apiUrl/search#$page", headers, payload)
@@ -120,14 +119,14 @@ class ComicFuz : HttpSource(), ConfigurableSource {
             deviceInfo = DeviceInfo(
                 deviceType = DeviceType.BROWSER,
             ),
-            mangaId = manga.url.toInt(),
+            mangaId = manga.url.substringAfterLast("/").toInt(),
         ).toRequestBody()
 
         return POST("$apiUrl/manga_detail", headers, payload)
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/manga/${manga.url}"
+        return "$baseUrl${manga.url}"
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -148,12 +147,16 @@ class ComicFuz : HttpSource(), ConfigurableSource {
         }
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        return "$baseUrl${chapter.url}"
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
         val payload = MangaViewerRequest(
             deviceInfo = DeviceInfo(
                 deviceType = DeviceType.BROWSER,
             ),
-            chapterId = chapter.url.toInt(),
+            chapterId = chapter.url.substringAfterLast("/").toInt(),
             useTicket = false,
             consumePoint = UserPoint(
                 event = 0,

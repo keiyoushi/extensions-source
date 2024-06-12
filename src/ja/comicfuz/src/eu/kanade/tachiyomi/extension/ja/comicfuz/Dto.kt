@@ -30,7 +30,7 @@ class Manga(
     @ProtoNumber(14) private val description: String,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = id.toString()
+        url = "/manga/$id"
         title = this@Manga.title
         thumbnail_url = cdnUrl + cover
         description = this@Manga.description
@@ -73,7 +73,7 @@ class Chapter(
     @ProtoNumber(8) private val date: String = "",
 ) {
     fun toSChapter() = SChapter.create().apply {
-        url = id.toString()
+        url = "/manga/viewer/$id"
         name = if (points.amount > 0) {
             "\uD83D\uDD12 $title" // lock emoji
         } else {
