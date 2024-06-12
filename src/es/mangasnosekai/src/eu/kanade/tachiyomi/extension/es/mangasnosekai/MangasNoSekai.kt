@@ -231,6 +231,9 @@ class MangasNoSekai : Madara(
         do {
             val xhrRequest = altChapterRequest(url, mangaId, page, objects)
             val xhrResponse = client.newCall(xhrRequest).execute()
+            if (!xhrResponse.isSuccessful) {
+                throw Exception("HTTP ${xhrResponse.code}: Intente iniciar sesión en WebView")
+            }
             val xhrBody = xhrResponse.body.string()
             if (xhrBody.startsWith("{")) {
                 return chaptersFromJson(xhrBody, mangaSlug)
