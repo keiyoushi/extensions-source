@@ -1,6 +1,11 @@
 package eu.kanade.tachiyomi.extension.ja.comicfuz
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,11 +16,16 @@ import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.IOException
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
-class ComicFuz : HttpSource() {
+class ComicFuz : HttpSource(), ConfigurableSource {
 
     override val name = "COMIC FUZ"
 
@@ -30,63 +40,88 @@ class ComicFuz : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor)
+        .addNetworkInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+
+            if (!response.isSuccessful) {
+                val exception = when (response.code) {
+                    401 -> "Unauthorized"
+                    402 -> "Payment Required"
+                    else -> "HTTP error ${response.code}"
+                }
+
+                throw IOException(exception)
+            }
+
+            return@addNetworkInterceptor response
+        }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
 
+    private val preference =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
     override fun popularMangaRequest(page: Int): Request {
+        throw UnsupportedOperationException()
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        throw UnsupportedOperationException()
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
         val payload = DayOfWeekRequest(
             deviceInfo = DeviceInfo(
-                deviceType = 2,
+                deviceType = DeviceType.BROWSER,
             ),
-            dayOfWeek = 0,
-        ).let(ProtoBuf::encodeToByteArray)
-            .toRequestBody()
+            dayOfWeek = preference.latestDayPref(),
+        ).toRequestBody()
 
         return POST("$apiUrl/mangas_by_day_of_week", headers, payload)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    override fun latestUpdatesParse(response: Response): MangasPage {
         val data = response.parseAs<DayOfWeekResponse>()
 
         val entries = data.mangas.map {
-            SManga.create().apply {
-                url = it.id.toString()
-                title = it.title
-                thumbnail_url = cdnUrl + it.cover
-                description = it.description
-            }
+            it.toSManga(cdnUrl)
         }
 
         return MangasPage(entries, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException()
+        val payload = SearchRequest(
+            deviceInfo = DeviceInfo(
+                deviceType = DeviceType.BROWSER,
+            ),
+            query = query.trim(),
+            pageIndexOfMangas = page,
+            pageIndexOfBooks = page,
+        ).toRequestBody()
+
+        return POST("$apiUrl/search#$page", headers, payload)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
+        val data = response.parseAs<SearchResponse>()
+        val page = response.request.url.fragment!!.toInt()
+
+        val entries = data.mangas.map { it.toSManga(cdnUrl) }
+
+        return MangasPage(entries, data.pageCountOfMangas > page)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val payload = MangaDetailsRequest(
             deviceInfo = DeviceInfo(
-                deviceType = 2,
+                deviceType = DeviceType.BROWSER,
             ),
             mangaId = manga.url.toInt(),
-        ).let(ProtoBuf::encodeToByteArray)
-            .toRequestBody()
+        ).toRequestBody()
 
         return POST("$apiUrl/manga_detail", headers, payload)
     }
@@ -98,14 +133,7 @@ class ComicFuz : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<MangaDetailsResponse>()
 
-        return SManga.create().apply {
-            url = data.manga.id.toString()
-            title = data.manga.title
-            thumbnail_url = cdnUrl + data.manga.cover
-            description = data.manga.description
-            genre = data.tags.joinToString { it.name }
-            author = data.authors.joinToString { it.author.name }
-        }
+        return data.toSManga(cdnUrl)
     }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
@@ -113,13 +141,9 @@ class ComicFuz : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<MangaDetailsResponse>()
 
-        return data.chapters.flatMap { group ->
+        return data.chapterGroups.flatMap { group ->
             group.chapters.map { chapter ->
-                SChapter.create().apply {
-                    url = chapter.id.toString()
-                    name = chapter.title
-                    date_upload = chapter.timestamp
-                }
+                chapter.toSChapter()
             }
         }
     }
@@ -127,7 +151,7 @@ class ComicFuz : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val payload = MangaViewerRequest(
             deviceInfo = DeviceInfo(
-                deviceType = 2,
+                deviceType = DeviceType.BROWSER,
             ),
             chapterId = chapter.url.toInt(),
             useTicket = false,
@@ -135,8 +159,7 @@ class ComicFuz : HttpSource() {
                 event = 0,
                 paid = 0,
             ),
-        ).let(ProtoBuf::encodeToByteArray)
-            .toRequestBody()
+        ).toRequestBody()
 
         return POST("$apiUrl/manga_viewer", headers, payload)
     }
@@ -170,4 +193,29 @@ class ComicFuz : HttpSource() {
     private inline fun <reified T> Response.parseAs(): T {
         return ProtoBuf.decodeFromByteArray(body.bytes())
     }
+
+    private inline fun <reified T : Any> T.toRequestBody(): RequestBody {
+        return ProtoBuf.encodeToByteArray(this)
+            .toRequestBody("application/protobuf".toMediaType())
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = LATEST_DAY_PREF
+            title = "Use Current Day for Latest Tab"
+            summaryOn = "Current Day"
+            summaryOff = "All Days"
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+    }
+
+    private fun SharedPreferences.latestDayPref(): DayOfWeek {
+        return if (getBoolean(LATEST_DAY_PREF, true)) {
+            DayOfWeek.today()
+        } else {
+            DayOfWeek.ALL
+        }
+    }
 }
+
+private const val LATEST_DAY_PREF = "latest_day_pref"

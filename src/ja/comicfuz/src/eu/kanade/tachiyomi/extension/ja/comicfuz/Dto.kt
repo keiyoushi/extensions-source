@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.comicfuz
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import java.text.ParseException
@@ -7,42 +9,46 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-class DeviceInfo(
-    @ProtoNumber(3) private val deviceType: Int,
-)
-
-@Serializable
-class DayOfWeekRequest(
-    @ProtoNumber(1) private val deviceInfo: DeviceInfo,
-    @ProtoNumber(2) private val dayOfWeek: Int,
-)
-
-@Serializable
 class DayOfWeekResponse(
     @ProtoNumber(1) val mangas: List<Manga>,
 )
 
 @Serializable
-class Manga(
-    @ProtoNumber(1) val id: Int,
-    @ProtoNumber(2) val title: String,
-    @ProtoNumber(4) val cover: String,
-    @ProtoNumber(14) val description: String,
-)
+class SearchResponse(
+    @ProtoNumber(2) val mangas: List<Manga>,
+    @ProtoNumber(6) val pageCountOfMangas: Int,
+    // @ProtoNumber(7) private val pageCountOfBooks: Int,
+) {
+    // val lastPage get() = maxOf(pageCountOfMangas, pageCountOfBooks)
+}
 
 @Serializable
-class MangaDetailsRequest(
-    @ProtoNumber(1) val deviceInfo: DeviceInfo,
-    @ProtoNumber(2) val mangaId: Int,
-)
+class Manga(
+    @ProtoNumber(1) private val id: Int,
+    @ProtoNumber(2) private val title: String,
+    @ProtoNumber(4) private val cover: String,
+    @ProtoNumber(14) private val description: String,
+) {
+    fun toSManga(cdnUrl: String) = SManga.create().apply {
+        url = id.toString()
+        title = this@Manga.title
+        thumbnail_url = cdnUrl + cover
+        description = this@Manga.description
+    }
+}
 
 @Serializable
 class MangaDetailsResponse(
-    @ProtoNumber(2) val manga: Manga,
-    @ProtoNumber(3) val chapters: List<ChapterGroup>,
-    @ProtoNumber(4) val authors: List<Author>,
-    @ProtoNumber(7) val tags: List<Name>,
-)
+    @ProtoNumber(2) private val manga: Manga,
+    @ProtoNumber(3) val chapterGroups: List<ChapterGroup>,
+    @ProtoNumber(4) private val authors: List<Author>,
+    @ProtoNumber(7) private val tags: List<Name>,
+) {
+    fun toSManga(cdnUrl: String) = manga.toSManga(cdnUrl).apply {
+        genre = tags.joinToString { it.name }
+        author = authors.joinToString { it.author.name }
+    }
+}
 
 @Serializable
 class Author(
@@ -61,15 +67,23 @@ class ChapterGroup(
 
 @Serializable
 class Chapter(
-    @ProtoNumber(1) val id: Int,
-    @ProtoNumber(2) val title: String,
-    @ProtoNumber(5) val points: Point,
+    @ProtoNumber(1) private val id: Int,
+    @ProtoNumber(2) private val title: String,
+    @ProtoNumber(5) private val points: Point,
     @ProtoNumber(8) private val date: String = "",
 ) {
-    val timestamp get() = try {
-        dateFormat.parse(date)!!.time
-    } catch (_: ParseException) {
-        0L
+    fun toSChapter() = SChapter.create().apply {
+        url = id.toString()
+        name = if (points.amount > 0) {
+            "\uD83D\uDD12 $title" // lock emoji
+        } else {
+            title
+        }
+        date_upload = try {
+            dateFormat.parse(date)!!.time
+        } catch (_: ParseException) {
+            0L
+        }
     }
 }
 
@@ -77,27 +91,7 @@ private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH)
 
 @Serializable
 class Point(
-    @ProtoNumber(2) ammount = 0
-)
-
-@Serializable
-class MangaViewerRequest(
-    @ProtoNumber(1) private val deviceInfo: DeviceInfo,
-    @ProtoNumber(2) private val chapterId: Int,
-    @ProtoNumber(3) private val useTicket: Boolean,
-    @ProtoNumber(4) private val consumePoint: UserPoint,
-    // @ProtoNumber(5) private val viewerMode: ViewerMode
-)
-
-@Serializable
-class UserPoint(
-    @ProtoNumber(1) private val event: Int,
-    @ProtoNumber(2) private val paid: Int,
-)
-
-@Serializable
-class ViewerMode(
-    @ProtoNumber(1) private val imageQuality: Int,
+    @ProtoNumber(2) val amount: Int = 0,
 )
 
 @Serializable
