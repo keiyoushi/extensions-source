@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.comicfuz
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -22,10 +17,10 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.IOException
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import rx.Observable
+import kotlin.math.min
 
-class ComicFuz : HttpSource(), ConfigurableSource {
+class ComicFuz : HttpSource() {
 
     override val name = "COMIC FUZ"
 
@@ -61,8 +56,9 @@ class ComicFuz : HttpSource(), ConfigurableSource {
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
 
-    private val preference =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return fetchSearchManga(page, "", FilterList())
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         throw UnsupportedOperationException()
@@ -72,49 +68,144 @@ class ComicFuz : HttpSource(), ConfigurableSource {
         throw UnsupportedOperationException()
     }
 
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        if (page == 1) {
+            client.newCall(latestUpdatesRequest(page))
+                .execute()
+                .use(::latestResponseParse)
+        }
+
+        val entries = cachedList.subList(
+            (page - 1) * 20,
+            min(page * 20, cachedList.size),
+        )
+
+        return Observable.just(MangasPage(entries, page * 20 < cachedList.size))
+    }
+
     override fun latestUpdatesRequest(page: Int): Request {
         val payload = DayOfWeekRequest(
             deviceInfo = DeviceInfo(
                 deviceType = DeviceType.BROWSER,
             ),
-            dayOfWeek = preference.latestDayPref(),
+            dayOfWeek = DayOfWeek.ALL,
         ).toRequestBody()
 
         return POST("$apiUrl/mangas_by_day_of_week", headers, payload)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
+    private fun latestResponseParse(response: Response) {
         val data = response.parseAs<DayOfWeekResponse>()
 
-        val entries = data.mangas.map {
+        cachedList = data.mangas.map {
             it.toSManga(cdnUrl)
         }
+    }
 
-        return MangasPage(entries, false)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        throw UnsupportedOperationException()
+    }
+
+    private var lastMangaPage = 0
+    private var lastBookPage = 0
+
+    private var cachedList: List<SManga> = emptyList()
+    private var cachedHasNextPage = false
+    private var useCached = false
+    private var cachedPage = 1
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (!useCached || page == 1) {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .execute()
+                .use(::searchResponseParse)
+        }
+
+        return Observable.just(getCached(cachedPage))
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (page == 1) {
+            lastMangaPage = 1
+            lastBookPage = 1
+            cachedPage = 1
+        }
+
         val payload = SearchRequest(
             deviceInfo = DeviceInfo(
                 deviceType = DeviceType.BROWSER,
             ),
             query = query.trim(),
-            pageIndexOfMangas = page,
+            pageIndexOfMangas = lastMangaPage,
+            pageIndexOfBooks = lastBookPage,
         ).toRequestBody()
 
-        return POST("$apiUrl/search#$page", headers, payload)
+        return POST("$apiUrl/search", headers, payload)
+    }
+
+    private fun searchResponseParse(response: Response) {
+        val data = response.parseAs<SearchResponse>()
+
+        cachedHasNextPage = false
+        if (data.pageCountOfMangas > lastMangaPage) {
+            lastMangaPage++
+            cachedHasNextPage = true
+        }
+        if (data.pageCountOfBooks > lastBookPage) {
+            lastBookPage++
+            cachedHasNextPage = true
+        }
+
+        useCached = true
+
+        cachedList = with(data) {
+            buildList(mangas.size + books.size) {
+                var i = 0
+                var j = 0
+
+                while (i < mangas.size || j < books.size) {
+                    if (i < mangas.size) {
+                        add(mangas[i].toSManga(cdnUrl))
+                        i++
+                    }
+                    if (j < books.size) {
+                        add(books[j].toSManga(cdnUrl))
+                        j++
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getCached(page: Int): MangasPage {
+        val entries = cachedList.subList(
+            (page - 1) * 20,
+            min(page * 20, cachedList.size),
+        )
+
+        cachedPage++
+
+        val cachedNextPage = page * 20 < cachedList.size
+
+        val hasNextPage = if (!cachedNextPage && cachedHasNextPage) {
+            useCached = false
+            cachedPage = 1
+            true
+        } else {
+            cachedNextPage
+        }
+
+        return MangasPage(entries, hasNextPage)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<SearchResponse>()
-        val page = response.request.url.fragment!!.toInt()
-
-        val entries = data.mangas.map { it.toSManga(cdnUrl) }
-
-        return MangasPage(entries, data.pageCountOfMangas > page)
+        throw UnsupportedOperationException()
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
+        if (!manga.url.contains("/manga/")) {
+            throw UnsupportedOperationException()
+        }
         val payload = MangaDetailsRequest(
             deviceInfo = DeviceInfo(
                 deviceType = DeviceType.BROWSER,
@@ -200,24 +291,6 @@ class ComicFuz : HttpSource(), ConfigurableSource {
     private inline fun <reified T : Any> T.toRequestBody(): RequestBody {
         return ProtoBuf.encodeToByteArray(this)
             .toRequestBody("application/protobuf".toMediaType())
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = LATEST_DAY_PREF
-            title = "Use Current Day for Latest Tab"
-            summaryOn = "Current Day"
-            summaryOff = "All Days"
-            setDefaultValue(true)
-        }.also(screen::addPreference)
-    }
-
-    private fun SharedPreferences.latestDayPref(): DayOfWeek {
-        return if (getBoolean(LATEST_DAY_PREF, true)) {
-            DayOfWeek.today()
-        } else {
-            DayOfWeek.ALL
-        }
     }
 }
 

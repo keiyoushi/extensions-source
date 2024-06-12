@@ -48,13 +48,19 @@ class SearchRequest(
     @ProtoNumber(1) private val deviceInfo: DeviceInfo,
     @ProtoNumber(2) private val query: String,
     @ProtoNumber(3) private val pageIndexOfMangas: Int,
-    @ProtoNumber(4) private val pageIndexOfBooks: Int = 1,
+    @ProtoNumber(4) private val pageIndexOfBooks: Int,
 )
 
 @Serializable
 class MangaDetailsRequest(
     @ProtoNumber(1) private val deviceInfo: DeviceInfo,
     @ProtoNumber(2) private val mangaId: Int,
+)
+
+@Serializable
+class BookDetailsRequest(
+    @ProtoNumber(1) private val deviceInfo: DeviceInfo,
+    @ProtoNumber(2) private val bookIssueId: Int,
 )
 
 @Serializable
