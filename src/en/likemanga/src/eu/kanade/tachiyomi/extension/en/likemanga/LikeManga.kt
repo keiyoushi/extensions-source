@@ -65,11 +65,7 @@ class LikeManga : ParsedHttpSource() {
             val url = "$baseUrl/${query.substringAfter(URL_SEARCH_PREFIX)}"
             return client.newCall(GET(url, headers)).asObservableSuccess().map { response ->
                 MangasPage(
-                    listOf(
-                        mangaDetailsParse(response).apply {
-                            setUrlWithoutDomain(url)
-                        },
-                    ),
+                    listOf(mangaDetailsParse(response).apply { setUrlWithoutDomain(url) }),
                     false,
                 )
             }
