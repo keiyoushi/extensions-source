@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -20,6 +21,7 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class SpyFakku : HttpSource() {
 
@@ -27,13 +29,17 @@ class SpyFakku : HttpSource() {
 
     override val baseUrl = "https://spy.fakku.cc"
 
+    private val baseImageUrl = "https://cdn.fakku.cc/data"
+
     override val lang = "en"
 
     override val supportsLatest = false
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
@@ -47,14 +53,16 @@ class SpyFakku : HttpSource() {
 
         val mangas = document.select("article.entry").map(::popularMangaFromElement)
 
-        val hasNextPage = document.select(".next").firstOrNull() != null
+        val hasNextPage = document.selectFirst(".next") != null
 
         return MangasPage(mangas, hasNextPage)
     }
 
     private fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        title = element.selectFirst("a")!!.attr("title")
+        with(element.selectFirst("a")!!) {
+            setUrlWithoutDomain(absUrl("href"))
+            title = attr("title")
+        }
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
@@ -62,28 +70,20 @@ class SpyFakku : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            val terms = query
-                .trim()
-                .replace(Regex("""^\?"""), "")
-                .lowercase()
-                .split(Regex("\\s+"))
-                .toMutableList()
+            val terms = mutableListOf(query.trim())
 
-            filters.forEach {
-                when (it) {
+            filters.forEach { filter ->
+                when (filter) {
                     is SortFilter -> {
-                        addQueryParameter("sort", it.getValue())
-                    }
-
-                    is OrderFilter -> {
-                        addQueryParameter("order", it.getValue())
+                        addQueryParameter("sort", filter.getValue())
+                        addQueryParameter("order", if (filter.state!!.ascending) "asc" else "desc")
                     }
 
                     is TextFilter -> {
-                        if (it.state.isNotEmpty()) {
-                            terms += it.state.split(",").map { tag ->
+                        if (filter.state.isNotEmpty()) {
+                            terms += filter.state.split(",").filter { it.isNotBlank() }.map { tag ->
                                 val trimmed = tag.trim().replace(" ", "_")
-                                (if (trimmed.startsWith("-")) "-" else "") + it.type + "&:" + trimmed.removePrefix("-")
+                                (if (trimmed.startsWith("-")) "-" else "") + filter.type + "&:" + trimmed.removePrefix("-")
                             }
                         }
                     }
@@ -108,13 +108,14 @@ class SpyFakku : HttpSource() {
 
     override fun getFilterList() = getFilters()
 
+    private val dateFormat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
     private fun Hentai.toSManga() = SManga.create().apply {
         title = this@toSManga.title
         url = "/archive/$id/$slug"
         author = artists?.joinToString { it.value }
         artist = artists?.joinToString { it.value }
         genre = tags?.joinToString { it.value }
-        thumbnail_url = "https://cdn.fakku.cc/data/$id/1/288.webp"
+        thumbnail_url = "$baseImageUrl/$id/1/288.webp"
         description = buildString {
             circle?.joinToString { it.value }?.let {
                 append("Circles: ", it, "\n")
@@ -127,7 +128,7 @@ class SpyFakku : HttpSource() {
             }
             append(
                 "Created At: ",
-                SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH).format(
+                dateFormat.format(
                     Date(createdAt * 1000),
                 ),
                 "\n",
@@ -163,7 +164,7 @@ class SpyFakku : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val hentai = response.parseAs<Hentai>()
         val range = 1..hentai.pages
-        val baseImageUrl = "https://cdn.fakku.cc/data/${hentai.id}/"
+        val baseImageUrl = "$baseImageUrl/${hentai.id}/"
         return range.map {
             val imageUrl = baseImageUrl + it
             Page(it - 1, imageUrl = imageUrl)

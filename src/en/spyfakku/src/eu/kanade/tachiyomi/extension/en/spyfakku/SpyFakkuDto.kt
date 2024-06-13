@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -17,8 +18,6 @@ class Hentai(
 )
 
 @Serializable
-data class Name(
-    private val name: String,
-) {
-    val value = name
-}
+class Name(
+    @SerialName("name") val value: String,
+)
