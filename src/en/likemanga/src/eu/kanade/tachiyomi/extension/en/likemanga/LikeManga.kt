@@ -42,6 +42,9 @@ class LikeManga : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     override fun popularMangaRequest(page: Int): Request {
         return searchMangaRequest(page, "", FilterList(SortFilter("top-manga")))
     }
