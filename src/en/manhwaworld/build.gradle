@@ -3,7 +3,7 @@ ext {
     extClass = '.ManhwaWorld'
     themePkg = 'madara'
     baseUrl = 'https://aquascans.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
