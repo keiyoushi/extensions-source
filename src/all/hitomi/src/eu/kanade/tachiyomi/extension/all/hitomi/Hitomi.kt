@@ -101,15 +101,18 @@ class Hitomi(
     }
 
     private suspend fun getRangedResponse(url: String, range: LongRange?): ByteArray {
-        val rangeHeaders = when (range) {
-            null -> headers
-            else -> headersBuilder()
-                .set("Range", "bytes=${range.first}-${range.last}")
-                .build()
+        val request = when (range) {
+            null -> GET(url, headers)
+            else -> {
+                val rangeHeaders = headersBuilder()
+                    .set("Range", "bytes=${range.first}-${range.last}")
+                    .build()
+
+                GET(url, rangeHeaders, CacheControl.FORCE_NETWORK)
+            }
         }
 
-        return client.newCall(GET(url, rangeHeaders, CacheControl.FORCE_NETWORK))
-            .awaitSuccess().use { it.body.bytes() }
+        return client.newCall(request).awaitSuccess().use { it.body.bytes() }
     }
 
     private suspend fun hitomiSearch(
@@ -123,12 +126,9 @@ class Hitomi(
 
             val terms = query
                 .trim()
-                .replace(Regex("""^\?"""), "")
                 .lowercase()
                 .split(Regex("\\s+"))
-                .map {
-                    it.replace('_', ' ')
-                }.toMutableList()
+                .toMutableList()
 
             filters.forEach {
                 when (it) {
@@ -148,9 +148,16 @@ class Hitomi(
 
                     is TextFilter -> {
                         if (it.state.isNotEmpty()) {
-                            terms += it.state.split(",").map { tag ->
+                            terms += it.state.split(",").filter(String::isNotBlank).map { tag ->
                                 val trimmed = tag.trim()
-                                (if (trimmed.startsWith("-")) "-" else "") + it.type + ":" + trimmed.lowercase().removePrefix("-")
+                                buildString {
+                                    if (trimmed.startsWith('-')) {
+                                        append("-")
+                                    }
+                                    append(it.type)
+                                    append(":")
+                                    append(trimmed.lowercase().removePrefix("-"))
+                                }
                             }
                         }
                     }
@@ -158,7 +165,7 @@ class Hitomi(
                 }
             }
 
-            if (language != "all" && sortBy == Pair(null, "index")) {
+            if (language != "all" && sortBy == Pair(null, "index") && !terms.any { it.contains(":") }) {
                 terms += "language:$language"
             }
 
