@@ -83,7 +83,7 @@ class Hitomi(
                     query.trim(),
                     filters,
                     nozomiLang,
-                ).toList()
+                )
             }
 
             val end = min(page * 25, searchResponse.size)
@@ -116,9 +116,10 @@ class Hitomi(
         query: String,
         filters: FilterList,
         language: String = "all",
-    ): Set<Int> =
+    ): List<Int> =
         coroutineScope {
             var sortBy: Pair<String?, String> = Pair(null, "index")
+            var random = false
 
             val terms = query
                 .trim()
@@ -133,6 +134,7 @@ class Hitomi(
                 when (it) {
                     is SelectFilter -> {
                         sortBy = Pair(it.getArea(), it.getValue())
+                        random = (it.vals[it.state].first == "Random")
                     }
 
                     is TypeFilter -> {
@@ -226,7 +228,11 @@ class Hitomi(
                 filterNegative(it.await())
             }
 
-            results
+            if (random) {
+                results.toList().shuffled()
+            } else {
+                results.toList()
+            }
         }
 
     // search.js
