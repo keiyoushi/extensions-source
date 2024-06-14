@@ -101,15 +101,18 @@ class Hitomi(
     }
 
     private suspend fun getRangedResponse(url: String, range: LongRange?): ByteArray {
-        val rangeHeaders = when (range) {
-            null -> headers
-            else -> headersBuilder()
-                .set("Range", "bytes=${range.first}-${range.last}")
-                .build()
+        val request = when (range) {
+            null -> GET(url, headers)
+            else -> {
+                val rangeHeaders = headersBuilder()
+                    .set("Range", "bytes=${range.first}-${range.last}")
+                    .build()
+
+                GET(url, rangeHeaders, CacheControl.FORCE_NETWORK)
+            }
         }
 
-        return client.newCall(GET(url, rangeHeaders, CacheControl.FORCE_NETWORK))
-            .awaitSuccess().use { it.body.bytes() }
+        return client.newCall(request).awaitSuccess().use { it.body.bytes() }
     }
 
     private suspend fun hitomiSearch(
@@ -123,12 +126,9 @@ class Hitomi(
 
             val terms = query
                 .trim()
-                .replace(Regex("""^\?"""), "")
                 .lowercase()
                 .split(Regex("\\s+"))
-                .map {
-                    it.replace('_', ' ')
-                }.toMutableList()
+                .toMutableList()
 
             filters.forEach {
                 when (it) {
@@ -148,9 +148,16 @@ class Hitomi(
 
                     is TextFilter -> {
                         if (it.state.isNotEmpty()) {
-                            terms += it.state.split(",").map { tag ->
+                            terms += it.state.split(",").filter(String::isNotBlank).map { tag ->
                                 val trimmed = tag.trim()
-                                (if (trimmed.startsWith("-")) "-" else "") + it.type + ":" + trimmed.lowercase().removePrefix("-")
+                                buildString {
+                                    if (trimmed.startsWith('-')) {
+                                        append("-")
+                                    }
+                                    append(it.type)
+                                    append(":")
+                                    append(trimmed.lowercase().removePrefix("-"))
+                                }
                             }
                         }
                     }
@@ -158,7 +165,7 @@ class Hitomi(
                 }
             }
 
-            if (language != "all" && sortBy == Pair(null, "index")) {
+            if (language != "all" && sortBy == Pair(null, "index") && !terms.any { it.contains(":") }) {
                 terms += "language:$language"
             }
 
@@ -204,17 +211,17 @@ class Hitomi(
             val results = when {
                 positiveTerms.isEmpty() || sortBy != Pair(null, "index")
                 -> getGalleryIDsFromNozomi(sortBy.first, sortBy.second, language)
-                else -> ArrayList()
-            }
+                else -> emptySet()
+            }.toMutableSet()
 
-            fun filterPositive(newResults: Collection<Int>) {
+            fun filterPositive(newResults: Set<Int>) {
                 when {
                     results.isEmpty() -> results.addAll(newResults)
                     else -> results.retainAll(newResults)
                 }
             }
 
-            fun filterNegative(newResults: Collection<Int>) {
+            fun filterNegative(newResults: Set<Int>) {
                 results.removeAll(newResults)
             }
 
@@ -228,14 +235,18 @@ class Hitomi(
                 filterNegative(it.await())
             }
 
-            if (random) results.shuffled() else results
+            if (random) {
+                results.toList().shuffled()
+            } else {
+                results.toList()
+            }
         }
 
     // search.js
     private suspend fun getGalleryIDsForQuery(
         query: String,
         language: String = "all",
-    ): MutableList<Int> {
+    ): Set<Int> {
         query.replace("_", " ").let {
             if (it.indexOf(':') > -1) {
                 val sides = it.split(":")
@@ -262,13 +273,13 @@ class Hitomi(
 
             val key = hashTerm(it)
             val node = getGalleryNodeAtAddress(0)
-            val data = bSearch(key, node) ?: return ArrayList()
+            val data = bSearch(key, node) ?: return emptySet()
 
             return getGalleryIDsFromData(data)
         }
     }
 
-    private suspend fun getGalleryIDsFromData(data: Pair<Long, Int>): MutableList<Int> {
+    private suspend fun getGalleryIDsFromData(data: Pair<Long, Int>): Set<Int> {
         val url = "$ltnUrl/galleriesindex/galleries.$galleriesIndexVersion.data"
         val (offset, length) = data
         require(length in 1..100000000) {
@@ -277,7 +288,7 @@ class Hitomi(
 
         val inbuf = getRangedResponse(url, offset.until(offset + length))
 
-        val galleryIDs = mutableListOf<Int>()
+        val galleryIDs = mutableSetOf<Int>()
 
         val buffer =
             ByteBuffer
@@ -366,14 +377,14 @@ class Hitomi(
         tag: String,
         language: String,
         range: LongRange? = null,
-    ): MutableList<Int> {
+    ): Set<Int> {
         val nozomiAddress = when (area) {
             null -> "$ltnUrl/$tag-$language.nozomi"
             else -> "$ltnUrl/$area/$tag-$language.nozomi"
         }
 
         val bytes = getRangedResponse(nozomiAddress, range)
-        val nozomi = mutableListOf<Int>()
+        val nozomi = mutableSetOf<Int>()
 
         val arrayBuffer = ByteBuffer
             .wrap(bytes)
