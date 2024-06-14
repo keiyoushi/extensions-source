@@ -48,5 +48,4 @@ private val getSortsList: List<Triple<String, String?, String>> = listOf(
     Triple("Popular: Week", "popular", "week"),
     Triple("Popular: Month", "popular", "month"),
     Triple("Popular: Year", "popular", "year"),
-    Triple("Random", "popular", "year"),
 )

@@ -83,7 +83,7 @@ class Hitomi(
                     query.trim(),
                     filters,
                     nozomiLang,
-                )
+                ).toList()
             }
 
             val end = min(page * 25, searchResponse.size)
@@ -116,10 +116,9 @@ class Hitomi(
         query: String,
         filters: FilterList,
         language: String = "all",
-    ): List<Int> =
+    ): Set<Int> =
         coroutineScope {
             var sortBy: Pair<String?, String> = Pair(null, "index")
-            var random = false
 
             val terms = query
                 .trim()
@@ -134,7 +133,6 @@ class Hitomi(
                 when (it) {
                     is SelectFilter -> {
                         sortBy = Pair(it.getArea(), it.getValue())
-                        random = (it.vals[it.state].first == "Random")
                     }
 
                     is TypeFilter -> {
@@ -204,17 +202,17 @@ class Hitomi(
             val results = when {
                 positiveTerms.isEmpty() || sortBy != Pair(null, "index")
                 -> getGalleryIDsFromNozomi(sortBy.first, sortBy.second, language)
-                else -> ArrayList()
-            }
+                else -> emptySet()
+            }.toMutableSet()
 
-            fun filterPositive(newResults: Collection<Int>) {
+            fun filterPositive(newResults: Set<Int>) {
                 when {
                     results.isEmpty() -> results.addAll(newResults)
                     else -> results.retainAll(newResults)
                 }
             }
 
-            fun filterNegative(newResults: Collection<Int>) {
+            fun filterNegative(newResults: Set<Int>) {
                 results.removeAll(newResults)
             }
 
@@ -228,14 +226,14 @@ class Hitomi(
                 filterNegative(it.await())
             }
 
-            if (random) results.shuffled() else results
+            results
         }
 
     // search.js
     private suspend fun getGalleryIDsForQuery(
         query: String,
         language: String = "all",
-    ): MutableList<Int> {
+    ): Set<Int> {
         query.replace("_", " ").let {
             if (it.indexOf(':') > -1) {
                 val sides = it.split(":")
@@ -262,13 +260,13 @@ class Hitomi(
 
             val key = hashTerm(it)
             val node = getGalleryNodeAtAddress(0)
-            val data = bSearch(key, node) ?: return ArrayList()
+            val data = bSearch(key, node) ?: return emptySet()
 
             return getGalleryIDsFromData(data)
         }
     }
 
-    private suspend fun getGalleryIDsFromData(data: Pair<Long, Int>): MutableList<Int> {
+    private suspend fun getGalleryIDsFromData(data: Pair<Long, Int>): Set<Int> {
         val url = "$ltnUrl/galleriesindex/galleries.$galleriesIndexVersion.data"
         val (offset, length) = data
         require(length in 1..100000000) {
@@ -277,7 +275,7 @@ class Hitomi(
 
         val inbuf = getRangedResponse(url, offset.until(offset + length))
 
-        val galleryIDs = mutableListOf<Int>()
+        val galleryIDs = mutableSetOf<Int>()
 
         val buffer =
             ByteBuffer
@@ -366,14 +364,14 @@ class Hitomi(
         tag: String,
         language: String,
         range: LongRange? = null,
-    ): MutableList<Int> {
+    ): Set<Int> {
         val nozomiAddress = when (area) {
             null -> "$ltnUrl/$tag-$language.nozomi"
             else -> "$ltnUrl/$area/$tag-$language.nozomi"
         }
 
         val bytes = getRangedResponse(nozomiAddress, range)
-        val nozomi = mutableListOf<Int>()
+        val nozomi = mutableSetOf<Int>()
 
         val arrayBuffer = ByteBuffer
             .wrap(bytes)
