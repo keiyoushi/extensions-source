@@ -1,9 +1,0 @@
-ext {
-    extName = 'Mangás Chan'
-    extClass = '.MangasChan'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://mangaschan.net'
-    overrideVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"
