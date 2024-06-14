@@ -15,7 +15,7 @@ class MagusManga : MangaThemesiaAlt(
     "Magus Manga",
     "https://dmvdepot.com",
     "en",
-    mangaUrlDirectory = "/series",
+    mangaUrlDirectory = "/series/",
     dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("en")),
 ) {
     override val id = 7792477462646075400
