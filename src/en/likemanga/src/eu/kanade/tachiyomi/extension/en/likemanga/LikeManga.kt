@@ -1,7 +1,9 @@
-package eu.kanade.tachiyomi.multisrc.likemanga
+package eu.kanade.tachiyomi.extension.en.likemanga
 
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,24 +22,28 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class LikeManga(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : ParsedHttpSource() {
+class LikeManga : ParsedHttpSource() {
+    override val name = "LikeManga"
+
+    override val baseUrl = "https://likemanga.io"
+
+    override val lang = "en"
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(1, 2)
+        .build()
+
+    private val json: Json by injectLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-
-    private val json: Json by injectLazy()
 
     override fun popularMangaRequest(page: Int): Request {
         return searchMangaRequest(page, "", FilterList(SortFilter("top-manga")))
@@ -56,6 +62,19 @@ abstract class LikeManga(
     override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
     override fun latestUpdatesSelector() = searchMangaSelector()
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(URL_SEARCH_PREFIX)) {
+            val url = "$baseUrl/${query.substringAfter(URL_SEARCH_PREFIX)}"
+            return client.newCall(GET(url, headers)).asObservableSuccess().map { response ->
+                MangasPage(
+                    mangas = listOf(mangaDetailsParse(response).apply { setUrlWithoutDomain(url) }),
+                    hasNextPage = false,
+                )
+            }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -240,12 +259,6 @@ abstract class LikeManga(
 
     override fun chapterListSelector() = ".wp-manga-chapter"
 
-    private fun String?.parseDate(): Long {
-        return runCatching {
-            dateFormat.parse(this!!)!!.time
-        }.getOrDefault(0L)
-    }
-
     override fun pageListParse(document: Document): List<Page> {
         val element = document.selectFirst("div.reading input#next_img_token")
 
@@ -277,12 +290,14 @@ abstract class LikeManga(
         }
     }
 
+    private fun String?.parseDate(): Long =
+        try { dateFormat.parse(this!!)!!.time } catch (_: Exception) { 0L }
+
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     companion object {
-        val dateFormat by lazy {
-            SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH)
-        }
+        const val URL_SEARCH_PREFIX = "slug:"
+        private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH)
         private val chapterPageCountRegex = Regex("""load_list_chapter\((\d+)\)""")
     }
 }

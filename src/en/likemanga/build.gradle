@@ -1,9 +1,7 @@
 ext {
     extName = 'LikeManga'
-    extClass = '.LikeMangaIO'
-    themePkg = 'likemanga'
-    baseUrl = 'https://likemanga.io'
-    overrideVersionCode = 3
+    extClass = '.LikeManga'
+    extVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"

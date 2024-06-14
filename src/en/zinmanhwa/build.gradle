@@ -1,9 +1,0 @@
-ext {
-    extName = 'ZinManga.io'
-    extClass = '.ZinMangaIO'
-    themePkg = 'likemanga'
-    baseUrl = 'https://zinmanga.io'
-    overrideVersionCode = 34
-}
-
-apply from: "$rootDir/common.gradle"
