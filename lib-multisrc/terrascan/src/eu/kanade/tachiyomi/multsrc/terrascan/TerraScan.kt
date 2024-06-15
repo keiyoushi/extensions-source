@@ -44,17 +44,6 @@ abstract class TerraScan(
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga?q=p&page=$page", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        if (genresList.isEmpty()) {
-            genresList = parseGenres(document)
-        }
-        val mangas = document.select(popularMangaSelector())
-            .map(::popularMangaFromElement)
-
-        return MangasPage(mangas, document.selectFirst(popularMangaNextPageSelector()) != null)
-    }
-
     open val popularMangaTitleSelector: String = "p, h3"
     open val popularMangaThumbnailSelector: String = "img"
 
@@ -68,6 +57,17 @@ abstract class TerraScan(
 
     override fun popularMangaSelector(): String = ".series-paginated .grid-item-series, .series-paginated .series"
 
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        if (genresList.isEmpty()) {
+            genresList = parseGenres(document)
+        }
+        val mangas = document.select(popularMangaSelector())
+            .map(::popularMangaFromElement)
+
+        return MangasPage(mangas, document.selectFirst(popularMangaNextPageSelector()) != null)
+    }
+
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga?q=u&page=$page", headers)
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
@@ -75,19 +75,6 @@ abstract class TerraScan(
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.contains("search")) {
-            return searchByQueryMangaParse(response)
-        }
-        return super.searchMangaParse(response)
-    }
-
-    override fun searchMangaNextPageSelector() = null
-
-    override fun searchMangaSelector() = ".col-6.col-sm-3.col-md-3.col-lg-2.p-1"
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
@@ -129,6 +116,19 @@ abstract class TerraScan(
         return GET(url.build(), headers)
     }
 
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+
+    override fun searchMangaNextPageSelector() = null
+
+    override fun searchMangaSelector() = ".col-6.col-sm-3.col-md-3.col-lg-2.p-1"
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        if (response.request.url.pathSegments.contains("search")) {
+            return searchByQueryMangaParse(response)
+        }
+        return super.searchMangaParse(response)
+    }
+
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<out Any>>()
 
@@ -163,19 +163,21 @@ abstract class TerraScan(
         setUrlWithoutDomain(document.location())
     }
 
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        with(element.selectFirst("h5")!!) {
+            name = ownText()
+            date_upload = selectFirst("div")!!.ownText().toDate()
+        }
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
+
+    override fun chapterListSelector() = ".col-chapter a"
+
     override fun pageListParse(document: Document): List<Page> {
         val mangaChapterUrl = document.location()
         val maxPage = findPageCount(mangaChapterUrl)
         return (1..maxPage).map { page -> Page(page - 1, "$mangaChapterUrl/$page") }
     }
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.selectFirst("h5")!!.ownText()
-        date_upload = element.selectFirst("h5 > div")!!.ownText().toDate()
-        setUrlWithoutDomain(element.absUrl("href"))
-    }
-
-    override fun chapterListSelector() = ".col-chapter a"
 
     override fun imageUrlParse(document: Document) = document.selectFirst("main img")!!.srcAttr()
 
