@@ -2,8 +2,9 @@ ext {
     extName = 'Reset Scans'
     extClass = '.ResetScans'
     themePkg = 'madara'
-    baseUrl = 'https://reset-scans.xyz'
-    overrideVersionCode = 1
+    baseUrl = 'https://resetscan.com'
+    overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
