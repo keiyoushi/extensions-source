@@ -74,7 +74,7 @@ class ComicFuz : HttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<DayOfWeekResponse>()
+        val data = response.parseAs<MangaListResponse>()
         val entries = data.mangas.map {
             it.toSManga(cdnUrl)
         }
@@ -83,27 +83,51 @@ class ComicFuz : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val payload = SearchRequest(
-            deviceInfo = DeviceInfo(
-                deviceType = DeviceType.BROWSER,
-            ),
-            query = query.trim(),
-            pageIndexOfMangas = page,
-            pageIndexOfBooks = 1,
-        ).toRequestBody()
+        val tag = filters.filterIsInstance<TagFilter>().first()
 
-        return POST("$apiUrl/search#$page", headers, payload)
+        return if (query.isNotBlank() || tag.selected == null) {
+            val payload = SearchRequest(
+                deviceInfo = DeviceInfo(
+                    deviceType = DeviceType.BROWSER,
+                ),
+                query = query.trim(),
+                pageIndexOfMangas = page,
+                pageIndexOfBooks = 1,
+            ).toRequestBody()
+
+            POST("$apiUrl/search#$page", headers, payload)
+        } else {
+            val payload = MangaListRequest(
+                deviceInfo = DeviceInfo(
+                    deviceType = DeviceType.BROWSER,
+                ),
+                tagId = tag.selected!!,
+            ).toRequestBody()
+
+            POST("$apiUrl/manga_list", headers, payload)
+        }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<SearchResponse>()
-        val page = response.request.url.fragment!!.toInt()
-        val entries = data.mangas.map {
-            it.toSManga(cdnUrl)
-        }
+        return if (response.request.url.pathSegments.last() == "search") {
+            val data = response.parseAs<SearchResponse>()
+            val page = response.request.url.fragment!!.toInt()
+            val entries = data.mangas.map {
+                it.toSManga(cdnUrl)
+            }
 
-        return MangasPage(entries, data.pageCountOfMangas > page)
+            MangasPage(entries, data.pageCountOfMangas > page)
+        } else {
+            val data = response.parseAs<MangaListResponse>()
+            val entries = data.mangas.map {
+                it.toSManga(cdnUrl)
+            }
+
+            return MangasPage(entries, false)
+        }
     }
+
+    override fun getFilterList() = getFilters()
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val payload = MangaDetailsRequest(

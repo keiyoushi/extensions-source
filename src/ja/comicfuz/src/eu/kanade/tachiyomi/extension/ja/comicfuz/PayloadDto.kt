@@ -52,6 +52,12 @@ class SearchRequest(
 )
 
 @Serializable
+class MangaListRequest(
+    @ProtoNumber(1) private val deviceInfo: DeviceInfo,
+    @ProtoNumber(2) private val tagId: Int,
+)
+
+@Serializable
 class MangaDetailsRequest(
     @ProtoNumber(1) private val deviceInfo: DeviceInfo,
     @ProtoNumber(2) private val mangaId: Int,

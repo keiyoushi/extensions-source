@@ -9,7 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-class DayOfWeekResponse(
+class MangaListResponse(
     @ProtoNumber(1) val mangas: List<Manga>,
 )
 
