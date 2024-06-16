@@ -153,6 +153,9 @@ class ComicFuz : HttpSource() {
                 event = 0,
                 paid = 0,
             ),
+            viewerMode = ViewerMode(
+                imageQuality = ImageQuality.HIGH,
+            ),
         ).toRequestBody()
 
         return POST("$apiUrl/manga_viewer", headers, payload)

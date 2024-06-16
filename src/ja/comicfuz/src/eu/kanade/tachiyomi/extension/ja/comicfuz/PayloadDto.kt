@@ -58,18 +58,12 @@ class MangaDetailsRequest(
 )
 
 @Serializable
-class BookDetailsRequest(
-    @ProtoNumber(1) private val deviceInfo: DeviceInfo,
-    @ProtoNumber(2) private val bookIssueId: Int,
-)
-
-@Serializable
 class MangaViewerRequest(
     @ProtoNumber(1) private val deviceInfo: DeviceInfo,
     @ProtoNumber(2) private val chapterId: Int,
     @ProtoNumber(3) private val useTicket: Boolean,
     @ProtoNumber(4) private val consumePoint: UserPoint,
-    // @ProtoNumber(5) private val viewerMode: ViewerMode
+    @ProtoNumber(5) private val viewerMode: ViewerMode,
 )
 
 @Serializable
@@ -80,5 +74,10 @@ class UserPoint(
 
 @Serializable
 class ViewerMode(
-    @ProtoNumber(1) private val imageQuality: Int,
+    @ProtoNumber(1) private val imageQuality: ImageQuality,
 )
+
+enum class ImageQuality {
+    NORMAL,
+    HIGH,
+}
