@@ -131,17 +131,13 @@ abstract class TerraScan(
 
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<out Any>>()
-
         if (genresList.isNotEmpty()) {
             filters += GenreFilter(
                 title = "Gêneros",
                 genres = genresList,
             )
         } else {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header("Aperte 'Redefinir' mostrar os gêneros disponíveis"),
-            )
+            filters += Filter.Header("Aperte 'Redefinir' mostrar os gêneros disponíveis")
         }
         return FilterList(filters)
     }
