@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.mangagun
 
-import android.webkit.CookieManager
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -8,14 +7,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Cookie
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import rx.Observable
 import java.util.Calendar
 
-private const val domain = "mangagun.net"
+private const val DOMAIN = "mangagun.net"
 
-class MangaGun : FMReader("MangaGun", "https://$domain/", "ja") {
+class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
     override val infoElementSelector = "div.row div.row"
 
     // source is picky about URL format
@@ -74,9 +75,20 @@ class MangaGun : FMReader("MangaGun", "https://$domain/", "ja") {
     private fun handleDdosProtect(document: Document): Document {
         val key = document.select("script:containsData(document.cookie)").first()?.html()
             ?.substringAfter("escape('")?.substringBefore("'")
-        // save anti_ddos_key
-        CookieManager.getInstance()
-            .setCookie(baseUrl, "ct_anti_ddos_key=$key; Domain=$domain; Path=/")
+        if (key != null) {
+            // save cookie ct_anti_ddos_key
+            client.cookieJar.saveFromResponse(
+                baseUrl.toHttpUrl(),
+                listOf(
+                    Cookie.Builder()
+                        .name("ct_anti_ddos_key")
+                        .value(key)
+                        .domain(DOMAIN)
+                        .path("/")
+                        .build(),
+                ),
+            )
+        }
         return document.select("noscript div a").attr("abs:href").let { url ->
             client.newCall(GET(url, headers)).execute().asJsoup()
         }
