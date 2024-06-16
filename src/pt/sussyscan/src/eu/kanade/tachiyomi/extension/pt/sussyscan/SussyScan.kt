@@ -8,7 +8,7 @@ import java.util.Locale
 
 class SussyScan : Madara(
     "Sussy Scan",
-    "https://sussyscan.com",
+    "https://old.sussytoons.com",
     "pt-BR",
     SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
 ) {
@@ -16,8 +16,11 @@ class SussyScan : Madara(
         .rateLimit(2)
         .build()
 
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
+    override val mangaDetailsSelectorAuthor = "div.manga-authors > a"
+    override val mangaDetailsSelectorDescription = ".manga-about.manga-info"
     override val mangaDetailsSelectorThumbnail = "head meta[property='og:image']"
 
     override fun imageFromElement(element: Element): String? {
