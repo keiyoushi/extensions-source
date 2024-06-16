@@ -16,44 +16,22 @@ class DayOfWeekResponse(
 @Serializable
 class SearchResponse(
     @ProtoNumber(2) val mangas: List<Manga>,
-    @ProtoNumber(3) val books: List<Book>,
     @ProtoNumber(6) val pageCountOfMangas: Int = 0,
-    @ProtoNumber(7) val pageCountOfBooks: Int = 0,
 )
-
-interface ComicFuzEntry {
-    val id: Int
-    val title: String
-    val cover: String
-    val description: String
-
-    val urlPart: String
-    fun toSManga(cdnUrl: String): SManga = SManga.create().apply {
-        url = "/$urlPart/$id"
-        title = this@ComicFuzEntry.title
-        thumbnail_url = cdnUrl + cover
-        description = this@ComicFuzEntry.description
-    }
-}
 
 @Serializable
 class Manga(
-    @ProtoNumber(1) override val id: Int,
-    @ProtoNumber(2) override val title: String,
-    @ProtoNumber(4) override val cover: String,
-    @ProtoNumber(14) override val description: String,
-) : ComicFuzEntry {
-    override val urlPart get() = "manga"
-}
-
-@Serializable
-class Book(
-    @ProtoNumber(2) override val id: Int,
-    @ProtoNumber(1) override val title: String,
-    @ProtoNumber(3) override val cover: String,
-    @ProtoNumber(10) override val description: String,
-) : ComicFuzEntry {
-    override val urlPart get() = "book"
+    @ProtoNumber(1) private val id: Int,
+    @ProtoNumber(2) private val title: String,
+    @ProtoNumber(4) private val cover: String,
+    @ProtoNumber(14) private val description: String,
+) {
+    fun toSManga(cdnUrl: String): SManga = SManga.create().apply {
+        url = "/manga/$id"
+        title = this@Manga.title
+        thumbnail_url = cdnUrl + cover
+        description = this@Manga.description
+    }
 }
 
 @Serializable

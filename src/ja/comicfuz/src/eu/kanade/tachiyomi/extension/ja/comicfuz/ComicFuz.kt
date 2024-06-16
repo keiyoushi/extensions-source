@@ -17,8 +17,6 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.IOException
-import rx.Observable
-import kotlin.math.min
 
 class ComicFuz : HttpSource() {
 
@@ -56,31 +54,12 @@ class ComicFuz : HttpSource() {
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return fetchSearchManga(page, "", FilterList())
-    }
-
     override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException()
+        return searchMangaRequest(page, "", getFilterList())
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
-
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        if (page == 1) {
-            client.newCall(latestUpdatesRequest(page))
-                .execute()
-                .use(::latestResponseParse)
-        }
-
-        val entries = cachedList.subList(
-            (page - 1) * 20,
-            min(page * 20, cachedList.size),
-        )
-
-        return Observable.just(MangasPage(entries, page * 20 < cachedList.size))
+        return searchMangaParse(response)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -88,124 +67,45 @@ class ComicFuz : HttpSource() {
             deviceInfo = DeviceInfo(
                 deviceType = DeviceType.BROWSER,
             ),
-            dayOfWeek = DayOfWeek.ALL,
+            dayOfWeek = DayOfWeek.today(),
         ).toRequestBody()
 
         return POST("$apiUrl/mangas_by_day_of_week", headers, payload)
     }
 
-    private fun latestResponseParse(response: Response) {
+    override fun latestUpdatesParse(response: Response): MangasPage {
         val data = response.parseAs<DayOfWeekResponse>()
-
-        cachedList = data.mangas.map {
+        val entries = data.mangas.map {
             it.toSManga(cdnUrl)
         }
-    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
-
-    private var lastMangaPage = 0
-    private var lastBookPage = 0
-
-    private var cachedList: List<SManga> = emptyList()
-    private var cachedHasNextPage = false
-    private var useCached = false
-    private var cachedPage = 1
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (!useCached || page == 1) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .execute()
-                .use(::searchResponseParse)
-        }
-
-        return Observable.just(getCached(cachedPage))
+        return MangasPage(entries, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (page == 1) {
-            lastMangaPage = 1
-            lastBookPage = 1
-            cachedPage = 1
-        }
-
         val payload = SearchRequest(
             deviceInfo = DeviceInfo(
                 deviceType = DeviceType.BROWSER,
             ),
             query = query.trim(),
-            pageIndexOfMangas = lastMangaPage,
-            pageIndexOfBooks = lastBookPage,
+            pageIndexOfMangas = page,
+            pageIndexOfBooks = 1,
         ).toRequestBody()
 
-        return POST("$apiUrl/search", headers, payload)
-    }
-
-    private fun searchResponseParse(response: Response) {
-        val data = response.parseAs<SearchResponse>()
-
-        cachedHasNextPage = false
-        if (data.pageCountOfMangas > lastMangaPage) {
-            lastMangaPage++
-            cachedHasNextPage = true
-        }
-        if (data.pageCountOfBooks > lastBookPage) {
-            lastBookPage++
-            cachedHasNextPage = true
-        }
-
-        useCached = true
-
-        cachedList = with(data) {
-            buildList(mangas.size + books.size) {
-                var i = 0
-                var j = 0
-
-                while (i < mangas.size || j < books.size) {
-                    if (i < mangas.size) {
-                        add(mangas[i].toSManga(cdnUrl))
-                        i++
-                    }
-                    if (j < books.size) {
-                        add(books[j].toSManga(cdnUrl))
-                        j++
-                    }
-                }
-            }
-        }
-    }
-
-    private fun getCached(page: Int): MangasPage {
-        val entries = cachedList.subList(
-            (page - 1) * 20,
-            min(page * 20, cachedList.size),
-        )
-
-        cachedPage++
-
-        val cachedNextPage = page * 20 < cachedList.size
-
-        val hasNextPage = if (!cachedNextPage && cachedHasNextPage) {
-            useCached = false
-            cachedPage = 1
-            true
-        } else {
-            cachedNextPage
-        }
-
-        return MangasPage(entries, hasNextPage)
+        return POST("$apiUrl/search#$page", headers, payload)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
+        val data = response.parseAs<SearchResponse>()
+        val page = response.request.url.fragment!!.toInt()
+        val entries = data.mangas.map {
+            it.toSManga(cdnUrl)
+        }
+
+        return MangasPage(entries, data.pageCountOfMangas > page)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        if (!manga.url.contains("/manga/")) {
-            throw UnsupportedOperationException()
-        }
         val payload = MangaDetailsRequest(
             deviceInfo = DeviceInfo(
                 deviceType = DeviceType.BROWSER,
@@ -293,5 +193,3 @@ class ComicFuz : HttpSource() {
             .toRequestBody("application/protobuf".toMediaType())
     }
 }
-
-private const val LATEST_DAY_PREF = "latest_day_pref"

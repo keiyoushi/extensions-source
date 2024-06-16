@@ -1,11 +1,7 @@
 ext {
-    extName = 'Comic Fuz'
+    extName = 'COMIC FUZ'
     extClass = '.ComicFuz'
     extVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(":lib:cryptoaes"))
-}
