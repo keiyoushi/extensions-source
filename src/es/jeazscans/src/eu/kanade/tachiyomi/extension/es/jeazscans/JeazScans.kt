@@ -8,7 +8,7 @@ import java.util.Locale
 
 class JeazScans : Madara(
     "JeazScans",
-    "https://jeazscansv1.com",
+    "https://jeaz.twobluescans.com",
     "es",
     SimpleDateFormat("d MMMM, yyyy", Locale("es")),
 ) {
