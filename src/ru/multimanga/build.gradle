@@ -1,7 +1,6 @@
 ext {
     extName = 'MultiManga'
     extClass = '.MultiManga'
-    extVersionCode = 10
+    extVersionCode = 10}
 }
-
-apply from: "$rootDir/common.gradle"
+aply from: "$rootDir/common.gradle"
