@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.mangaterra
+package eu.kanade.tachiyomi.multisrc.terrascan
 
 import eu.kanade.tachiyomi.source.model.Filter
 

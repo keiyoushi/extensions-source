@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
-            android:name=".pt.mangaterra.MangaTerraUrlActivity"
+            android:name="eu.kanade.tachiyomi.multisrc.terrascan.TerraScanUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -13,9 +13,9 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:scheme="https"
-                    android:host="manga-terra.com"
-                    android:pathPattern="/manga/..*" />
+                    android:host="${SOURCEHOST}"
+                    android:pathPattern="/manga/..*"
+                    android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
     </application>

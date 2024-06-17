@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.mangaterra
+package eu.kanade.tachiyomi.multisrc.terrascan
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class MangaTerraUrlActivity : Activity() {
+class TerraScanUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -35,5 +35,5 @@ class MangaTerraUrlActivity : Activity() {
     }
 
     private fun slug(pathSegments: List<String>) =
-        "${MangaTerra.PREFIX_SEARCH}${pathSegments[pathSegments.size - 1]}"
+        "${TerraScan.URL_SEARCH_PREFIX}${pathSegments[pathSegments.size - 1]}"
 }
