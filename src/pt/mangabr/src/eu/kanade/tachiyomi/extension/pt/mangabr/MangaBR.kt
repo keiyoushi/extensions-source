@@ -1,12 +1,12 @@
-package eu.kanade.tachiyomi.extension.pt.mangaterra
+package eu.kanade.tachiyomi.extension.pt.mangabr
 
 import eu.kanade.tachiyomi.multisrc.terrascan.TerraScan
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.util.concurrent.TimeUnit
 
-class MangaTerra : TerraScan(
-    "Manga Terra",
-    "https://manga-terra.com",
+class MangaBR : TerraScan(
+    "Manga BR",
+    "https://mangabr.net",
     "pt-BR",
 ) {
     override val client = super.client.newBuilder()
