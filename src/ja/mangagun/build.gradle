@@ -2,7 +2,7 @@ ext {
     extName = 'MangaGun'
     extClass = '.MangaGun'
     themePkg = 'fmreader'
-    baseUrl = 'https://mangagun.net/'
+    baseUrl = 'https://mangagun.net'
     overrideVersionCode = 0
 }
 
