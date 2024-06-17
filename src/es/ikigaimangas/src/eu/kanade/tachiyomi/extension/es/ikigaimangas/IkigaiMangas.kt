@@ -31,7 +31,7 @@ import kotlin.concurrent.thread
 
 class IkigaiMangas : HttpSource(), ConfigurableSource {
 
-    override val baseUrl: String = "https://visorikigai.net"
+    override val baseUrl: String = "https://es.ikigaiweb.lat"
     private val apiBaseUrl: String = "https://panel.ikigaimangas.com"
 
     override val lang: String = "es"
@@ -40,7 +40,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     override val supportsLatest: Boolean = true
 
     private val cookieInterceptor = CookieInterceptor(
-        baseUrl.substringAfter("://"),
+        "",
         listOf(
             "data-saving" to "0",
             "nsfw-mode" to "1",
