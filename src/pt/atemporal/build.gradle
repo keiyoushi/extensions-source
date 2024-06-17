@@ -1,0 +1,14 @@
+ext {
+    extName = 'Atemporal'
+    extClass = '.Atemporal'
+    themePkg = 'madara'
+    baseUrl = 'https://atemporal.cloud'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    api(project(":lib:cookieinterceptor"))
+}
