@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class FlowerMangaDotCom : Madara(
     "FlowerManga.com",
