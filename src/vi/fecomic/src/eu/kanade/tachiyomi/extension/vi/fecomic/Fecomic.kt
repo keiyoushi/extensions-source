@@ -45,6 +45,7 @@ class Fecomic : Madara(
         return super.chapterFromElement(element).apply {
             // Skip 301 redirect
             val httpUrl = url.toHttpUrl()
+            // Removes trailing slash, keeps query parameters
             if (httpUrl.pathSegments.lastOrNull()?.isEmpty() == true) {
                 url = httpUrl.newBuilder().removePathSegment(httpUrl.pathSegments.size - 1).build().toString()
             }
