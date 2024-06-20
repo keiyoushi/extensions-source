@@ -7,13 +7,15 @@ import java.util.Locale
 
 class ArgosComics : Madara(
     "Argos Comics",
-    "https://argoscomics.com",
+    "https://argoscomic.com",
     "pt-BR",
-    SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+    SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
 ) {
-    override val mangaSubString = "comics"
-
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
+    override val useNewChapterEndpoint = true
 }
