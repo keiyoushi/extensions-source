@@ -8,7 +8,7 @@ import java.util.Locale
 
 class SussyScan : Madara(
     "Sussy Scan",
-    "https://old.sussytoons.com",
+    "https://oldi.sussytoons.com",
     "pt-BR",
     SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
 ) {
