@@ -10,7 +10,10 @@ class DarkScans : Madara("Dark Scans", "https://darkscans.net", "en") {
         .rateLimit(20, 4)
         .build()
 
-    override val mangaSubString = "all-series"
+    override val mangaSubString = "mangas"
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useNewChapterEndpoint = true
 
     override val filterNonMangaItems = false
 }
