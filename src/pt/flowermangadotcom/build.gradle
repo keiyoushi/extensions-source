@@ -2,8 +2,8 @@ ext {
     extName = 'FlowerManga.com'
     extClass = '.FlowerMangaDotCom'
     themePkg = 'madara'
-    baseUrl = 'https://flowermanga.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://flowermangas.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
