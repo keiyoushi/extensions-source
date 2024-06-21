@@ -1,24 +1,44 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
+import android.app.Application
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class SSSScanlator : MangaThemesia(
-    "SSSScanlator",
-    "https://sssscanlator.com.br",
-    "pt-BR",
-    dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
-) {
+class SSSScanlator :
+    MangaThemesia(
+        "SSSScanlator",
+        "https://sssscanlator.com.br",
+        "pt-BR",
+        dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+    ),
+    ConfigurableSource {
+
+    private val preferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     override val client: OkHttpClient = super.client.newBuilder()
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .rateLimit(1, 2, TimeUnit.SECONDS)
+        .connectTimeout(40, TimeUnit.SECONDS)
         .build()
 
     override fun imageRequest(page: Page): Request {
@@ -32,5 +52,9 @@ class SSSScanlator : MangaThemesia(
             .build()
 
         return GET(page.imageUrl!!, newHeaders)
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
     }
 }
