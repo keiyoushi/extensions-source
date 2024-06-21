@@ -29,8 +29,6 @@ class LuraToon :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val supportsLatest = false
-
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .setRandomUserAgent(
@@ -56,7 +54,8 @@ class LuraToon :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        if (response.request.url.pathSegments.contains("login")) {
+        val pathSegments = response.request.url.pathSegments
+        if (pathSegments.contains("login") || pathSegments.isEmpty()) {
             throw Exception("Faça o login na WebView para acessar o contéudo")
         }
         return super.pageListParse(response)
