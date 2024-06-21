@@ -28,9 +28,7 @@ class SSSScanlator :
     ),
     ConfigurableSource {
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     override val client: OkHttpClient = super.client.newBuilder()
         .setRandomUserAgent(
