@@ -18,5 +18,5 @@ class DeccalScans : Madara(
     override val useNewChapterEndpoint = true
 
     override val mangaDetailsSelectorDescription = ".manga-summary p"
-    override val mangaDetailsSelectorAuthor: String = ".manga-authors a"
+    override val mangaDetailsSelectorAuthor = ".manga-authors a"
 }
