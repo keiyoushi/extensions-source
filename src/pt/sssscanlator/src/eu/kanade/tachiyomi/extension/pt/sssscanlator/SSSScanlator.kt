@@ -53,10 +53,7 @@ class SSSScanlator :
             .build()
 
         page.apply {
-            imageUrl = when {
-                imageUrl!!.contains(JETPACK_CDN) -> imageUrl!!.replace("$JETPACK_CDN/", "")
-                else -> imageUrl
-            }
+            imageUrl = imageUrl?.replace("$JETPACK_CDN/", "")
         }
         return GET(page.imageUrl!!, newHeaders)
     }
