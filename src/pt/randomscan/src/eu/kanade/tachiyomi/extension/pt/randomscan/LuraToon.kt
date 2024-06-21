@@ -10,7 +10,10 @@ import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.peachscan.PeachScan
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import okhttp3.Response
+import okio.IOException
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -28,7 +31,16 @@ class LuraToon :
     }
 
     override val client = super.client.newBuilder()
-        .rateLimit(1, 2)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val pathSegments = request.url.pathSegments
+            if (pathSegments.contains("login") || pathSegments.isEmpty()) {
+                throw IOException(LOGIN_WARNIGN)
+            }
+
+            chain.proceed(request)
+        }
+        .rateLimit(3)
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
@@ -49,5 +61,14 @@ class LuraToon :
 
             setUrlWithoutDomain(chapUrl)
         }
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        return super.pageListParse(response).takeIf { it.isNotEmpty() }
+            ?: throw Exception(LOGIN_WARNIGN)
+    }
+
+    companion object {
+        const val LOGIN_WARNIGN = "Faça o login na WebView para acessar o contéudo"
     }
 }
