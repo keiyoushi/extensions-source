@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.manhwaweb
 
-import android.app.Application
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,15 +16,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 class ManhwaWeb : HttpSource() {
-
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
     override val name = "ManhwaWeb"
 
@@ -40,7 +33,7 @@ class ManhwaWeb : HttpSource() {
     private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -63,7 +56,7 @@ class ManhwaWeb : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadLatestDto>(response.body.string())
         val mangas = (result.data.esp + result.data.raw18 + result.data.esp18)
-            .distinctBy { it.type + it.slug }
+            .distinctBy { it.slug }
             .sortedByDescending { it.latestChapterDate }
             .map { it.toSManga() }
 
@@ -123,7 +116,7 @@ class ManhwaWeb : HttpSource() {
         return MangasPage(mangas, result.hasNextPage)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url.removePrefix("/")}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.removeSuffix("/").substringAfterLast("/")
