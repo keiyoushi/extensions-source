@@ -38,12 +38,12 @@ class SSSScanlator :
             preferences.getPrefCustomUA(),
         )
         .rateLimit(1, 2, TimeUnit.SECONDS)
-        .connectTimeout(40, TimeUnit.SECONDS)
         .build()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Referer", page.url)
+            .set("Alt-Used", baseUrl.substringAfterLast("/"))
             .set("Accept", "image/avif,image/webp,*/*")
             .set("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
             .set("Sec-Fetch-Dest", "image")
@@ -51,10 +51,20 @@ class SSSScanlator :
             .set("Sec-Fetch-Site", "same-origin")
             .build()
 
+        page.apply {
+            imageUrl = when {
+                imageUrl!!.contains(JETPACK_CDN) -> imageUrl!!.replace("$JETPACK_CDN/", "")
+                else -> imageUrl
+            }
+        }
         return GET(page.imageUrl!!, newHeaders)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
+    }
+
+    companion object {
+        val JETPACK_CDN = "i0.wp.com"
     }
 }
