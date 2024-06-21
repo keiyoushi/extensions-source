@@ -37,6 +37,7 @@ class SSSScanlator :
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
         )
+        .readTimeout(1, TimeUnit.MINUTES)
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
