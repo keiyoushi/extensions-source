@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import okhttp3.Response
-import okio.IOException
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -30,16 +29,9 @@ class LuraToon :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client = super.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val pathSegments = request.url.pathSegments
-            if (pathSegments.contains("login") || pathSegments.isEmpty()) {
-                throw IOException(LOGIN_WARNIGN)
-            }
+    override val supportsLatest = false
 
-            chain.proceed(request)
-        }
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .setRandomUserAgent(
             preferences.getPrefUAType(),
@@ -64,11 +56,8 @@ class LuraToon :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        return super.pageListParse(response).takeIf { it.isNotEmpty() }
-            ?: throw Exception(LOGIN_WARNIGN)
-    }
-
-    companion object {
-        const val LOGIN_WARNIGN = "Faça o login na WebView para acessar o contéudo"
+        if (response.request.url.pathSegments.contains("login"))
+            throw Exception("Faça o login na WebView para acessar o contéudo")
+        return super.pageListParse(response)
     }
 }
