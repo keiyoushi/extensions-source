@@ -25,7 +25,7 @@ class PopularComicDto(
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
-        url = slug
+        url = slug.removePrefix("/")
     }
 }
 
@@ -45,13 +45,14 @@ class LatestDto(
 class LatestComicDto(
     @SerialName("create") val latestChapterDate: Long,
     @SerialName("id_manhwa") val slug: String,
-    @SerialName("_tipo") val type: String,
+    @SerialName("_plataforma") val platform: String,
     @SerialName("name_manhwa") private val name: String,
     @SerialName("img") private val thumbnail: String,
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
+        val type = if (platform == "toptoon" || platform == "lezhin") "manhwa" else "manga"
         url = "$type/$slug"
     }
 }
@@ -65,13 +66,14 @@ class PayloadSearchDto(
 @Serializable
 class SearchComicDto(
     @SerialName("_id") val slug: String,
-    @SerialName("_tipo") val type: String,
+    @SerialName("_plataforma") val platform: String,
     @SerialName("the_real_name") private val name: String,
     @SerialName("_imagen") private val thumbnail: String,
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
+        val type = if (platform == "toptoon" || platform == "lezhin") "manhwa" else "manga"
         url = "$type/$slug"
     }
 }
@@ -113,14 +115,14 @@ class ComicDetailsExtrasDto(
 
 @Serializable
 class PayloadChapterDto(
-    @SerialName("chapters_esp") val esp: List<ChapterDto>,
-    @SerialName("chapters_raw") val raw: List<ChapterDto>,
+    val chapters: List<ChapterDto>,
 )
 
 @Serializable
 class ChapterDto(
     @SerialName("chapter") val number: Float,
-    @SerialName("link") val url: String,
+    @SerialName("link") val espUrl: String? = null,
+    @SerialName("link_raw") val rawUrl: String? = null,
     @SerialName("create") val createdAt: Long?,
 )
 
