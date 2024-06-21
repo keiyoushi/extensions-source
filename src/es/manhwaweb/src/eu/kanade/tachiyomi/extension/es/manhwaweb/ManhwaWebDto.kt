@@ -25,7 +25,7 @@ class PopularComicDto(
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
-        url = slug
+        url = slug.removePrefix("/")
     }
 }
 
@@ -113,14 +113,14 @@ class ComicDetailsExtrasDto(
 
 @Serializable
 class PayloadChapterDto(
-    @SerialName("chapters_esp") val esp: List<ChapterDto>,
-    @SerialName("chapters_raw") val raw: List<ChapterDto>,
+    val chapters: List<ChapterDto>,
 )
 
 @Serializable
 class ChapterDto(
     @SerialName("chapter") val number: Float,
-    @SerialName("link") val url: String,
+    @SerialName("link") val espUrl: String?,
+    @SerialName("link_raw") val rawUrl: String?,
     @SerialName("create") val createdAt: Long?,
 )
 
