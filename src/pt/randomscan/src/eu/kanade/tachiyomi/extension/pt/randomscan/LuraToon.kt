@@ -56,8 +56,9 @@ class LuraToon :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        if (response.request.url.pathSegments.contains("login"))
+        if (response.request.url.pathSegments.contains("login")) {
             throw Exception("Faça o login na WebView para acessar o contéudo")
+        }
         return super.pageListParse(response)
     }
 }
