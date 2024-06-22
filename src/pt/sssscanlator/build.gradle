@@ -3,7 +3,11 @@ ext {
     extClass = '.SSSScanlator'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sssscanlator.com.br'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib:randomua')
+}
