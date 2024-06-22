@@ -2,8 +2,8 @@ ext {
     extName = 'Noblesse Translations'
     extClass = '.NoblesseTranslations'
     themePkg = 'madara'
-    baseUrl = 'https://www.nobledicion.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://www.actualizamrd.com'
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"
