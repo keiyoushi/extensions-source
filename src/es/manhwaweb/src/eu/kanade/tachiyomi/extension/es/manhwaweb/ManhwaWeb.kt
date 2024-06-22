@@ -132,7 +132,7 @@ class ManhwaWeb : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = json.decodeFromString<PayloadChapterDto>(response.body.string())
-        val chapters = result.chapters.map { it.toSChapter() }
+        val chapters = result.chapters.filterNot { it.espUrl == null && it.rawUrl == null }.map { it.toSChapter() }
 
         return chapters.sortedByDescending { it.chapter_number }
     }
