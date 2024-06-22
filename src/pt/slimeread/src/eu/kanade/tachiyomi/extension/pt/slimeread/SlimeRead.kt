@@ -22,8 +22,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
@@ -43,6 +45,19 @@ class SlimeRead : HttpSource() {
         network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .rateLimitHost(apiUrl.toHttpUrl(), 1)
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                val mime = response.headers["Content-Type"]
+                if (response.isSuccessful) {
+                    if (mime == "application/octet-stream") {
+                        val type = "image/jpeg".toMediaType()
+                        val body = response.body.bytes().toResponseBody(type)
+                        return@addInterceptor response.newBuilder().body(body)
+                            .header("Content-Type", "image/jpeg").build()
+                    }
+                }
+                response
+            }
             .build()
     }
 
@@ -52,10 +67,14 @@ class SlimeRead : HttpSource() {
 
     private fun getApiUrlFromPage(): String {
         val initClient = network.cloudflareClient
-        val document = initClient.newCall(GET(baseUrl, headers)).execute().asJsoup()
+        val response = initClient.newCall(GET(baseUrl, headers)).execute()
+        if (!response.isSuccessful) throw Exception("HTTP error ${response.code}")
+        val document = response.asJsoup()
         val scriptUrl = document.selectFirst("script[src*=pages/_app]")?.attr("abs:src")
             ?: throw Exception("Could not find script URL")
-        val script = initClient.newCall(GET(scriptUrl, headers)).execute().body.string()
+        val scriptResponse = initClient.newCall(GET(scriptUrl, headers)).execute()
+        if (!scriptResponse.isSuccessful) throw Exception("HTTP error ${scriptResponse.code}")
+        val script = scriptResponse.body.string()
         val apiUrl = FUNCTION_REGEX.find(script)?.value?.let { function ->
             BASEURL_VAL_REGEX.find(function)?.groupValues?.get(1)?.let { baseUrlVar ->
                 val regex = """let.*?$baseUrlVar\s*=.*?(?=,\s*\w\s*=)""".toRegex(RegexOption.DOT_MATCHES_ALL)
