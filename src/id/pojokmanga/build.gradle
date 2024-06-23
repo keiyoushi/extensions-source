@@ -2,8 +2,8 @@ ext {
     extName = 'Pojok Manga'
     extClass = '.PojokManga'
     themePkg = 'madara'
-    baseUrl = 'https://pojokmanga.net'
-    overrideVersionCode = 5
+    baseUrl = 'https://pojokmanga.org'
+    overrideVersionCode = 6
 }
 
 apply from: "$rootDir/common.gradle"
