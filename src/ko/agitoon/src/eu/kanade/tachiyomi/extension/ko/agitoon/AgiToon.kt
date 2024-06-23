@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ko.agitoon
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -104,8 +103,11 @@ class AgiToon : HttpSource() {
         var list = db
 
         if (query.isNotBlank()) {
-            val stdQuery = query.replace(Regex("""\s+"""), "")
-            list = list.filter { it.name.contains(stdQuery) || it.author.contains(stdQuery) }
+            val stdQuery = query.trim()
+            list = list.filter {
+                it.name.contains(stdQuery, true) ||
+                    it.author.contains(stdQuery, true)
+            }
         }
 
         filters.filterIsInstance<ListFilter>().forEach {
@@ -119,16 +121,8 @@ class AgiToon : HttpSource() {
 
     override fun getFilterList() = getFilters()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response, manga)
-            }
-    }
-
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/azi_toon/${manga.url}.html", headers)
+        return GET("$baseUrl/azi_toon/${manga.url}.html#${manga.status}", headers)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -145,11 +139,14 @@ class AgiToon : HttpSource() {
         }
     }
 
-    private fun mangaDetailsParse(response: Response, manga: SManga): SManga {
-        val document = response.asJsoup()
-        return manga.apply {
-            description = document.select("p.mt-2").last()?.text()
-            initialized = true
+    override fun mangaDetailsParse(response: Response): SManga {
+        val doc = response.asJsoup()
+        return SManga.create().apply {
+            description = doc.select("p.mt-2").last()?.text()
+            thumbnail_url = doc.selectFirst("script:containsData(+img_domain+)")?.data()?.let {
+                cdnUrl + it.substringAfter("+'").substringBefore("'+")
+            }
+            status = response.request.url.fragment!!.toInt()
         }
     }
 
@@ -213,9 +210,6 @@ class AgiToon : HttpSource() {
         throw UnsupportedOperationException()
     }
     override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
-    override fun mangaDetailsParse(response: Response): SManga {
         throw UnsupportedOperationException()
     }
     override fun imageUrlParse(response: Response): String {
