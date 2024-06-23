@@ -111,41 +111,41 @@ class SpyFakku : HttpSource() {
             val doc = response.asJsoup()
             title = doc.selectFirst("p.text-lg.font-semibold.leading-6")!!.ownText()
             url = "/g/${doc.selectFirst("a[href*='/read']")!!.attr("href").substringBefore("/read").substringAfterLast("/")}"
-            author = doc.select("a[href*='artist:']").emptyOrNull()?.joinToString { it.ownText() }
-            artist = doc.select("a[href*='artist:']").emptyOrNull()?.joinToString { it.ownText() }
-            genre = doc.select("a[href*='tag:']").emptyOrNull()?.joinToString { it.ownText() }
-            thumbnail_url = doc.selectFirst("img[src*='/cover']")!!.absUrl("src")
+            author = doc.select("a[href*='artist:']").emptyToNull()?.joinToString { it.ownText() }
+            artist = doc.select("a[href*='artist:']").emptyToNull()?.joinToString { it.ownText() }
+            genre = doc.select("a[href*='tag:']").emptyToNull()?.joinToString { it.ownText() }
+            thumbnail_url = doc.selectFirst("img[src*='/cover']")?.absUrl("src")
             description = buildString {
-                doc.select("a[href*='circle:']").emptyOrNull()?.joinToString { it.ownText() }?.let {
+                doc.select("a[href*='circle:']").emptyToNull()?.joinToString { it.ownText() }?.let {
                     append("Circles: ", it, "\n")
                 }
-                doc.select("a[href*='publisher:']").emptyOrNull()?.joinToString { it.ownText() }?.let {
+                doc.select("a[href*='publisher:']").emptyToNull()?.joinToString { it.ownText() }?.let {
                     append("Publishers: ", it, "\n")
                 }
-                doc.select("a[href*='magazine:']").emptyOrNull()?.joinToString { it.ownText() }?.let {
+                doc.select("a[href*='magazine:']").emptyToNull()?.joinToString { it.ownText() }?.let {
                     append("Magazines: ", it, "\n")
                 }
-                doc.select("a[href*='event:']").emptyOrNull()?.joinToString { it.ownText() }?.let {
+                doc.select("a[href*='event:']").emptyToNull()?.joinToString { it.ownText() }?.let {
                     append("Events: ", it, "\n")
                 }
-                doc.select("a[href*='parody:']").emptyOrNull()?.joinToString { it.ownText() }?.let {
+                doc.select("a[href*='parody:']").emptyToNull()?.joinToString { it.ownText() }?.let {
                     append("Parodies: ", it, "\n\n")
                 }
-                append(
-                    "Created At: ",
-                    dateReformat.format(
-                        dateFormat.parse(doc.selectFirst("p:containsOwn(Released)")!!.parent()!!.selectFirst(".text-sm")!!.ownText())!!.time,
-                    ),
-                    "\n",
-                )
-                append("Pages: ", doc.selectFirst("p:containsOwn(pages)")!!.ownText(), "\n")
+                doc.selectFirst("p:containsOwn(Released)")?.parent()?.selectFirst(".text-sm")?.ownText()?.let {
+                    dateFormat.parse(it)?.let {
+                        append("Created At: ", dateReformat.format(it.time), "\n")
+                    }
+                }
+                doc.selectFirst("p:containsOwn(pages)")?.ownText()?.let {
+                    append("Pages: ", it, "\n")
+                }
             }
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             initialized = true
         }
     }
-    private fun Elements.emptyOrNull(): Elements? {
+    private fun Elements.emptyToNull(): Elements? {
         return this.ifEmpty { null }
     }
 
@@ -160,7 +160,9 @@ class SpyFakku : HttpSource() {
             SChapter.create().apply {
                 name = "Chapter"
                 url = "/g/${doc.selectFirst("a[href*='/read']")!!.attr("href").substringBefore("/read").substringAfterLast("/")}"
-                date_upload = dateFormat.parse(doc.selectFirst("p:containsOwn(Released)")!!.parent()!!.selectFirst(".text-sm")!!.ownText())!!.time
+                date_upload = doc.selectFirst("p:containsOwn(Released)")?.parent()?.selectFirst(".text-sm")?.ownText()?.let {
+                    dateFormat.parse(it)?.time
+                } ?: 0L
             },
         )
     }
