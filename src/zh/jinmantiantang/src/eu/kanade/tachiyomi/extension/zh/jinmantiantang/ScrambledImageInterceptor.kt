@@ -11,6 +11,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.zip.GZIPInputStream
 import kotlin.math.floor
 
 object ScrambledImageInterceptor : Interceptor {
@@ -22,13 +23,24 @@ object ScrambledImageInterceptor : Interceptor {
         val pathSegments = url.pathSegments
         val aid = pathSegments[pathSegments.size - 2].toInt()
         if (aid < scrambleId) return response // 对在漫画章节ID为220980之前的图片未进行图片分割,直接放行
-// 章节ID:220980(包含)之后的漫画(2020.10.27之后)图片进行了分割getRows倒序处理
+        // 章节ID:220980(包含)之后的漫画(2020.10.27之后)图片进行了分割getRows倒序处理
+        val responseBuilder = response.newBuilder()
         val imgIndex: String = pathSegments.last().substringBefore('.')
-        val res = response.body.byteStream().use {
-            decodeImage(it, getRows(aid, imgIndex))
+        val input = if ("gzip" == response.header("Content-Encoding")) {
+            responseBuilder.headers(
+                response.headers.newBuilder()
+                    .removeAll("Content-Encoding")
+                    .removeAll("Content-Length")
+                    .build(),
+            )
+            GZIPInputStream(response.body.byteStream())
+        } else {
+            response.body.byteStream()
         }
-        val outputBytes = res.toResponseBody(jpegMediaType)
-        return response.newBuilder().body(outputBytes).build()
+        val newBody = input.use {
+            decodeImage(it, getRows(aid, imgIndex))
+        }.toResponseBody(jpegMediaType)
+        return responseBuilder.body(newBody).build()
     }
 
     // 220980
