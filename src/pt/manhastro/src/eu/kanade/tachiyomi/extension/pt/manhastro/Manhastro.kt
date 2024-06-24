@@ -20,8 +20,10 @@ class Manhastro : Madara(
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
 
+    override val mangaSubString: String = "lermanga"
+
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(2)
+        .rateLimit(1)
         .readTimeout(1, TimeUnit.MINUTES)
         .connectTimeout(1, TimeUnit.MINUTES)
         .addInterceptor { chain ->
@@ -42,6 +44,8 @@ class Manhastro : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val mangaDetailsSelectorTitle = "div.summary_content h2"
 
