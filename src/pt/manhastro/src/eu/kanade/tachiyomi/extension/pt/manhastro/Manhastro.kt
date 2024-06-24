@@ -20,7 +20,7 @@ class Manhastro : Madara(
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
 
-    override val mangaSubString: String = "lermanga"
+    override val mangaSubString = "lermanga"
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1)
