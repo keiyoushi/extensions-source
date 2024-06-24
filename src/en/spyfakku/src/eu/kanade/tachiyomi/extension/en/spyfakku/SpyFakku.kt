@@ -160,9 +160,13 @@ class SpyFakku : HttpSource() {
             SChapter.create().apply {
                 name = "Chapter"
                 url = "/g/${doc.selectFirst("a[href*='/read']")!!.attr("href").substringBefore("/read").substringAfterLast("/")}"
-                date_upload = doc.selectFirst("p:containsOwn(Released)")?.parent()?.selectFirst(".text-sm")?.ownText()?.let {
-                    dateFormat.parse(it)?.time
-                } ?: 0L
+                date_upload = try {
+                    dateFormat.parse(
+                        doc.selectFirst("p:containsOwn(Released)")!!.parent()!!.selectFirst(".text-sm")!!.ownText()
+                    )!!.time
+                } catch (e: Exception) {
+                    0L
+                }
             },
         )
     }
