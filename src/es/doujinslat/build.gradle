@@ -1,0 +1,10 @@
+ext {
+    extName = 'Doujins.lat'
+    extClass = '.DoujinsLat'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://doujins.lat'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
