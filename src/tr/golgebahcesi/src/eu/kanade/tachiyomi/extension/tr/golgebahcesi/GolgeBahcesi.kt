@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.tr.golgebahcesi
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -17,9 +15,9 @@ class GolgeBahcesi : MangaThemesia(
 ) {
     private var captchaUrl: String? = null
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
-            ?: super.mangaDetailsRequest(manga)
+    override fun getMangaUrl(manga: SManga): String =
+        captchaUrl?.also { captchaUrl = null }
+            ?: super.getMangaUrl(manga)
 
     override fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst("#readerarea form, #readerarea input[value=Doğrula]") != null) {
