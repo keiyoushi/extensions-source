@@ -22,8 +22,8 @@ class Manhastro : Madara(
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)
-        .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(1, TimeUnit.MINUTES)
+        .connectTimeout(1, TimeUnit.MINUTES)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             val mime = response.headers["Content-Type"]
