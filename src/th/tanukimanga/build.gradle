@@ -1,0 +1,10 @@
+ext {
+    extName = 'Tanuki-Manga'
+    extClass = '.TanukiManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://www.tanuki-manga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
