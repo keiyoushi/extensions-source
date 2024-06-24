@@ -1,0 +1,9 @@
+ext {
+    extName = 'MangaBuff'
+    extClass = '.MangaBuff'
+    themePkg = 'mangabuff'
+    baseUrl = 'https://mangabuff.ru'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
