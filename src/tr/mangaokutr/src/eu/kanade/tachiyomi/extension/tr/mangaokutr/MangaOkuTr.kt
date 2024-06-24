@@ -30,6 +30,6 @@ class MangaOkuTr : MangaThemesia(
             .build()
     }
 
-    override val seriesTypeSelector = "> x:not(x)" // Always 'Manga', disabling
+    override val seriesTypeSelector = ".tsinfo .imptdt:contains(Tür) a"
     override val seriesDescriptionSelector = "h2 + .entry-content > p:not(:contains(Kategoriler: ))"
 }
