@@ -103,10 +103,10 @@ class YugenMangas : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val slug = chapter.url.removePrefix("/series/")
+        val slug = chapter.url.removePrefix("/series/").substringBefore("/")
         val chapterSlug = chapter.url.substringAfterLast("/")
 
-        return POST("$API_BASE_URL/serie/${slug.substringBefore("/")}/chapter/$chapterSlug/images/imgs/get/", apiHeaders)
+        return POST("$API_BASE_URL/serie/$slug/chapter/$chapterSlug/images/imgs/get/", apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
