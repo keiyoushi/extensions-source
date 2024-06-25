@@ -32,7 +32,6 @@ class ShortHentai(
     val id: Int,
     val hash: String,
     val title: String,
-    val tags: List<Name>?,
 )
 
 @Serializable
