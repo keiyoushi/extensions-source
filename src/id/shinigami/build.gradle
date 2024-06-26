@@ -2,8 +2,8 @@ ext {
     extName = 'Shinigami'
     extClass = '.Shinigami'
     themePkg = 'madara'
-    baseUrl = 'https://shinigamitoon.id'
-    overrideVersionCode = 21
+    baseUrl = 'https://shinigamitoon.app'
+    overrideVersionCode = 22
     isNsfw = false
 }
 
