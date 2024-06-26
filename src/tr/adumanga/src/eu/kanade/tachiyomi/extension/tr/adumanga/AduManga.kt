@@ -8,5 +8,5 @@ class AduManga : MangaThemesia(
     "Adu Manga",
     "https://adumanga.com",
     "tr",
-    dateFormat = SimpleDateFormat("MMMM d, yyy", Locale("tr")),
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("en")),
 )
