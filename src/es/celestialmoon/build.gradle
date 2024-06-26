@@ -1,10 +1,14 @@
 ext {
     extName = 'Celestial Moon'
     extClass = '.CelestialMoon'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://www.celestialmoonscan.com'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://celestialmoonscan.es'
     overrideVersionCode = 0
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:cookieinterceptor"))
+}

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.unionmangas
 
-import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -10,22 +9,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
-import java.util.concurrent.TimeUnit
 
 class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override val lang = langOption.lang
@@ -38,39 +31,12 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    val langApiInfix = when (lang) {
-        "it" -> langOption.infix
-        else -> "v3/po"
-    }
-
     override val client = network.client.newBuilder()
-        .rateLimit(5, 2, TimeUnit.SECONDS)
+        .rateLimit(2)
         .build()
 
-    private fun apiHeaders(url: String): Headers {
-        val date = apiDateFormat.format(Date())
-        val path = url.toUrlWithoutDomain()
-
-        return headersBuilder()
-            .add("_hash", authorization(apiSeed, domain, date))
-            .add("_tranId", authorization(apiSeed, domain, date, path))
-            .add("_date", date)
-            .add("_domain", domain)
-            .add("_path", path)
-            .add("Origin", baseUrl)
-            .add("Host", apiUrl.removeProtocol())
-            .add("Referer", "$baseUrl/")
-            .build()
-    }
-
-    private fun authorization(vararg payloads: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        val bytes = payloads.joinToString("").toByteArray()
-        val digest = md.digest(bytes)
-        return digest
-            .fold("") { str, byte -> str + "%02x".format(byte) }
-            .padStart(32, '0')
-    }
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
@@ -79,106 +45,110 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
         var currentPage = 0
         do {
             val chaptersDto = fetchChapterListPageable(manga, currentPage)
-            chapters += chaptersDto.toSChapter(langOption)
+            chapters += chaptersDto.data.map { chapter ->
+                SChapter.create().apply {
+                    name = chapter.name
+                    date_upload = chapter.date.toDate()
+                    url = chapter.toChapterUrl(langOption.infix)
+                }
+            }
             currentPage++
         } while (chaptersDto.hasNextPage())
-        return Observable.just(chapters.reversed())
+        return Observable.just(chapters)
     }
 
-    private fun fetchChapterListPageable(manga: SManga, page: Int): ChapterPageDto {
+    private fun fetchChapterListPageable(manga: SManga, page: Int): Pageable<ChapterDto> {
+        manga.apply {
+            url = getURLCompatibility(url)
+        }
+
         val maxResult = 16
-        val url = "$apiUrl/api/$langApiInfix/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
-        return client.newCall(GET(url, apiHeaders(url))).execute()
-            .parseAs<ChapterPageDto>()
+        val url = "$apiUrl/${langOption.infix}/GetChapterListFilter/${manga.slug()}/$maxResult/$page/all/ASC"
+        return client.newCall(GET(url, headers)).execute()
+            .parseAs<Pageable<ChapterDto>>()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val nextData = response.parseNextData<LatestUpdateProps>()
-        val dto = nextData.data.latestUpdateDto
-        val mangas = dto.mangas.map { mangaParse(it, nextData.query) }
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
+    override fun latestUpdatesRequest(page: Int): Request {
+        val maxResult = 24
+        val url = "$apiUrl/${langOption.infix}/HomeLastUpdate".toHttpUrl().newBuilder()
+            .addPathSegment("$maxResult")
+            .addPathSegment("${page - 1}")
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        manga.apply {
+            url = getURLCompatibility(url)
+        }
+
+        return baseUrl + manga.url.replace(langOption.infix, langOption.mangaSubstring)
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        manga.apply {
+            url = getURLCompatibility(url)
+        }
+
+        val url = "$apiUrl/${langOption.infix}/getInfoManga".toHttpUrl().newBuilder()
+            .addPathSegment(manga.slug())
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val dto = response.parseAs<MangaDetailsDto>()
+        return mangaParse(dto.details)
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterSlug = getURLCompatibility(chapter.url)
+            .substringAfter(langOption.infix)
+
+        val url = "$apiUrl/${langOption.infix}/GetImageChapter$chapterSlug"
+        return GET(url, headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val location = response.request.url.toString()
+        val dto = response.parseAs<PageDto>()
+        return dto.pages.mapIndexed { index, url ->
+            Page(index, location, imageUrl = url)
+        }
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val dto = response.parseAs<Pageable<MangaDto>>()
+        val mangas = dto.data.map(::mangaParse)
         return MangasPage(
             mangas = mangas,
             hasNextPage = dto.hasNextPage(),
         )
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/${langOption.infix}/latest-releases".toHttpUrl().newBuilder()
-            .addQueryParameter("page", "$page")
+    override fun popularMangaRequest(page: Int): Request {
+        val maxResult = 24
+        return GET("$apiUrl/${langOption.infix}/HomeTopFllow/$maxResult/${page - 1}")
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val maxResult = 20
+        val url = "$apiUrl/${langOption.infix}/QuickSearch/".toHttpUrl().newBuilder()
+            .addPathSegment(query)
+            .addPathSegment("$maxResult")
             .build()
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val nextData = response.parseNextData<MangaDetailsProps>()
-        val dto = nextData.data.mangaDetailsDto
-        return SManga.create().apply {
-            title = dto.title
-            genre = dto.genres
-            thumbnail_url = dto.thumbnailUrl
-            url = mangaUrlParse(dto.slug, nextData.query.type)
-            status = dto.status
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val chaptersDto = decryptChapters(response)
-        return chaptersDto.images.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
-        }
-    }
-
-    private fun decryptChapters(response: Response): ChaptersDto {
-        val document = response.asJsoup()
-        val password = findChapterPassword(document)
-        val pageListData = document.parseNextData<ChaptersProps>().data.pageListData
-        val decodedData = CryptoAES.decrypt(pageListData, password)
-        return ChaptersDto(
-            data = json.decodeFromString<ChaptersDto>(decodedData).data,
-            delimiter = langOption.pageDelimiter,
-        )
-    }
-
-    private fun findChapterPassword(document: Document): String {
-        val regxPasswordUrl = """\/pages\/%5Btype%5D\/%5Bidmanga%5D\/%5Biddetail%5D-.+\.js""".toRegex()
-        val regxFindPassword = """AES\.decrypt\(\w+,"(?<password>[^"]+)"\)""".toRegex(RegexOption.MULTILINE)
-        val jsDecryptUrl = document.select("script")
-            .map { it.absUrl("src") }
-            .first { regxPasswordUrl.find(it) != null }
-        val jsDecrypt = client.newCall(GET(jsDecryptUrl, headers)).execute().asJsoup().html()
-        return regxFindPassword.find(jsDecrypt)?.groups?.get("password")!!.value.trim()
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseNextData<PopularMangaProps>()
-        val mangas = dto.data.mangas.map { it.details }.map { mangaParse(it, dto.query) }
-        return MangasPage(
-            mangas = mangas,
-            hasNextPage = false,
-        )
-    }
-
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/${langOption.infix}")
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val maxResult = 6
-        val url = "$apiUrl/api/$langApiInfix/searchforms/$maxResult/".toHttpUrl().newBuilder()
-            .addPathSegment(query)
-            .addPathSegment("${page - 1}")
-            .build()
-        return GET(url, apiHeaders(url.toString()))
-    }
-
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(slugPrefix)) {
-            val mangaUrl = query.substringAfter(slugPrefix)
-            return client.newCall(GET("$baseUrl/${langOption.infix}/$mangaUrl", headers))
+        if (query.startsWith(SEARCH_PREFIX)) {
+            val url = "$baseUrl/${langOption.infix}/${query.substringAfter(SEARCH_PREFIX)}"
+            return client.newCall(GET(url, headers))
                 .asObservableSuccess().map { response ->
-                    val manga = mangaDetailsParse(response).apply {
-                        url = mangaUrl
-                    }
-                    MangasPage(listOf(manga), false)
+                    val mangas = try { listOf(mangaDetailsParse(response)) } catch (_: Exception) { emptyList() }
+                    MangasPage(mangas, false)
                 }
         }
         return super.fetchSearchManga(page, query, filters)
@@ -187,52 +157,54 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
     override fun imageUrlParse(response: Response): String = ""
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val mangasDto = response.parseAs<MangaListDto>().apply {
-            currentPage = response.request.url.pathSegments.last()
-        }
-
+        val dto = response.parseAs<SearchDto>()
         return MangasPage(
-            mangas = mangasDto.toSManga(langOption.infix),
-            hasNextPage = mangasDto.hasNextPage(),
+            dto.mangas.map(::mangaParse),
+            false,
         )
     }
 
-    private inline fun <reified T> Response.parseNextData() = asJsoup().parseNextData<T>()
+    /*
+     * Keeps compatibility with pt-BR previous version
+     * */
+    private fun getURLCompatibility(url: String): String {
+        val slugSuffix = "-br"
+        val mangaSubString = "manga-br"
 
-    private inline fun <reified T> Document.parseNextData(): NextData<T> {
-        val jsonContent = selectFirst("script#__NEXT_DATA__")!!.html()
-        return json.decodeFromString<NextData<T>>(jsonContent)
+        val oldSlug = url.substringAfter(mangaSubString)
+            .substring(1)
+            .split("/")
+            .first()
+
+        val newSlug = oldSlug.substringBeforeLast(slugSuffix)
+
+        return url.replace(oldSlug, newSlug)
     }
 
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString(body.string())
     }
 
-    private fun String.removeProtocol() = trim().replace("https://", "")
-
     private fun SManga.slug() = this.url.split("/").last()
 
-    private fun String.toUrlWithoutDomain() = trim().replace(apiUrl, "")
-
-    private fun mangaParse(dto: MangaDto, query: QueryDto): SManga {
+    private fun mangaParse(dto: MangaDto): SManga {
         return SManga.create().apply {
             title = dto.title
             thumbnail_url = dto.thumbnailUrl
             status = dto.status
-            url = mangaUrlParse(dto.slug, query.type)
+            url = "/${langOption.infix}/${dto.slug}"
             genre = dto.genres
+            initialized = true
         }
     }
 
-    private fun mangaUrlParse(slug: String, pathSegment: String) = "/$pathSegment/$slug"
+    private fun String.toDate(): Long =
+        try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
 
     companion object {
-        val apiUrl = "https://api.unionmanga.xyz"
-        val apiSeed = "8e0550790c94d6abc71d738959a88d209690dc86"
-        val domain = "yaoi-chan.xyz"
-        val slugPrefix = "slug:"
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
-        val apiDateFormat = SimpleDateFormat("EE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
-            .apply { timeZone = TimeZone.getTimeZone("GMT") }
+        const val SEARCH_PREFIX = "slug:"
+        val apiUrl = "https://app.unionmanga.xyz/api"
+        val oldApiUrl = "https://api.unionmanga.xyz"
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ENGLISH)
     }
 }

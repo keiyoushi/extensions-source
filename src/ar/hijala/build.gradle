@@ -1,9 +1,9 @@
 ext {
     extName = 'Hijala'
     extClass = '.Hijala'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://www.hijala.com'
-    overrideVersionCode = 22
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://hijala.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"

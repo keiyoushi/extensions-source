@@ -21,7 +21,7 @@ class MangaRawClub : ParsedHttpSource() {
 
     override val id = 734865402529567092
     override val name = "MangaGeko"
-    override val baseUrl = "https://www.mgeko.com"
+    override val baseUrl = "https://www.mgeko.cc"
     override val lang = "en"
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -58,7 +58,7 @@ class MangaRawClub : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
     override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun searchMangaNextPageSelector() = "ul.pagination > li:last-child > a"
+    override fun searchMangaNextPageSelector() = ".paging .mg-pagination-chev:last-child:not(.chev-disabled)"
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 

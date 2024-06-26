@@ -122,10 +122,16 @@ class BrasilHentai : ParsedHttpSource() {
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) {
-            client.newCall(GET("$baseUrl/${query.substringAfter(PREFIX_SEARCH)}", headers))
+        return if (query.startsWith(SEARCH_PREFIX)) {
+            val url = "$baseUrl/${query.substringAfter(SEARCH_PREFIX)}/"
+            client.newCall(GET(url, headers))
                 .asObservableSuccess()
-                .map { MangasPage(listOf(searchMangaFromElement(it.asJsoup())), false) }
+                .map {
+                    val manga = mangaDetailsParse(it).apply {
+                        setUrlWithoutDomain(url)
+                    }
+                    MangasPage(listOf(manga), false)
+                }
         } else {
             super.fetchSearchManga(page, query, filters)
         }
@@ -168,6 +174,6 @@ class BrasilHentai : ParsedHttpSource() {
     private fun categoriesRequest(): Request = GET(baseUrl, headers)
 
     companion object {
-        val PREFIX_SEARCH: String = "slug:"
+        const val SEARCH_PREFIX: String = "slug:"
     }
 }

@@ -170,7 +170,8 @@ class Chapter(
     private val hid: String,
     private val lang: String = "",
     private val title: String = "",
-    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("created_at") private val createdAt: String = "",
+    @SerialName("publish_at") val publishedAt: String = "",
     private val chap: String = "",
     private val vol: String = "",
     @SerialName("group_name") val groups: List<String> = emptyList(),
@@ -196,4 +197,10 @@ class ChapterPageData(
 @Serializable
 class Page(
     val url: String? = null,
+)
+
+@Serializable
+class Error(
+    val statusCode: Int,
+    val message: String,
 )

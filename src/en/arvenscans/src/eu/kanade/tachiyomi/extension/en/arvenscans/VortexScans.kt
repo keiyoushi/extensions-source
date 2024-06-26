@@ -19,7 +19,7 @@ class VortexScans : HttpSource() {
 
     override val name = "Vortex Scans"
 
-    override val baseUrl = "https://vortexscans.com"
+    override val baseUrl = "https://vortexscans.org"
 
     override val lang = "en"
 
@@ -130,7 +130,7 @@ class VortexScans : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        return document.select("main > section > img").mapIndexed { idx, img ->
+        return document.select("main section > img").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.absUrl("src"))
         }
     }

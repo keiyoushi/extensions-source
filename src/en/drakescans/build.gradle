@@ -3,7 +3,7 @@ ext {
     extClass = '.DrakeScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://drake-scans.com'
-    overrideVersionCode = 11
+    overrideVersionCode = 12
 }
 
 apply from: "$rootDir/common.gradle"

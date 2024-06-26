@@ -11,10 +11,9 @@ class UnionMangasUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val host = intent?.data?.host
         val pathSegments = intent?.data?.pathSegments
 
-        if (host != null && pathSegments != null) {
+        if (pathSegments != null && pathSegments.size > 1) {
             val intent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 putExtra("query", slug(pathSegments))
@@ -32,5 +31,6 @@ class UnionMangasUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun slug(pathSegments: List<String>) = "${UnionMangas.slugPrefix}${pathSegments.last()}"
+    private fun slug(pathSegments: List<String>) =
+        "${UnionMangas.SEARCH_PREFIX}${pathSegments[1]}"
 }

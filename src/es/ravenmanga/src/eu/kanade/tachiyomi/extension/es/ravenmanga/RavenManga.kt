@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.ravenmanga
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,6 +15,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -135,8 +137,19 @@ class RavenManga : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("main.contenedor-imagen > section img[src]").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
+        var doc = document
+        val form = doc.selectFirst("form#redirectForm[method=post]")
+        if (form != null) {
+            val url = form.attr("action")
+            val headers = headersBuilder().set("Referer", doc.location()).build()
+            val body = FormBody.Builder()
+            form.select("input").forEach {
+                body.add(it.attr("name"), it.attr("value"))
+            }
+            doc = client.newCall(POST(url, headers, body.build())).execute().asJsoup()
+        }
+        return doc.select("main.contenedor-imagen > section img[src], main > img[src]").mapIndexed { i, element ->
+            Page(i, imageUrl = element.attr("abs:src"))
         }
     }
 

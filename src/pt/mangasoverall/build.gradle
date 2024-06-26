@@ -1,9 +1,0 @@
-ext {
-    extName = 'ROG Mangás'
-    extClass = '.RogMangas'
-    themePkg = 'madara'
-    baseUrl = 'https://rogmangas.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

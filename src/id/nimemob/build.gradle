@@ -1,0 +1,10 @@
+ext {
+    extName = 'Nimemob'
+    extClass = '.Nimemob'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.nimemob.my.id'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -3,7 +3,7 @@ ext {
     extClass = '.TresDaosScan'
     themePkg = 'mangathemesia'
     baseUrl = 'https://tresdaos.com'
-    overrideVersionCode = 6
+    overrideVersionCode = 8
 }
 
 apply from: "$rootDir/common.gradle"

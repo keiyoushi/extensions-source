@@ -28,7 +28,7 @@ class YugenMangas : HttpSource() {
 
     override val name = "Yugen Mangás"
 
-    override val baseUrl = "https://yugenmangas.net.br"
+    override val baseUrl = "https://yugenapp.lat"
 
     override val lang = "pt-BR"
 
@@ -53,13 +53,12 @@ class YugenMangas : HttpSource() {
         .add("Sec-Fetch-Site", "same-site")
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$API_BASE_URL/random_top_series/", apiHeaders)
+        return GET("$API_BASE_URL/top_series_all/", apiHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<List<YugenMangaDto>>()
-        val mangaList = result.map { it.toSManga(baseUrl) }
-
+        val mangaList = result.map { it.toSManga(API_HOST) }
         return MangasPage(mangaList, hasNextPage = false)
     }
 
@@ -70,8 +69,8 @@ class YugenMangas : HttpSource() {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val apiUrl = "$API_BASE_URL/series/list".toHttpUrl().newBuilder()
-            .addQueryParameter("query", query)
+        val apiUrl = "$API_BASE_URL/series".toHttpUrl().newBuilder()
+            .addQueryParameter("search", query)
             .build()
 
         return GET(apiUrl, apiHeaders)
@@ -81,14 +80,13 @@ class YugenMangas : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.removePrefix("/series/")
-
-        return POST("$API_BASE_URL/serie_details/$slug", apiHeaders)
+        return POST("$API_BASE_URL/serie/serie_details/$slug", apiHeaders)
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
     override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<YugenMangaDto>().toSManga(baseUrl)
+        return response.parseAs<YugenMangaDto>().toSManga(API_BASE_URL)
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -101,7 +99,14 @@ class YugenMangas : HttpSource() {
             .set("Content-Type", payload.contentType().toString())
             .build()
 
-        return POST("$API_BASE_URL/get_chapters_by_serie/", newHeaders, payload)
+        return POST("$API_BASE_URL/chapters/get_chapters_by_serie/", newHeaders, payload)
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val slug = chapter.url.removePrefix("/series/").substringBefore("/")
+        val chapterSlug = chapter.url.substringAfterLast("/")
+
+        return POST("$API_BASE_URL/serie/$slug/chapter/$chapterSlug/images/imgs/get/", apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -114,23 +119,10 @@ class YugenMangas : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val paths = chapter.url.removePrefix("/").split("/")
-
-        val newHeaders = apiHeadersBuilder()
-            .set("Referer", getChapterUrl(chapter))
-            .build()
-
-        return POST("$API_BASE_URL/serie/${paths[1]}/chapter/${paths[2]}/images/imgs/", newHeaders)
-    }
-
     override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<YugenReaderDto>()
-        val chapterUrl = response.request.headers["Referer"].orEmpty()
+        val result = response.parseAs<YugenPageList>()
 
-        return result.images.orEmpty().mapIndexed { index, image ->
-            Page(index, chapterUrl, "$baseUrl/${image.removePrefix("/")}")
-        }
+        return result.chapterImages.mapIndexed { index, url -> Page(index, baseUrl, "$API_HOST/$url") }
     }
 
     override fun imageUrlParse(response: Response) = ""
@@ -153,7 +145,8 @@ class YugenMangas : HttpSource() {
     }
 
     companion object {
-        private const val API_BASE_URL = "https://api.yugenmangas.net.br/api"
+        private const val API_HOST = "https://api.yugenapp.lat"
+        private const val API_BASE_URL = "$API_HOST/api"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }

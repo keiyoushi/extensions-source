@@ -1,9 +1,0 @@
-ext {
-    extName = 'O Cu Meo'
-    extClass = '.OCuMeo'
-    themePkg = 'a3manga'
-    baseUrl = 'https://www.ocumeo.store'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

@@ -10,9 +10,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonObject
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -89,9 +88,7 @@ class LoadingArtist : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val comics = json.parseToJsonElement(response.body.string()).jsonObject.map {
-            json.decodeFromJsonElement<Comic>(it.value)
-        }
+        val comics = json.decodeFromString<List<Comic>>(response.body.string())
         val validTypes = listOf("comic", "game", "art")
         return comics.filter { validTypes.any { type -> it.section == type } }.map {
             SChapter.create().apply {

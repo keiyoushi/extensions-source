@@ -212,8 +212,8 @@ abstract class ZeistManga(
     protected open val useNewChapterFeed = false
     protected open val useOldChapterFeed = false
 
-    private val chapterFeedRegex = """clwd\.run\(["'](.*?)["']\)""".toRegex()
-    private val scriptSelector = "#clwd > script"
+    protected open val chapterFeedRegex = """clwd\.run\(["'](.*?)["']\)""".toRegex()
+    protected open val scriptSelector = "#clwd > script"
 
     open fun getChapterFeedUrl(doc: Document): String {
         if (useNewChapterFeed) return newChapterFeedUrl(doc)
@@ -434,6 +434,6 @@ abstract class ZeistManga(
 
     companion object {
         private const val maxMangaResults = 20
-        private const val maxChapterResults = 999999
+        const val maxChapterResults = 999999
     }
 }

@@ -9,7 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-data class YugenMangaDto(
+class YugenMangaDto(
     val name: String,
     @JsonNames("capa", "cover") val cover: String,
     val slug: String,
@@ -30,16 +30,22 @@ data class YugenMangaDto(
             "completed", "finished" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = if (cover.startsWith("/")) baseUrl + cover else cover
+
+        thumbnail_url = when {
+            cover.startsWith(listOf("/", "cover")) -> "$baseUrl/media/${cover.removePrefix("/")}"
+            else -> cover
+        }
         url = "/series/$slug"
     }
+
+    private fun String.startsWith(group: List<String>): Boolean = group.any(::startsWith)
 }
 
 @Serializable
-data class YugenChapterListDto(val chapters: List<YugenChapterDto>)
+class YugenChapterListDto(val chapters: List<YugenChapterDto>)
 
 @Serializable
-data class YugenChapterDto(
+class YugenChapterDto(
     val name: String,
     val season: Int,
     @SerialName("upload_date") val uploadDate: String,
@@ -67,11 +73,11 @@ data class YugenChapterDto(
 }
 
 @Serializable
-data class YugenReaderDto(
-    @SerialName("chapter_images") val images: List<String>? = emptyList(),
+data class YugenGetChaptersBySeriesDto(
+    @SerialName("serie_slug") val seriesSlug: String,
 )
 
 @Serializable
-data class YugenGetChaptersBySeriesDto(
-    @SerialName("serie_slug") val seriesSlug: String,
+class YugenPageList(
+    @SerialName("chapter_images") val chapterImages: List<String>,
 )

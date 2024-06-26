@@ -28,6 +28,7 @@ fun List<PopularMangaDto>.toSMangaList(): List<SManga> = map { item ->
 
 @Serializable
 data class MangaInfoDto(
+    @SerialName("book_id") val id: Int,
     @SerialName("book_image") val thumbnail_url: String?,
     @SerialName("book_name_original") val name: String,
     @SerialName("book_status") val status: Int,

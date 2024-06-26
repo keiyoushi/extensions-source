@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiEra'
+    extClass = '.HentaiEraFactory'
+    themePkg = 'galleryadults'
+    baseUrl = 'https://hentaiera.com'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

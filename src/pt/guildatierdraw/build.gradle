@@ -2,8 +2,8 @@ ext {
     extName = 'Guilda Tier Draw'
     extClass = '.GuildaTierDraw'
     themePkg = 'zeistmanga'
-    baseUrl = 'https://www.guildatierdraw.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.guildatierdraw.top'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

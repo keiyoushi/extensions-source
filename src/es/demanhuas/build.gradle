@@ -1,9 +1,0 @@
-ext {
-    extName = 'DeManhuas'
-    extClass = '.DeManhuas'
-    themePkg = 'madara'
-    baseUrl = 'https://demanhuas.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

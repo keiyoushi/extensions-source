@@ -12,6 +12,7 @@ import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -19,6 +20,21 @@ import java.util.Locale
 class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)) {
 
     override val versionId: Int = 2
+
+    private val cdnHeaders = super.headersBuilder()
+        .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .build()
+
+    override val client = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url.toString()
+            if (url.contains("/wp-content/uploads/")) {
+                return@addInterceptor chain.proceed(request.newBuilder().headers(cdnHeaders).build())
+            }
+            chain.proceed(request)
+        }
+        .build()
 
     override val mangaSubString = "hentai"
     override val fetchGenres = false
@@ -85,6 +101,16 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
             return GET(url, headers)
         }
         return GET(baseUrl + url, headers)
+    }
+
+    override fun imageFromElement(element: Element): String? {
+        return when {
+            element.hasAttr("data-src") -> element.attr("abs:data-src")
+            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
+            element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ").removeSuffix(",")
+            element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
+            else -> element.attr("abs:src")
+        }
     }
 }
 

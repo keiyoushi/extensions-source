@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hunlight Scans'
+    extClass = '.HunlightScans'
+    themePkg = 'madara'
+    baseUrl = 'https://hunlight.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

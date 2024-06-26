@@ -21,14 +21,19 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.io.IOException
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
-class Akuma : ParsedHttpSource() {
+class Akuma(
+    override val lang: String,
+    private val akumaLang: String,
+) : ParsedHttpSource() {
 
     override val name = "Akuma"
 
     override val baseUrl = "https://akuma.moe"
-
-    override val lang = "all"
 
     override val supportsLatest = false
 
@@ -38,6 +43,9 @@ class Akuma : ParsedHttpSource() {
 
     private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
 
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ddosGuardIntercept)
         .addInterceptor(::tokenInterceptor)
@@ -102,12 +110,19 @@ class Akuma : ParsedHttpSource() {
             .add("view", "3")
             .build()
 
-        return if (page == 1) {
+        val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
+
+        if (page == 1) {
             nextHash = null
-            POST(baseUrl, headers, payload)
         } else {
-            POST("$baseUrl/?cursor=$nextHash", headers, payload)
+            url.addQueryParameter("cursor", nextHash)
         }
+        if (lang != "all") {
+            // append like `q=language:english$`
+            url.addQueryParameter("q", "language:$akumaLang$")
+        }
+
+        return POST(url.toString(), headers, payload)
     }
 
     override fun popularMangaSelector() = ".post-loop li"
@@ -115,6 +130,10 @@ class Akuma : ParsedHttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
+
+        if (document.text().contains("Max keywords of 3 exceeded.")) {
+            throw Exception("Login required for more than 3 filters")
+        } else if (document.text().contains("Max keywords of 8 exceeded.")) throw Exception("Only max of 8 filters are allowed")
 
         val mangas = document.select(popularMangaSelector()).map { element ->
             popularMangaFromElement(element)
@@ -154,8 +173,39 @@ class Akuma : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val request = popularMangaRequest(page)
 
+        val finalQuery: MutableList<String> = mutableListOf(query)
+
+        if (lang != "all") {
+            finalQuery.add("language: $akumaLang$")
+        }
+        filters.forEach { filter ->
+            when (filter) {
+                is TextFilter -> {
+                    if (filter.state.isNotEmpty()) {
+                        finalQuery.addAll(
+                            filter.state.split(",").filter { it.isNotBlank() }.map {
+                                (if (it.trim().startsWith("-")) "-" else "") + "${filter.tag}:\"${it.trim().replace("-", "")}\""
+                            },
+                        )
+                    }
+                }
+                is OptionFilter -> {
+                    if (filter.state > 0) finalQuery.add("opt:${filter.getValue()}")
+                }
+                is CategoryFilter -> {
+                    filter.state.forEach {
+                        when {
+                            it.isIncluded() -> finalQuery.add("category:\"${it.name}\"")
+                            it.isExcluded() -> finalQuery.add("-category:\"${it.name}\"")
+                        }
+                    }
+                }
+                else -> {}
+            }
+        }
+
         val url = request.url.newBuilder()
-            .addQueryParameter("q", query.trim())
+            .setQueryParameter("q", finalQuery.joinToString(" "))
             .build()
 
         return request.newBuilder()
@@ -168,24 +218,62 @@ class Akuma : ParsedHttpSource() {
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".entry-title").text()
-        thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
-        author = document.select("li.meta-data  > span.artist + span.value").text()
-        genre = document.select(".info-list a").joinToString { it.text() }
-        description = document.select(".pages span.value").text() + " Pages"
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        status = SManga.COMPLETED
+    override fun mangaDetailsParse(document: Document) = with(document) {
+        SManga.create().apply {
+            title = select(".entry-title").text()
+            thumbnail_url = select(".img-thumbnail").attr("abs:src")
+
+            author = select(".group~.value").eachText().joinToString()
+            artist = select(".artist~.value").eachText().joinToString()
+
+            val characters = select(".character~.value").eachText()
+            val parodies = select(".parody~.value").eachText()
+            val males = select(".male~.value")
+                .map { "${it.text()} ♂" }
+            val females = select(".female~.value")
+                .map { "${it.text()} ♀" }
+            val others = select(".other~.value")
+                .map { "${it.text()} ◊" }
+            // show all in tags for quickly searching
+
+            genre = (males + females + others).joinToString()
+            description = buildString {
+                append(
+                    "Full English and Japanese title: \n",
+                    select(".entry-title").text(),
+                    "\n",
+                    select(".entry-title+span").text(),
+                    "\n\n",
+                )
+
+                // translated should show up in the description
+                append("Language: ", select(".language~.value").eachText().joinToString(), "\n")
+                append("Pages: ", select(".pages .value").text(), "\n")
+                append("Upload Date: ", select(".date .value>time").text().replace(" ", ", ") + " UTC", "\n")
+                append("Categories: ", selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
+
+                // show followings for easy to reference
+                parodies.takeIf { it.isNotEmpty() }?.let { append("Parodies: ", parodies.joinToString(), "\n") }
+                characters.takeIf { it.isNotEmpty() }?.let { append("Characters: ", characters.joinToString(), "\n") }
+            }
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.UNKNOWN
+        }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    url = "${manga.url}/1"
-                    name = "Chapter"
-                },
-            ),
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+
+        return listOf(
+            SChapter.create().apply {
+                setUrlWithoutDomain("${response.request.url}/1")
+                name = "Chapter"
+                date_upload = try {
+                    dateFormat.parse(document.select(".date .value>time").text())!!.time
+                } catch (_: ParseException) {
+                    0L
+                }
+            },
         )
     }
 
@@ -201,12 +289,16 @@ class Akuma : ParsedHttpSource() {
             pageList.add(Page(i, "$url/$i"))
         }
 
+        pageList[0].imageUrl = imageUrlParse(document)
+
         return pageList
     }
 
     override fun imageUrlParse(document: Document): String {
         return document.select(".entry-content img").attr("abs:src")
     }
+
+    override fun getFilterList(): FilterList = getFilters()
 
     companion object {
         const val PREFIX_ID = "id:"

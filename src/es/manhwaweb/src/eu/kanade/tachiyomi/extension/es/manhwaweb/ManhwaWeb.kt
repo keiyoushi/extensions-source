@@ -1,12 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.manhwaweb
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,15 +16,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
-class ManhwaWeb : HttpSource(), ConfigurableSource {
-
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+class ManhwaWeb : HttpSource() {
 
     override val name = "ManhwaWeb"
 
@@ -44,7 +33,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
     private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -67,7 +56,7 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadLatestDto>(response.body.string())
         val mangas = (result.data.esp + result.data.raw18 + result.data.esp18)
-            .distinctBy { it.type + it.slug }
+            .distinctBy { it.slug }
             .sortedByDescending { it.latestChapterDate }
             .map { it.toSManga() }
 
@@ -143,25 +132,17 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = json.decodeFromString<PayloadChapterDto>(response.body.string())
-        val chaptersEsp = result.esp.map { it.toSChapter("Esp") }
-        val chaptersRaw = result.raw.map { it.toSChapter("Raw") }
+        val chapters = result.chapters.filterNot { it.espUrl == null && it.rawUrl == null }.map { it.toSChapter() }
 
-        val filteredRaws = if (preferences.showAllRawsPref()) {
-            chaptersRaw
-        } else {
-            val chapterNumbers = chaptersEsp.map { it.chapter_number }.toSet()
-            chaptersRaw.filter { it.chapter_number !in chapterNumbers }
-        }
-
-        return (chaptersEsp + filteredRaws).sortedByDescending { it.chapter_number }
+        return chapters.sortedByDescending { it.chapter_number }
     }
 
-    private fun ChapterDto.toSChapter(type: String) = SChapter.create().apply {
+    private fun ChapterDto.toSChapter() = SChapter.create().apply {
         name = "Capítulo ${number.toString().removeSuffix(".0")}"
         chapter_number = number
         date_upload = createdAt ?: 0
-        setUrlWithoutDomain(this@toSChapter.url)
-        scanlator = type
+        url = espUrl ?: rawUrl!!
+        scanlator = if (espUrl != null) "Esp" else "Raw"
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -175,25 +156,5 @@ class ManhwaWeb : HttpSource(), ConfigurableSource {
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val showAllRawsPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_ALL_RAWS_PREF
-            title = SHOW_ALL_RAWS_TITLE
-            summary = SHOW_ALL_RAWS_SUMMARY
-            setDefaultValue(SHOW_ALL_RAWS_DEFAULT)
-        }
-
-        screen.addPreference(showAllRawsPref)
-    }
-
-    private fun SharedPreferences.showAllRawsPref() = getBoolean(SHOW_ALL_RAWS_PREF, SHOW_ALL_RAWS_DEFAULT)
-
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    companion object {
-        private const val SHOW_ALL_RAWS_PREF = "pref_show_all_raws_"
-        private const val SHOW_ALL_RAWS_TITLE = "Mostrar todos los capítulos \"Raw\""
-        private const val SHOW_ALL_RAWS_SUMMARY = "Mostrar todos los capítulos \"Raw\" en la lista de capítulos, a pesar de que ya exista una versión en español."
-        private const val SHOW_ALL_RAWS_DEFAULT = false
-    }
 }

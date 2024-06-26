@@ -11,8 +11,7 @@ class TresDaosScan : MangaThemesia(
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-    // Site move from Madara to MangaThemesia
-    override val versionId = 3
+    override val versionId = 4
 
     override val client = super.client.newBuilder()
         .rateLimit(2)

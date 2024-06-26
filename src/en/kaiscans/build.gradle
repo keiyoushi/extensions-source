@@ -1,9 +1,10 @@
 ext {
-    extName = 'Kai Scans'
-    extClass = '.KaiScans'
+    extName = 'Umi Scans'
+    extClass = '.UmiScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://kaiscans.org'
-    overrideVersionCode = 1
+    baseUrl = 'https://umiscans.org'
+    overrideVersionCode = 3
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

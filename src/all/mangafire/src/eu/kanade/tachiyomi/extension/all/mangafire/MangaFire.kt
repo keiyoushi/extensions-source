@@ -138,13 +138,13 @@ open class MangaFire(
     override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
         val result = json.decodeFromString<ResponseDto<String>>(response.body.string()).result
         val document = Jsoup.parse(result)
-
-        val elements = document.select("ul li")
+        val selector = if (isVolume) "div.unit" else "ul li"
+        val elements = document.select(selector)
         if (elements.size > 0) {
             val linkToFirstChapter = elements[0].selectFirst(Evaluator.Tag("a"))!!.attr("href")
             val mangaId = linkToFirstChapter.toString().substringAfter('.').substringBefore('/')
-
-            val request = GET("$baseUrl/ajax/read/$mangaId/chapter/$langCode", headers)
+            val type = if (isVolume) volumeType else chapterType
+            val request = GET("$baseUrl/ajax/read/$mangaId/$type/$langCode", headers)
             val response = client.newCall(request).execute()
             val res = json.decodeFromString<ResponseDto<ChapterIdsDto>>(response.body.string()).result.html
             val chapterInfoDocument = Jsoup.parse(res)
@@ -177,6 +177,7 @@ open class MangaFire(
             val element = elements[i]
             val number = element.attr("data-number").toFloatOrNull() ?: -1f
             if (chapter.chapter_number != number) throw Exception("Chapter number doesn't match. Try updating again.")
+            chapter.name = element.select(Evaluator.Tag("span"))[0].ownText()
             val date = element.select(Evaluator.Tag("span"))[1].ownText()
             chapter.date_upload = try {
                 dateFormat.parse(date)!!.time

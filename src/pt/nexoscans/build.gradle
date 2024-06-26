@@ -1,9 +1,0 @@
-ext {
-    extName = 'Nexo Scans'
-    extClass = '.NexoScans'
-    themePkg = 'madara'
-    baseUrl = 'https://nexoscans.net'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

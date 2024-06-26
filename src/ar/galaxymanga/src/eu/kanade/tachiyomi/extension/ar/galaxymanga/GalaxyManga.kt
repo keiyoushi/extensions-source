@@ -8,7 +8,7 @@ import okhttp3.Request
 
 class GalaxyManga : FlixScans(
     "جالاكسي مانجا",
-    "https://flixscans.com",
+    "https://flixscans.net",
     "ar",
     "https://ar.flixscans.site/api/v1",
 ) {

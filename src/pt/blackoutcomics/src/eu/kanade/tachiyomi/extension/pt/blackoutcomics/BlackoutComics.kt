@@ -155,7 +155,7 @@ class BlackoutComics : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.chapter-image canvas").mapIndexed { index, item ->
+        return document.select("div[class^=chapter-image] canvas[height][width][data-src^=/assets/obras/]").mapIndexed { index, item ->
             Page(index, "", item.absUrl("data-src"))
         }
     }

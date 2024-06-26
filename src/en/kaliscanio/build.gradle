@@ -1,0 +1,10 @@
+ext {
+    extName = 'KaliScan.io'
+    extClass = '.KaliScanIo'
+    themePkg = 'madtheme'
+    baseUrl = 'https://kaliscan.io'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

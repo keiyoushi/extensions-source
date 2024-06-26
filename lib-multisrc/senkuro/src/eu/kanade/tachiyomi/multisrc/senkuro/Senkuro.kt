@@ -36,12 +36,12 @@ abstract class Senkuro(
     override val supportsLatest = false
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Tachiyomi (+https://github.com/tachiyomiorg/tachiyomi)")
+        .add("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
         .add("Content-Type", "application/json")
 
     override val client: OkHttpClient =
         network.client.newBuilder()
-            .rateLimit(5)
+            .rateLimit(3)
             .build()
 
     private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =

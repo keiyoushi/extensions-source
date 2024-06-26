@@ -8,9 +8,9 @@ import android.os.Looper
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -33,7 +33,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -81,23 +80,12 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/mangas/", headers)
+        return GET("$baseUrl/mangas/?sort=popular&p=$page", headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        pageNumberDoc = document
+    override fun popularMangaNextPageSelector() = ".pagination > li:last-child:not(.disabled)"
 
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
-        val hasNextPage = false
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun popularMangaNextPageSelector(): String? = null
-
-    override fun popularMangaSelector() = "#top_mangas_week li"
+    override fun popularMangaSelector() = ".mangas-list .manga-block:not(:has(a[href='']))"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -110,47 +98,15 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     }
 
     // Latest
-    private lateinit var latestDirectory: List<Element>
-
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(latestUpdatesRequest(page))
-                .asObservableSuccess()
-                .map { latestUpdatesParse(it) }
-        } else {
-            Observable.just(parseLatestDirectory(page))
-        }
-    }
-
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
+        return GET("$baseUrl/mangas/?sort=updated&p=$page", headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        latestDirectory = document.select(latestUpdatesSelector())
-            .distinctBy { element -> element.select("a").attr("href") }
-
-        return parseLatestDirectory(1)
-    }
-
-    private fun parseLatestDirectory(page: Int): MangasPage {
-        val manga = mutableListOf<SManga>()
-        val end = ((page * 24) - 1).let { if (it <= latestDirectory.lastIndex) it else latestDirectory.lastIndex }
-
-        for (i in (((page - 1) * 24)..end)) {
-            manga.add(latestUpdatesFromElement(latestDirectory[i]))
-        }
-
-        return MangasPage(manga, end < latestDirectory.lastIndex)
-    }
-
-    override fun latestUpdatesSelector() = "#chapters h3.mb-0"
+    override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -180,7 +136,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaNextPageSelector(): String = "li.page-item:last-child:not(li.active)"
+    override fun searchMangaNextPageSelector(): String = popularMangaSelector()
 
     override fun searchMangaSelector(): String = "div.card div.p-2"
 
@@ -225,7 +181,8 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         val infoElement = document.selectFirst("#main .card-body")!!
 
         val manga = SManga.create()
-        manga.thumbnail_url = infoElement.select("img").attr("abs:src")
+        val path = document.location().replaceFirst("$baseUrl/", "")
+        manga.thumbnail_url = "$baseUrl/imgs/${path.replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
 
         val infoRows = infoElement.select(".row, .d-flex")
         infoRows.select("p").forEach { el ->
@@ -272,27 +229,18 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {
         val interfaceName = randomString()
-        val zjsElement = document.selectFirst("script[src*=/zjs/]")
-            ?: throw Exception("ZJS not found")
-        val dataElement = document.selectFirst("#data")
-            ?: throw Exception("Chapter data not found")
-        val minDoc = Document.createShell(document.location())
-        val minDocBody = minDoc.body()
-
-        minDocBody.appendChild(dataElement)
-        minDocBody.append(
+        document.body().prepend(
             """
             <script>
-                const _parse = JSON.parse;
-
-                JSON.parse = function(...args) {
-                    window.$interfaceName.passPayload(args[0]);
-                    return _parse(...args);
+                const _atob = atob;
+                atob = function(arg) {
+                    let data = _atob(arg)
+                    window.$interfaceName.passPayload(data);
+                    return data;
                 };
             </script>
             """.trimIndent(),
         )
-        minDocBody.appendChild(zjsElement)
 
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
@@ -308,16 +256,26 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
+            innerWv.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    url: String?,
+                ): Boolean {
+                    url ?: return true
+                    return !url.contains("/zjs/")
+                }
+            }
+
             innerWv.loadDataWithBaseURL(
                 document.location(),
-                minDoc.outerHtml(),
+                document.outerHtml(),
                 "text/html",
                 "UTF-8",
                 null,
             )
         }
 
-        latch.await(5, TimeUnit.SECONDS)
+        latch.await(10, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
@@ -340,28 +298,6 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     private class TextField(name: String) : Filter.Text(name)
 
     private class PageList(pages: Array<Int>) : Filter.Select<Int>("Page #", arrayOf(0, *pages))
-
-    override fun getFilterList(): FilterList {
-        val totalPages = pageNumberDoc?.select("li.page-item:last-child a")?.text()
-        val pageList = mutableListOf<Int>()
-        return if (!totalPages.isNullOrEmpty()) {
-            for (i in 0 until totalPages.toInt()) {
-                pageList.add(i + 1)
-            }
-            FilterList(
-                Filter.Header("Page alphabétique"),
-                PageList(pageList.toTypedArray()),
-            )
-        } else {
-            FilterList(
-                Filter.Header("Page alphabétique"),
-                TextField("Page #"),
-                Filter.Header("Appuyez sur reset pour la liste"),
-            )
-        }
-    }
-
-    private var pageNumberDoc: Document? = null
 
     // Prefs
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
@@ -396,10 +332,14 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         @JavascriptInterface
         @Suppress("UNUSED")
         fun passPayload(rawData: String) {
-            val data = json.parseToJsonElement(rawData).jsonObject
+            try {
+                val data = json.parseToJsonElement(rawData).jsonObject
 
-            images = data["imagesLink"]!!.jsonArray.map { it.jsonPrimitive.content }
-            latch.countDown()
+                images = data["imagesLink"]!!.jsonArray.map { it.jsonPrimitive.content }
+                latch.countDown()
+            } catch (_: Exception) {
+                return
+            }
         }
     }
 }
