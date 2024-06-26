@@ -73,7 +73,7 @@ class YugenChapterDto(
 }
 
 @Serializable
-class YugenGetChaptersBySeriesDto(
+data class YugenGetChaptersBySeriesDto(
     @SerialName("serie_slug") val seriesSlug: String,
 )
 
