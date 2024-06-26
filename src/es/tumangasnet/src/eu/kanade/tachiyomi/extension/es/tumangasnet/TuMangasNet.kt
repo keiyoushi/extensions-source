@@ -51,7 +51,7 @@ class TuMangasNet : ParsedHttpSource() {
                 .replace("/leer-manga/", "/manga/"),
         )
         title = element.selectFirst(".title")!!.text().substringBeforeLast("Ep.").trim()
-        thumbnail_url = element.selectFirst("figure > img")!!.attr("src")
+        thumbnail_url = element.selectFirst("figure > img")?.attr("src")
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -86,7 +86,7 @@ class TuMangasNet : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         title = element.selectFirst(".title")!!.text()
-        thumbnail_url = element.selectFirst("figure > img")!!.attr("src")
+        thumbnail_url = element.selectFirst("figure > img")?.attr("src")
     }
 
     override fun getFilterList() = FilterList(
@@ -96,11 +96,11 @@ class TuMangasNet : ParsedHttpSource() {
     )
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        document.selectFirst("article.anime-single")?.let { element ->
+        document.selectFirst("article.anime-single")!!.let { element ->
             title = element.selectFirst(".title")!!.text()
             genre = element.select("p.genres > span").joinToString { it.text() }
-            description = element.selectFirst(".sinopsis")!!.text()
-            thumbnail_url = element.selectFirst("div.thumb figure > img")!!.attr("abs:src")
+            description = element.selectFirst(".sinopsis")?.text()
+            thumbnail_url = element.selectFirst("div.thumb figure > img")?.attr("abs:src")
         }
     }
 
