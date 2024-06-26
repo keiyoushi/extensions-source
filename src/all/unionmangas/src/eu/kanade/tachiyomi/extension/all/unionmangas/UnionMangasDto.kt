@@ -58,11 +58,11 @@ class SearchDto(
 
 @Serializable
 class PageDto(val `data`: Data) {
-    val pages: List<String> get() = `data`.lsDetail.source.split("#")
+    val pages: List<String> get() = `data`.detailDocuments.source.split("#")
 
     @Serializable
-    class Data(val lsDetail: LsDetail)
+    class Data(@SerialName("detail_documents") val detailDocuments: DetailDocuments)
 
     @Serializable
-    class LsDetail(val source: String)
+    class DetailDocuments(val source: String)
 }
