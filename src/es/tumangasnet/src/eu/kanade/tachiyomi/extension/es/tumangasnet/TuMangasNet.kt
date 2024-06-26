@@ -91,7 +91,6 @@ class TuMangasNet : ParsedHttpSource() {
 
     override fun getFilterList() = FilterList(
         Filter.Header("NOTA: Los filtros no funcionan en la búsqueda por texto."),
-        Filter.Separator(),
         GenreFilter(),
     )
 
