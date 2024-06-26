@@ -59,7 +59,7 @@ class TuMangasNet : ParsedHttpSource() {
             val url = "$baseUrl/biblioteca-manga".toHttpUrl().newBuilder()
                 .addQueryParameter("buscar", query)
                 .addQueryParameter("page", page.toString())
-                .toString()
+                .build()
 
             return GET(url, headers)
         }
