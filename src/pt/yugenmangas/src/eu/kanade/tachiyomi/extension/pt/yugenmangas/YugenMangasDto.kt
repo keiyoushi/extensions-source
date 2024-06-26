@@ -80,5 +80,4 @@ data class YugenGetChaptersBySeriesDto(
 @Serializable
 class YugenPageList(
     @SerialName("chapter_images") val chapterImages: List<String>,
-
 )
