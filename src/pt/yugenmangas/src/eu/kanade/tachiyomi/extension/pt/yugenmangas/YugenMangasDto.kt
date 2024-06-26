@@ -9,7 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-data class YugenMangaDto(
+class YugenMangaDto(
     val name: String,
     @JsonNames("capa", "cover") val cover: String,
     val slug: String,
@@ -42,10 +42,10 @@ data class YugenMangaDto(
 }
 
 @Serializable
-data class YugenChapterListDto(val chapters: List<YugenChapterDto>)
+class YugenChapterListDto(val chapters: List<YugenChapterDto>)
 
 @Serializable
-data class YugenChapterDto(
+class YugenChapterDto(
     val name: String,
     val season: Int,
     @SerialName("upload_date") val uploadDate: String,
@@ -75,4 +75,9 @@ data class YugenChapterDto(
 @Serializable
 data class YugenGetChaptersBySeriesDto(
     @SerialName("serie_slug") val seriesSlug: String,
+)
+
+@Serializable
+class YugenPageList(
+    @SerialName("chapter_images") val chapterImages: List<String>,
 )
