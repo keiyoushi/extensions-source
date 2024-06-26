@@ -95,6 +95,7 @@ class SpyFakku : HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
+        manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }
         return GET(baseApiUrl + manga.url, headers)
     }
 
@@ -140,12 +141,17 @@ class SpyFakku : HttpSource() {
             }
             append("Pages: ", pages, "\n\n")
 
-            releasedAtFormat.parse(released_at)?.let {
-                append("Released: ", dateReformat.format(it.time), "\n")
-            }
-            createdAtFormat.parse(created_at)?.let {
-                append("Added: ", dateReformat.format(it.time), "\n")
-            }
+            try {
+                releasedAtFormat.parse(released_at)?.let {
+                    append("Released: ", dateReformat.format(it.time), "\n")
+                }
+            } catch (_: Exception) {}
+
+            try {
+                createdAtFormat.parse(created_at)?.let {
+                    append("Added: ", dateReformat.format(it.time), "\n")
+                }
+            } catch (_: Exception) {}
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
