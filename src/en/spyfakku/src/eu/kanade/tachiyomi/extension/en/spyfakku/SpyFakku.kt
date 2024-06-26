@@ -100,6 +100,7 @@ class SpyFakku : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
+        chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }
         return GET(baseApiUrl + chapter.url, headers)
     }
 
