@@ -6,7 +6,7 @@ import java.util.Locale
 
 class AduManga : MangaThemesia(
     "Adu Manga",
-    "https://www.mangacim.com",
+    "https://adumanga.com",
     "tr",
     dateFormat = SimpleDateFormat("MMMM d, yyy", Locale("tr")),
 )
