@@ -13,9 +13,10 @@ fun getFilters(): FilterList {
         TextFilter("Tags", "tag"),
         TextFilter("Artists", "artist"),
         TextFilter("Magazines", "magazine"),
+        TextFilter("Publishers", "publisher"),
         TextFilter("Parodies", "parody"),
         TextFilter("Circles", "circle"),
-        TextFilter("Pages", "pages"),
+        TextFilter("Events", "event"),
     )
 }
 
@@ -26,9 +27,9 @@ internal open class SortFilter(name: String, selection: Selection, private val v
 }
 
 private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("ID", "id"),
     Pair("Title", "title"),
-    Pair("Created", "created_at"),
-    Pair("Published", "published_at"),
+    Pair("Relevance", "relevance"),
+    Pair("Date Added", "created_at"),
+    Pair("Date Released", "released_at"),
     Pair("Pages", "pages"),
 )
