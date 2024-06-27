@@ -19,6 +19,6 @@ class PururinEN : Pururin(
 )
 class PururinJA : Pururin(
     "ja",
-    Pair("13010", "english"),
+    Pair("13011", "japanese"),
     "/tags/language/13011/japanese",
 )
