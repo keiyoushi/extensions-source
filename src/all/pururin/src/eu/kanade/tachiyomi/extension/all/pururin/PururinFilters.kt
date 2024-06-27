@@ -1,57 +1,57 @@
 package eu.kanade.tachiyomi.extension.all.pururin
 
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 
-sealed class TagFilter(
-    name: String,
-    val id: String,
-) : Filter.TriState(name)
-
-sealed class TagGroup<T : TagFilter>(
-    name: String,
-    values: List<T>,
-) : Filter.Group<T>(name, values)
-
-class Category(name: String, id: String) : TagFilter(name, id)
-
-class CategoryGroup(
-    values: List<Category> = categories,
-) : TagGroup<Category>("Categories", values) {
-    companion object {
-        private val categories get() = listOf(
-            Category("Doujinshi", "{\"id\":13003,\"name\":\"Doujinshi [Category]\"}"),
-            Category("Manga", "{\"id\":13004,\"name\":\"Manga [Category]\"}"),
-            Category("Artist CG", "{\"id\":13006,\"name\":\"Artist CG [Category]\"}"),
-            Category("Game CG", "{\"id\":13008,\"name\":\"Game CG [Category]\"}"),
-            Category("Artbook", "{\"id\":17783,\"name\":\"Artbook [Category]\"}"),
-            Category("Webtoon", "{\"id\":27939,\"name\":\"Webtoon [Category]\"}"),
-        )
-    }
+fun getFilters(): FilterList {
+    return FilterList(
+        SelectFilter("Sort by", getSortsList),
+        TypeFilter("Types"),
+        Filter.Separator(),
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        TextFilter("Tags", "[Content]"),
+        TextFilter("Artists", "[Artist]"),
+        TextFilter("Circles", "[Circle]"),
+        TextFilter("Parodies", "[Parody]"),
+        TextFilter("Languages", "[Language]"),
+        TextFilter("Scanlators", "[Scanlator]"),
+        TextFilter("Conventions", "[Convention]"),
+        TextFilter("Collections", "[Collections]"),
+        TextFilter("Categories", "[Category]"),
+        TextFilter("Uploaders", "[Uploader]"),
+        Filter.Separator(),
+        Filter.Header("Filter by pages, for example: (>20)"),
+        PageFilter("Pages"),
+    )
 }
+internal class TypeFilter(name: String) :
+    Filter.Group<CheckBoxFilter>(
+        name,
+        listOf(
+            Pair("Artbook", "17783"),
+            Pair("Artist CG", "13004"),
+            Pair("Doujinshi", "13003"),
+            Pair("Game CG", "13008"),
+            Pair("Manga", "13004"),
+            Pair("Webtoon", "27939"),
+        ).map { CheckBoxFilter(it.first, it.second, true) },
+    )
 
-class PagesFilter(
-    name: String,
-    default: Int,
-    values: Array<Int> = range,
-) : Filter.Select<Int>(name, values, default) {
-    companion object {
-        private val range get() = Array(301) { it }
-    }
+internal open class CheckBoxFilter(name: String, val value: String, state: Boolean) : Filter.CheckBox(name, state)
+
+internal open class PageFilter(name: String) : Filter.Text(name)
+
+internal open class TextFilter(name: String, val type: String) : Filter.Text(name)
+
+internal open class SelectFilter(name: String, val vals: List<Pair<String, String>>, state: Int = 0) :
+    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+    fun getValue() = vals[state].second
 }
-
-class PagesGroup(
-    values: List<PagesFilter> = minmax,
-) : Filter.Group<PagesFilter>("Pages", values) {
-    inline val range get() = IntRange(state[0].state, state[1].state).also {
-        require(it.first <= it.last) { "'Minimum' cannot exceed 'Maximum'" }
-    }
-
-    companion object {
-        private val minmax get() = listOf(
-            PagesFilter("Minimum", 0),
-            PagesFilter("Maximum", 300),
-        )
-    }
-}
-
-inline fun <reified T> List<Filter<*>>.find() = find { it is T } as T
+private val getSortsList: List<Pair<String, String>> = listOf(
+    Pair("Newest", "newest"),
+    Pair("Most Popular", "most-popular"),
+    Pair("Highest Rated", "highest-rated"),
+    Pair("Most Viewed", "most-viewed"),
+    Pair("Title", "title"),
+)
