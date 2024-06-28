@@ -3,7 +3,7 @@ ext {
     extClass = '.MGKomik'
     themePkg = 'madara'
     baseUrl = 'https://mgkomik.id'
-    overrideVersionCode = 13
+    overrideVersionCode = 14
     isNsfw = false
 }
 
