@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.brakeout
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -9,20 +10,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.lang.IllegalArgumentException
 import java.util.Calendar
 
 class Brakeout : ParsedHttpSource() {
@@ -35,49 +32,63 @@ class Brakeout : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/api/top", headers)
 
-    override fun popularMangaSelector(): String = "div#div-diario figure, div#div-semanal figure, div#div-mensual figure"
+    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String? = null
 
+    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangasPage = super.popularMangaParse(response)
-        val distinctList = mangasPage.mangas.distinctBy { it.url }
-
-        return MangasPage(distinctList, mangasPage.hasNextPage)
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        title = element.selectFirst("figcaption")!!.text()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        val result = json.decodeFromString<TopSeriesPayloadDto>(response.body.string())
+        val series = result.data.map { it.project.toSManga() }
+        return MangasPage(series, false)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun latestUpdatesSelector(): String = "section.flex > div.grid > figure"
+    override fun latestUpdatesSelector(): String = "body > main > div:eq(0) div.grid > div.flex"
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        title = element.selectFirst("figcaption")!!.text()
+        thumbnail_url = element.selectFirst("a > img")!!.attr("abs:src")
+        title = element.selectFirst("a > h1")!!.text()
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
+
+    var mangaList = listOf<SeriesDto>()
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        if (query.isEmpty()) return super.fetchSearchManga(page, query, filters)
+        if (mangaList.isEmpty()) {
+            val request = searchMangaRequest(page, query, filters)
+            return client.newCall(request).asObservableSuccess().map { response ->
+                searchMangaParse(response, query)
+            }
+        } else {
+            return Observable.just(parseMangaList(query))
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            if (query.length > 1) return GET("$baseUrl/comics#$query", headers)
+            if (query.length > 1) return GET("$baseUrl/comics", headers)
             throw Exception("La búsqueda debe tener al menos 2 caracteres")
         }
         return GET("$baseUrl/comics?page=$page", headers)
@@ -87,36 +98,23 @@ class Brakeout : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String = "main.container section.flex > div > a:containsOwn(Siguiente)"
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val query = response.request.url.fragment ?: return super.searchMangaParse(response)
-        val document = response.asJsoup()
-        val mangas = parseMangaList(document, query)
-        return MangasPage(mangas, false)
-    }
-
-    private fun parseMangaList(document: Document, query: String): List<SManga> {
-        val docString = document.toString()
-        val mangaListJson = JSON_PROJECT_LIST.find(docString)?.destructured?.toList()?.get(0).orEmpty()
-
-        return try {
-            json.decodeFromString<List<SerieDto>>(mangaListJson)
-                .filter { it.title.contains(query, ignoreCase = true) }
-                .map {
-                    SManga.create().apply {
-                        title = it.title
-                        thumbnail_url = it.thumbnail
-                        url = "/ver/${it.id}/${it.slug}"
-                    }
-                }
-        } catch (_: IllegalArgumentException) {
-            emptyList()
-        }
-    }
-
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
         title = element.selectFirst("figcaption")!!.text()
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
+
+    private fun searchMangaParse(response: Response, query: String): MangasPage {
+        val docString = response.body.string()
+        val jsonString = JSON_PROJECT_LIST.find(docString)?.destructured?.toList()?.get(0).orEmpty()
+        mangaList = json.decodeFromString<List<SeriesDto>>(jsonString)
+        return parseMangaList(query)
+    }
+
+    private fun parseMangaList(query: String): MangasPage {
+        val mangas = mangaList.filter { it.name.contains(query, ignoreCase = true) }
+            .map { it.toSManga() }
+        return MangasPage(mangas, false)
     }
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -167,14 +165,6 @@ class Brakeout : ParsedHttpSource() {
     class WordSet(private vararg val words: String) {
         fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) }
     }
-
-    @Serializable
-    data class SerieDto(
-        val id: Int,
-        @SerialName("nombre") val title: String,
-        val slug: String,
-        @SerialName("portada") val thumbnail: String,
-    )
 
     companion object {
         private val JSON_PROJECT_LIST = """proyectos\s*=\s*(\[[\s\S]+?\])\s*;""".toRegex()
