@@ -1,9 +1,0 @@
-ext {
-    extName = 'Merlin Shoujo'
-    extClass = '.MerlinShoujo'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://merlinshoujo.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
