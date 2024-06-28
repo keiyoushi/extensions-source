@@ -125,7 +125,7 @@ class TCBScans : ParsedHttpSource() {
         val context = Injekt.get<Application>()
         val prefs = context.getSharedPreferences("source_$id", 0x0000)
 
-        if (!prefs.getBoolean("__legacy_updateTime_removed", false)) {
+        if (!prefs.getBoolean("legacy_updateTime_removed", false)) {
             try {
                 val sharedPrefDir = File(context.applicationInfo.dataDir, "shared_prefs")
                 if (sharedPrefDir.exists() && sharedPrefDir.isDirectory()) {
@@ -137,6 +137,7 @@ class TCBScans : ParsedHttpSource() {
                                 file.name.startsWith("source_${id}_updateTime") &&
                                 file.name.endsWith(".xml")
                             ) {
+                                Log.d(name, "Deleting ${file.name}")
                                 file.delete()
                             }
                         }
@@ -146,7 +147,7 @@ class TCBScans : ParsedHttpSource() {
                 Log.e(name, "Failed to delete old preference files")
             }
             prefs.edit()
-                .putBoolean("__legacy_updateTime_removed", true)
+                .putBoolean("legacy_updateTime_removed", true)
                 .apply()
         }
     }
