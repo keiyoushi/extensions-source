@@ -1,0 +1,9 @@
+ext {
+    extName = 'Epikman'
+    extClass = '.Epikman'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.epikman.ga'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
