@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Keyfi'
-    extClass = '.MangaKeyfi'
-    themePkg = 'madara'
-    baseUrl = 'https://mangakeyfi.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
