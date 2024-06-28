@@ -6,7 +6,7 @@ import java.util.Locale
 
 class ScamberTraslator : Madara(
     "ScamberTraslator",
-    "https://scambertraslator.com",
+    "https://visorscamber-scans.com",
     "es",
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es")),
 ) {
