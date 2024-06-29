@@ -39,6 +39,8 @@ class HentaiTeca :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0")
 
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
     }
