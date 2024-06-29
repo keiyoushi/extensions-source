@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.pandachaika
 
-import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -20,6 +20,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import uy.kohesive.injekt.injectLazy
+import java.lang.String.CASE_INSENSITIVE_ORDER
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -94,8 +95,8 @@ class PandaChaika(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             val tags = mutableListOf<String>()
-            val reason = mutableListOf<String>()
-            val uploader = mutableListOf<String>()
+            var reason = ""
+            var uploader = ""
             var pagesMin = 1
             var pagesMax = 9999
 
@@ -122,12 +123,12 @@ class PandaChaika(
 
                     is TextFilter -> {
                         if (it.state.isNotEmpty()) {
-                            it.state.split(",").filter(String::isNotBlank).map { tag ->
-                                val trimmed = tag.trim()
-                                when (it.type) {
-                                    "reason" -> reason.add(trimmed)
-                                    "uploader" -> uploader.add(trimmed)
-                                    else -> {
+                            when (it.type) {
+                                "reason" -> reason = it.state
+                                "uploader" -> uploader = it.state
+                                else -> {
+                                    it.state.split(",").filter(String::isNotBlank).map { tag ->
+                                        val trimmed = tag.trim()
                                         tags.add(
                                             buildString {
                                                 if (trimmed.startsWith('-')) append("-")
@@ -150,8 +151,8 @@ class PandaChaika(
             addQueryParameter("tags", tags.joinToString())
             addQueryParameter("filecount_from", pagesMin.toString())
             addQueryParameter("filecount_to", pagesMax.toString())
-            addQueryParameter("reason", reason.joinToString())
-            addQueryParameter("uploader", uploader.joinToString())
+            addQueryParameter("reason", reason)
+            addQueryParameter("uploader", uploader)
             addQueryParameter("page", page.toString())
             addQueryParameter("apply", "")
             addQueryParameter("json", "")
@@ -181,13 +182,26 @@ class PandaChaika(
 
     // Details
     private fun Archive.toSManga() = SManga.create().apply {
-        val groups = tags.filter { it.startsWith("group:") }.emptyToNull()?.joinToString { it.substringAfter(":").replace("_", " ") }
-        val artists = tags.filter { it.startsWith("artist:") }.emptyToNull()?.joinToString { it.substringAfter(":").replace("_", " ") }
-        val publishers = tags.filter { it.startsWith("publisher:") }.emptyToNull()?.joinToString { it.substringAfter(":").replace("_", " ") }
-        val male = tags.filter { it.startsWith("male:") }.emptyToNull()?.joinToString { it.substringAfter(":").replace("_", " ") }
-        val female = tags.filter { it.startsWith("female:") }.emptyToNull()?.joinToString { it.substringAfter(":").replace("_", " ") }
-        val others = tags.filter { it.startsWith("other:") || (!it.contains("female:") && !it.contains("male:") && !it.contains("artist:") && !it.contains("publisher:") && !it.contains("group:") && !it.contains("parody:")) }.emptyToNull()?.joinToString { it.substringAfter(":").replace("_", " ") }
-        val parodies = tags.filter { it.startsWith("parody:") }.emptyToNull()?.joinToString { it.substringAfter(":").replace("_", " ") }
+        fun filterTags(include: String = "", exclude: List<String> = emptyList()): String? {
+            return tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
+                .emptyToNull()
+                ?.joinToString { it.substringAfter(":").replace("_", " ") }
+        }
+        fun getReadableSize(bytes: Double): String {
+            return when {
+                bytes >= 300 * 1024 * 1024 -> "${"%.2f".format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
+                bytes >= 100 * 1024 -> "${"%.2f".format(bytes / (1024.0 * 1024.0))} MB"
+                bytes >= 1024 -> "${"%.2f".format(bytes / (1024.0))} KB"
+                else -> "$bytes B"
+            }
+        }
+        val groups = filterTags("group")
+        val artists = filterTags("artist")
+        val publishers = filterTags("publisher")
+        val male = filterTags("male")
+        val female = filterTags("female")
+        val others = filterTags(exclude = listOf("female", "male", "artist", "publisher", "group", "parody"))
+        val parodies = filterTags("parody")
         title = this@toSManga.title
         url = download.substringBefore("/download/")
         author = (groups ?: artists)
@@ -213,6 +227,7 @@ class PandaChaika(
 
             title_jpn?.let { append("Japanese Title: ", it, "\n") }
             append("Pages: ", filecount, "\n")
+            append("File Size: ", getReadableSize(filesize), "\n")
 
             try {
                 append("Posted: ", dateReformat.format(Date(posted * 1000)), "\n")
@@ -243,40 +258,46 @@ class PandaChaika(
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    override fun imageRequest(page: Page): Request {
-        val remoteZip = page.imageUrl!!.substringAfter("and then this:").parseAs<RemoteZip>()
-        val filename = page.imageUrl!!.substringBefore("and then this:")
-
-        val uncompressedBytes = remoteZip.fetch(filename)
-        val imageUrl = Base64.encodeToString(uncompressedBytes, Base64.DEFAULT)
-
-        var type = filename.substringAfterLast('.').lowercase()
-        type = if (type == "jpg") "jpeg" else type
-
-        return GET("https://127.0.0.1/?images/$type;base64,$imageUrl", headers)
-    }
-
     // Pages
     override fun pageListParse(response: Response): List<Page> {
-        fun List<String>.sort() = this.sortedBy { it.filter(Char::isDigit).toIntOrNull() }
+        fun List<String>.sort() = this.sortedWith(compareBy(CASE_INSENSITIVE_ORDER) { it })
         val archive = response.parseAs<Archive>()
         val url = "$baseUrl${archive.download}".toHttpUrl()
-        val remoteZip = RemoteZipPointer(url, additionalHeaders = headers).populate()
+
+        val fileType = getZipType(url)
+
+        val remoteZip = ZipHandler(url, client, headers, fileType).populate()
         val fileListing = remoteZip.files().sort()
 
-        val file = remoteZip.toJson()
-        return fileListing.mapIndexed { index, _ ->
-            Page(index, imageUrl = fileListing[index] + "and then this:" + file)
+        val files = remoteZip.toJson()
+        return fileListing.mapIndexed { index, filename ->
+            Page(index, imageUrl = "https://127.0.0.1/#$filename&$files")
         }
     }
 
+    private fun getZipType(url: HttpUrl): String {
+        val request = Request.Builder()
+            .url(url)
+            .headers(headers)
+            .method("HEAD", null)
+            .build()
+
+        val contentLength = client.newCall(request).execute().header("content-length")!!.toBigInteger()
+
+        return if (contentLength > Int.MAX_VALUE.toBigInteger()) "zip64" else "zip"
+    }
     private fun Intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url.toString()
-        return if (url.startsWith("https://127.0.0.1/?image")) {
-            val dataString = url.substringAfter("?")
-            val byteArray = Base64.decode(dataString.substringAfter("base64,"), Base64.DEFAULT)
-            val mediaType = dataString.substringBefore("base64,").toMediaType()
-            Response.Builder().body(byteArray.toResponseBody(mediaType))
+        return if (url.startsWith("https://127.0.0.1/#")) {
+            val fragment = url.toHttpUrl().fragment!!
+            val remoteZip = fragment.substringAfter("&").parseAs<RemoteZip>()
+            val filename = fragment.substringBefore("&")
+
+            val byteArray = remoteZip.fetch(filename, client)
+            var type = filename.substringAfterLast('.').lowercase()
+            type = if (type == "jpg") "jpeg" else type
+
+            Response.Builder().body(byteArray.toResponseBody("image/$type".toMediaType()))
                 .request(chain.request())
                 .protocol(Protocol.HTTP_1_0)
                 .code(200)

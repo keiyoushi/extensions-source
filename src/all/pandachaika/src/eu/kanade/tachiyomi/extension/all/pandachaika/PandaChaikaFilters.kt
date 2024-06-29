@@ -55,8 +55,8 @@ private val getTypes = listOf(
 )
 
 private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("Posted Date", "posted_date"),
     Pair("Public Date", "public_date"),
+    Pair("Posted Date", "posted_date"),
     Pair("Title", "title"),
     Pair("Japanese Title", "title_jpn"),
     Pair("Rating", "rating"),

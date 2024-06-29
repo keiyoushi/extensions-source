@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 class Archive(
     val download: String,
     val filecount: Int,
+    val filesize: Double,
     val posted: Long,
     val tags: List<String>,
     val title: String,
