@@ -26,38 +26,3 @@ class FilterData(
     val options: List<Pair<String, String>>,
     val queryParameter: String,
 )
-
-//
-// class MainGenreFilter : SelectFilter(
-//    "Main Genre",
-//    listOf(
-//        "",
-//        "fantasy",
-//        "romance",
-//        "action",
-//        "drama",
-//    ),
-// )
-//
-// class TypeFilter : SelectFilter(
-//    "Type",
-//    listOf(
-//        "",
-//        "manhwa",
-//        "manhua",
-//        "manga",
-//        "comic",
-//    ),
-// )
-//
-// class StatusFilter : SelectFilter(
-//    "Status",
-//    listOf(
-//        "",
-//        "ongoing",
-//        "completed",
-//        "droped",
-//        "onhold",
-//        "soon",
-//    ),
-// )
