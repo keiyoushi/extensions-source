@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.multisrc.flixscans
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +10,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -86,11 +90,78 @@ abstract class FlixScans(
         return MangasPage(entries, hasNextPage)
     }
 
+    private var filters: List<FilterData> = emptyList()
+    private val scope = CoroutineScope(Dispatchers.IO)
+    protected fun launchIO(block: () -> Unit) = scope.launch {
+        try {
+            block()
+        } catch (_: Exception) { }
+    }
+
+    override fun getFilterList(): FilterList {
+        launchIO {
+            if (filters.isEmpty()) {
+                val document = client.newCall(GET("$baseUrl/search", headers)).execute().asJsoup()
+
+                val mainGenre = FilterData(
+                    displayName = document.select("label[for$=main_genres]").text(),
+                    options = document.select("select[wire:model.live=main_genres] option").map {
+                        it.text() to it.attr("value")
+                    },
+                    queryParameter = "main_genres",
+                )
+                val typeFilter = FilterData(
+                    displayName = document.select("label[for$=type]").text(),
+                    options = document.select("select[wire:model.live=type] option").map {
+                        it.text() to it.attr("value")
+                    },
+                    queryParameter = "type",
+                )
+                val statusFilter = FilterData(
+                    displayName = document.select("label[for$=status]").text(),
+                    options = document.select("select[wire:model.live=status] option").map {
+                        it.text() to it.attr("value")
+                    },
+                    queryParameter = "status",
+                )
+                val genreFilter = FilterData(
+                    displayName = if (lang == "ar") {
+                        "التصنيفات"
+                    } else {
+                        "Genre"
+                    },
+                    options = document.select("div[x-data*=genre] > div").map {
+                        it.text() to it.attr("wire:key")
+                    },
+                    queryParameter = "genre",
+                )
+
+                filters = listOf(mainGenre, typeFilter, statusFilter, genreFilter)
+            }
+        }
+
+        val filters: List<Filter<*>> = filters.map {
+            SelectFilter(
+                it.displayName,
+                it.options,
+                it.queryParameter,
+            )
+        }.ifEmpty {
+            listOf(
+                Filter.Header("Press 'reset' to load filters"),
+            )
+        }
+
+        return FilterList(filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("serie_type", "webtoon")
             addQueryParameter("title", query.trim())
-            // TODO filters
+            filters.filterIsInstance<SelectFilter>().forEach {
+                it.addFilterParameter(this)
+            }
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
