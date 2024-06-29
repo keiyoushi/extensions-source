@@ -2,8 +2,9 @@ ext {
     extName = 'ScamberTraslator'
     extClass = '.ScamberTraslator'
     themePkg = 'madara'
-    baseUrl = 'https://scambertraslator.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://visorscamber-scans.com'
+    overrideVersionCode = 4
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
