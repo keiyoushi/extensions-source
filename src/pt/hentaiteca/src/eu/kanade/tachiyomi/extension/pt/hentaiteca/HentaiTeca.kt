@@ -22,7 +22,7 @@ class HentaiTeca :
         "Hentai Teca",
         "https://hentaiteca.net",
         "pt-BR",
-        SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
     ),
     ConfigurableSource {
 
