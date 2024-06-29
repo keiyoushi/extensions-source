@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
+import eu.kanade.tachiyomi.source.model.SManga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -34,6 +35,8 @@ class MangaLib : LibGroup("MangaLib", "https://mangalib.me", "ru") {
             }
         }.let(screen::addPreference)
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     companion object {
         private const val DOMAIN_PREF = "MangaLibDomain"
