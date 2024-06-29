@@ -1,8 +1,7 @@
 ext {
     extName = 'Flix Scans'
-    extClass = '.FlixScansNet'
+    extClass = '.FlixScans'
     themePkg = 'flixscans'
-    baseUrl = 'https://flixscans.org'
     overrideVersionCode = 0
 }
 
