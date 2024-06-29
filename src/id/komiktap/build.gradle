@@ -2,8 +2,8 @@ ext {
     extName = 'Komiktap'
     extClass = '.Komiktap'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://komiktap.me'
-    overrideVersionCode = 1
+    baseUrl = 'https://komiktap.info'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
