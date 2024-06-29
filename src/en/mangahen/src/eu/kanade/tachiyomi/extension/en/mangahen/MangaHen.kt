@@ -129,10 +129,12 @@ class MangaHen : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
+            val authors = document.select("a[href*=/circles/]").eachText().joinToString()
+            val artists = document.select("a[href*=/authors/]").eachText().joinToString()
             initialized = true
-            title = document.select(".title").text()
-            author = document.select("a[href*=/circles/]").text()
-            artist = document.select("a[href*=/authors/]").text()
+            title = document.select("h1.font-semibold").text()
+            author = if(authors.isEmpty()) artists else authors
+            artist = artists
             genre = document.select("a[href*=/tags/]").eachText().joinToString()
             description = buildString {
                 append("Categories: ", document.select("a[href*=/categories/]").text(), "\n")
