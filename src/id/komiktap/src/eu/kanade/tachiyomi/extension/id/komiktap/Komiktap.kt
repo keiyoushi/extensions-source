@@ -8,7 +8,7 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
 
-class Komiktap : MangaThemesia("Komiktap", "https://komiktap.me", "id") {
+class Komiktap : MangaThemesia("Komiktap", "https://komiktap.info", "id") {
     override val client = super.client.newBuilder().addInterceptor(::sucuriInterceptor).build()
 
     // Taken from es/ManhwasNet
