@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.flixscans
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -45,7 +44,6 @@ abstract class FlixScans(
         val entries = document.select(
             """div.tabs div[wire:snapshot*=App\\Models\\Serie], main div:has(h2:matches(Today\'s Hot|الرائج اليوم)) a[wire:snapshot*=App\\Models\\Serie]""",
         ).map { element ->
-            Log.d(name, element.html())
             SManga.create().apply {
                 setUrlWithoutDomain(
                     if (element.tagName().equals("a")) {
