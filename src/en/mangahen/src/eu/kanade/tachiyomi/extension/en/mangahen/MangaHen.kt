@@ -133,7 +133,7 @@ class MangaHen : HttpSource() {
             val artists = document.select("a[href*=/authors/]").eachText().joinToString()
             initialized = true
             title = document.select("h1.font-semibold").text()
-            author = if(authors.isEmpty()) artists else authors
+            author = if (authors.isEmpty()) artists else authors
             artist = artists
             genre = document.select("a[href*=/tags/]").eachText().joinToString()
             description = buildString {
