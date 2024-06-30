@@ -211,19 +211,19 @@ class PandaChaika(
         }
         description = buildString {
             append("Uploader: ", uploader, "\n")
-            publishers?.let {
+            publishers.takeIf { it.isNotBlank() }?.let {
                 append("Publishers: ", it, "\n")
             }
-            parodies?.let {
+            parodies.takeIf { it.isNotBlank() }?.let {
                 append("Parodies: ", it, "\n")
             }
-            male?.let {
+            male.takeIf { it.isNotBlank() }?.let {
                 append("Male Tags: ", it, "\n")
             }
-            female?.let {
+            female.takeIf { it.isNotBlank() }?.let {
                 append("Female Tags: ", it, "\n")
             }
-            others?.let {
+            others.takeIf { it.isNotBlank() }?.let {
                 append("Other Tags: ", it, "\n\n")
             }
 
