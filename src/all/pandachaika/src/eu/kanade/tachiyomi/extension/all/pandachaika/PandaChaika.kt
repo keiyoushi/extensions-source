@@ -176,16 +176,13 @@ class PandaChaika(
     override fun getFilterList() = getFilters()
 
     private val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
-    private fun <T> Collection<T>.emptyToNull(): Collection<T>? {
-        return this.ifEmpty { null }
-    }
 
     // Details
     private fun Archive.toSManga() = SManga.create().apply {
         fun filterTags(include: String = "", exclude: List<String> = emptyList()): String? {
             return tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
-                .emptyToNull()
-                ?.joinToString { it.substringAfter(":").replace("_", " ") }
+                .joinToString { it.substringAfter(":").replace("_", " ") }
+                .takeIf { it.isNotEmpty() }
         }
         fun getReadableSize(bytes: Double): String {
             return when {
@@ -205,8 +202,14 @@ class PandaChaika(
         title = this@toSManga.title
         url = download.substringBefore("/download/")
         author = (groups ?: artists)
-        artist = artists
-        genre = listOfNotNull(male, female, others).joinToString().takeIf { it.isNotEmpty() }
+        artist = (artists ?: groups)
+        genre = listOfNotNull(male, female, others).joinToString {
+            it.split(" ").joinToString(" ") { s ->
+                s.replaceFirstChar { sr ->
+                    if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
+                }
+            }
+        }.takeIf { it.isNotEmpty() }
         description = buildString {
             append("Uploader: ", uploader, "\n")
             publishers?.let {
