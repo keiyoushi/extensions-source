@@ -42,15 +42,11 @@ private val getTypes = listOf(
     "All",
     "Doujinshi",
     "Manga",
-    "Image Sets",
+    "Image Set",
     "Artist CG",
     "Game CG",
-    "Game CG Sets",
-    "Artist CG Sets",
     "Western",
     "Non-H",
-    "Cosplay",
-    "Asian Porn",
     "Misc",
 )
 

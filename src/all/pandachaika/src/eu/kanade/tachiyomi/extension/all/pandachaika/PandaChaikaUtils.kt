@@ -5,11 +5,10 @@ import eu.kanade.tachiyomi.extension.all.pandachaika.ZipParser.parseAllCDs
 import eu.kanade.tachiyomi.extension.all.pandachaika.ZipParser.parseEOCD
 import eu.kanade.tachiyomi.extension.all.pandachaika.ZipParser.parseEOCD64
 import eu.kanade.tachiyomi.extension.all.pandachaika.ZipParser.parseLocalFile
+import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.Serializable
 import okhttp3.Headers
-import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.ByteArrayOutputStream
 import java.math.BigInteger
 import java.nio.ByteBuffer
@@ -22,10 +21,9 @@ const val END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50
 const val END_OF_CENTRAL_DIRECTORY_64_SIGNATURE = 0x06064b50
 const val LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50
 
-data class EndOfCentralDirectory(
-    val centralDirectoryDisk: Int,
-    val centralDirectoryByteSize: Int,
-    val centralDirectoryByteOffset: Int,
+class EndOfCentralDirectory(
+    val centralDirectoryByteSize: BigInteger,
+    val centralDirectoryByteOffset: BigInteger,
 )
 
 @Serializable
@@ -41,17 +39,10 @@ class LocalFileHeader(
     val compressionMethod: Int,
 )
 
-data class EndOfCentralDirectory64(
-    val centralDirectoryDisk: Int,
-    val centralDirectoryByteSize: BigInteger,
-    val centralDirectoryByteOffset: BigInteger,
-)
-
 @Serializable
 class RemoteZip(
     private val url: String,
     private val centralDirectoryRecords: List<CentralDirectoryRecord>,
-    private val method: String,
 ) {
     fun files(): List<String> {
         return centralDirectoryRecords.map {
@@ -73,13 +64,9 @@ class RemoteZip(
                     file.compressedSize +
                     MAX_LOCAL_FILE_HEADER_SIZE
                 }",
-            )
+            ).build()
 
-        val request = Request.Builder()
-            .url(url)
-            .method(method, null)
-            .headers(headersBuilder.build())
-            .build()
+        val request = GET(url, headersBuilder)
 
         val response = client.newCall(request).execute()
 
@@ -97,56 +84,31 @@ class RemoteZip(
 }
 
 class ZipHandler(
-    private val url: HttpUrl,
+    private val url: String,
     private val client: OkHttpClient,
     private val additionalHeaders: Headers = Headers.Builder().build(),
     private val zipType: String = "zip",
-    private val method: String = "GET",
+    private val contentLength: BigInteger,
 ) {
     fun populate(): RemoteZip {
-        val request = Request.Builder()
-            .url(url)
-            .headers(additionalHeaders)
-            .method("HEAD", null)
-            .build()
-
-        val response = client.newCall(request).execute()
-
-        val contentLengthRaw = response.header("content-length")
-            ?: throw Exception("Could not get Content-Length of URL")
-
-        val contentLength = BigInteger(contentLengthRaw)
-
-        if (zipType == "zip64") {
-            val endOfCentralDirectory = fetchEndOfCentralDirectory64(contentLength)
-            val centralDirectoryRecords = fetchCentralDirectoryRecords64(endOfCentralDirectory)
-
-            return RemoteZip(
-                url.toString(),
-                centralDirectoryRecords,
-                method,
-            )
-        }
-        val endOfCentralDirectory = fetchEndOfCentralDirectory(contentLength)
+        val endOfCentralDirectory = fetchEndOfCentralDirectory(contentLength, zipType)
         val centralDirectoryRecords = fetchCentralDirectoryRecords(endOfCentralDirectory)
 
         return RemoteZip(
-            url.toString(),
+            url,
             centralDirectoryRecords,
-            method,
         )
     }
 
-    private fun fetchEndOfCentralDirectory(zipByteLength: BigInteger): EndOfCentralDirectory {
+    private fun fetchEndOfCentralDirectory(zipByteLength: BigInteger, zipType: String): EndOfCentralDirectory {
         val EOCD_MAX_BYTES = 128.toBigInteger()
         val eocdInitialOffset = maxOf(0.toBigInteger(), zipByteLength - EOCD_MAX_BYTES)
 
-        val request = Request.Builder()
-            .url(url)
-            .method(method, null)
-            .headers(additionalHeaders)
-            .addHeader("Range", "bytes=$eocdInitialOffset-$zipByteLength")
+        val headers = additionalHeaders
+            .newBuilder()
+            .set("Range", "bytes=$eocdInitialOffset-$zipByteLength")
             .build()
+        val request = GET(url, headers)
 
         val response = client.newCall(request).execute()
 
@@ -156,11 +118,11 @@ class ZipHandler(
 
         val eocdBuffer = response.body.byteStream().use { it.readBytes() }
 
-        // throw Exception("Maybe it's here")
-
         if (eocdBuffer.isEmpty()) throw Exception("Could not get Range request to start looking for EOCD")
 
-        val eocd = parseEOCD(eocdBuffer) ?: throw Exception("Could not get EOCD record of remote ZIP")
+        val eocd =
+            (if (zipType == "zip64") parseEOCD64(eocdBuffer) else parseEOCD(eocdBuffer))
+                ?: throw Exception("Could not get EOCD record of the ZIP")
 
         return eocd
     }
@@ -173,62 +135,9 @@ class ZipHandler(
                 endOfCentralDirectory.centralDirectoryByteOffset +
                     endOfCentralDirectory.centralDirectoryByteSize
                 }",
-            )
+            ).build()
 
-        val request = Request.Builder()
-            .url(url)
-            .method(method, null)
-            .headers(headersBuilder.build())
-            .build()
-
-        val response = client.newCall(request).execute()
-
-        val cdBuffer = response.body.byteStream().use { it.readBytes() }
-
-        return parseAllCDs(cdBuffer)
-    }
-
-    private fun fetchEndOfCentralDirectory64(zipByteLength: BigInteger): EndOfCentralDirectory64 {
-        val EOCD_MAX_BYTES = 128.toBigInteger()
-        val eocdInitialOffset = maxOf(0.toBigInteger(), zipByteLength - EOCD_MAX_BYTES)
-
-        val request = Request.Builder()
-            .url(url)
-            .method(method, null)
-            .headers(additionalHeaders)
-            .addHeader("Range", "bytes=$eocdInitialOffset-$zipByteLength")
-            .build()
-
-        val response = client.newCall(request).execute()
-
-        if (!response.isSuccessful) {
-            throw Exception("Could not fetch remote ZIP: HTTP status ${response.code}")
-        }
-
-        val eocdBuffer = response.body.byteStream().use { it.readBytes() }
-
-        if (eocdBuffer.isEmpty()) throw Exception("Could not get Range request to start looking for EOCD")
-
-        val eocd = parseEOCD64(eocdBuffer) ?: throw Exception("Could not get EOCD record of remote ZIP")
-
-        return eocd
-    }
-
-    private fun fetchCentralDirectoryRecords64(endOfCentralDirectory: EndOfCentralDirectory64): List<CentralDirectoryRecord> {
-        val headersBuilder = Headers.Builder()
-            .set(
-                "Range",
-                "bytes=${endOfCentralDirectory.centralDirectoryByteOffset}-${
-                endOfCentralDirectory.centralDirectoryByteOffset +
-                    endOfCentralDirectory.centralDirectoryByteSize
-                }",
-            )
-
-        val request = Request.Builder()
-            .url(url)
-            .method(method, null)
-            .headers(headersBuilder.build())
-            .build()
+        val request = GET(url, headersBuilder)
 
         val response = client.newCall(request).execute()
 
@@ -291,23 +200,21 @@ object ZipParser {
         for (i in 0 until buffer.size - MIN_EOCD_LENGTH + 1) {
             if (view.getInt(i) == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
                 return EndOfCentralDirectory(
-                    centralDirectoryDisk = view.getShort(i + 6).toInt(),
-                    centralDirectoryByteSize = view.getInt(i + 12),
-                    centralDirectoryByteOffset = view.getInt(i + 16),
+                    centralDirectoryByteSize = view.getInt(i + 12).toBigInteger(),
+                    centralDirectoryByteOffset = view.getInt(i + 16).toBigInteger(),
                 )
             }
         }
         return null
     }
 
-    fun parseEOCD64(buffer: ByteArray): EndOfCentralDirectory64? {
+    fun parseEOCD64(buffer: ByteArray): EndOfCentralDirectory? {
         val MIN_EOCD_LENGTH = 56
         val view = ByteBuffer.wrap(buffer).order(LITTLE_ENDIAN)
 
         for (i in 0 until buffer.size - MIN_EOCD_LENGTH + 1) {
             if (view.getInt(i) == END_OF_CENTRAL_DIRECTORY_64_SIGNATURE) {
-                return EndOfCentralDirectory64(
-                    centralDirectoryDisk = view.getInt(i + 20),
+                return EndOfCentralDirectory(
                     centralDirectoryByteSize = view.getLong(i + 40).toBigInteger(),
                     centralDirectoryByteOffset = view.getLong(i + 48).toBigInteger(),
                 )
