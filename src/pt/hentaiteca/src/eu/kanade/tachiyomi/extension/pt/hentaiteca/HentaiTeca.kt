@@ -37,11 +37,25 @@ class HentaiTeca :
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0")
+        .addCustomUA()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
+    }
+
+    /*
+     * Using Custom UA also in WebView
+     * */
+    private fun Headers.Builder.addCustomUA(): Headers.Builder {
+        preferences.getPrefCustomUA()
+            .takeIf { !it.isNullOrBlank() }
+            ?.let { set(UA_KEY, it) }
+        return this
+    }
+
+    companion object {
+        const val UA_KEY = "User-Agent"
     }
 }
