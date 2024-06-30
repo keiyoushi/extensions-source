@@ -179,10 +179,9 @@ class PandaChaika(
 
     // Details
     private fun Archive.toSManga() = SManga.create().apply {
-        fun filterTags(include: String = "", exclude: List<String> = emptyList()): String? {
+        fun filterTags(include: String = "", exclude: List<String> = emptyList()): String {
             return tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
                 .joinToString { it.substringAfter(":").replace("_", " ") }
-                .takeIf { it.isNotEmpty() }
         }
         fun getReadableSize(bytes: Double): String {
             return when {
@@ -201,15 +200,15 @@ class PandaChaika(
         val parodies = filterTags("parody")
         title = this@toSManga.title
         url = download.substringBefore("/download/")
-        author = (groups ?: artists)
-        artist = (artists ?: groups)
-        genre = listOfNotNull(male, female, others).joinToString {
+        author = groups.ifEmpty { artists }
+        artist = artists
+        genre = listOf(male, female, others).joinToString {
             it.split(" ").joinToString(" ") { s ->
                 s.replaceFirstChar { sr ->
                     if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
                 }
             }
-        }.takeIf { it.isNotEmpty() }
+        }
         description = buildString {
             append("Uploader: ", uploader, "\n")
             publishers?.let {
