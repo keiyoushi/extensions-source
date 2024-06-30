@@ -181,7 +181,13 @@ class PandaChaika(
     private fun Archive.toSManga() = SManga.create().apply {
         fun filterTags(include: String = "", exclude: List<String> = emptyList()): String {
             return tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
-                .joinToString { it.substringAfter(":").replace("_", " ") }
+                .joinToString {
+                    it.substringAfter(":").replace("_", " ").split(" ").joinToString(" ") { s ->
+                        s.replaceFirstChar { sr ->
+                            if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
+                        }
+                    }
+                }
         }
         fun getReadableSize(bytes: Double): String {
             return when {
@@ -202,29 +208,23 @@ class PandaChaika(
         url = download.substringBefore("/download/")
         author = groups.ifEmpty { artists }
         artist = artists
-        genre = listOf(male, female, others).joinToString {
-            it.split(" ").joinToString(" ") { s ->
-                s.replaceFirstChar { sr ->
-                    if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
-                }
-            }
-        }
+        genre = listOf(male, female, others).joinToString()
         description = buildString {
             append("Uploader: ", uploader, "\n")
             publishers.takeIf { it.isNotBlank() }?.let {
-                append("Publishers: ", it, "\n")
+                append("Publishers: ", it, "\n\n")
             }
             parodies.takeIf { it.isNotBlank() }?.let {
-                append("Parodies: ", it, "\n")
+                append("Parodies: ", it, "\n\n")
             }
             male.takeIf { it.isNotBlank() }?.let {
-                append("Male Tags: ", it, "\n")
+                append("Male tags: ", it, "\n\n")
             }
             female.takeIf { it.isNotBlank() }?.let {
-                append("Female Tags: ", it, "\n")
+                append("Female tags: ", it, "\n\n")
             }
             others.takeIf { it.isNotBlank() }?.let {
-                append("Other Tags: ", it, "\n\n")
+                append("Other tags: ", it, "\n\n")
             }
 
             title_jpn?.let { append("Japanese Title: ", it, "\n") }
