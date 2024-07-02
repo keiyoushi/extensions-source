@@ -1,9 +1,0 @@
-ext {
-    extName = 'Flix Scans'
-    extClass = '.FlixScansNet'
-    themePkg = 'flixscans'
-    baseUrl = 'https://flixscans.org'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
