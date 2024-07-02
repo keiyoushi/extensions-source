@@ -19,7 +19,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -36,6 +36,9 @@ class NicovideoSeiga : HttpSource() {
         .addInterceptor(::imageIntercept)
         .build()
     private val apiUrl: String = "https://api.nicomanga.jp/api/v1/app/manga"
+    private val json: Json = Json {
+        ignoreUnknownKeys = true
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage =
         throw UnsupportedOperationException()
@@ -44,7 +47,7 @@ class NicovideoSeiga : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val pageNumber = response.request.url.queryParameter("page")!!.toInt()
-        val r = Json.parseToJsonElement(response.toString()).jsonArray
+        val r = json.parseToJsonElement(response.body.string()).jsonArray
         val mangas = ArrayList<SManga>()
         for (entry in r) {
             val mangaEntry = entry as JsonObject
@@ -56,7 +59,7 @@ class NicovideoSeiga : HttpSource() {
                     // The thumbnail provided only displays a glimpse of the latest chapter. Not the actual cover
                     // We can obtain a better thumbnail when the user clicks into the details
                     thumbnail_url = mangaEntry["thumbnail_url"]!!.jsonPrimitive.content
-                    setUrlWithoutDomain("$apiUrl/comic/$id")
+                    setUrlWithoutDomain("$baseUrl/comic/$id")
                 },
             )
         }
@@ -65,7 +68,8 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$apiUrl/manga/ajax/ranking?span=total&category=all&page=$page")
+        // This is the only API call that doesn't use the API url
+        GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page")
 
     // Parses the common manga entry object from the api
     private fun parseMangaEntry(entry: Manga): SManga {
@@ -89,24 +93,24 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val r = Json.parseToJsonElement(response.toString()).jsonObject
+        val r = json.parseToJsonElement(response.body.string()).jsonObject
         val hasNext =
             r["data"]!!.jsonObject["extra"]!!.jsonObject["has_next"]!!.jsonPrimitive.boolean
         val result = r["data"]!!.jsonObject["result"]!!.jsonArray
         val mangas = ArrayList<SManga>()
         for (entry in result) {
-            val manga = Json.decodeFromJsonElement<Manga>(entry)
+            val manga = json.decodeFromJsonElement<Manga>(entry)
             mangas.add(parseMangaEntry(manga))
         }
         return MangasPage(mangas, hasNext)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${page * 20}")
+        GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}")
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val r = Json.parseToJsonElement(response.toString()).jsonObject
-        val entry = Json.decodeFromJsonElement<Manga>(r["data"]!!.jsonObject["result"]!!)
+        val r = json.parseToJsonElement(response.body.string()).jsonObject
+        val entry = json.decodeFromJsonElement<Manga>(r["data"]!!.jsonObject["result"]!!)
         return parseMangaEntry(entry)
     }
 
@@ -116,21 +120,33 @@ class NicovideoSeiga : HttpSource() {
         return GET("$apiUrl/contents/$id")
     }
 
+    override fun getMangaUrl(manga: SManga): String {
+        // Return functionality to WebView
+        return "$baseUrl/comic/${manga.url.substringAfterLast("/")}"
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val r = Json.parseToJsonElement(response.toString()).jsonObject
+        val r = json.parseToJsonElement(response.body.string()).jsonObject
         val result = r["data"]!!.jsonObject["result"]!!.jsonArray
         val chapters = ArrayList<SChapter>()
         for (entry in result) {
-            val chapter = Json.decodeFromJsonElement<Chapter>(entry)
-            val isPaid = chapter.meta.ownership.sellStatus == "selling"
+            val chapter = json.decodeFromJsonElement<Chapter>(entry)
+            val isPaid = chapter.ownership.sellStatus == "selling"
+            if (chapter.ownership.sellStatus == "publication_finished") {
+                // Chapter is unpublished by publishers from Niconico
+                // Either due to licensing issues or the publisher is withholding the chapter from selling
+                continue
+            }
             chapters.add(
                 SChapter.create().apply {
                     name = (if (isPaid) "\uD83D\uDCB4 " else "") + chapter.meta.title
-                    date_upload = chapter.meta.createdAt
+                    // Timestamp is in seconds, convert to milliseconds
+                    date_upload = chapter.meta.createdAt * 1000
                     // While chapters are properly sorted, authors often add promotional material as "chapters" which breaks trackers
                     // There's no way to properly filter these as they are treated the same as normal chapters
                     chapter_number = chapter.meta.number.toFloat()
-                    setUrlWithoutDomain("$apiUrl/episodes/${chapter.id}/frames?enable_webp=true")
+                    // Can't use setUrlWithoutDomain as it uses the baseUrl instead of apiUrl
+                    url = "/episodes/${chapter.id}/frames"
                 },
             )
         }
@@ -144,6 +160,10 @@ class NicovideoSeiga : HttpSource() {
         return GET("$apiUrl/contents/$id/episodes")
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        return "$baseUrl/watch/mg${chapter.url.substringBeforeLast("/").substringAfterLast("/")}"
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         // Nicomanga historically refuses to serve pages if you don't login.
         // However, due to the network attack against the site (as of July 2024) login is disabled
@@ -151,14 +171,23 @@ class NicovideoSeiga : HttpSource() {
         if (response.code == 403) {
             throw SecurityException("You need to purchase this chapter first")
         }
-        val r = Json.parseToJsonElement(response.toString()).jsonObject
+        if (response.code == 401) {
+            throw SecurityException("Not logged in. Please login via WebView")
+        }
+        val r = json.parseToJsonElement(response.body.string()).jsonObject
         val frames = r["data"]!!.jsonObject["result"]!!.jsonArray
         val pages = ArrayList<Page>()
         for ((i, entry) in frames.withIndex()) {
-            val frame = Json.decodeFromJsonElement<Frame>(entry)
-            pages.add(Page(i, frame.meta.sourceUrl))
+            val frame = json.decodeFromJsonElement<Frame>(entry)
+            pages.add(Page(i, frame.meta.sourceUrl, frame.meta.sourceUrl))
         }
         return pages
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        // Overwrite to use the API instead of scraping the shared URL
+        val id = chapter.url.substringBeforeLast("/").substringAfterLast("/")
+        return GET("$apiUrl/episodes/$id/frames?enable_webp=true")
     }
 
     override fun imageRequest(page: Page): Request {
@@ -199,14 +228,13 @@ class NicovideoSeiga : HttpSource() {
 
         // Construct a new response
         val body =
-            decryptedImage.toResponseBody("image/${getImageType(decryptedImage)}".toMediaTypeOrNull())
+            decryptedImage.toResponseBody("image/${getImageType(decryptedImage)}".toMediaType())
         return response.newBuilder().body(body).build()
     }
 
     /**
      * Paid images are xor encrypted in Nicovideo.
-     * The image url is displayed in the document in noscript environment
-     * It will look like the following:
+     * Take this example:
      * https://drm.cdn.nicomanga.jp/image/d952d4bc53ddcaafffb42d628239ebed4f66df0f_9477/12057916p.webp?1636382474
      *                                    ^^^^^^^^^^^^^^^^
      * The encryption key is stored directly on the URL. Up there. Yes, it stops right there
