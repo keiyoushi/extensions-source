@@ -3,8 +3,12 @@ ext {
     extClass = '.HentaiTeca'
     themePkg = 'madara'
     baseUrl = 'https://hentaiteca.net'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib:randomua')
+}
