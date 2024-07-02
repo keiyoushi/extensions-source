@@ -28,7 +28,7 @@ import org.jsoup.Jsoup
 import kotlin.experimental.xor
 
 class NicovideoSeiga : HttpSource() {
-    override val baseUrl: String = "https://sp.manga.nicovideo.jp/"
+    override val baseUrl: String = "https://sp.manga.nicovideo.jp"
     override val lang: String = "ja"
     override val name: String = "Nicovideo Seiga"
     override val supportsLatest: Boolean = false
@@ -56,7 +56,7 @@ class NicovideoSeiga : HttpSource() {
                     // The thumbnail provided only displays a glimpse of the latest chapter. Not the actual cover
                     // We can obtain a better thumbnail when the user clicks into the details
                     thumbnail_url = mangaEntry["thumbnail_url"]!!.jsonPrimitive.content
-                    setUrlWithoutDomain("$baseUrl/comic/$id")
+                    setUrlWithoutDomain("$apiUrl/comic/$id")
                 },
             )
         }
@@ -65,10 +65,11 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page")
+        GET("$apiUrl/manga/ajax/ranking?span=total&category=all&page=$page")
 
     // Parses the common manga entry object from the api
     private fun parseMangaEntry(entry: Manga): SManga {
+        // The description is html. Simply using Jsoup to remove all the html tags
         val descriptionText = Jsoup.parse(entry.meta.description).text()
         return SManga.create().apply {
             title = entry.meta.title
