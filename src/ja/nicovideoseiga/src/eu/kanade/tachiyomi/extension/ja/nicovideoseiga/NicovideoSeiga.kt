@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.nicovideoseiga
 
-import android.app.Application
+import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Chapter
+import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Frame
+import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Manga
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -8,193 +10,152 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import uy.kohesive.injekt.injectLazy
+import org.jsoup.Jsoup
 import kotlin.experimental.xor
 
 class NicovideoSeiga : HttpSource() {
-    // Nicovideo Seiga contains illustrations, manga and books from Bookwalker. This extension will focus on manga only.
-    override val baseUrl: String = "https://seiga.nicovideo.jp"
+    override val baseUrl: String = "https://sp.manga.nicovideo.jp/"
     override val lang: String = "ja"
     override val name: String = "Nicovideo Seiga"
-    override val supportsLatest: Boolean = true
+    override val supportsLatest: Boolean = false
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::imageIntercept)
         .build()
-    private val application: Application by injectLazy()
+    private val apiUrl: String = "https://api.nicomanga.jp/api/v1/app/manga"
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val currentPage = response.request.url.queryParameter("page")!!.toInt()
-        val doc = response.asJsoup()
-        val mangaCount = doc.select("#main_title > h2 > span").text().trim().dropLast(1).toInt()
-        val mangaPerPage = 20
-        val mangaList = doc.select("#comic_list > ul > li")
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        throw UnsupportedOperationException()
+
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val pageNumber = response.request.url.queryParameter("page")!!.toInt()
+        val r = Json.parseToJsonElement(response.toString()).jsonArray
         val mangas = ArrayList<SManga>()
-        for (manga in mangaList) {
-            val mangaElement = manga.select("div > .description > div > div")
+        for (entry in r) {
+            val mangaEntry = entry as JsonObject
+            val id = mangaEntry["id"]!!.jsonPrimitive.int
             mangas.add(
                 SManga.create().apply {
-                    setUrlWithoutDomain(
-                        baseUrl + mangaElement.select(".comic_icon > div > a").attr("href"),
-                    )
-                    title = mangaElement.select(".mg_body > .title > a").text()
-                    // While the site does label who are the author and artists are, there is no formatting standard at all!
-                    // It becomes impossible to parse the names and their specific roles
-                    // So we are not going to process this at all
-                    author = mangaElement.select(".mg_description_header > .mg_author > a").text()
-                    // Nicovideo doesn't provide large thumbnails in their searches and manga listings unfortunately
-                    // A larger thumbnail is only available after going into the details page
-                    thumbnail_url = mangaElement.select(".comic_icon > div > a > img").attr("src")
-                    val statusText =
-                        mangaElement.select(".mg_description_header > .mg_icon > .content_status > span")
-                            .text()
-                    status = when (statusText) {
-                        "連載" -> {
-                            SManga.ONGOING
-                        }
-                        "完結" -> {
-                            SManga.COMPLETED
-                        }
-                        else -> {
-                            SManga.UNKNOWN
-                        }
-                    }
+                    title = mangaEntry["title"]!!.jsonPrimitive.content
+                    author = mangaEntry["author"]!!.jsonPrimitive.content
+                    // The thumbnail provided only displays a glimpse of the latest chapter. Not the actual cover
+                    // We can obtain a better thumbnail when the user clicks into the details
+                    thumbnail_url = mangaEntry["thumbnail_url"]!!.jsonPrimitive.content
+                    setUrlWithoutDomain("$baseUrl/comic/$id")
                 },
             )
         }
-        return MangasPage(mangas, mangaCount - mangaPerPage * currentPage > 0)
+        // The api call allows a maximum of 5 pages
+        return MangasPage(mangas, pageNumber < 5)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/manga/list?page=$page&sort=manga_updated")
-
-    override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
-
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/manga/list?page=$page&sort=manga_view")
+        GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page")
+
+    // Parses the common manga entry object from the api
+    private fun parseMangaEntry(entry: Manga): SManga {
+        val descriptionText = Jsoup.parse(entry.meta.description).text()
+        return SManga.create().apply {
+            title = entry.meta.title
+            description = descriptionText
+            // Although their API does contain individual author fields, they are arbitrary strings and we can't trust it conforms to a format
+            // Use display name instead which puts all of the people involved together
+            author = entry.meta.author
+            thumbnail_url = entry.meta.thumbnailUrl
+            // Use the share URL so that WebView still works
+            setUrlWithoutDomain(entry.meta.shareUrl)
+            status = when (entry.meta.serialStatus) {
+                "serial" -> SManga.ONGOING
+                "concluded" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        }
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val currentPage = response.request.url.queryParameter("page")!!.toInt()
-        val doc = response.asJsoup()
-        val mangaCount =
-            doc.select("#mg_wrapper > div > div.header > div.header__result-summary").text().trim()
-                .split("：")[1].toInt()
-        val mangaPerPage = 20
-        val mangaList = doc.select(".search_result__item")
+        val r = Json.parseToJsonElement(response.toString()).jsonObject
+        val hasNext =
+            r["data"]!!.jsonObject["extra"]!!.jsonObject["has_next"]!!.jsonPrimitive.boolean
+        val result = r["data"]!!.jsonObject["result"]!!.jsonArray
         val mangas = ArrayList<SManga>()
-        for (manga in mangaList) {
-            mangas.add(
-                SManga.create().apply {
-                    setUrlWithoutDomain(
-                        baseUrl + manga.select(".search_result__item__thumbnail > a")
-                            .attr("href"),
-                    )
-                    title =
-                        manga.select(".search_result__item__info > .search_result__item__info--title > a")
-                            .text().trim()
-                    // While the site does label who the author and artists are, there is no formatting standard at all!
-                    // It becomes impossible to parse the names and their specific roles
-                    // So we are not going to process this at all
-                    author =
-                        manga.select(".search_result__item__info > .search_result__item__info--author")
-                            .text()
-                    // Nicovideo doesn't provide large thumbnails in their searches and manga listings unfortunately
-                    // A larger thumbnail/cover art is only available after going into the chapter listings
-                    thumbnail_url = manga.select(".search_result__item__thumbnail > a > img")
-                        .attr("data-original")
-                },
-            )
+        for (entry in result) {
+            val manga = Json.decodeFromJsonElement<Manga>(entry)
+            mangas.add(parseMangaEntry(manga))
         }
-        return MangasPage(mangas, mangaCount - mangaPerPage * currentPage > 0)
+        return MangasPage(mangas, hasNext)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$baseUrl/manga/search/?q=$query&page=$page&sort=score")
+        GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${page * 20}")
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val doc = response.asJsoup()
-        // The description is a mix of synopsis and news announcements
-        // This is just how mangakas use this site
-        description =
-            doc.select("#contents > div.mg_work_detail > div > div.row > div.description_text")
-                .text()
-        // A better larger cover art is available here
-        thumbnail_url =
-            doc.select("#contents > div.primaries > div.main_visual > a > img").attr("src")
-        val statusText =
-            doc.select("#contents > div.mg_work_detail > div > div:nth-child(2) > div.tip.content_status.status_series > span")
-                .text()
-        status = when (statusText) {
-            "連載" -> {
-                SManga.ONGOING
-            }
-            "完結" -> {
-                SManga.COMPLETED
-            }
-            else -> {
-                SManga.UNKNOWN
-            }
-        }
+    override fun mangaDetailsParse(response: Response): SManga {
+        val r = Json.parseToJsonElement(response.toString()).jsonObject
+        val entry = Json.decodeFromJsonElement<Manga>(r["data"]!!.jsonObject["result"]!!)
+        return parseMangaEntry(entry)
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        // Overwrite to use the API instead of scraping the shared URL
+        val id = manga.url.substringAfterLast("/")
+        return GET("$apiUrl/contents/$id")
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
+        val r = Json.parseToJsonElement(response.toString()).jsonObject
+        val result = r["data"]!!.jsonObject["result"]!!.jsonArray
         val chapters = ArrayList<SChapter>()
-        val chapterList = doc.select("#episode_list > ul > li")
-        val mangaId = response.request.url.toUrl().toString().substringAfterLast('/').substringBefore('?')
-        val sharedPref = application.getSharedPreferences("source_${id}_time_found:$mangaId", 0)
-        val editor = sharedPref.edit()
-        // After logging in, any chapters bought should show up as well
-        // Users will need to refresh their chapter list after logging in
-        for (chapter in chapterList) {
+        for (entry in result) {
+            val chapter = Json.decodeFromJsonElement<Chapter>(entry)
+            val isPaid = chapter.meta.ownership.sellStatus == "selling"
             chapters.add(
                 SChapter.create().apply {
-                    // Unfortunately we cannot filter out promotional materials in the chapter list,
-                    // nor we can determine the chapter number from the title
-                    // That would require understanding the context of the title (See One Punch Man and Uzaki-chan for example)
-                    // Unless we have a machine learning algorithm in place, it's simply not possible
-                    name = chapter.select("div > div.description > div.title > a").text()
-                    setUrlWithoutDomain(
-                        baseUrl + chapter.select("div > div.description > div.title > a")
-                            .attr("href"),
-                    )
-                    // The data-number attribute is the only way we can determine chapter orders,
-                    // without that this extension would have been impossible to make
-                    // Note: Promotional materials also count as "chapters" here, so auto tracking unfortunately does not work at all
-                    chapter_number = chapter.select("div").attr("data-number").toFloat()
-                    // We can't determine the upload date from the website
-                    // Store date_upload when a chapter is found for the first time
-                    val dateFound = System.currentTimeMillis()
-                    if (!sharedPref.contains(chapter_number.toString())) {
-                        editor.putLong(chapter_number.toString(), dateFound)
-                    }
-                    date_upload = sharedPref.getLong(chapter_number.toString(), dateFound)
+                    name = (if (isPaid) "\uD83D\uDCB4 " else "") + chapter.meta.title
+                    date_upload = chapter.meta.createdAt
+                    // While chapters are properly sorted, authors often add promotional material as "chapters" which breaks trackers
+                    // There's no way to properly filter these as they are treated the same as normal chapters
+                    chapter_number = chapter.meta.number.toFloat()
+                    setUrlWithoutDomain("$apiUrl/episodes/${chapter.id}/frames?enable_webp=true")
                 },
             )
         }
-        editor.apply()
         chapters.sortByDescending { chapter -> chapter.chapter_number }
         return chapters
     }
 
+    override fun chapterListRequest(manga: SManga): Request {
+        // Overwrite to use the API instead of scraping the shared URL
+        val id = manga.url.substringAfterLast("/")
+        return GET("$apiUrl/contents/$id/episodes")
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val doc = response.asJsoup()
-        val pages = ArrayList<Page>()
-        // Nicovideo will refuse to serve any pages if the user has not logged in
-        if (!doc.select("#login_manga").isEmpty()) {
-            throw SecurityException("Not logged in. Please login via WebView first")
+        // Nicomanga historically refuses to serve pages if you don't login.
+        // However, due to the network attack against the site (as of July 2024) login is disabled
+        // Changes may be required as the site recovers
+        if (response.code == 403) {
+            throw SecurityException("You need to purchase this chapter first")
         }
-        val pageList = doc.select("#page_contents > li")
-        for (page in pageList) {
-            val pageNumber = page.attr("data-page-index").toInt()
-            val url = page.select("div > img").attr("data-original")
-            pages.add(Page(pageNumber, url, url))
+        val r = Json.parseToJsonElement(response.toString()).jsonObject
+        val frames = r["data"]!!.jsonObject["result"]!!.jsonArray
+        val pages = ArrayList<Page>()
+        for ((i, entry) in frames.withIndex()) {
+            val frame = Json.decodeFromJsonElement<Frame>(entry)
+            pages.add(Page(i, frame.meta.sourceUrl))
         }
         return pages
     }
@@ -202,15 +163,12 @@ class NicovideoSeiga : HttpSource() {
     override fun imageRequest(page: Page): Request {
         // Headers are required to avoid cache miss from server side
         val headers = headersBuilder()
-            .set("referer", "https://seiga.nicovideo.jp/")
+            .set("referer", baseUrl)
             .set("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .set("pragma", "no-cache")
             .set("cache-control", "no-cache")
             .set("accept-encoding", "gzip, deflate, br")
-            .set(
-                "user-agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36",
-            )
+            .set("user-agent", System.getProperty("http.agent")!!)
             .set("sec-fetch-dest", "image")
             .set("sec-fetch-mode", "no-cors")
             .set("sec-fetch-site", "cross-site")
@@ -239,7 +197,8 @@ class NicovideoSeiga : HttpSource() {
         val decryptedImage = decryptImage(key, encryptedImage)
 
         // Construct a new response
-        val body = decryptedImage.toResponseBody("image/${getImageType(decryptedImage)}".toMediaTypeOrNull())
+        val body =
+            decryptedImage.toResponseBody("image/${getImageType(decryptedImage)}".toMediaTypeOrNull())
         return response.newBuilder().body(body).build()
     }
 
