@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.extension.en.mangaforfreecom
 
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
@@ -40,5 +42,10 @@ class Mangaforfreecom : Madara("Mangaforfree.com", "https://mangaforfree.com", "
         return super.client.newBuilder()
             .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
             .hostnameVerifier { _, _ -> true }.build()
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        return super.pageListParse(document)
+            .onEach { it.imageUrl = it.imageUrl!!.replace("http://", "https://") }
     }
 }

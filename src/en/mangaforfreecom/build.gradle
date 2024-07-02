@@ -3,7 +3,7 @@ ext {
     extClass = '.Mangaforfreecom'
     themePkg = 'madara'
     baseUrl = 'https://mangaforfree.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
