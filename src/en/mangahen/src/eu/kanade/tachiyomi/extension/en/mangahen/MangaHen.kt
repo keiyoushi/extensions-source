@@ -28,6 +28,8 @@ class MangaHen : HttpSource() {
 
     override val client = network.cloudflareClient
 
+    private var tagsList: List<String> = listOf()
+
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         return GET("$advSearchURL/?search=1&type=0&sort=1&page=$page", headers)
@@ -66,11 +68,13 @@ class MangaHen : HttpSource() {
     }
 
     private fun tagsList(): List<String> {
-        val request = GET(advSearchURL, headers)
-
-        val response = client.newCall(request).execute()
-        val tagsList = response.asJsoup().select("li[onclick=updateTag(this)]").map { it.ownText().lowercase() }
-
+        if(tagsList.isEmpty())
+            val request = GET(advSearchURL, headers)
+    
+            val response = client.newCall(request).execute()
+    
+            tagsList = response.asJsoup().select("li[onclick=updateTag(this)]").map { it.ownText().lowercase() }
+        }
         return tagsList
     }
 
