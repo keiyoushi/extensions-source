@@ -1,7 +1,7 @@
 ext {
     extName = 'Plot Twist No Fansub'
     extClass = '.PlotTwistNoFansub'
-    extVersionCode = 6
+    extVersionCode = 7
     isNsfw = true
 }
 
