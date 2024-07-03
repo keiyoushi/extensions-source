@@ -40,7 +40,7 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Plot Twist No Fansub"
 
-    override val baseUrl = "https://www.plotfansub.com"
+    override val baseUrl = "https://plotnf.com"
 
     override val lang = "es"
 
@@ -77,7 +77,7 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
             val mangaUrl = selectFirst("a")!!.attr("href")
                 .removeSuffix("/")
                 .substringBeforeLast("/")
-                .replaceFirst("/reader/", "/plot/manga/")
+                .replaceFirst("/reader/", "/plotwist/manga/")
             setUrlWithoutDomain(mangaUrl)
             thumbnail_url = select("img").imgAttr()
             title = select("img").attr("title")
