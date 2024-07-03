@@ -68,11 +68,11 @@ class MangaHen : HttpSource() {
     }
 
     private fun tagsList(): List<String> {
-        if(tagsList.isEmpty()) {
+        if (tagsList.isEmpty()) {
             val request = GET(advSearchURL, headers)
-    
+
             val response = client.newCall(request).execute()
-    
+
             tagsList = response.asJsoup().select("li[onclick=updateTag(this)]").map { it.ownText().lowercase() }
         }
         return tagsList
