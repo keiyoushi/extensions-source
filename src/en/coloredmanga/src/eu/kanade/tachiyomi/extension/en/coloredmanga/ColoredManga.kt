@@ -42,6 +42,10 @@ class ColoredManga : HttpSource() {
 
     private val json: Json by injectLazy()
 
+    private val nameRegex = Regex(" -$")
+
+    private val chapterNameRegex = Regex("0+(\\d+)")
+
     override val client = network.cloudflareClient
         .newBuilder()
         .addInterceptor(::Intercept)
@@ -182,7 +186,10 @@ class ColoredManga : HttpSource() {
 
     private fun getMangas(doc: Document): MutableList<Mangas> {
         val mangasRaw = doc.selectFirst("script:containsData(\\\"cover)")!!.data()
-        val mangasJson = mangasRaw.replace("\\\"", "\"").replace("\\\\\"", "\\\"").replace("self.__next_f.push([1,\"7:[\"\$\",\"div\",null,{\"className\":\"xl:w-[1280px] w-full min-h-[100vh] font-light flex flex-col items-start justify-start\",\"id\":\"themes_body___1nq3\",\"children\":[\"\$\",\"\$Le\",null,{\"params\":\"\$undefined\",\"data\":[", "{\"data\":[").replace("}]}]}]\\n\"])", "}]}")
+        val mangasJson = mangasRaw
+            .replace(Regex("""\\([\\"])"""), "$1")
+            .replaceBefore("\"data\":[", "{")
+            .removeSuffix("]}]\\n\"])")
 
         val parsedMangas = mangasJson.parseAs<MangasList>()
 
@@ -193,19 +200,29 @@ class ColoredManga : HttpSource() {
         return mangas
     }
 
-    private fun getManga(doc: Document): Mangas {
-        val mangaRaw = doc.selectFirst("script:containsData(\\\"cover)")!!.data()
-        val mangaJson = mangaRaw.replace("\\\"", "\"").replace("\\\\\"", "\\\"").replace("self.__next_f.push([1,\"7:[\"\$\",\"\$Lf\",null,", "").replace("\"data\":{", "\"data\":[{").replace("}}]\\n\"])", "}]}")
+    private fun getManga(response: Response): Mangas {
+        val url = response.request.url.toString()
+        val formData = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("id", url.substringAfter("manga/"))
+            .build()
 
-        return mangaJson.parseAs<MangasList>().data[0]
+        val request = Request.Builder()
+            .url("$baseUrl/api/selectedManga")
+            .put(formData)
+            .addHeader("Cache-Control", "no-store")
+            .build()
+
+        val res = client.newCall(request).execute().body.string()
+
+        return res.parseAs<Mangas>()
     }
 
     private fun getImage(manga_name: String, volume_name: String? = "", chapter: Chapter, index: String): String {
         val chapterNumber = index.padStart(4, '0')
-        var chapterName = chapter.number
-        if (chapter.title.isNotEmpty()) {
-            chapterName = "${chapter.number} - ${chapter.title}"
-        }
+        val chapterName = listOf(chapter.number, chapter.title)
+            .joinToString(" - ")
+            .trim()
+            .replace(nameRegex, "")
 
         val formData = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("path", "/images/content/$manga_name/$volume_name$chapterName")
@@ -257,12 +274,12 @@ class ColoredManga : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Details
+
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val manga = getManga(document)
+        val manga = getManga(response)
         return SManga.create().apply {
             title = manga.name
-            url = "/manga.${manga.id}"
+            url = "/manga/${manga.id}"
             author = manga.author
             artist = manga.artist
             genre = manga.tags.joinToString()
@@ -280,35 +297,31 @@ class ColoredManga : HttpSource() {
     // Chapters
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val manga = getManga(document)
+        val manga = getManga(response)
 
         val listMangas = if (manga.chapters.isNotEmpty()) {
             manga.chapters.map { chapter ->
                 SChapter.create().apply {
-                    name = if (chapter.title.isNotEmpty()) {
-                        "${chapter.number} - ${chapter.title}"
-                    } else {
-                        chapter.number
-                    }
-                    url = "/manga/${manga.id}/${chapter.id}"
+                    name = listOf(chapter.number, chapter.title)
+                        .joinToString(" - ")
+                        .trim()
+                        .replace(nameRegex, "")
+                        .replace(chapterNameRegex, "$1")
+
+                    url = "/manga/${manga.id}/${chapter.number}"
                     date_upload = try {
                         chapterDateFormat.parse(chapter.date)!!.time
                     } catch (e: Exception) {
                         0L
                     }
                 }
-            }.reversed()
+            }
         } else {
             manga.volume.flatMap { volume ->
                 volume.chapters.map { chapter ->
                     SChapter.create().apply {
-                        name = if (chapter.title.isNotEmpty()) {
-                            "${volume.number} | ${chapter.number} - ${chapter.title}"
-                        } else {
-                            "${volume.number} | ${chapter.number}"
-                        }
-                        url = "/manga/${manga.id}/${chapter.id}"
+                        name = "${volume.number} | ${chapter.number} - ${chapter.title}".replace(nameRegex, "").replace(chapterNameRegex, "$1")
+                        url = "/manga/${manga.id}/${chapter.number}"
                         date_upload = try {
                             chapterDateFormat.parse(chapter.date)!!.time
                         } catch (e: Exception) {
@@ -317,18 +330,19 @@ class ColoredManga : HttpSource() {
                     }
                 }
             }
-        }.reversed()
+        }
 
-        return listMangas
+        return listMangas.reversed()
     }
 
     // Pages
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val response = client.newCall(GET(baseUrl + chapter.url.substringBeforeLast("/"), headers)).execute()
-        val document = response.asJsoup()
-        val manga = getManga(document)
+        val manga = getManga(response)
         val volumes = manga.chapters.isEmpty() || manga.volume.isNotEmpty()
+        chapter.apply { name = chapter.url.substringAfterLast("/") }
+
         val spChapter = if (volumes) {
             manga.volume
                 .flatMap { it.chapters }
@@ -344,16 +358,15 @@ class ColoredManga : HttpSource() {
                 val volumeInfo = if (volumes) {
                     manga.volume.find { vol -> vol.chapters.any { chap -> chap.number == chapter.name } }
                         ?.let { vol ->
-                            if (vol.title.isNotEmpty()) {
-                                "${vol.number} - ${vol.title}/"
-                            } else {
-                                "${vol.number}/"
-                            }
+                            listOf(vol.number, vol.title)
+                                .joinToString(" - ")
+                                .trim()
+                                .replace(nameRegex, "") + "/"
                         } ?: ""
                 } else {
                     ""
                 }
-                Page(it, url = "$searchUrl/${manga.id}/${spChapter.id}", imageUrl = "$url&volume=$volumeInfo&chapter=$chapterJson")
+                Page(it, url = "$baseUrl${chapter.url}", imageUrl = "$url&volume=$volumeInfo&chapter=$chapterJson")
             },
         )
     }
