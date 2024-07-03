@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.nicovideoseiga
 
+import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.ApiResponse
 import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Chapter
 import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Frame
 import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Manga
+import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.PopularManga
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,14 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -48,19 +44,17 @@ class NicovideoSeiga : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val pageNumber = response.request.url.queryParameter("page")!!.toInt()
-        val r = json.parseToJsonElement(response.body.string()).jsonArray
+        val r = json.decodeFromString<List<PopularManga>>(response.body.string())
         val mangas = ArrayList<SManga>()
-        for (entry in r) {
-            val mangaEntry = entry as JsonObject
-            val id = mangaEntry["id"]!!.jsonPrimitive.int
+        for (manga in r) {
             mangas.add(
                 SManga.create().apply {
-                    title = mangaEntry["title"]!!.jsonPrimitive.content
-                    author = mangaEntry["author"]!!.jsonPrimitive.content
+                    title = manga.title
+                    author = manga.author
                     // The thumbnail provided only displays a glimpse of the latest chapter. Not the actual cover
                     // We can obtain a better thumbnail when the user clicks into the details
-                    thumbnail_url = mangaEntry["thumbnail_url"]!!.jsonPrimitive.content
-                    setUrlWithoutDomain("$baseUrl/comic/$id")
+                    thumbnail_url = manga.thumbnailUrl
+                    setUrlWithoutDomain("$baseUrl/comic/${manga.id}")
                 },
             )
         }
@@ -94,25 +88,20 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val r = json.parseToJsonElement(response.body.string()).jsonObject
-        val hasNext =
-            r["data"]!!.jsonObject["extra"]!!.jsonObject["has_next"]!!.jsonPrimitive.boolean
-        val result = r["data"]!!.jsonObject["result"]!!.jsonArray
+        val r = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
         val mangas = ArrayList<SManga>()
-        for (entry in result) {
-            val manga = json.decodeFromJsonElement<Manga>(entry)
+        for (manga in r.data.result) {
             mangas.add(parseMangaEntry(manga))
         }
-        return MangasPage(mangas, hasNext)
+        return MangasPage(mangas, r.data.extra!!.hasNext)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}")
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val r = json.parseToJsonElement(response.body.string()).jsonObject
-        val entry = json.decodeFromJsonElement<Manga>(r["data"]!!.jsonObject["result"]!!)
-        return parseMangaEntry(entry)
+        val r = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
+        return parseMangaEntry(r.data.result.first())
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -127,11 +116,9 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val r = json.parseToJsonElement(response.body.string()).jsonObject
-        val result = r["data"]!!.jsonObject["result"]!!.jsonArray
+        val r = json.decodeFromString<ApiResponse<Chapter>>(response.body.string())
         val chapters = ArrayList<SChapter>()
-        for (entry in result) {
-            val chapter = json.decodeFromJsonElement<Chapter>(entry)
+        for (chapter in r.data.result) {
             val isPaid = chapter.ownership.sellStatus == "selling"
             if (chapter.ownership.sellStatus == "publication_finished") {
                 // Chapter is unpublished by publishers from Niconico
@@ -175,14 +162,9 @@ class NicovideoSeiga : HttpSource() {
         if (response.code == 401) {
             throw SecurityException("Not logged in. Please login via WebView")
         }
-        val r = json.parseToJsonElement(response.body.string()).jsonObject
-        val frames = r["data"]!!.jsonObject["result"]!!.jsonArray
-        val pages = ArrayList<Page>()
-        for ((i, entry) in frames.withIndex()) {
-            val frame = json.decodeFromJsonElement<Frame>(entry)
-            pages.add(Page(i, frame.meta.sourceUrl, frame.meta.sourceUrl))
-        }
-        return pages
+        val r = json.decodeFromString<ApiResponse<Frame>>(response.body.string())
+        // Map the frames to pages
+        return r.data.result.mapIndexed { i, frame -> Page(i, frame.meta.sourceUrl, frame.meta.sourceUrl) }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
