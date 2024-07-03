@@ -74,7 +74,7 @@ class NicovideoSeiga : HttpSource() {
     // Parses the common manga entry object from the api
     private fun parseMangaEntry(entry: Manga): SManga {
         // The description is html. Simply using Jsoup to remove all the html tags
-        val descriptionText = Jsoup.parse(entry.meta.description).text()
+        val descriptionText = Jsoup.parse(entry.meta.description).wholeText()
         return SManga.create().apply {
             title = entry.meta.title
             description = descriptionText
