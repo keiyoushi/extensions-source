@@ -35,6 +35,7 @@ class NicovideoSeiga : HttpSource() {
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::imageIntercept)
         .build()
+    override val versionId: Int = 2
     private val apiUrl: String = "https://api.nicomanga.jp/api/v1/app/manga"
     private val json: Json = Json {
         ignoreUnknownKeys = true
