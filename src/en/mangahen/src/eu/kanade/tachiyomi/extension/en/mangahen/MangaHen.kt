@@ -68,7 +68,7 @@ class MangaHen : HttpSource() {
     }
 
     private fun tagsList(): List<String> {
-        if(tagsList.isEmpty())
+        if(tagsList.isEmpty()) {
             val request = GET(advSearchURL, headers)
     
             val response = client.newCall(request).execute()
