@@ -44,7 +44,7 @@ class ColoredManga : HttpSource() {
 
     private val nameRegex = Regex(" -$")
 
-    private val chapterNameRegex = Regex("0+(\\d+)")
+    private val chapterNameRegex = Regex(" 0+(\\d+)")
 
     override val client = network.cloudflareClient
         .newBuilder()
@@ -184,24 +184,17 @@ class ColoredManga : HttpSource() {
         return MangasPage(final, false)
     }
 
-    private fun getMangas(doc: Document): MutableList<Mangas> {
+    private fun getMangas(doc: Document): List<Mangas> {
         val mangasRaw = doc.selectFirst("script:containsData(\\\"cover)")!!.data()
         val mangasJson = mangasRaw
             .replace(Regex("""\\([\\"])"""), "$1")
             .replaceBefore("\"data\":[", "{")
             .removeSuffix("]}]\\n\"])")
 
-        val parsedMangas = mangasJson.parseAs<MangasList>()
-
-        val mangas: MutableList<Mangas> = mutableListOf()
-        for (manga in parsedMangas.data) {
-            mangas.add(manga)
-        }
-        return mangas
+        return mangasJson.parseAs<MangasList>().data
     }
 
-    private fun getManga(response: Response): Mangas {
-        val url = response.request.url.toString()
+    private fun getManga(url: String): Request {
         val formData = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("id", url.substringAfter("manga/"))
             .build()
@@ -212,9 +205,7 @@ class ColoredManga : HttpSource() {
             .addHeader("Cache-Control", "no-store")
             .build()
 
-        val res = client.newCall(request).execute().body.string()
-
-        return res.parseAs<Mangas>()
+        return request
     }
 
     private fun getImage(manga_name: String, volume_name: String? = "", chapter: Chapter, index: String): String {
@@ -275,8 +266,14 @@ class ColoredManga : HttpSource() {
 
     // Details
 
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return getManga(manga.url)
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = getManga(response)
+        val manga = response.parseAs<Mangas>()
         return SManga.create().apply {
             title = manga.name
             url = "/manga/${manga.id}"
@@ -290,14 +287,16 @@ class ColoredManga : HttpSource() {
                 "Hiatus" -> SManga.ON_HIATUS
                 else -> COMPLETED
             }
+            thumbnail_url = "$baseUrl${manga.cover}"
             initialized = true
         }
     }
 
     // Chapters
 
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
     override fun chapterListParse(response: Response): List<SChapter> {
-        val manga = getManga(response)
+        val manga = response.parseAs<Mangas>()
 
         val listMangas = if (manga.chapters.isNotEmpty()) {
             manga.chapters.map { chapter ->
@@ -306,7 +305,7 @@ class ColoredManga : HttpSource() {
                         .joinToString(" - ")
                         .trim()
                         .replace(nameRegex, "")
-                        .replace(chapterNameRegex, "$1")
+                        .replace(chapterNameRegex, " $1")
 
                     url = "/manga/${manga.id}/${chapter.number}"
                     date_upload = try {
@@ -320,7 +319,7 @@ class ColoredManga : HttpSource() {
             manga.volume.flatMap { volume ->
                 volume.chapters.map { chapter ->
                     SChapter.create().apply {
-                        name = "${volume.number} | ${chapter.number} - ${chapter.title}".replace(nameRegex, "").replace(chapterNameRegex, "$1")
+                        name = "${volume.number} | ${chapter.number} - ${chapter.title}".replace(nameRegex, "").replace(chapterNameRegex, " $1")
                         url = "/manga/${manga.id}/${chapter.number}"
                         date_upload = try {
                             chapterDateFormat.parse(chapter.date)!!.time
@@ -335,11 +334,17 @@ class ColoredManga : HttpSource() {
         return listMangas.reversed()
     }
 
+    override fun getFilterList(): FilterList = getFilters()
+
     // Pages
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        return getManga(chapter.url.substringBeforeLast("/"))
+    }
+
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val response = client.newCall(GET(baseUrl + chapter.url.substringBeforeLast("/"), headers)).execute()
-        val manga = getManga(response)
+        val response = client.newCall(pageListRequest(chapter)).execute()
+        val manga = response.parseAs<Mangas>()
         val volumes = manga.chapters.isEmpty() || manga.volume.isNotEmpty()
         chapter.apply { name = chapter.url.substringAfterLast("/") }
 
@@ -399,10 +404,14 @@ class ColoredManga : HttpSource() {
         return json.decodeFromString(this)
     }
 
+    private inline fun <reified T> Response.parseAs(): T {
+        return json.decodeFromString(body.string())
+    }
+
     private fun Chapter.toJson(): String {
         return json.encodeToString(this)
     }
-    override fun getFilterList() = getFilters()
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 }
