@@ -31,7 +31,7 @@ class PandaChaika(
 
     override val baseUrl = "https://panda.chaika.moe"
 
-    private val baseApiUrl = "$baseUrl/api"
+    private val baseSearchUrl = "$baseUrl/search"
 
     override val supportsLatest = true
 
@@ -44,7 +44,7 @@ class PandaChaika(
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/search/?tags=$searchLang&sort=rating&apply=&json=&page=$page", headers)
+        return GET("$baseSearchUrl/?tags=$searchLang&sort=rating&apply=&json=&page=$page", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
@@ -53,7 +53,7 @@ class PandaChaika(
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/search/?tags=$searchLang&sort=public_date&apply=&json=&page=$page", headers)
+        return GET("$baseSearchUrl/?tags=$searchLang&sort=public_date&apply=&json=&page=$page", headers)
     }
 
     private fun parsePageRange(query: String, minPages: Int = 1, maxPages: Int = 9999): Pair<Int, Int> {
@@ -84,7 +84,7 @@ class PandaChaika(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
+        val url = baseSearchUrl.toHttpUrl().newBuilder().apply {
             val tags = mutableListOf<String>()
             var reason = ""
             var uploader = ""
@@ -137,7 +137,6 @@ class PandaChaika(
                 }
             }
 
-            addPathSegment("search")
             addQueryParameter("title", query)
             addQueryParameter("tags", tags.joinToString())
             addQueryParameter("filecount_from", pagesMin.toString())
@@ -152,43 +151,42 @@ class PandaChaika(
         return GET(url, headers)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseApiUrl?archive=${manga.url}", headers)
-    }
-
     override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseApiUrl?archive=${manga.url}", headers)
+        return GET("$baseUrl/api?archive=${manga.url}", headers)
     }
 
     override fun getFilterList() = getFilters()
 
     // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<Archive>().toSManga()
+
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        return Observable.just(manga.apply { initialized = true })
     }
 
     // Chapters
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val archive = response.parseAs<Archive>()
 
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
-                url = "$baseUrl${archive.download}"
+                url = archive.download.substringBefore("/download/")
                 date_upload = archive.posted * 1000
             },
         )
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/archive/${manga.url}"
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/archive/${chapter.url.substringBefore("/download/")}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
     // Pages
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         fun List<String>.sort() = this.sortedWith(compareBy(CASE_INSENSITIVE_ORDER) { it })
-        val (fileType, contentLength) = getZipType(chapter.url)
+        val url = "$baseUrl${chapter.url}/download/"
+        val (fileType, contentLength) = getZipType(url)
 
-        val remoteZip = ZipHandler(chapter.url, client, headers, fileType, contentLength).populate()
+        val remoteZip = ZipHandler(url, client, headers, fileType, contentLength).populate()
         val fileListing = remoteZip.files().sort()
 
         val files = remoteZip.toJson()
@@ -214,11 +212,12 @@ class PandaChaika(
 
         return (if (contentLength > Int.MAX_VALUE.toBigInteger()) "zip64" else "zip") to contentLength
     }
+
     private fun Intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url.toString()
         return if (url.startsWith("https://127.0.0.1/#")) {
             val fragment = url.toHttpUrl().fragment!!
-            val remoteZip = fragment.substringAfter("&").parseAs<RemoteZip>()
+            val remoteZip = fragment.substringAfter("&").parseAs<Zip>()
             val filename = fragment.substringBefore("&")
 
             val byteArray = remoteZip.fetch(filename, client)
@@ -244,10 +243,11 @@ class PandaChaika(
         return json.decodeFromString(this)
     }
 
-    private fun RemoteZip.toJson(): String {
+    private fun Zip.toJson(): String {
         return json.encodeToString(this)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }

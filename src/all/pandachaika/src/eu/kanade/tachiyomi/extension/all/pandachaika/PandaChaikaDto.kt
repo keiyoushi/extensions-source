@@ -7,52 +7,61 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
+fun filterTags(include: String = "", exclude: List<String> = emptyList(), tags: List<String>): String {
+    return tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
+        .joinToString {
+            it.substringAfter(":").replace("_", " ").split(" ").joinToString(" ") { s ->
+                s.replaceFirstChar { sr ->
+                    if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
+                }
+            }
+        }
+}
+fun getReadableSize(bytes: Double): String {
+    return when {
+        bytes >= 300 * 1024 * 1024 -> "${"%.2f".format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
+        bytes >= 100 * 1024 -> "${"%.2f".format(bytes / (1024.0 * 1024.0))} MB"
+        bytes >= 1024 -> "${"%.2f".format(bytes / (1024.0))} KB"
+        else -> "$bytes B"
+    }
+}
+
 @Serializable
 class Archive(
     val download: String,
-    val filecount: Int,
-    val filesize: Double,
     val posted: Long,
-    val tags: List<String>,
-    val title: String,
-    val title_jpn: String?,
-    val uploader: String,
+)
+
+@Serializable
+class LongArchive(
+    private val thumbnail: String,
+    private val title: String,
+    private val id: Int,
+    private val posted: Long?,
+    private val public_date: Long?,
+    private val filecount: Int,
+    private val filesize: Double,
+    private val tags: List<String>,
+    private val title_jpn: String?,
+    private val uploader: String,
 ) {
     fun toSManga() = SManga.create().apply {
-        fun filterTags(include: String = "", exclude: List<String> = emptyList()): String {
-            return tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
-                .joinToString {
-                    it.substringAfter(":").replace("_", " ").split(" ").joinToString(" ") { s ->
-                        s.replaceFirstChar { sr ->
-                            if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
-                        }
-                    }
-                }
-        }
-        fun getReadableSize(bytes: Double): String {
-            return when {
-                bytes >= 300 * 1024 * 1024 -> "${"%.2f".format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
-                bytes >= 100 * 1024 -> "${"%.2f".format(bytes / (1024.0 * 1024.0))} MB"
-                bytes >= 1024 -> "${"%.2f".format(bytes / (1024.0))} KB"
-                else -> "$bytes B"
-            }
-        }
-        val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
-
-        val groups = filterTags("group")
-        val artists = filterTags("artist")
-        val publishers = filterTags("publisher")
-        val male = filterTags("male")
-        val female = filterTags("female")
-        val others = filterTags(exclude = listOf("female", "male", "artist", "publisher", "group", "parody"))
-        val parodies = filterTags("parody")
-        title = this@Archive.title
-        url = download.substringBefore("/download/")
+        val groups = filterTags("group", tags = tags)
+        val artists = filterTags("artist", tags = tags)
+        val publishers = filterTags("publisher", tags = tags)
+        val male = filterTags("male", tags = tags)
+        val female = filterTags("female", tags = tags)
+        val others = filterTags(exclude = listOf("female", "male", "artist", "publisher", "group", "parody"), tags = tags)
+        val parodies = filterTags("parody", tags = tags)
+        url = id.toString()
+        title = this@LongArchive.title
+        thumbnail_url = thumbnail
         author = groups.ifEmpty { artists }
         artist = artists
         genre = listOf(male, female, others).joinToString()
         description = buildString {
-            append("Uploader: ", uploader, "\n")
+            append("Uploader: ", uploader.ifEmpty { "Anonymous" }, "\n")
             publishers.takeIf { it.isNotBlank() }?.let {
                 append("Publishers: ", it, "\n\n")
             }
@@ -74,26 +83,15 @@ class Archive(
             append("File Size: ", getReadableSize(filesize), "\n")
 
             try {
-                append("Posted: ", dateReformat.format(Date(posted * 1000)), "\n")
+                append("Public Date: ", dateReformat.format(Date(public_date!! * 1000)), "\n")
+            } catch (_: Exception) {}
+            try {
+                append("Posted: ", dateReformat.format(Date(posted!! * 1000)), "\n")
             } catch (_: Exception) {}
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         initialized = true
-    }
-}
-
-@Serializable
-class LongArchive(
-    private val thumbnail: String,
-    private val title: String,
-    private val tags: List<String>,
-    private val id: Int,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        url = id.toString()
-        title = this@LongArchive.title
-        thumbnail_url = thumbnail
     }
 }
 

@@ -40,7 +40,7 @@ class LocalFileHeader(
 )
 
 @Serializable
-class RemoteZip(
+class Zip(
     private val url: String,
     private val centralDirectoryRecords: List<CentralDirectoryRecord>,
 ) {
@@ -52,7 +52,7 @@ class RemoteZip(
 
     fun fetch(path: String, client: OkHttpClient): ByteArray {
         val file = centralDirectoryRecords.find { it.filename == path }
-            ?: throw Exception("File not found in remote ZIP: $path")
+            ?: throw Exception("File not found in  ZIP: $path")
 
         val MAX_LOCAL_FILE_HEADER_SIZE = 256 + 32 + 30 + 100
 
@@ -73,7 +73,7 @@ class RemoteZip(
         val byteArray = response.body.byteStream().use { it.readBytes() }
 
         val localFile = parseLocalFile(byteArray, file.compressedSize)
-            ?: throw Exception("Failed to parse local file header in remote ZIP")
+            ?: throw Exception("Failed to parse local file header in ZIP")
 
         return if (localFile.compressionMethod == 0) {
             localFile.compressedData
@@ -90,11 +90,11 @@ class ZipHandler(
     private val zipType: String = "zip",
     private val contentLength: BigInteger,
 ) {
-    fun populate(): RemoteZip {
+    fun populate(): Zip {
         val endOfCentralDirectory = fetchEndOfCentralDirectory(contentLength, zipType)
         val centralDirectoryRecords = fetchCentralDirectoryRecords(endOfCentralDirectory)
 
-        return RemoteZip(
+        return Zip(
             url,
             centralDirectoryRecords,
         )
@@ -113,7 +113,7 @@ class ZipHandler(
         val response = client.newCall(request).execute()
 
         if (!response.isSuccessful) {
-            throw Exception("Could not fetch remote ZIP: HTTP status ${response.code}")
+            throw Exception("Could not fetch ZIP: HTTP status ${response.code}")
         }
 
         val eocdBuffer = response.body.byteStream().use { it.readBytes() }
@@ -271,10 +271,9 @@ object ZipParser {
         try {
             while (!inflater.finished()) {
                 val count = inflater.inflate(buffer)
-                if (count <= 0 && inflater.finished()) {
-                    break
+                if (count > 0) {
+                    output.write(buffer, 0, count)
                 }
-                output.write(buffer, 0, count)
             }
         } catch (e: Exception) {
             throw Exception("Invalid compressed data format: ${e.message}", e)
