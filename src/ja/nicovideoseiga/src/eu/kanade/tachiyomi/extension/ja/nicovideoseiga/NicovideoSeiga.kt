@@ -89,11 +89,7 @@ class NicovideoSeiga : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val r = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
-        val mangas = ArrayList<SManga>()
-        for (manga in r.data.result) {
-            mangas.add(parseMangaEntry(manga))
-        }
-        return MangasPage(mangas, r.data.extra!!.hasNext)
+        return MangasPage(r.data.result.map { parseMangaEntry(it) }, r.data.extra!!.hasNext)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
