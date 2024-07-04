@@ -15,4 +15,6 @@ class Siikomik : MangaThemesia(
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
+
+    override val hasProjectPage = true
 }
