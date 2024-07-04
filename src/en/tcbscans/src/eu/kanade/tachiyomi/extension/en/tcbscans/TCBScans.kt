@@ -1,174 +1,156 @@
 package eu.kanade.tachiyomi.extension.en.tcbscans
 
 import android.app.Application
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.File
 
 class TCBScans : ParsedHttpSource() {
 
     override val name = "TCB Scans"
-    override val baseUrl = "https://tcbscans.com"
+    override val baseUrl = "https://tcbscans.me"
     override val lang = "en"
     override val supportsLatest = false
-    override val client: OkHttpClient = network.cloudflareClient
-    companion object {
-        private const val MIGRATE_MESSAGE = "Migrate from TCB Scans to TCB Scans"
-        private val TITLE_REGEX = "[0-9]+$".toRegex()
-    }
+
+    override val client = network.cloudflareClient.newBuilder().addNetworkInterceptor { chain ->
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        if (
+            request.url.toString().startsWith(baseUrl) &&
+            request.url.pathSegments.firstOrNull() in listOf("mangas", "chapters") &&
+            response.code == 404
+        ) {
+            throw IOException("Migrate from TCB Scans to TCB Scans")
+        }
+
+        return@addNetworkInterceptor response
+    }.build()
 
     // popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/projects")
-    }
-
-    override fun popularMangaSelector() = ".bg-card.border.border-border.rounded.p-3.mb-3"
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select(".w-24.h-24.object-cover.rounded-lg").attr("src")
-        manga.setUrlWithoutDomain(element.select("a.mb-3.text-white.text-lg.font-bold").attr("href"))
-        manga.title = element.select("a.mb-3.text-white.text-lg.font-bold").text()
-        return manga
-    }
-
-    override fun popularMangaNextPageSelector(): String? = null
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservable()
-            .doOnNext { response ->
-                if (!response.isSuccessful) {
-                    response.close()
-                    throw Exception(if (response.code == 404) MIGRATE_MESSAGE else "HTTP error ${response.code}")
-                }
-            }
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
-    }
-
-    // latest
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        var mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
-        val query = response.request.headers["query"]
-        mangas = if (query != null) {
-            mangas.filter { it.title.contains(query, true) }
-        } else {
-            emptyList()
-        }
-
-        return MangasPage(mangas, false)
-    }
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector(): String = popularMangaSelector()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val headers = headersBuilder()
-            .add("query", query)
-            .build()
         return GET("$baseUrl/projects", headers)
     }
 
+    override fun popularMangaSelector() = "div.bg-card"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        with(element.selectFirst("a[href].text-white")!!) {
+            setUrlWithoutDomain(absUrl("href"))
+            title = text()
+        }
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
+
+    override fun popularMangaNextPageSelector() = null
+
+    // latest
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        return GET("$baseUrl/projects#$query", headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val query = response.request.url.fragment!!
+        val mangas = popularMangaParse(response).mangas.filter {
+            it.title.contains(query, true)
+        }
+        return MangasPage(mangas, false)
+    }
+
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
+    override fun searchMangaSelector(): String = popularMangaSelector()
+
     // manga details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val descElement = document.select(".order-1.bg-card.border.border-border.rounded.py-3")
-
-        thumbnail_url = descElement.select(".flex.items-center.justify-center img").attr("src")
-        title = descElement.select(".my-3.font-bold.text-3xl").text()
-        description = descElement.select(".leading-6.my-3").text()
+        with(document.selectFirst("div.order-1")!!) {
+            thumbnail_url = selectFirst("img")?.absUrl("src")
+            title = selectFirst("h1")!!.text()
+            description = selectFirst("p")?.text()
+        }
     }
 
     // chapters
-    override fun chapterListSelector() =
-        ".block.border.border-border.bg-card.mb-3.p-3.rounded"
+    override fun chapterListSelector() = "div.grid a"
 
-    private fun chapterWithDate(element: Element, slug: String): SChapter {
-        val seriesPrefs = Injekt.get<Application>().getSharedPreferences("source_${id}_updateTime:$slug", 0)
-        val seriesPrefsEditor = seriesPrefs.edit()
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
 
-        val chapter = chapterFromElement(element)
+        val title = element.select("div.font-bold:not(.flex)").text()
+        val description = element.selectFirst(".text-gray-500")
+            ?.text()?.takeIf { it.isNotBlank() }
+        val chapNumber = TITLE_REGEX.find(title)?.value
 
-        val currentTimeMillis = System.currentTimeMillis()
-        if (!seriesPrefs.contains(chapter.name)) {
-            seriesPrefsEditor.putLong(chapter.name, currentTimeMillis)
-        }
-
-        chapter.date_upload = seriesPrefs.getLong(chapter.name, currentTimeMillis)
-
-        seriesPrefsEditor.apply()
-        return chapter
-    }
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-
-        chapter.setUrlWithoutDomain(element.attr("href"))
-
-        // Chapters retro compatibility
-        var name = element.select(".text-lg.font-bold:not(.flex)").text()
-        val description = element.select(".text-gray-500").text()
-        val matchResult = TITLE_REGEX.find(name)
-        if (matchResult != null) {
-            name = "Chapter ${matchResult.value}"
-        }
-        chapter.name = "$name: $description"
-
-        return chapter
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val slug = response.request.url.pathSegments[2]
-
-        return document.select(chapterListSelector()).map { chapterWithDate(it, slug) }
-    }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservable()
-            .doOnNext { response ->
-                if (!response.isSuccessful) {
-                    response.close()
-                    throw Exception(if (response.code == 404) MIGRATE_MESSAGE else "HTTP error ${response.code}")
-                }
+        name = buildString {
+            if (chapNumber != null) {
+                append("Chapter ")
+                append(chapNumber)
+            } else {
+                append(title)
             }
-            .map { response ->
-                pageListParse(response)
+            if (description != null) {
+                append(": ")
+                append(description)
             }
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(".flex.flex-col.items-center.justify-center picture img")
-            .mapIndexed { i, el -> Page(i, "", el.attr("src")) }
+        return document.select("picture img, .image-container img").mapIndexed { i, img ->
+            Page(i, imageUrl = img.absUrl("src"))
+        }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    init {
+        val context = Injekt.get<Application>()
+        val prefs = context.getSharedPreferences("source_$id", 0x0000)
+
+        if (!prefs.getBoolean("legacy_updateTime_removed", false)) {
+            try {
+                val sharedPrefDir = File(context.applicationInfo.dataDir, "shared_prefs")
+                if (sharedPrefDir.exists() && sharedPrefDir.isDirectory()) {
+                    val files = sharedPrefDir.listFiles()
+                    if (files != null) {
+                        for (file in files) {
+                            if (
+                                file.isFile &&
+                                file.name.startsWith("source_${id}_updateTime") &&
+                                file.name.endsWith(".xml")
+                            ) {
+                                Log.d(name, "Deleting ${file.name}")
+                                file.delete()
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                Log.e(name, "Failed to delete old preference files")
+            }
+            prefs.edit()
+                .putBoolean("legacy_updateTime_removed", true)
+                .apply()
+        }
+    }
 }
+
+private val TITLE_REGEX = Regex("""\d+.?\d+$""")
