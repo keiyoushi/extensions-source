@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.nicovideoseiga
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -140,7 +140,7 @@ class NicovideoSeiga : HttpSource() {
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return client.newCall(pageListRequest(chapter))
-            .asObservableSuccess()
+            .asObservable()
             .map { response ->
                 // Nicomanga historically refuses to serve pages if you don't login.
                 // However, due to the network attack against the site (as of July 2024) login is disabled
