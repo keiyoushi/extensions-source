@@ -153,4 +153,4 @@ class TCBScans : ParsedHttpSource() {
     }
 }
 
-private val TITLE_REGEX = Regex("""\d+.?\d++$""")
+private val TITLE_REGEX = Regex("""\d+.?\d+$""")
