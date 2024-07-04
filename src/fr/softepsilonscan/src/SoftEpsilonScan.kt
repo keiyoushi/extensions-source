@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class SoftEpsilonScan : Madara(
     "Soft Epsilon Scan",
-    "https://soft.epsilonscan.fr",
+    "https://epsilonsoft.to",
     "fr",
     SimpleDateFormat("dd/MM/yy", Locale.FRENCH),
 ) {
