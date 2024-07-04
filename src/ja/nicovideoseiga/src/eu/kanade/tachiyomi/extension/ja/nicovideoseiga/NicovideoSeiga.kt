@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.nicovideoseiga
 
-import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.ApiResponse
-import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Chapter
-import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Frame
-import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.Manga
-import eu.kanade.tachiyomi.extension.ja.nicovideoseiga.data.PopularManga
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,6 +17,8 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
+import rx.Observable
+import uy.kohesive.injekt.injectLazy
 import kotlin.experimental.xor
 
 class NicovideoSeiga : HttpSource() {
@@ -33,9 +31,7 @@ class NicovideoSeiga : HttpSource() {
         .build()
     override val versionId: Int = 2
     private val apiUrl: String = "https://api.nicomanga.jp/api/v1/app/manga"
-    private val json: Json = Json {
-        ignoreUnknownKeys = true
-    }
+    private val json: Json by injectLazy()
 
     override fun latestUpdatesParse(response: Response): MangasPage =
         throw UnsupportedOperationException()
@@ -44,22 +40,21 @@ class NicovideoSeiga : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val pageNumber = response.request.url.queryParameter("page")!!.toInt()
-        val r = json.decodeFromString<List<PopularManga>>(response.body.string())
-        val mangas = ArrayList<SManga>()
-        for (manga in r) {
-            mangas.add(
+        val mangas = json.decodeFromString<List<PopularManga>>(response.body.string())
+        // The api call allows a maximum of 5 pages
+        return MangasPage(
+            mangas.map {
                 SManga.create().apply {
-                    title = manga.title
-                    author = manga.author
+                    title = it.title
+                    author = it.author
                     // The thumbnail provided only displays a glimpse of the latest chapter. Not the actual cover
                     // We can obtain a better thumbnail when the user clicks into the details
-                    thumbnail_url = manga.thumbnailUrl
-                    setUrlWithoutDomain("$baseUrl/comic/${manga.id}")
-                },
-            )
-        }
-        // The api call allows a maximum of 5 pages
-        return MangasPage(mangas, pageNumber < 5)
+                    thumbnail_url = it.thumbnailUrl
+                    url = "/${it.id}"
+                }
+            },
+            pageNumber < 5,
+        )
     }
 
     override fun popularMangaRequest(page: Int): Request =
@@ -68,11 +63,10 @@ class NicovideoSeiga : HttpSource() {
 
     // Parses the common manga entry object from the api
     private fun parseMangaEntry(entry: Manga): SManga {
-        // The description is html. Simply using Jsoup to remove all the html tags
-        val descriptionText = Jsoup.parse(entry.meta.description).wholeText()
         return SManga.create().apply {
             title = entry.meta.title
-            description = descriptionText
+            // The description is html. Simply using Jsoup to remove all the html tags
+            description = Jsoup.parse(entry.meta.description).wholeText()
             // Although their API does contain individual author fields, they are arbitrary strings and we can't trust it conforms to a format
             // Use display name instead which puts all of the people involved together
             author = entry.meta.author
@@ -84,12 +78,13 @@ class NicovideoSeiga : HttpSource() {
                 "concluded" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
+            initialized = true
         }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val r = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
-        return MangasPage(r.data.result.map { parseMangaEntry(it) }, r.data.extra!!.hasNext)
+        return MangasPage(r.data.result.map { parseMangaEntry(it) }, r.data.extra!!.hasNext!!)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
@@ -113,16 +108,13 @@ class NicovideoSeiga : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val r = json.decodeFromString<ApiResponse<Chapter>>(response.body.string())
-        val chapters = ArrayList<SChapter>()
-        for (chapter in r.data.result) {
-            val isPaid = chapter.ownership.sellStatus == "selling"
-            if (chapter.ownership.sellStatus == "publication_finished") {
-                // Chapter is unpublished by publishers from Niconico
-                // Either due to licensing issues or the publisher is withholding the chapter from selling
-                continue
-            }
-            chapters.add(
+        return r.data.result
+            // Chapter is unpublished by publishers from Niconico
+            // Either due to licensing issues or the publisher is withholding the chapter from selling
+            .filter { it.ownership.sellStatus != "publication_finished" }
+            .map { chapter ->
                 SChapter.create().apply {
+                    val isPaid = chapter.ownership.sellStatus == "selling"
                     name = (if (isPaid) "\uD83D\uDCB4 " else "") + chapter.meta.title
                     // Timestamp is in seconds, convert to milliseconds
                     date_upload = chapter.meta.createdAt * 1000
@@ -131,11 +123,9 @@ class NicovideoSeiga : HttpSource() {
                     chapter_number = chapter.meta.number.toFloat()
                     // Can't use setUrlWithoutDomain as it uses the baseUrl instead of apiUrl
                     url = "/episodes/${chapter.id}/frames"
-                },
-            )
-        }
-        chapters.sortByDescending { chapter -> chapter.chapter_number }
-        return chapters
+                }
+            }
+            .sortedByDescending { it.chapter_number }
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -148,16 +138,24 @@ class NicovideoSeiga : HttpSource() {
         return "$baseUrl/watch/mg${chapter.url.substringBeforeLast("/").substringAfterLast("/")}"
     }
 
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        return client.newCall(pageListRequest(chapter))
+            .asObservableSuccess()
+            .map { response ->
+                // Nicomanga historically refuses to serve pages if you don't login.
+                // However, due to the network attack against the site (as of July 2024) login is disabled
+                // Changes may be required as the site recovers
+                if (response.code == 403) {
+                    throw SecurityException("You need to purchase this chapter first")
+                }
+                if (response.code == 401) {
+                    throw SecurityException("Not logged in. Please login via WebView")
+                }
+                pageListParse(response)
+            }
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        // Nicomanga historically refuses to serve pages if you don't login.
-        // However, due to the network attack against the site (as of July 2024) login is disabled
-        // Changes may be required as the site recovers
-        if (response.code == 403) {
-            throw SecurityException("You need to purchase this chapter first")
-        }
-        if (response.code == 401) {
-            throw SecurityException("Not logged in. Please login via WebView")
-        }
         val r = json.decodeFromString<ApiResponse<Frame>>(response.body.string())
         // Map the frames to pages
         return r.data.result.mapIndexed { i, frame -> Page(i, frame.meta.sourceUrl, frame.meta.sourceUrl) }
@@ -172,12 +170,11 @@ class NicovideoSeiga : HttpSource() {
     override fun imageRequest(page: Page): Request {
         // Headers are required to avoid cache miss from server side
         val headers = headersBuilder()
-            .set("referer", baseUrl)
+            .set("referer", "$baseUrl/")
             .set("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .set("pragma", "no-cache")
             .set("cache-control", "no-cache")
             .set("accept-encoding", "gzip, deflate, br")
-            .set("user-agent", System.getProperty("http.agent")!!)
             .set("sec-fetch-dest", "image")
             .set("sec-fetch-mode", "no-cors")
             .set("sec-fetch-site", "cross-site")
