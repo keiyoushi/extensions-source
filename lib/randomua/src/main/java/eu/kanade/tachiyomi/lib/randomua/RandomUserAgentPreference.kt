@@ -8,9 +8,9 @@ import androidx.preference.PreferenceScreen
 import okhttp3.Headers
 
 
-    /**
-     * Helper function to return UserAgentType based on SharedPreference value
-     */
+/**
+ * Helper function to return UserAgentType based on SharedPreference value
+ */
 fun SharedPreferences.getPrefUAType(): UserAgentType {
     return when (getString(PREF_KEY_RANDOM_UA, "off")) {
         "mobile" -> UserAgentType.MOBILE
