@@ -151,9 +151,11 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.mom", "id", "/d
 
         if (query.isNotEmpty()) {
             url.addPathSegments("page/$page/").addQueryParameter("s", query)
-        } else {
-            url.addPathSegment(mangaUrlDirectory.substring(1)).addPathSegments("page/$page/")
+            return GET(url.build(), headers)
         }
+
+        url.addPathSegment(mangaUrlDirectory.substring(1))
+            .addPathSegments("page/$page/")
 
         filters.forEach { filter ->
             when (filter) {
@@ -183,7 +185,7 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.mom", "id", "/d
                 else -> { /* Do Nothing */ }
             }
         }
-        return GET(url.build())
+        return GET(url.build(), headers)
     }
 
     private class StatusFilter : SelectFilter(
