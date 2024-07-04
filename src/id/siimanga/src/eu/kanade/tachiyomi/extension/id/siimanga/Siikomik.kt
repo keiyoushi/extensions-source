@@ -8,8 +8,6 @@ class Siikomik : MangaThemesia(
     "https://siikomik.com",
     "id",
 ) {
-    override val id = 5693774260946188681
-
     override val versionId = 2
 
     override val client = super.client.newBuilder()
