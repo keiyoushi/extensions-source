@@ -9,7 +9,7 @@ class GenzToons : MangaThemesia(
     "en",
 ) {
     override val id = 2909429739457928148
-    
+
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
