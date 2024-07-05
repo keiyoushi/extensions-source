@@ -50,7 +50,8 @@ class NicovideoSeiga : HttpSource() {
                     // The thumbnail provided only displays a glimpse of the latest chapter. Not the actual cover
                     // We can obtain a better thumbnail when the user clicks into the details
                     thumbnail_url = it.thumbnailUrl
-                    url = "/${it.id}"
+                    // Store id only as we override the url down the chain
+                    url = it.id.toString()
                 }
             },
             pageNumber < 5,
@@ -71,8 +72,8 @@ class NicovideoSeiga : HttpSource() {
             // Use display name instead which puts all of the people involved together
             author = entry.meta.author
             thumbnail_url = entry.meta.thumbnailUrl
-            // Use the share URL so that WebView still works
-            setUrlWithoutDomain(entry.meta.shareUrl)
+            // Store id only as we override the url down the chain
+            url = entry.id.toString()
             status = when (entry.meta.serialStatus) {
                 "serial" -> SManga.ONGOING
                 "concluded" -> SManga.COMPLETED
@@ -121,8 +122,8 @@ class NicovideoSeiga : HttpSource() {
                     // While chapters are properly sorted, authors often add promotional material as "chapters" which breaks trackers
                     // There's no way to properly filter these as they are treated the same as normal chapters
                     chapter_number = chapter.meta.number.toFloat()
-                    // Can't use setUrlWithoutDomain as it uses the baseUrl instead of apiUrl
-                    url = "/episodes/${chapter.id}/frames"
+                    // Store id only as we override the url down the chain
+                    url = chapter.id.toString()
                 }
             }
             .sortedByDescending { it.chapter_number }
@@ -150,6 +151,9 @@ class NicovideoSeiga : HttpSource() {
                 }
                 if (response.code == 401) {
                     throw SecurityException("Not logged in. Please login via WebView")
+                }
+                if (response.code != 200) {
+                    throw Exception("HTTP error ${response.code}")
                 }
                 pageListParse(response)
             }

@@ -22,7 +22,7 @@ data class Data<T>(
 )
 
 @Serializable
-data class Extra(
+class Extra(
     @SerialName("has_next")
     val hasNext: Boolean? = null,
 )
@@ -45,7 +45,7 @@ class SingleResultSerializer<T>(serializer: KSerializer<T>) : JsonTransformingSe
 // Result objects
 
 @Serializable
-data class PopularManga(
+class PopularManga(
     val id: Int,
     val title: String,
     val author: String,
@@ -54,7 +54,7 @@ data class PopularManga(
 )
 
 @Serializable
-data class Manga(
+class Manga(
     val id: Int,
     val meta: MangaMetadata,
 ) {
@@ -75,8 +75,7 @@ data class Manga(
 
 // Frames are the internal name for pages in the API
 @Serializable
-data class Frame(
-    val id: Int,
+class Frame(
     val meta: FrameMetadata,
 ) {
     @Serializable
@@ -88,7 +87,7 @@ data class Frame(
 
 // Chapters are known as Episodes internally in the API
 @Serializable
-data class Chapter(
+class Chapter(
     val id: Int,
     val meta: ChapterMetadata,
     @SerialName("own_status")
