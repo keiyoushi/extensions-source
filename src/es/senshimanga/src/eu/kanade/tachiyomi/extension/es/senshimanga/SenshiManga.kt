@@ -64,7 +64,7 @@ class SenshiManga : HttpSource() {
             }
         }
 
-        if (query.isNotBlank()) url.setQueryParameter("q", query)
+        if (query.isNotBlank()) url.setQueryParameter("title", query)
 
         return GET(url.build(), apiHeaders)
     }
