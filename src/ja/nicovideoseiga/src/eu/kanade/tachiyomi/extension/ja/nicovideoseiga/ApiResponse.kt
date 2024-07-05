@@ -59,7 +59,7 @@ class Manga(
     val meta: MangaMetadata,
 ) {
     @Serializable
-    data class MangaMetadata(
+    class MangaMetadata(
         val title: String,
         @SerialName("display_author_name")
         val author: String,
@@ -79,7 +79,7 @@ class Frame(
     val meta: FrameMetadata,
 ) {
     @Serializable
-    data class FrameMetadata(
+    class FrameMetadata(
         @SerialName("source_url")
         val sourceUrl: String,
     )
@@ -94,7 +94,7 @@ class Chapter(
     val ownership: Ownership,
 ) {
     @Serializable
-    data class ChapterMetadata(
+    class ChapterMetadata(
         val title: String,
         val number: Int,
         @SerialName("created_at")
@@ -102,7 +102,7 @@ class Chapter(
     )
 
     @Serializable
-    data class Ownership(
+    class Ownership(
         @SerialName("sell_status")
         val sellStatus: String,
     )
