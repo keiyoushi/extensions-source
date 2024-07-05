@@ -60,7 +60,7 @@ class NicovideoSeiga : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request =
         // This is the only API call that doesn't use the API url
-        GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page")
+        GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page", headers)
 
     // Parses the common manga entry object from the api
     private fun parseMangaEntry(entry: Manga): SManga {
@@ -89,7 +89,7 @@ class NicovideoSeiga : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}")
+        GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val r = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
@@ -98,13 +98,12 @@ class NicovideoSeiga : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         // Overwrite to use the API instead of scraping the shared URL
-        val id = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/contents/$id")
+        return GET("$apiUrl/contents/${manga.url}", headers)
     }
 
     override fun getMangaUrl(manga: SManga): String {
         // Return functionality to WebView
-        return "$baseUrl/comic/${manga.url.substringAfterLast("/")}"
+        return "$baseUrl/comic/${manga.url}"
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -131,12 +130,11 @@ class NicovideoSeiga : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request {
         // Overwrite to use the API instead of scraping the shared URL
-        val id = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/contents/$id/episodes")
+        return GET("$apiUrl/contents/${manga.url}/episodes", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/watch/mg${chapter.url.substringBeforeLast("/").substringAfterLast("/")}"
+        return "$baseUrl/watch/mg${chapter.url}"
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -167,8 +165,7 @@ class NicovideoSeiga : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         // Overwrite to use the API instead of scraping the shared URL
-        val id = chapter.url.substringBeforeLast("/").substringAfterLast("/")
-        return GET("$apiUrl/episodes/$id/frames?enable_webp=true")
+        return GET("$apiUrl/episodes/${chapter.url}/frames?enable_webp=true", headers)
     }
 
     override fun imageRequest(page: Page): Request {
