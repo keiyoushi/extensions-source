@@ -26,18 +26,16 @@ class Fecomic : Madara(
     override fun popularMangaFromElement(element: Element): SManga {
         return super.popularMangaFromElement(element).apply {
             // Skip 301 redirect
-            if (url.startsWith("http://")) {
-                url = "https://${url.removePrefix("http://")}"
-            }
+            url = url.asHttps()
+            thumbnail_url = thumbnail_url.asHttpsOrNull()
         }
     }
 
     override fun searchMangaFromElement(element: Element): SManga {
         return super.searchMangaFromElement(element).apply {
             // Skip 301 redirect
-            if (url.startsWith("http://")) {
-                url = "https://${url.removePrefix("http://")}"
-            }
+            url = url.asHttps()
+            thumbnail_url = thumbnail_url.asHttpsOrNull()
         }
     }
 
@@ -50,5 +48,17 @@ class Fecomic : Madara(
                 url = httpUrl.newBuilder().removePathSegment(httpUrl.pathSegments.size - 1).build().toString()
             }
         }
+    }
+
+    private fun String.asHttps(): String {
+        return if (this.startsWith("http://")) {
+            "https://${this.removePrefix("http://")}"
+        } else {
+            this
+        }
+    }
+
+    private fun String?.asHttpsOrNull(): String? {
+        return this?.asHttps()
     }
 }
