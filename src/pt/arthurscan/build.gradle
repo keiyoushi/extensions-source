@@ -3,7 +3,7 @@ ext {
     extClass = '.ArthurScan'
     themePkg = 'madara'
     baseUrl = 'https://arthurscan.xyz'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
 }
 
 apply from: "$rootDir/common.gradle"
