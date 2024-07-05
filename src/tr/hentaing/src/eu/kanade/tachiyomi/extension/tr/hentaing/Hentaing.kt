@@ -25,7 +25,7 @@ class Hentaing : Madara(
             throw Exception("Okumak için WebView üzerinden giriş yapın")
         }
 
-        return pageList.filter { it.imageUrl?.let(patternBadImage::containsMatchIn) != true }
+        return pageList.filterNot { it.imageUrl?.let(patternBadImage::containsMatchIn) ?: true }
     }
 
     private val patternBadImage = """/\.(?:webp|jpeg|tiff|.{3})$""".toRegex()
