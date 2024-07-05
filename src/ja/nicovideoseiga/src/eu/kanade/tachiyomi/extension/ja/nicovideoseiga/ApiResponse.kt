@@ -15,7 +15,7 @@ class ApiResponse<T>(
 )
 
 @Serializable
-data class Data<T>(
+class Data<T>(
     @Serializable(with = SingleResultSerializer::class)
     val result: List<T>,
     val extra: Extra? = null,
