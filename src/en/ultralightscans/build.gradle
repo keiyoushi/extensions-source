@@ -1,9 +1,0 @@
-ext {
-    extName = 'UltraLight Scans'
-    extClass = '.UltraLightScans'
-    themePkg = 'bakkin'
-    baseUrl = 'https://readlight.org/'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
