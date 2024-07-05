@@ -34,6 +34,8 @@ class ColoredManga : HttpSource() {
 
     override val baseUrl = "https://coloredmanga.net"
 
+    override val versionId = 2
+
     private val searchUrl = "$baseUrl/manga"
 
     override val lang = "en"
