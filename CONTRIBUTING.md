@@ -720,6 +720,9 @@ And for a release build of Tachiyomi:
 
 ### Android Debugger
 
+> [!IMPORTANT]
+> Rooted device required. If you are using an emulator instead, make sure you choose a profile without Google Play.
+
 You can leverage the Android Debugger to step through your extension while debugging.
 
 You *cannot* simply use Android Studio's `Debug 'module.name'` -> this will most likely result in an
