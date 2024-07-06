@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hentaing'
+    extClass = '.Hentaing'
+    themePkg = 'madara'
+    baseUrl = 'https://hentaing.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
