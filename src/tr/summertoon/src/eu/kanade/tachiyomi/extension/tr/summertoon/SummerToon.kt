@@ -7,7 +7,7 @@ import java.util.Locale
 
 class SummerToon : MangaThemesia(
     "SummerToon",
-    "https://summertoon.me",
+    "https://summertoon.biz",
     "tr",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 ) {
