@@ -2,8 +2,8 @@ ext {
     extName = 'ApollComics'
     extClass = '.ApollComics'
     themePkg = 'madara'
-    baseUrl = 'https://apollcomics.xyz'
-    overrideVersionCode = 2
+    baseUrl = 'https://apollcomics.es'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
