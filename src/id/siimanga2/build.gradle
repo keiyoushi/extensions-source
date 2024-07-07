@@ -1,0 +1,10 @@
+ext {
+    extName = 'Siimanga'
+    extClass = '.Siimanga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://siimanga.cyou'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
