@@ -83,7 +83,7 @@ class MangaBuff : ParsedHttpSource() {
     private fun getToken(): String {
         if (storedToken.isNullOrEmpty()) {
             val request = GET(baseUrl, headers)
-            client.newCall(request).execute() // updates token in interceptor
+            client.newCall(request).execute().close() // updates token in interceptor
         }
         return storedToken!!
     }
