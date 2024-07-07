@@ -8,11 +8,12 @@ import java.util.Locale
 
 class VerManhwas : Madara(
     "Ver Manhwas",
-    "https://vermanhwa.es",
+    "https://vermanhwa.com",
     "es",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
 ) {
-    override val useNewChapterEndpoint = true
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useNewChapterEndpoint = false
 
     override fun genresRequest(): Request {
         return GET("$baseUrl/?s=&post_type=wp-manga", headers)
