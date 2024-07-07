@@ -721,7 +721,7 @@ And for a release build of Tachiyomi:
 ### Android Debugger
 
 > [!IMPORTANT]
-> If you didn't build Tachiyomi from source with debug enabled and are using a release/beta APK, you **need** a rooted device.
+> If you didn't build the main app from source with debug enabled and are using a release/beta APK, you **need** a rooted device.
 > If you are using an emulator instead, make sure you choose a profile **without** Google Play.
 
 You can leverage the Android Debugger to step through your extension while debugging.
