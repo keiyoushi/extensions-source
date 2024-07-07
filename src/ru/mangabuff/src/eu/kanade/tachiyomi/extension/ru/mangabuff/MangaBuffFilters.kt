@@ -100,6 +100,7 @@ class GenreFilter : TriStateGroup("Жанр", genres) {
         )
     }
 }
+
 class TypeFilter : TriStateGroup("Тип", types) {
     companion object {
         private val types = listOf(
