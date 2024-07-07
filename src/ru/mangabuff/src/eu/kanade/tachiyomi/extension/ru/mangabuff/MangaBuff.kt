@@ -235,11 +235,11 @@ class MangaBuff : ParsedHttpSource() {
                 }
         }
 
-        genre =
-            (
-                document.select(".manga__middle-links > a:not(:last-child), .manga-mobile__info > a:not(:last-child)")
-                    .eachText() + document.select(".tags > .tags__item").eachText()
-                ).joinToString()
+        genre = buildList {
+            addAll(document.select(".manga__middle-links > a:not(:last-child)").eachText())
+            addAll(document.select(".manga-mobile__info > a:not(:last-child)").eachText())
+            addAll(document.select(".tags > .tags__item").eachText())
+        }.takeIf { it.isNotEmpty() }?.joinToString()
 
         status = document
             .select(".manga__middle-links > a:last-child, .manga-mobile__info > a:last-child")
@@ -284,7 +284,7 @@ class MangaBuff : ParsedHttpSource() {
             .execute()
             .parseAs<WrappedHtmlDto>()
             .content
-            .let(Jsoup::parse)
+            .let(Jsoup::parseBodyFragment)
             .select(chapterListSelector())
             .map(::chapterFromElement)
 
