@@ -19,14 +19,7 @@ class Manga168 : MangaThemesia(
         return super.mangaDetailsParse(document).apply {
             // Add 'color' badge as a genre
             if (document.selectFirst(".thumb .colored") != null) {
-                val genres = genre
-                    ?.split(", ")
-                    ?.toMutableList()
-                    ?: mutableListOf()
-
-                genre = genres
-                    .apply { add("Color") }
-                    .joinToString()
+                genre = genre?.plus(", Color")
             }
         }
     }
