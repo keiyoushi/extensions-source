@@ -2,8 +2,8 @@ ext {
     extName = 'Blazescans'
     extClass = '.Blazescans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://blazescans.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://blazetoon.com'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
