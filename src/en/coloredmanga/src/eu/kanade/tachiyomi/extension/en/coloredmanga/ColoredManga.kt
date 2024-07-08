@@ -191,7 +191,7 @@ class ColoredManga : HttpSource() {
         val mangasJson = mangasRaw
             .replace(Regex("""\\([\\"])"""), "$1")
             .replaceBefore("\"data\":[", "{")
-            .removeSuffix("]}]\\n\"])")
+            .replaceFrom("}]}]}]", "}]}")
 
         return mangasJson.parseAs<MangasList>().data
     }
@@ -402,8 +402,14 @@ class ColoredManga : HttpSource() {
             chain.proceed(chain.request())
         }
     }
+
     private inline fun <reified T> String.parseAs(): T {
         return json.decodeFromString(this)
+    }
+
+    private fun String.replaceFrom(prefix: String, replacement: String): String {
+        val index = this.indexOf(prefix)
+        return if (index == -1) this else this.substring(0, index) + replacement
     }
 
     private inline fun <reified T> Response.parseAs(): T {
