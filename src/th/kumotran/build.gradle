@@ -1,0 +1,10 @@
+ext {
+    extName = 'KumoTran'
+    extClass = '.KumoTran'
+    themePkg = 'madara'
+    baseUrl = 'https://www.kumotran.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
