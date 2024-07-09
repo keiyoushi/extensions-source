@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SManga.Companion.COMPLETED
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -130,12 +131,19 @@ class MangaHen : HttpSource() {
         return SManga.create().apply {
             val authors = document.select("a[href*=/circles/]").eachText().joinToString()
             val artists = document.select("a[href*=/authors/]").eachText().joinToString()
+            val titles = document.select("h1.font-semibold").text().split(" | ")
+            val altit = document.select("h2.text-lg.font-medium").text()
             initialized = true
-            title = document.select("h1.font-semibold").text()
+            title = titles[0]
             author = authors.ifEmpty { artists }
             artist = artists
             genre = document.select("a[href*=/tags/]").eachText().joinToString()
             description = buildString {
+                titles.getOrNull(1)?.let {
+                    append("Alternative Titles: ", "\n", "- $it", "\n")
+                    if (altit.isNotBlank()) append("- $altit", "\n")
+                    append("\n")
+                }
                 append("Categories: ", document.select("a[href*=/categories/]").text(), "\n")
                 append("Parodies: ", document.select("a[href*=/parodies/]").text(), "\n")
                 append("Circles: ", document.select("a[href*=/circles/]").text(), "\n\n")
@@ -143,6 +151,7 @@ class MangaHen : HttpSource() {
                 append(document.select("tr:contains(view)").text(), "\n")
             }
             thumbnail_url = document.selectFirst("img[src*=thumbnail].w-96")?.absUrl("src")
+            status = COMPLETED
         }
     }
 
@@ -162,9 +171,10 @@ class MangaHen : HttpSource() {
     // Pages
 
     override fun pageListParse(response: Response): List<Page> {
-        val images = response.asJsoup().select("img[src*=images]:not(img[src*=thumbnail]).w-full")
-        return images.mapIndexed { index, image ->
-            Page(index, imageUrl = image.absUrl("src").replace(Regex("-t(?=\\.)"), ""))
+        val images = response.asJsoup().select("img[src*=images]:not(img[src*=thumbnail]).w-full, img[data-src*=images]")
+        return images.mapIndexed { index, img ->
+            val image = img.absUrl("src").ifEmpty { img.absUrl("data-src") }
+            Page(index, imageUrl = image.replace(Regex("-t(?=\\.)"), ""))
         }
     }
 
