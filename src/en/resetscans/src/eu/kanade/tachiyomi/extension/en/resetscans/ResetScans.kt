@@ -5,7 +5,7 @@ import java.util.Locale
 
 class ResetScans : Madara(
     "Reset Scans",
-    "https://resetscan.com",
+    "https://reset-scans.co",
     "en",
     dateFormat = SimpleDateFormat("MMM dd", Locale("en")),
 ) {
