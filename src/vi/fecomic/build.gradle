@@ -1,0 +1,10 @@
+ext {
+    extName = 'Fecomic'
+    extClass = '.Fecomic'
+    themePkg = 'madara'
+    baseUrl = 'https://fecomicc.xyz'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
