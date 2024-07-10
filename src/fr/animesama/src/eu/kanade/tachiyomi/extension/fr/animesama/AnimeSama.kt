@@ -1,22 +1,26 @@
 package eu.kanade.tachiyomi.extension.fr.animesama
 
 import android.net.Uri
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
+import java.net.URL
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 class AnimeSama : ParsedHttpSource() {
 
@@ -24,7 +28,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override val baseUrl = "https://anime-sama.fr"
 
-    val cdn_url = "https://cdn.statically.io/gh/Anime-Sama/IMG/img/animes/animes%20icones%20carr%C3%A9/"
+    val cdn = "https://anime-sama.fr/s2/scans/"
 
     override val lang = "fr"
 
@@ -32,23 +36,21 @@ class AnimeSama : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    private val json: Json by injectLazy()
-
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/scan", headers)
+        return GET("$baseUrl/catalogue/", headers)
     }
 
-    override fun popularMangaSelector() = "figure.figure"
+    override fun popularMangaSelector() = ".cardListAnime.Scans"
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("figcaption").text()
+            title = element.select("h1").text()
             setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("a > img").attr("src")
+            thumbnail_url = element.select("img").attr("src")
         }
     }
 
@@ -56,15 +58,15 @@ class AnimeSama : ParsedHttpSource() {
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
+        return GET("$baseUrl/catalogue/", headers)
     }
 
-    override fun latestUpdatesSelector() = "div.container-fluid:nth-child(15) > div:nth-child(1) figure"
+    override fun latestUpdatesSelector() = ".cardListAnime.Scans"
 
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("figcaption").text().replace("\\nScan\\n", "")
-            setUrlWithoutDomain(cdn_url + title.replace(" ", "-").trim() + "carre.jpg")
+            title = element.select("h1").text()
+            setUrlWithoutDomain(element.select("a").attr("href"))
             thumbnail_url = element.select("img").attr("src")
         }
     }
@@ -73,31 +75,47 @@ class AnimeSama : ParsedHttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val uri = Uri.parse("$baseUrl/search/search.php").buildUpon()
-            .appendQueryParameter("terme", query + " [SCANS]")
-            .appendQueryParameter("s", "Search")
-        return GET(uri.toString(), headers)
+        val uri = Uri.parse("$baseUrl/template-php/defaut/fetch.php").buildUpon()
+            .appendQueryParameter("query", query)
+        val mediaType = "application/x-www-form-urlencoded; charset=UTF-8".toMediaType()
+        return POST(uri.toString(), headers, "query=$query".toRequestBody(mediaType))
     }
-    override fun searchMangaSelector() = "div.media-body"
+    override fun searchMangaSelector() = "a[href*='catalogue']"
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h5").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url =
-                cdn_url + title.replace(
-                " [SCANS]",
-                "",
-            ).replace(" ", "-").trim() + "carre.jpg"
+            title = element.select("h3").text()
+            setUrlWithoutDomain(element.attr("href"))
+            thumbnail_url = element.select("img").attr("src")
         }
     }
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select("div.carousel-item:nth-child(1) > div:nth-child(2) > h5:nth-child(1)").text()
-        description = document.select("div.carousel-item:nth-child(2) > div:nth-child(2) > p:nth-child(1)").text()
-        thumbnail_url = document.select("div.carousel-item:nth-child(1) > img:nth-child(1)").attr("src")
-        genre = document.select("div.carousel-item:nth-child(2) > div:nth-child(2) > p:nth-child(2)").text().replace("Genres : ", "")
+        var boolSyn = false
+        var boolGenre = false
+
+        document.select("#sousBlocMilieu > div").first()!!.children().forEach { element ->
+            if (boolSyn) {
+                boolSyn = false
+                description = element.text()
+            }
+
+            if (element.text() == "Synopsis") {
+                boolSyn = true
+            }
+
+            if (boolGenre) {
+                boolGenre = false
+                genre = element.text()
+            }
+
+            if (element.text() == "Genres") {
+                boolGenre = true
+            }
+        }
+        title = document.select("#titreOeuvre").text()
+        thumbnail_url = document.select("#coverOeuvre").attr("src")
     }
 
     // Chapters
@@ -105,52 +123,126 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val javascriptUrl = document.select("body > script:nth-child(3)").attr("abs:src")
+    fun String.containsMultipleTimes(search: String): Boolean {
+        if (this.contains(search)) {
+            var temp = this.split(search)[1]
+            return temp.contains(search)
+        }
+        return false
+    }
 
+    override fun chapterListParse(response: Response): List<SChapter> {
+        var document = response.asJsoup()
+        val goodRequest = GET(document.baseUri() + "/scan/vf")
+        val goodResponse = client.newCall(goodRequest).execute()
+        document = goodResponse.asJsoup()
+
+        Log.v("AnimeSama", document.baseUri())
+        val javascriptUrl = "episodes.js?title=" + document.select("#titreOeuvre").text()
+        Log.v("AnimeSama", javascriptUrl)
         val newHeaders = headersBuilder()
             .add("Accept-Version", "v1")
             .build()
 
-        val request = GET(javascriptUrl, newHeaders)
+        val request = GET(document.baseUri() + "/" + javascriptUrl, newHeaders)
         val responsejs = client.newCall(request).execute()
-        val jsonDataString = responsejs.body.string()
+        var jsonDataString = responsejs.body.string()
 
-        return jsonDataString
+        val toJson = jsonDataString
             .split(" ", ",")
             .filter { it.contains("eps") && !it.contains("drive.google.com") }
             .mapNotNull { it.replace("=", "").replace("eps", "").toIntOrNull() }
             .sorted()
             .map { chapter ->
-                SChapter.create().apply {
-                    name = "Chapitre $chapter"
-                    setUrlWithoutDomain(javascriptUrl + "/$chapter")
+            }.asReversed()
+        var chapList: MutableList<SChapter> = ArrayList()
+        var retard = 0
+
+        Log.v("AnimeSama", document.html())
+        if (document.html().containsMultipleTimes("resetListe()")) {
+            var list = document.html().split("resetListe();").toMutableList()
+            list.removeAt(0)
+            list.removeAt(0)
+            list[0] = list[0].split("finirList")[0]
+            list = list[0].split(");").toMutableList()
+            Log.v("AnimeSama", list.toString())
+            list.forEach { command ->
+                when {
+                    command.contains("creerListe(") -> {
+                        var clean = command.replace("creerListe(", "").trimIndent().split(",")
+                        var start = clean[0].replace(" ", "").toInt()
+                        var end = clean[1].replace(" ", "").toInt()
+
+                        for (i in start..end) {
+                            Log.v("AnimeSama", "" + (chapList.size + 1) + " - " + i)
+                            chapList.add(
+                                SChapter.create().apply {
+                                    name = "Chapitre " + (i)
+                                    setUrlWithoutDomain(document.baseUri() + "/" + javascriptUrl + "&id=${chapList.size + 1}")
+                                },
+                            )
+                        }
+                    }
+                    command.contains("newSP(") -> {
+                        var clean = command.replace("newSP(", "").trimIndent()
+                        Log.v("AnimeSama", "" + (chapList.size + 1) + " - " + clean)
+                        chapList.add(
+                            SChapter.create().apply {
+                                name = "Chapitre " + (clean)
+                                setUrlWithoutDomain(document.baseUri() + "/" + javascriptUrl + "&id=${chapList.size + 1}")
+                            },
+                        )
+                        retard++
+                    }
                 }
             }
+        }
+        for (index in chapList.size..toJson.size - 1) {
+            Log.v("AnimeSama", "" + (chapList.size + 1) + " - " + (chapList.size + 1 - retard))
+            chapList.add(
+                SChapter.create().apply {
+                    name = "Chapitre " + (chapList.size + 1 - retard)
+                    setUrlWithoutDomain(document.baseUri() + "/" + javascriptUrl + "&id=${chapList.size + 1}")
+                },
+            )
+        }
+        return chapList.asReversed()
     }
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {
-        val url = document.baseUri().split("/")
-        val javascriptUrlFinal = url.subList(0, url.size - 1).joinToString("/")
-        val javascriptResponse = checkJavascript(javascriptUrlFinal)
+        Log.v("AnimeSama", document.baseUri())
+        val url = URL(document.baseUri())
+        val query = url.query
+        val parameters = query.split("&").associate {
+            val (key, value) = it.split("=")
+            key to URLDecoder.decode(value, StandardCharsets.UTF_8.toString())
+        }
+
+        val title = parameters["title"]
+        val chapter = parameters["id"]
+        val javascriptResponse = checkJavascript(document.baseUri())
         val jsonDataString = javascriptResponse.body.string()
 
-        val episode = url[url.size - 1]
         val allEpisodes = jsonDataString.split("var")
 
-        val theEpisode = allEpisodes.firstOrNull { it.contains("eps$episode") }
+        val theEpisode = allEpisodes.firstOrNull { it.contains("eps$chapter=") }
             ?: return emptyList()
 
         val final_list = theEpisode
             .substringAfter("[")
             .substringBefore("]")
+            .split(",")
 
-        return final_list
-            .substring(0, final_list.lastIndexOf(",")).replace("""'""".toRegex(), "\"")
-            .let { json.decodeFromString<List<String>>("[$it]") }
-            .mapIndexed { i, imageUrl -> Page(i, "", imageUrl) }
+        val image_list = mutableListOf<Page>()
+
+        for (index in 1..final_list.size - 1) {
+            image_list.add(
+                Page(index, "", "$cdn$title/$chapter/$index.jpg"),
+            )
+        }
+
+        return image_list
     }
 
     private fun checkJavascript(url: String): Response {
