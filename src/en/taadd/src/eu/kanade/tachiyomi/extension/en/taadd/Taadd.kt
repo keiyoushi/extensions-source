@@ -159,6 +159,10 @@ class Taadd : HttpSource() {
         return GET("$baseUrl${manga.url}#mobile", headers)
     }
 
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl${manga.url}"
+    }
+
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
 
@@ -267,6 +271,10 @@ class Taadd : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         return GET("$baseUrl${chapter.url}#desktop", headers)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return "$baseUrl${chapter.url}"
     }
 
     override fun pageListParse(response: Response): List<Page> {
