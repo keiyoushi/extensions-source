@@ -125,8 +125,8 @@ class AnimeSama : ParsedHttpSource() {
 
     fun String.containsMultipleTimes(search: String): Boolean {
         if (this.contains(search)) {
-            var temp = this.split(search)[1]
-            return temp.contains(search)
+            var temp = this.split(search)
+            return (temp.size > 2)
         }
         return false
     }
@@ -194,6 +194,7 @@ class AnimeSama : ParsedHttpSource() {
                         )
                         retard++
                     }
+                    /* The site contains an as-yet unused command called "newSPE", and as I have no concrete examples of its use, I haven't implemented it yet. */
                 }
             }
         }
