@@ -262,7 +262,6 @@ class Taadd : HttpSource() {
 
     private val specialChar = Regex("""[^a-z0-9]+""")
     private val whiteSpace = Regex("""\s+""")
-    private val chRegex = Regex("""ch\.\s?""", RegexOption.IGNORE_CASE)
 
     private val dateFormat = SimpleDateFormat("EEEE, MMMM dd, yyyy", Locale.ENGLISH)
 
