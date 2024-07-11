@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 
-class ManhwaDesu : MangaThemesia("ManhwaDesu", "https://manhwadesu.one", "id", "/komik") {
+class ManhwaDesu : MangaThemesia("ManhwaDesu", "https://manhwadesu.guru", "id", "/komik") {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
