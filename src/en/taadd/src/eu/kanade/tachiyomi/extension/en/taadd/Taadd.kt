@@ -163,7 +163,20 @@ class Taadd : HttpSource() {
         val document = response.asJsoup()
 
         thumbnail_url = document.selectFirst("img.detail-cover")?.absUrl("src")
-        description = document.selectFirst(".manga-summary")?.text()
+        description = buildString {
+            document.selectFirst(".manga-summary")?.text()?.let {
+                if (it.trim() != "N/A") {
+                    append(it)
+                }
+            }
+
+            document.selectFirst(".detail-info > p:contains(Alternative)")?.text()?.let {
+                if (isNotBlank()) {
+                    append("\n\n")
+                }
+                append(it)
+            }
+        }
         genre = document.select(".manga-genres a").eachText().joinToString()
         status = when (document.selectFirst(".detail-info > p:contains(status) > a")?.text()) {
             "Ongoing" -> SManga.ONGOING
@@ -181,11 +194,60 @@ class Taadd : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
+        val mangaTitle = document.selectFirst("meta[property=og:title]")!!
+            .attr("content")
+            .lowercase()
+            .replace(specialChar, "")
+            .replace(whiteSpace, "")
+
         return document.select(".chapter_list tr").drop(1).map {
             SChapter.create().apply {
                 with(it.selectFirst("td > a")!!) {
                     setUrlWithoutDomain(absUrl("href"))
-                    name = text()
+                    name = run {
+                        val rawTitle = text()
+                        val simplified = rawTitle
+                            .lowercase()
+                            .replace(specialChar, "")
+                            .replace(whiteSpace, "")
+
+                        if (simplified.startsWith(mangaTitle)) {
+                            var idx = mangaTitle.length
+                            while (idx < rawTitle.length) {
+                                // vol.x ch.y
+                                if (rawTitle[idx].equals('v', true)) {
+                                    val _idx = rawTitle.indexOf('c', idx, true)
+                                    if (_idx != -1) {
+                                        idx = _idx
+                                    } else {
+                                        idx++
+                                    }
+                                    // actual chapter number
+                                } else if (!rawTitle[idx].isDigit()) {
+                                    idx++
+                                } else {
+                                    // remove leading zeros -> 005
+                                    while (
+                                        rawTitle[idx] == '0' &&
+                                        rawTitle.getOrNull(idx + 1)?.isDigit() == true
+                                    ) {
+                                        idx++
+                                    }
+                                    break
+                                }
+                            }
+
+                            if (idx != rawTitle.length) {
+                                val cleanedTitle = rawTitle.substring(idx, rawTitle.length)
+
+                                "Chapter $cleanedTitle"
+                            } else {
+                                rawTitle
+                            }
+                        } else {
+                            rawTitle
+                        }
+                    }
                 }
                 date_upload = try {
                     dateFormat.parse(
@@ -197,6 +259,10 @@ class Taadd : HttpSource() {
             }
         }
     }
+
+    private val specialChar = Regex("""[^a-z0-9]+""")
+    private val whiteSpace = Regex("""\s+""")
+    private val chRegex = Regex("""ch\.\s?""", RegexOption.IGNORE_CASE)
 
     private val dateFormat = SimpleDateFormat("EEEE, MMMM dd, yyyy", Locale.ENGLISH)
 
