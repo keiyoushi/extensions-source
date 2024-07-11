@@ -3,7 +3,7 @@ ext {
     extClass = '.PinkSeaUnicorn'
     themePkg = 'madara'
     baseUrl = 'https://psunicorn.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
