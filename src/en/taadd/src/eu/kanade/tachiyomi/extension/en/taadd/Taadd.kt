@@ -39,7 +39,7 @@ class Taadd : HttpSource() {
             val request = chain.request()
             val url = request.url.toString()
 
-            if (!url.startsWith(baseUrl)) {
+            if (!url.startsWith(baseUrl) || request.url.fragment.isNullOrBlank()) {
                 return@addNetworkInterceptor chain.proceed(request)
             }
 
@@ -200,9 +200,7 @@ class Taadd : HttpSource() {
 
         val mangaTitle = document.selectFirst("meta[property=og:title]")!!
             .attr("content")
-            .lowercase()
-            .replace(specialChar, "")
-            .replace(whiteSpace, "")
+            .simplify()
 
         return document.select(".chapter_list tr").drop(1).map {
             SChapter.create().apply {
@@ -210,16 +208,16 @@ class Taadd : HttpSource() {
                     setUrlWithoutDomain(absUrl("href"))
                     name = run {
                         val rawTitle = text()
-                        val simplified = rawTitle
-                            .lowercase()
-                            .replace(specialChar, "")
-                            .replace(whiteSpace, "")
+                        val simplified = rawTitle.simplify()
 
                         if (simplified.startsWith(mangaTitle)) {
                             var idx = mangaTitle.length
                             while (idx < rawTitle.length) {
-                                // vol.x ch.y
-                                if (rawTitle[idx].equals('v', true)) {
+                                // vol.x ch.y || season x chap y
+                                if (
+                                    rawTitle[idx].equals('v', true) ||
+                                    rawTitle[idx].equals('s', true)
+                                ) {
                                     val _idx = rawTitle.indexOf('c', idx, true)
                                     if (_idx != -1) {
                                         idx = _idx
@@ -246,7 +244,7 @@ class Taadd : HttpSource() {
 
                                 "Chapter $cleanedTitle"
                             } else {
-                                rawTitle
+                                rawTitle.substring(mangaTitle.length, rawTitle.length).trim()
                             }
                         } else {
                             rawTitle
@@ -264,9 +262,14 @@ class Taadd : HttpSource() {
         }
     }
 
-    private val specialChar = Regex("""[^a-z0-9]+""")
-    private val whiteSpace = Regex("""\s+""")
+    private fun String.simplify(): String {
+        return lowercase()
+            .replace(specialChar) {
+                " ".repeat(it.value.length)
+            }
+    }
 
+    private val specialChar = Regex("""[^a-z0-9]+""")
     private val dateFormat = SimpleDateFormat("EEEE, MMMM dd, yyyy", Locale.ENGLISH)
 
     override fun pageListRequest(chapter: SChapter): Request {
