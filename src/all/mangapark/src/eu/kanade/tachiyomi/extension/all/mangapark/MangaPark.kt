@@ -30,6 +30,8 @@ import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MangaPark(
     override val lang: String,
@@ -238,7 +240,8 @@ class MangaPark(
     private inline fun <reified T : Any> T.toJsonRequestBody() =
         json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
 
-    private var cookiesSet = false
+    private val cookiesNotSet = AtomicBoolean(true)
+    private val latch = CountDownLatch(1)
 
     // sets necessary cookies to not block genres like `Hentai`
     private fun siteSettingsInterceptor(chain: Interceptor.Chain): Response {
@@ -248,15 +251,19 @@ class MangaPark(
 
         if (
             request.url.toString() != settingsUrl &&
-            request.url.host == domain &&
-            !cookiesSet
+            request.url.host == domain
         ) {
-            val payload = """{"data":{"general_autoLangs":[],"general_userLangs":[],"general_excGenres":[],"general_prefLangs":[]}}"""
-                .toRequestBody(JSON_MEDIA_TYPE)
+            if (cookiesNotSet.getAndSet(false)) {
+                val payload =
+                    """{"data":{"general_autoLangs":[],"general_userLangs":[],"general_excGenres":[],"general_prefLangs":[]}}"""
+                        .toRequestBody(JSON_MEDIA_TYPE)
 
-            client.newCall(POST(settingsUrl, headers, payload)).execute().close()
+                client.newCall(POST(settingsUrl, headers, payload)).execute().close()
 
-            cookiesSet = true
+                latch.countDown()
+            } else {
+                latch.await()
+            }
         }
 
         return chain.proceed(request)
