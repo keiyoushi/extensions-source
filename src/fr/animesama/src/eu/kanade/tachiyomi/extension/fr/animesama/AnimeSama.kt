@@ -96,11 +96,10 @@ class AnimeSama : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     fun String.containsMultipleTimes(search: String): Boolean {
-        if (this.contains(search)) {
-            var temp = this.split(search)
-            return (temp.size > 2)
-        }
-        return false
+        val regex = Regex(search)
+        val matches = regex.findAll(this)
+        val count = matches.count()
+        return count > 1
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -135,7 +134,7 @@ class AnimeSama : ParsedHttpSource() {
 
         var scriptContent = document.select("script:containsData(resetListe\\(\\))").toString()
         if (scriptContent.containsMultipleTimes("resetListe()")) {
-            var scriptCommandList = document.html().split(";").toMutableList()
+            var scriptCommandList = document.html().split(";")
             var createListRegex = Regex("""creerListe\((\d+,\s*\d+)\)""")
             var specialRegex = Regex("""newSP\((\d+(\.\d+)?)\)""")
             scriptCommandList.forEach { command ->
