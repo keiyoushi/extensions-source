@@ -18,6 +18,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -95,8 +98,6 @@ class MangaPark(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        runCatching(::getGenres)
-
         val result = response.parseAs<SearchResponse>()
 
         val entries = result.data.searchComics.items.map { it.data.toSManga() }
@@ -131,6 +132,10 @@ class MangaPark(
     }
 
     override fun getFilterList(): FilterList {
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching(::getGenres)
+        }
+
         val filters = mutableListOf<Filter<*>>(
             SortFilter(),
             OriginalLanguageFilter(),
