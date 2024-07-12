@@ -2,8 +2,8 @@ ext {
     extName = 'Algodão Doce'
     extClass = '.AlgodaoDoce'
     themePkg = 'madara'
-    baseUrl = 'https://algodaodocescan.com.br'
-    overrideVersionCode = 0
+    baseUrl = 'https://xn--algododoce-j5a.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
