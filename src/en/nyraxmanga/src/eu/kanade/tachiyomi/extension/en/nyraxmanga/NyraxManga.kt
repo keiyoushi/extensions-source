@@ -36,7 +36,7 @@ class NyraxManga : MangaThemesia(
         }
 
         return imageList.mapIndexed { i, jsonEl ->
-            Page(i, imageUrl = jsonEl.jsonPrimitive.content)
+            Page(i, document.location(), jsonEl.jsonPrimitive.content)
         }
     }
 }

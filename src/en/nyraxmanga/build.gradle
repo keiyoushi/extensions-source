@@ -4,7 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://nyraxmanga.com'
     overrideVersionCode = 0
-    // isNsfw = ?
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
