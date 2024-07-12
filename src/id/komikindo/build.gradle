@@ -1,0 +1,10 @@
+ext {
+    extName = 'Komikindo'
+    extClass = '.Komikindo'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://komikindo.sbs'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
