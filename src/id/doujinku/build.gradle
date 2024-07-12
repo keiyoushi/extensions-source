@@ -1,0 +1,10 @@
+ext {
+    extName = 'Doujinku'
+    extClass = '.Doujinku'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://doujinku.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
