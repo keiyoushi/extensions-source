@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhuascan.us'
+    extClass = '.ManhuascanUs'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://manhuascan.us'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
