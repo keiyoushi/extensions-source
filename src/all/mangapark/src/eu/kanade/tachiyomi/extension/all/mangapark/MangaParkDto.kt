@@ -113,6 +113,7 @@ class MangaParkChapter(
     private val dateModify: Long? = null,
     private val urlPath: String,
     private val srcTitle: String? = null,
+    private val userNode: Data<Name>? = null,
     val dupChapters: List<Data<MangaParkChapter>> = emptyList(),
 ) {
     fun toSChapter() = SChapter.create().apply {
@@ -122,9 +123,12 @@ class MangaParkChapter(
             title?.let { append(": ", it) }
         }
         date_upload = dateModify ?: dateCreate ?: 0L
-        scanlator = srcTitle ?: "Unknown"
+        scanlator = userNode?.data?.name ?: srcTitle ?: "Unknown"
     }
 }
+
+@Serializable
+class Name(val name: String)
 
 @Serializable
 class ChapterPages(
