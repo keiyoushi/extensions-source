@@ -1,0 +1,10 @@
+ext {
+    extName = 'Doujin69'
+    extClass = '.Doujin69'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://doujin69.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
