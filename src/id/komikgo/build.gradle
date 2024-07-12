@@ -1,0 +1,10 @@
+ext {
+    extName = 'KomikGO'
+    extClass = '.KomikGo'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://komikgo.xyz'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
