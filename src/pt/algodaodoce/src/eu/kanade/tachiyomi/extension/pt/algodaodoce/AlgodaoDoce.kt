@@ -6,7 +6,7 @@ import java.util.Locale
 
 class AlgodaoDoce : Madara(
     "Algodão Doce",
-    "https://algodaodocescan.com.br",
+    "https://xn--algododoce-j5a.com",
     "pt-BR",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("pt", "BR")),
 ) {
