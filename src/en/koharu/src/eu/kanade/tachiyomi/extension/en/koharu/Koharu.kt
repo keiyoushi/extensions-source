@@ -153,7 +153,6 @@ class Koharu : HttpSource(), ConfigurableSource {
         val males = mutableListOf<String>()
         val mixed = mutableListOf<String>()
         val other = mutableListOf<String>()
-        // val languages = mutableListOf<String>()
         val uploaders = mutableListOf<String>()
         val tags = mutableListOf<String>()
         for (tag in this@toSManga.tags) {
@@ -168,7 +167,6 @@ class Koharu : HttpSource(), ConfigurableSource {
                 8 -> males.add(tag.name + " ♂")
                 9 -> females.add(tag.name + " ♀")
                 10 -> mixed.add(tag.name + " ◊")
-                // 11 -> languages.add(tag.name)
                 12 -> other.add(tag.name + " ◊")
                 else -> tags.add(tag.name + " ◊")
             }
@@ -241,11 +239,8 @@ class Koharu : HttpSource(), ConfigurableSource {
         val mangaEntry = response.parseAs<MangaEntry>()
         val imagesInfo = getImagesByMangaEntry(mangaEntry)
 
-        return imagesInfo.entries.mapIndexed { i, image ->
-            Page(
-                i,
-                imageUrl = "${imagesInfo.base}/${image.path}",
-            )
+        return imagesInfo.entries.mapIndexed { index, image ->
+            Page(index, imageUrl = "${imagesInfo.base}/${image.path}")
         }
     }
 
