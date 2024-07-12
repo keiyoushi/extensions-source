@@ -76,6 +76,11 @@ val CHAPTERS_QUERY = buildQuery {
                     dateCreate
                     urlPath
                     srcTitle
+                    userNode {
+                        data {
+                            name
+                        }
+                    }
                     dupChapters {
                         data {
                             id
