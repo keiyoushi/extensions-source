@@ -26,10 +26,12 @@ class PijamaliKoi : MangaThemesia(
         return super.pageListRequest(chapter).fixupUrl()
     }
 
-    // Fixes the `/m` in baseUrl
+    // Fixes the extra `/m` in the manga URL
+    //
+    // In the database URLs are stored as `/m/seri/regina-rena-to-the-unforgiven/`
+    // With `*Request()` it becomes `$baseUrl/m/seri/regina-rena-to-the-unforgiven/`
+    // Since `baseUrl` contains the the extra `/m`, it will double up, leading to an invalid URL.
     private fun Request.fixupUrl(): Request {
-        return takeIf { url.pathSize >= 1 }
-            ?.let { newBuilder().url(url.newBuilder().removePathSegment(0).build()).build() }
-            ?: this
+        return newBuilder().url(url.newBuilder().removePathSegment(0).build()).build()
     }
 }
