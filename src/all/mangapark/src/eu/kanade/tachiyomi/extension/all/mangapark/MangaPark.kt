@@ -22,6 +22,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -54,6 +55,7 @@ class MangaPark(
     private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::siteSettingsInterceptor)
         .addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
         .rateLimitHost(apiUrl.toHttpUrl(), 1)
         .build()
@@ -235,6 +237,30 @@ class MangaPark(
 
     private inline fun <reified T : Any> T.toJsonRequestBody() =
         json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
+
+    private var cookiesSet = false
+
+    // sets necessary cookies to not block genres like `Hentai`
+    private fun siteSettingsInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        val settingsUrl = "$baseUrl/aok/settings-save"
+
+        if (
+            request.url.toString() != settingsUrl &&
+            request.url.host == domain &&
+            !cookiesSet
+        ) {
+            val payload = """{"data":{"general_autoLangs":[],"general_userLangs":[],"general_excGenres":[],"general_prefLangs":[]}}"""
+                .toRequestBody(JSON_MEDIA_TYPE)
+
+            client.newCall(POST(settingsUrl, headers, payload)).execute().close()
+
+            cookiesSet = true
+        }
+
+        return chain.proceed(request)
+    }
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
