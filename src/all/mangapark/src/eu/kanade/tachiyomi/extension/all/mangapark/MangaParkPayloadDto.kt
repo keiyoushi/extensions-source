@@ -4,28 +4,28 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class GraphQL<T>(
-    val variables: T,
-    val query: String,
+class GraphQL<T>(
+    private val variables: T,
+    private val query: String,
 )
 
 @Serializable
-data class SearchVariables(val select: SearchPayload)
+class SearchVariables(private val select: SearchPayload)
 
 @Serializable
-data class SearchPayload(
-    @SerialName("word") val query: String? = null,
-    val incGenres: List<String>? = null,
-    val excGenres: List<String>? = null,
-    val incTLangs: List<String>? = null,
-    val incOLangs: List<String>? = null,
-    val sortby: String? = null,
-    val chapCount: String? = null,
-    val origStatus: String? = null,
-    val siteStatus: String? = null,
-    val page: Int,
-    val size: Int,
+class SearchPayload(
+    @SerialName("word") private val query: String? = null,
+    private val incGenres: List<String>? = null,
+    private val excGenres: List<String>? = null,
+    private val incTLangs: List<String>? = null,
+    private val incOLangs: List<String>? = null,
+    private val sortby: String? = null,
+    private val chapCount: String? = null,
+    private val origStatus: String? = null,
+    private val siteStatus: String? = null,
+    private val page: Int,
+    private val size: Int,
 )
 
 @Serializable
-data class IdVariables(val id: String)
+class IdVariables(private val id: String)

@@ -4,6 +4,7 @@ import android.app.Application
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -175,7 +176,13 @@ class MangaPark(
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ChapterListResponse>()
 
-        return result.data.chapterList.map { it.data.toSChapter() }.reversed()
+        return if (preference.getBoolean(DUPLICATE_CHAPTER_PREF_KEY, false)) {
+            result.data.chapterList.flatMap {
+                it.data.dupChapters.map { it.data.toSChapter() }
+            }.reversed()
+        } else {
+            result.data.chapterList.map { it.data.toSChapter() }.reversed()
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast("#")
@@ -210,6 +217,13 @@ class MangaPark(
                 Toast.makeText(screen.context, "Restart Tachiyomi to apply changes", Toast.LENGTH_LONG).show()
                 true
             }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = DUPLICATE_CHAPTER_PREF_KEY
+            title = "Fetch Duplicate Chapters"
+            summary = "Refresh chapter list to apply changes"
+            setDefaultValue(false)
         }.also(screen::addPreference)
     }
 
@@ -248,5 +262,7 @@ class MangaPark(
             "parkmanga.org",
             "mpark.to",
         )
+
+        private const val DUPLICATE_CHAPTER_PREF_KEY = "pref_dup_chapters"
     }
 }
