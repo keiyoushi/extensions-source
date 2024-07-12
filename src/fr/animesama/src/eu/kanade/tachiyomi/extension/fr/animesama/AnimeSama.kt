@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.animesama
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -61,16 +62,12 @@ class AnimeSama : ParsedHttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/template-php/defaut/fetch.php".toHttpUrl().newBuilder().build()
+        val url = "$baseUrl/template-php/defaut/fetch.php"
         val formBody = FormBody.Builder()
             .add("query", query)
             .build()
 
-        val request = Request.Builder()
-            .url(url)
-            .post(formBody)
-            .build()
-        return request
+        return POST(url, headers, formBody)
     }
     override fun searchMangaSelector() = "a[href*='catalogue']"
     override fun searchMangaNextPageSelector(): String? = null
@@ -103,11 +100,8 @@ class AnimeSama : ParsedHttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = "$baseUrl${manga.url}/scan/vf".toHttpUrl().newBuilder().build()
-        return Request.Builder()
-            .url(url)
-            .get()
-            .build()
+        val url = "$baseUrl${manga.url}/scan/vf"
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -115,10 +109,7 @@ class AnimeSama : ParsedHttpSource() {
 
         val baseChapterUrl = "episodes.js?title=" + document.select("#titreOeuvre").text()
 
-        val requestToFetchChapters = Request.Builder()
-            .url(document.baseUri() + "/" + baseChapterUrl)
-            .get()
-            .build()
+        val requestToFetchChapters = GET("${document.baseUri()}/$baseChapterUrl", headers)
         val javascriptFile = client.newCall(requestToFetchChapters).execute()
         var javascriptFileContent = javascriptFile.body.string()
 
