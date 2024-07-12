@@ -1,0 +1,10 @@
+ext {
+    extName = 'ToomTam-Manga'
+    extClass = '.ToomTamManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://toomtam-manga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
