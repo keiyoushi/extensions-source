@@ -15,7 +15,7 @@
 
                 <data
                     android:host="koharu.to"
-                    android:pathPattern="/g/.*/..*"
+                    android:pathPattern="/g/..*/..*"
                     android:scheme="https" />
             </intent-filter>
         </activity>

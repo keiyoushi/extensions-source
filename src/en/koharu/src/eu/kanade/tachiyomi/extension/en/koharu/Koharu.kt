@@ -141,8 +141,8 @@ class Koharu : HttpSource(), ConfigurableSource {
                     else -> {}
                 }
             }
-            if(query.isNotEmpty()) terms.add("title:\"$query\"")
-            if(terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
+            if (query.isNotEmpty()) terms.add("title:\"$query\"")
+            if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
             addQueryParameter("page", page.toString())
         }.build()
 
