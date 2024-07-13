@@ -1,0 +1,10 @@
+ext {
+    extName = 'Pijamalı Koi'
+    extClass = '.PijamaliKoi'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://pijamalikoi.com/m'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
