@@ -6,13 +6,10 @@ import org.jsoup.nodes.Element
 
 class ManhwaDesu : MangaThemesia("ManhwaDesu", "https://manhwadesu.cc", "id", "/komik") {
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(4,2)
+   override val client: OkHttpClient = super.client.newBuilder()
+        .rateLimit(4)
         .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("referer", "$baseUrl/")
-
+        
     override fun Element.imgAttr(): String {
         attributes()
             .find { it.key.endsWith("original-src") }
