@@ -25,7 +25,7 @@ class PinkSeaUnicorn : Madara(
     private fun checkPasswordProtectedIntercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
 
-        if (response.request.url.queryParameter("password-protected") != null) {
+        if (chain.request().url.queryParameter("password-protected") != null) {
             response.close()
             throw IOException("Autentique-se através da WebView e tente novamente.")
         }
