@@ -21,12 +21,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
-import kotlin.reflect.KProperty1
 
 class Koharu : HttpSource(), ConfigurableSource {
     override val name = "Koharu"
@@ -42,16 +42,16 @@ class Koharu : HttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(3, 1, TimeUnit.SECONDS)
+        .rateLimit(1)
         .build()
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json: Json by injectLazy()
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private var quality = preferences.getString(PREF_IMAGERES, "0")!!
+    private fun quality() = preferences.getString(PREF_IMAGERES, "1280")!!
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -64,8 +64,14 @@ class Koharu : HttpSource(), ConfigurableSource {
     }
 
     private fun getImagesByMangaEntry(entry: MangaEntry): ImagesInfo {
-        val dataKey = readInstanceProperty(entry.data, quality) as DataKey
-
+        val data = entry.data
+        val dataKey = when (quality()) {
+            "1600" -> data.`1600`
+            "1280" -> data.`980`
+            "980" -> data.`980`
+            "780" -> data.`780`
+            else -> data.`0`
+        }
         val imagesResponse = client.newCall(POST("$apiBooksUrl/data/${entry.id}/${entry.public_key}/${dataKey.id}/${dataKey.public_key}", headers)).execute()
         val images = imagesResponse.parseAs<ImagesInfo>()
         return images
@@ -88,6 +94,18 @@ class Koharu : HttpSource(), ConfigurableSource {
     // Search
 
     override fun getFilterList(): FilterList = getFilters()
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return when {
+            query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
+                val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
+                val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", headers)).execute()
+                Observable.just(searchMangaParse2(response))
+            }
+            else -> super.fetchSearchManga(page, query, filters)
+        }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiBooksUrl.toHttpUrl().newBuilder().apply {
             val terms = mutableListOf(query.trim())
@@ -123,14 +141,29 @@ class Koharu : HttpSource(), ConfigurableSource {
                     else -> {}
                 }
             }
-            addQueryParameter("s", "title:\"$query\" " + terms.joinToString(" "))
+            addQueryParameter("s", "title:\"$query \" " + terms.joinToString(" "))
             addQueryParameter("page", page.toString())
         }.build()
+
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
+    private fun searchMangaParse2(response: Response): MangasPage {
+        val entry = response.parseAs<MangaEntry>()
+
+        return MangasPage(
+            listOf(
+                SManga.create().apply {
+                    setUrlWithoutDomain("${entry.id}/${entry.public_key}")
+                    title = entry.title
+                    thumbnail_url = entry.thumbnails.base + entry.thumbnails.main.path
+                },
+            ),
+            false,
+        )
+    }
     // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -166,9 +199,9 @@ class Koharu : HttpSource(), ConfigurableSource {
                 7 -> uploaders.add(tag.name)
                 8 -> males.add(tag.name + " ♂")
                 9 -> females.add(tag.name + " ♀")
-                10 -> mixed.add(tag.name + " ◊")
-                12 -> other.add(tag.name + " ◊")
-                else -> tags.add(tag.name + " ◊")
+                10 -> mixed.add(tag.name)
+                12 -> other.add(tag.name)
+                else -> tags.add(tag.name)
             }
         }
         author = (circles.emptyToNull() ?: artists).joinToString()
@@ -255,18 +288,8 @@ class Koharu : HttpSource(), ConfigurableSource {
             entries = arrayOf("780x", "980x", "1280x", "1600x", "Original")
             entryValues = arrayOf("780", "980", "1280", "1600", "0")
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                quality = newValue.toString()
-                true
-            }
+            setDefaultValue("1280")
         }.also(screen::addPreference)
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun readInstanceProperty(instance: Data, propertyName: String): Any? {
-        val property = instance::class.members.first { it.name == propertyName } as KProperty1<Any, *>
-        return property.get(instance)
     }
 
     private inline fun <reified T> Response.parseAs(): T {
@@ -274,6 +297,7 @@ class Koharu : HttpSource(), ConfigurableSource {
     }
 
     companion object {
-        private const val PREF_IMAGERES = "0"
+        const val PREFIX_ID_KEY_SEARCH = "id:"
+        private const val PREF_IMAGERES = "1280"
     }
 }

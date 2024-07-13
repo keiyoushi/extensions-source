@@ -11,9 +11,9 @@ class Tag(
 @Serializable
 class Books(
     val entries: List<Entry> = emptyList(),
-    val total: Int,
+    val total: Int = 0,
+    val limit: Int = 0,
     val page: Int,
-    val limit: Int,
 )
 
 @Serializable
@@ -27,6 +27,7 @@ class Entry(
 @Serializable
 class MangaEntry(
     val id: Int,
+    val title: String,
     val public_key: String,
     val created_at: Long = 0L,
     val updated_at: Long?,
@@ -37,6 +38,8 @@ class MangaEntry(
 
 @Serializable
 class Thumbnails(
+    val base: String,
+    val main: Thumbnail,
     val entries: List<Thumbnail>,
 )
 
