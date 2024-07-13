@@ -1,22 +1,21 @@
 package eu.kanade.tachiyomi.extension.fr.animesama
 
-import android.net.Uri
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 
 class AnimeSama : ParsedHttpSource() {
 
@@ -24,80 +23,68 @@ class AnimeSama : ParsedHttpSource() {
 
     override val baseUrl = "https://anime-sama.fr"
 
-    val cdn_url = "https://cdn.statically.io/gh/Anime-Sama/IMG/img/animes/animes%20icones%20carr%C3%A9/"
+    private val cdn = "$baseUrl/s2/scans/"
 
     override val lang = "fr"
 
-    override val supportsLatest = true
+    override val supportsLatest = false
 
     override val client: OkHttpClient = network.cloudflareClient
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/scan", headers)
+        return GET("$baseUrl/catalogue/", headers)
     }
 
-    override fun popularMangaSelector() = "figure.figure"
+    override fun popularMangaSelector() = ".cardListAnime.Scans"
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("figcaption").text()
+            title = element.select("h1").text()
             setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("a > img").attr("src")
+            thumbnail_url = element.select("img").attr("src")
         }
     }
 
     override fun popularMangaNextPageSelector(): String? = null
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() = "div.container-fluid:nth-child(15) > div:nth-child(1) figure"
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.select("figcaption").text().replace("\\nScan\\n", "")
-            setUrlWithoutDomain(cdn_url + title.replace(" ", "-").trim() + "carre.jpg")
-            thumbnail_url = element.select("img").attr("src")
-        }
-    }
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String? = null
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val uri = Uri.parse("$baseUrl/search/search.php").buildUpon()
-            .appendQueryParameter("terme", query + " [SCANS]")
-            .appendQueryParameter("s", "Search")
-        return GET(uri.toString(), headers)
+        val url = "$baseUrl/template-php/defaut/fetch.php"
+        val formBody = FormBody.Builder()
+            .add("query", query)
+            .build()
+
+        return POST(url, headers, formBody)
     }
-    override fun searchMangaSelector() = "div.media-body"
+    override fun searchMangaSelector() = "a[href*='catalogue']"
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h5").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url =
-                cdn_url + title.replace(
-                " [SCANS]",
-                "",
-            ).replace(" ", "-").trim() + "carre.jpg"
+            title = element.select("h3").text()
+            setUrlWithoutDomain(element.attr("href"))
+            thumbnail_url = element.select("img").attr("src")
         }
     }
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select("div.carousel-item:nth-child(1) > div:nth-child(2) > h5:nth-child(1)").text()
-        description = document.select("div.carousel-item:nth-child(2) > div:nth-child(2) > p:nth-child(1)").text()
-        thumbnail_url = document.select("div.carousel-item:nth-child(1) > img:nth-child(1)").attr("src")
-        genre = document.select("div.carousel-item:nth-child(2) > div:nth-child(2) > p:nth-child(2)").text().replace("Genres : ", "")
+        description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
+        genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
+        title = document.select("#titreOeuvre").text()
+        thumbnail_url = document.select("#coverOeuvre").attr("src")
     }
 
     // Chapters
@@ -105,58 +92,109 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
+    fun String.containsMultipleTimes(search: String): Boolean {
+        val regex = Regex(search)
+        val matches = regex.findAll(this)
+        val count = matches.count()
+        return count > 1
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val url = "$baseUrl${manga.url}/scan/vf"
+        return GET(url, headers)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val javascriptUrl = document.select("body > script:nth-child(3)").attr("abs:src")
+        var document = response.asJsoup()
 
-        val newHeaders = headersBuilder()
-            .add("Accept-Version", "v1")
-            .build()
+        val baseChapterUrl = "episodes.js?title=" + document.select("#titreOeuvre").text()
 
-        val request = GET(javascriptUrl, newHeaders)
-        val responsejs = client.newCall(request).execute()
-        val jsonDataString = responsejs.body.string()
+        val requestToFetchChapters = GET("${document.baseUri()}/$baseChapterUrl", headers)
+        val javascriptFile = client.newCall(requestToFetchChapters).execute()
+        var javascriptFileContent = javascriptFile.body.string()
 
-        return jsonDataString
+        val parsedJavascriptFileToJson = javascriptFileContent
             .split(" ", ",")
             .filter { it.contains("eps") && !it.contains("drive.google.com") }
             .mapNotNull { it.replace("=", "").replace("eps", "").toIntOrNull() }
             .sorted()
             .map { chapter ->
-                SChapter.create().apply {
-                    name = "Chapitre $chapter"
-                    setUrlWithoutDomain(javascriptUrl + "/$chapter")
+            }.asReversed()
+        var parsedChapterList: MutableList<SChapter> = ArrayList()
+        var chapterDelay = 0
+
+        var scriptContent = document.select("script:containsData(resetListe\\(\\))").toString()
+        if (scriptContent.containsMultipleTimes("resetListe()")) {
+            var scriptCommandList = document.html().split(";")
+            var createListRegex = Regex("""creerListe\((\d+,\s*\d+)\)""")
+            var specialRegex = Regex("""newSP\((\d+(\.\d+)?)\)""")
+            scriptCommandList.forEach { command ->
+                when {
+                    createListRegex.find(command) != null -> {
+                        var data = createListRegex.find(command)!!.groupValues[1].split(",")
+                        var start = data[0].replace(" ", "").toInt()
+                        var end = data[1].replace(" ", "").toInt()
+
+                        for (i in start..end) {
+                            parsedChapterList.add(
+                                SChapter.create().apply {
+                                    name = "Chapitre " + i
+                                    setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                                },
+                            )
+                        }
+                    }
+                    specialRegex.find(command) != null -> {
+                        var title = specialRegex.find(command)!!.groupValues[1]
+                        parsedChapterList.add(
+                            SChapter.create().apply {
+                                name = "Chapitre " + title
+                                setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                            },
+                        )
+                        chapterDelay++
+                    }
+                    /* The site contains an as-yet unused command called "newSPE", and as I have no concrete examples of its use, I haven't implemented it yet. */
                 }
             }
+        }
+        for (index in parsedChapterList.size..parsedJavascriptFileToJson.size - 1) {
+            parsedChapterList.add(
+                SChapter.create().apply {
+                    name = "Chapitre " + (parsedChapterList.size + 1 - chapterDelay)
+                    setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                },
+            )
+        }
+        return parsedChapterList.asReversed()
     }
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {
-        val url = document.baseUri().split("/")
-        val javascriptUrlFinal = url.subList(0, url.size - 1).joinToString("/")
-        val javascriptResponse = checkJavascript(javascriptUrlFinal)
-        val jsonDataString = javascriptResponse.body.string()
+        val url = document.baseUri().toHttpUrl()
 
-        val episode = url[url.size - 1]
-        val allEpisodes = jsonDataString.split("var")
+        val title = url.queryParameter("title")
+        val chapter = url.queryParameter("id")
 
-        val theEpisode = allEpisodes.firstOrNull { it.contains("eps$episode") }
+        val allChapters = document.body().toString().split("var")
+
+        val chapterImageListString = allChapters.firstOrNull { it.contains("eps$chapter=") }
             ?: return emptyList()
 
-        val final_list = theEpisode
+        val chapterImageListParsed = chapterImageListString
             .substringAfter("[")
             .substringBefore("]")
+            .split(",")
 
-        return final_list
-            .substring(0, final_list.lastIndexOf(",")).replace("""'""".toRegex(), "\"")
-            .let { json.decodeFromString<List<String>>("[$it]") }
-            .mapIndexed { i, imageUrl -> Page(i, "", imageUrl) }
-    }
+        val image_list = mutableListOf<Page>()
 
-    private fun checkJavascript(url: String): Response {
-        val request = GET(url, headers)
+        for (index in 1 until chapterImageListParsed.size) {
+            image_list.add(
+                Page(index, imageUrl = "$cdn$title/$chapter/$index.jpg"),
+            )
+        }
 
-        return client.newCall(request).execute()
+        return image_list
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
