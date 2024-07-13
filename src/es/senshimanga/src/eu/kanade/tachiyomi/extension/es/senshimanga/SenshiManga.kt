@@ -34,6 +34,7 @@ class SenshiManga : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
+        .rateLimitHost(apiUrl.toHttpUrl(), 3)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
