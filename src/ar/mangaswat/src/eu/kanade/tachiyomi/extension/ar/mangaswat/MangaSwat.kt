@@ -101,6 +101,7 @@ class MangaSwat :
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
         private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -110,6 +111,7 @@ class MangaSwat :
             summary = BASE_URL_PREF_SUMMARY
             this.setDefaultValue(defaultBaseUrl)
             dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: ${super.baseUrl}"
 
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
@@ -119,5 +121,16 @@ class MangaSwat :
         screen.addPreference(baseUrlPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != super.baseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, super.baseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
+                    .apply()
+            }
+        }
+    }
 }
