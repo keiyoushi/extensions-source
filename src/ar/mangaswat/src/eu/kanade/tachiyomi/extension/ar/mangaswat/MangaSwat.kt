@@ -99,7 +99,7 @@ class MangaSwat :
     companion object {
         private const val RESTART_TACHIYOMI = "Restart Tachiyomi to apply new setting."
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
-        private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
     }
