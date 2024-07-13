@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Diyari'
-    extClass = '.MangaDiyari'
-    themePkg = 'madara'
-    baseUrl = 'https://manga-diyari.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
