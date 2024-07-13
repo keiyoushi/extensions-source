@@ -20,7 +20,7 @@ class KoharuUrlActivity : Activity() {
             }
 
             try {
-                startActivity(intent)
+                startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
                 Log.e("KoharuUrlActivity", "Could not start activity", e)
             }
