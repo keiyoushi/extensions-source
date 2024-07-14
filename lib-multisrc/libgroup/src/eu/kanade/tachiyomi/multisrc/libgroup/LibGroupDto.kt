@@ -241,7 +241,7 @@ class Chapter(
         url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"
         scanlator = getTeamName(branchId) ?: if (isScanUser) getUserName(branchId) else null
         date_upload = runCatching { LibGroup.simpleDateFormat.parse(first(branchId)!!.createdAt)!!.time }.getOrDefault(0L)
-        chapter_number = itemNumber ?: -1f
+        chapter_number = number.toFloat()
     }
 }
 
