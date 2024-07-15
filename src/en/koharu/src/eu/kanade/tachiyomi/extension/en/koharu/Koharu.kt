@@ -67,11 +67,12 @@ class Koharu : HttpSource(), ConfigurableSource {
         val data = entry.data
         val dataKey = when (quality()) {
             "1600" -> data.`1600`
-            "1280" -> data.`980`
+            "1280" -> data.`1280`
             "980" -> data.`980`
             "780" -> data.`780`
             else -> data.`0`
         }
+
         val imagesResponse = client.newCall(POST("$apiBooksUrl/data/${entry.id}/${entry.public_key}/${dataKey.id}/${dataKey.public_key}", headers)).execute()
         val images = imagesResponse.parseAs<ImagesInfo>()
         return images
@@ -299,6 +300,6 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     companion object {
         const val PREFIX_ID_KEY_SEARCH = "id:"
-        private const val PREF_IMAGERES = "1280"
+        private const val PREF_IMAGERES = "pref_image_quality"
     }
 }
