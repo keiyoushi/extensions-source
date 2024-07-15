@@ -1,9 +1,0 @@
-ext {
-    extName = 'Toshi wa Yume'
-    extClass = '.ToshiWaYume'
-    themePkg = 'foolslide'
-    baseUrl = 'https://leitoronline.toshiwayume.com.br'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
