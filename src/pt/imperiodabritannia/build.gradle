@@ -3,7 +3,7 @@ ext {
     extClass = '.ImperioDaBritannia'
     themePkg = 'madara'
     baseUrl = 'https://imperiodabritannia.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
