@@ -24,6 +24,8 @@ class SenshiManga : HttpSource() {
 
     override val baseUrl = "https://senshimanga.com"
 
+    private val apiUrl = "https://api.senshimanga.com"
+
     override val lang = "es"
 
     override val supportsLatest = true
@@ -32,6 +34,7 @@ class SenshiManga : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
+        .rateLimitHost(apiUrl.toHttpUrl(), 3)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -42,17 +45,17 @@ class SenshiManga : HttpSource() {
         .build()
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", apiHeaders)
+        GET("$apiUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", apiHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest", apiHeaders)
+        GET("$apiUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/manga-custom".toHttpUrl().newBuilder()
+        val url = "$apiUrl/api/manga-custom".toHttpUrl().newBuilder()
 
         url.setQueryParameter("page", page.toString())
         url.setQueryParameter("limit", PAGE_LIMIT.toString())
@@ -91,7 +94,7 @@ class SenshiManga : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$baseUrl/api/manga-custom/${manga.url}", apiHeaders)
+        GET("$apiUrl/api/manga-custom/${manga.url}", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = json.decodeFromString<Data<SeriesDto>>(response.body.string())
@@ -117,7 +120,7 @@ class SenshiManga : HttpSource() {
         val seriesSlug = chapter.url.substringBefore("/")
         val chapterSlug = chapter.url.substringAfter("/")
 
-        return GET("$baseUrl/api/manga-custom/$seriesSlug/chapter/$chapterSlug/pages", apiHeaders)
+        return GET("$apiUrl/api/manga-custom/$seriesSlug/chapter/$chapterSlug/pages", apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
