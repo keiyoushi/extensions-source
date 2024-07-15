@@ -66,10 +66,10 @@ class Koharu : HttpSource(), ConfigurableSource {
     private fun getImagesByMangaEntry(entry: MangaEntry): ImagesInfo {
         val data = entry.data
         val dataKey = when (quality()) {
-            "1600" -> data.`1600`
-            "1280" -> data.`1280`
-            "980" -> data.`980`
-            "780" -> data.`780`
+            "1600" -> data.`1600` ?: data.`1280` ?: data.`0`
+            "1280" -> data.`1280` ?: data.`1600` ?: data.`0`
+            "980" -> data.`980` ?: data.`1280` ?: data.`0`
+            "780" -> data.`780` ?: data.`980` ?: data.`0`
             else -> data.`0`
         }
 

@@ -51,10 +51,10 @@ class Thumbnail(
 @Serializable
 class Data(
     val `0`: DataKey,
-    val `780`: DataKey = `0`,
-    val `980`: DataKey = `780`,
-    val `1280`: DataKey = `980`,
-    val `1600`: DataKey = `1280`,
+    val `780`: DataKey? = null,
+    val `980`: DataKey? = null,
+    val `1280`: DataKey? = null,
+    val `1600`: DataKey? = null,
 )
 
 @Serializable
