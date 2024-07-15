@@ -18,19 +18,16 @@ class PinkSeaUnicorn : Madara(
 ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
         .addNetworkInterceptor(::checkPasswordProtectedIntercept)
+        .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
     private fun checkPasswordProtectedIntercept(chain: Interceptor.Chain): Response {
-        val response = chain.proceed(chain.request())
-
         if (chain.request().url.queryParameter("password-protected") != null) {
-            response.close()
             throw IOException("Autentique-se através da WebView e tente novamente.")
         }
 
-        return response
+        return chain.proceed(chain.request())
     }
 
     override val useNewChapterEndpoint = true
