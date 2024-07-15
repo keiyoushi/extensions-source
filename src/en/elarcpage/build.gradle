@@ -2,8 +2,8 @@ ext {
     extName = 'Elarc Toon'
     extClass = '.ElarcPage'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://elarctoons.ink'
-    overrideVersionCode = 8
+    baseUrl = 'https://elarctoons.biz'
+    overrideVersionCode = 9
     isNsfw = false
 }
 
