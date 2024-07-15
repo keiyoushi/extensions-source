@@ -1,57 +1,44 @@
 package eu.kanade.tachiyomi.extension.es.nekoscans
 
-import android.util.Base64
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.Page
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
-import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Response
 import java.util.concurrent.TimeUnit
 
-class NekoScans : MangaThemesia(
+class NekoScans : ZeistManga(
     "NekoScans",
-    "https://nekoscans.com",
+    "https://nekoscanlationlector.blogspot.com",
     "es",
-    mangaUrlDirectory = "/proyecto",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
+    // Theme changed from MangaThemesia to ZeistManga
+    override val versionId = 2
+
     override val client = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
 
-    override val seriesStatusSelector = ".tsinfo .imptdt:contains(estado) i"
+    override val excludedCategories = listOf("Anime", "Novel")
 
-    override fun pageListParse(document: Document): List<Page> {
-        countViews(document)
+    override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
+    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
+    override val supportsLatest = false
 
-        val chapterUrl = document.location()
-        val htmlPages = document.select(pageSelector)
-            .filterNot { it.imgAttr().isEmpty() }
-            .mapIndexed { i, img -> Page(i, chapterUrl, img.imgAttr()) }
-
-        // Some sites also loads pages via javascript
-        if (htmlPages.isNotEmpty()) { return htmlPages }
-
-        var docString = document.toString()
-
-        document.select("div#content > div.wrapper > script[src^=data:text/javascript;base64,]").forEach { script ->
-            val scriptText = String(Base64.decode(script.attr("src").substringAfter("base64,"), Base64.DEFAULT))
-            docString += scriptText
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        document.selectFirst("header[itemprop=mainEntity]")!!.let { element ->
+            title = element.selectFirst("h1[itemprop=name]")!!.text()
+            thumbnail_url = element.selectFirst("img[itemprop=image]")!!.attr("src")
+            status = parseStatus(element.selectFirst("span[data-status]")!!.text())
+            genre = element.select("dl:has(dt:contains(Genre)) > dd > a[rel=tag]").joinToString { it.text() }
         }
-
-        val imageListJson = JSON_IMAGE_LIST_REGEX.find(docString)?.destructured?.toList()?.get(0).orEmpty()
-        val imageList = try {
-            json.parseToJsonElement(imageListJson).jsonArray
-        } catch (_: IllegalArgumentException) {
-            emptyList()
+        description = document.selectFirst("#synopsis, #sinop")!!.text()
+        document.selectFirst("div#extra-info")?.let { element ->
+            author = element.selectFirst("dl:has(dt:contains(Autor)) > dd")!!.text()
+            artist = element.selectFirst("dl:has(dt:contains(Artista)) > dd")!!.text()
         }
-        val scriptPages = imageList.mapIndexed { i, jsonEl ->
-            Page(i, chapterUrl, jsonEl.jsonPrimitive.content)
-        }
-
-        return scriptPages
     }
+
+    override val pageListSelector = "div#readarea img"
 }
