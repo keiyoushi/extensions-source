@@ -202,7 +202,6 @@ class Chapter(
     val name: String?,
     val number: String,
     val volume: String,
-    @SerialName("item_number") val itemNumber: Float?,
 ) {
     @Serializable
     class Branch(
