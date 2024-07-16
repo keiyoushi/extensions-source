@@ -66,7 +66,7 @@ class DataKey(
     fun readableSize() = when {
         size >= 300 * 1024 * 1024 -> "${"%.2f".format(size / (1024.0 * 1024.0 * 1024.0))} GB"
         size >= 100 * 1024 -> "${"%.2f".format(size / (1024.0 * 1024.0))} MB"
-        size >= 1024 -> "${"%.2f".format(size / (1024.0))} KB"
+        size >= 1024 -> "${"%.2f".format(size / (1024.0))} kB"
         else -> "$size B"
     }
 }
