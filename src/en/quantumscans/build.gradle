@@ -2,7 +2,7 @@ ext {
     extName = 'Quantum Scans'
     extClass = '.QuantumScans'
     themePkg = 'mangathemesia'
-    baseUrl = ' https://qscomics.org'
+    baseUrl = 'https://qscomics.org'
     overrideVersionCode = 1
 }
 
