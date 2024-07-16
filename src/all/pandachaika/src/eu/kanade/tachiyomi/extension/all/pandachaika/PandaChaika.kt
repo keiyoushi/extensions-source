@@ -44,7 +44,7 @@ class PandaChaika(
 
     private val json: Json by injectLazy()
 
-    private val fakkuRegex = Regex("""(?:https?://)?(?:www\.)?fakku\.net/manga/""")
+    private val fakkuRegex = Regex("""(?:https?://)?(?:www\.)?fakku\.net/hentai/""")
     private val ehentaiRegex = Regex("""(?:https?://)?e-hentai\.org/g/""")
 
     // Popular
@@ -91,7 +91,11 @@ class PandaChaika(
             query.startsWith(PREFIX_EHEN_ID_SEARCH) -> {
                 val id = query.removePrefix(PREFIX_EHEN_ID_SEARCH).replace(ehentaiRegex, "")
                 val baseLink = "https://e-hentai.org/g/"
-                client.newCall(GET("$baseSearchUrl/?qsearch=$baseLink$id&json="))
+                val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
+                    addQueryParameter("qsearch", baseLink + id)
+                    addQueryParameter("json", "")
+                }.build()
+                client.newCall(GET(fullLink))
                     .asObservableSuccess()
                     .map {
                         val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
@@ -101,7 +105,11 @@ class PandaChaika(
             query.startsWith(PREFIX_FAK_ID_SEARCH) -> {
                 val slug = query.removePrefix(PREFIX_FAK_ID_SEARCH).replace(fakkuRegex, "")
                 val baseLink = "https://www.fakku.net/hentai/"
-                client.newCall(GET("$baseSearchUrl/?qsearch=$baseLink$slug&json="))
+                val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
+                    addQueryParameter("qsearch", baseLink + slug)
+                    addQueryParameter("json", "")
+                }.build()
+                client.newCall(GET(fullLink, headers))
                     .asObservableSuccess()
                     .map {
                         val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
@@ -110,7 +118,7 @@ class PandaChaika(
             }
             query.startsWith(PREFIX_SOURCE_SEARCH) -> {
                 val url = query.removePrefix(PREFIX_SOURCE_SEARCH)
-                client.newCall(GET("$baseSearchUrl/?qsearch=$url&json="))
+                client.newCall(GET("$baseSearchUrl/?qsearch=$url&json=", headers))
                     .asObservableSuccess()
                     .map {
                         val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
@@ -132,7 +140,11 @@ class PandaChaika(
 
     private fun searchMangaParse0(response: Response, id: Int = 0): MangasPage {
         val title = response.parseAs<Archive>().title
-        val archive = client.newCall(GET("$baseSearchUrl/?qsearch=$title&json="))
+        val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
+            addQueryParameter("qsearch", title)
+            addQueryParameter("json", "")
+        }.build()
+        val archive = client.newCall(GET(fullLink, headers))
             .execute()
             .parseAs<ArchiveResponse>().archives
             .find {

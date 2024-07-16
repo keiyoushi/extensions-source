@@ -22,7 +22,7 @@ fun getReadableSize(bytes: Double): String {
     return when {
         bytes >= 300 * 1000 * 1000 -> "${"%.2f".format(bytes / (1000.0 * 1000.0 * 1000.0))} GB"
         bytes >= 100 * 1000 -> "${"%.2f".format(bytes / (1000.0 * 1000.0))} MB"
-        bytes >= 1000 -> "${"%.2f".format(bytes / (1000.0))} KB"
+        bytes >= 1000 -> "${"%.2f".format(bytes / (1000.0))} kB"
         else -> "$bytes B"
     }
 }
@@ -44,7 +44,7 @@ class LongArchive(
     private val filecount: Int,
     private val filesize: Double,
     private val tags: List<String>,
-    private val title_jpn: String?,
+    private val title_jpn: String = "",
     private val uploader: String,
 ) {
     fun toSManga() = SManga.create().apply {
@@ -91,7 +91,7 @@ class LongArchive(
                 append("Other tags: ", it, "\n\n")
             }
 
-            title_jpn?.ifEmpty { null }?.let { append("Japanese Title: ", it, "\n") }
+            title_jpn.takeIf { it.isNotEmpty() }?.let { append("Japanese Title: ", it, "\n") }
             append("Pages: ", filecount, "\n")
             append("File Size: ", getReadableSize(filesize), "\n")
 
