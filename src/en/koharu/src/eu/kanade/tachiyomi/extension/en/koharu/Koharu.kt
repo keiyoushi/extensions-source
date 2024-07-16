@@ -48,7 +48,7 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val B_REGEX = Regex("""\s*\[.*?]\s*|\s*\(.*?\)\s*|\s*\w+[\)\]]""")
+    private val B_REGEX = Regex("""\s*[([{].*[)\]}]\s*""")
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
