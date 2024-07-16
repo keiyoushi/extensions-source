@@ -266,7 +266,7 @@ class Pages(
 
 @Serializable
 class AuthToken(
-    private val auth: Auth,
+    val auth: Auth?,
     private val token: Token,
 ) {
     @Serializable
@@ -290,5 +290,5 @@ class AuthToken(
 
     fun getToken(): String = "${token.tokenType} ${token.accessToken}"
 
-    fun getUserId(): Int = auth.id
+    fun getUserId(): Int = auth!!.id
 }
