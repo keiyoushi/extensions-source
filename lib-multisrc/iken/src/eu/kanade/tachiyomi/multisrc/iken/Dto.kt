@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.arvenscans
+package eu.kanade.tachiyomi.multisrc.iken
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -18,7 +18,7 @@ class SearchResponse(
 
 @Serializable
 class Manga(
-    val id: Int,
+    private val id: Int,
     val slug: String,
     private val postTitle: String,
     private val postContent: String? = null,
@@ -29,7 +29,7 @@ class Manga(
     private val artist: String? = null,
     private val seriesType: String? = null,
     private val seriesStatus: String? = null,
-    private val genres: List<Name>? = emptyList(),
+    val genres: List<Genre> = emptyList(),
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = "$slug#$id"
@@ -70,9 +70,15 @@ class Manga(
             "MANHWA" -> add("Manhwa")
             else -> {}
         }
-        genres?.forEach { add(it.name) }
+        genres.forEach { add(it.name) }
     }.distinct().joinToString()
 }
+
+@Serializable
+class Genre(
+    val id: Int,
+    val name: String,
+)
 
 @Serializable
 class Name(val name: String)

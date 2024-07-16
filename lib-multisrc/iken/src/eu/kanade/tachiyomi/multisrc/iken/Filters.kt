@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.arvenscans
+package eu.kanade.tachiyomi.multisrc.iken
 
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
@@ -65,37 +65,8 @@ class TypeFilter : SelectFilter(
     ),
 )
 
-class GenreFilter : CheckBoxGroup(
+class GenreFilter(genres: List<Pair<String, String>>) : CheckBoxGroup(
     "Genres",
     "genreIds",
-    listOf(
-        Pair("Action", "1"),
-        Pair("Adventure", "13"),
-        Pair("Comedy", "7"),
-        Pair("Drama", "2"),
-        Pair("elf", "25"),
-        Pair("Fantas", "28"),
-        Pair("Fantasy", "8"),
-        Pair("Historical", "19"),
-        Pair("Horror", "9"),
-        Pair("Josei", "21"),
-        Pair("Manhwa", "5"),
-        Pair("Martial Arts", "6"),
-        Pair("Mature", "12"),
-        Pair("Monsters", "14"),
-        Pair("Reincarnation", "16"),
-        Pair("Revenge", "17"),
-        Pair("Romance", "20"),
-        Pair("School Life", "23"),
-        Pair("Seinen", "10"),
-        Pair("shojo", "26"),
-        Pair("Shoujo", "22"),
-        Pair("Shounen", "3"),
-        Pair("Slice Of Life", "18"),
-        Pair("Sports", "4"),
-        Pair("Supernatural", "11"),
-        Pair("System", "15"),
-        Pair("terror", "24"),
-        Pair("Video Games", "27"),
-    ),
+    genres,
 )
