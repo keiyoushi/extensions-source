@@ -158,7 +158,7 @@ class SpyFakku : HttpSource() {
                 when {
                     size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
                     size >= 100 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0))} MB"
-                    size >= 1000 -> "${"%.2f".format(size / (1000.0))} KB"
+                    size >= 1000 -> "${"%.2f".format(size / (1000.0))} kB"
                     else -> "$size B"
                 },
             )
