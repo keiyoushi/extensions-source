@@ -64,9 +64,9 @@ class DataKey(
     val public_key: String,
 ) {
     fun readableSize() = when {
-        size >= 300 * 1024 * 1024 -> "${"%.2f".format(size / (1024.0 * 1024.0 * 1024.0))} GB"
-        size >= 100 * 1024 -> "${"%.2f".format(size / (1024.0 * 1024.0))} MB"
-        size >= 1024 -> "${"%.2f".format(size / (1024.0))} kB"
+        size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
+        size >= 100 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0))} MB"
+        size >= 1000 -> "${"%.2f".format(size / (1000.0))} kB"
         else -> "$size B"
     }
 }
