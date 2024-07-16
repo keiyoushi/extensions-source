@@ -3,7 +3,7 @@ ext {
     extClass = '.InariPikav'
     themePkg = 'mangathemesia'
     baseUrl = 'https://inaripikav.org'
-    overrideVersionCode = 10
+    overrideVersionCode = 11
     isNsfw = true
 }
 
