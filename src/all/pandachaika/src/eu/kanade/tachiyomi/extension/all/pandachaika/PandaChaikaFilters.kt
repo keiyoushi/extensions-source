@@ -17,6 +17,7 @@ fun getFilters(): FilterList {
         TextFilter("Female Tags", "female"),
         TextFilter("Artists", "artist"),
         TextFilter("Parodies", "parody"),
+        TextFilter("Characters", "character"),
         Filter.Separator(),
         TextFilter("Reason", "reason"),
         TextFilter("Uploader", "reason"),
