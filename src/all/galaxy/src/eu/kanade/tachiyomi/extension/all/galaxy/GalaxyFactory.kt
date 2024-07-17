@@ -8,7 +8,7 @@ class GalaxyFactory : SourceFactory {
         override val id = 2602904659965278831
     }
 
-    class GalaxyManga : Galaxy("Galaxy Manga", "https://ayoub-zrr.xyz", "ar") {
+    class GalaxyManga : Galaxy("Galaxy Manga", "https://galaxymanga.net", "ar") {
         override val id = 2729515745226258240
     }
 
