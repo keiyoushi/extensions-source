@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -47,11 +48,15 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
+    private val B_REGEX = Regex("""\s*[([{].*[)\]}]\s*""")
+
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
     private fun quality() = preferences.getString(PREF_IMAGERES, "1280")!!
+
+    private fun remadd() = preferences.getBoolean(PREF_REM_ADD, false)
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -59,7 +64,7 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     private fun getManga(book: Entry) = SManga.create().apply {
         setUrlWithoutDomain("${book.id}/${book.public_key}")
-        title = book.title
+        title = if (remadd()) book.title.replace(B_REGEX, "").trim() else book.title
         thumbnail_url = book.thumbnail.path
     }
 
@@ -85,7 +90,7 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$apiBooksUrl?sort=6&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiBooksUrl?sort=8&page=$page", headers)
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<Books>()
 
@@ -159,7 +164,7 @@ class Koharu : HttpSource(), ConfigurableSource {
             listOf(
                 SManga.create().apply {
                     setUrlWithoutDomain("${entry.id}/${entry.public_key}")
-                    title = entry.title
+                    title = if (remadd()) entry.title.replace(B_REGEX, "").trim() else entry.title
                     thumbnail_url = entry.thumbnails.base + entry.thumbnails.main.path
                 },
             ),
@@ -198,7 +203,7 @@ class Koharu : HttpSource(), ConfigurableSource {
                 4 -> magazines.add(tag.name)
                 5 -> characters.add(tag.name)
                 6 -> cosplayers.add(tag.name)
-                7 -> uploaders.add(tag.name)
+                7 -> tag.name.takeIf { it != "anonymous" }?.let { uploaders.add(it) }
                 8 -> males.add(tag.name + " ♂")
                 9 -> females.add(tag.name + " ♀")
                 10 -> mixed.add(tag.name)
@@ -206,37 +211,59 @@ class Koharu : HttpSource(), ConfigurableSource {
                 else -> tags.add(tag.name)
             }
         }
-        author = (circles.emptyToNull() ?: artists).joinToString()
-        artist = artists.joinToString()
-        genre = (tags + males + females + mixed).joinToString()
+
+        var appended = false
+        fun List<String>.joinAndCapitalizeEach(): String? = this.emptyToNull()?.joinToString { it.capitalizeEach() }?.apply { appended = true }
+        title = if (remadd()) this@toSManga.title.replace(B_REGEX, "").trim() else this@toSManga.title
+
+        author = (circles.emptyToNull() ?: artists).joinToString { it.capitalizeEach() }
+        artist = artists.joinToString { it.capitalizeEach() }
+        genre = (tags + males + females + mixed).joinToString { it.capitalizeEach() }
         description = buildString {
-            circles.emptyToNull()?.joinToString()?.let {
+            circles.joinAndCapitalizeEach()?.let {
                 append("Circles: ", it, "\n")
             }
-            uploaders.emptyToNull()?.joinToString()?.let {
+            uploaders.joinAndCapitalizeEach()?.let {
                 append("Uploaders: ", it, "\n")
             }
-            magazines.emptyToNull()?.joinToString()?.let {
+            magazines.joinAndCapitalizeEach()?.let {
                 append("Magazines: ", it, "\n")
             }
-            cosplayers.emptyToNull()?.joinToString()?.let {
+            cosplayers.joinAndCapitalizeEach()?.let {
                 append("Cosplayers: ", it, "\n")
             }
-            parodies.emptyToNull()?.joinToString()?.let {
+            parodies.joinAndCapitalizeEach()?.let {
                 append("Parodies: ", it, "\n")
             }
-            characters.emptyToNull()?.joinToString()?.let {
+            characters.joinAndCapitalizeEach()?.let {
                 append("Characters: ", it, "\n")
             }
-            append("Pages: ", thumbnails.entries.size, "\n\n")
+
+            if (appended) append("\n")
 
             try {
-                append("Added: ", dateReformat.format(((updated_at ?: created_at))), "\n")
+                append("Posted: ", dateReformat.format(created_at), "\n")
             } catch (_: Exception) {}
+
+            val dataKey = when (quality()) {
+                "1600" -> data.`1600` ?: data.`1280` ?: data.`0`
+                "1280" -> data.`1280` ?: data.`1600` ?: data.`0`
+                "980" -> data.`980` ?: data.`1280` ?: data.`0`
+                "780" -> data.`780` ?: data.`980` ?: data.`0`
+                else -> data.`0`
+            }
+            append("Size: ", dataKey.readableSize(), "\n\n")
+            append("Pages: ", thumbnails.entries.size, "\n\n")
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         initialized = true
+    }
+
+    private fun String.capitalizeEach() = this.split(" ").joinToString(" ") { s ->
+        s.replaceFirstChar { sr ->
+            if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
+        }
     }
 
     private fun <T> Collection<T>.emptyToNull(): Collection<T>? {
@@ -292,6 +319,14 @@ class Koharu : HttpSource(), ConfigurableSource {
             summary = "%s"
             setDefaultValue("1280")
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_REM_ADD
+            title = "Remove additional information in title"
+            summary = "Remove anything in brackets from manga titles.\n" +
+                "Reload manga to apply changes to loaded manga."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     private inline fun <reified T> Response.parseAs(): T {
@@ -301,5 +336,6 @@ class Koharu : HttpSource(), ConfigurableSource {
     companion object {
         const val PREFIX_ID_KEY_SEARCH = "id:"
         private const val PREF_IMAGERES = "pref_image_quality"
+        private const val PREF_REM_ADD = "pref_remove_additional"
     }
 }
