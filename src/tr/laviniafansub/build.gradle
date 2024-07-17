@@ -3,7 +3,7 @@ ext {
     extClass = '.LaviniaFansub'
     themePkg = 'madara'
     baseUrl = 'https://laviniafansub.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
