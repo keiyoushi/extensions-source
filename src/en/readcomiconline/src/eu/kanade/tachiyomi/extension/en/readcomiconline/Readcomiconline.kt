@@ -388,17 +388,13 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     private fun removeComments(input: String): String {
         var full = input
         var finalText = ""
-
         val comment = "//"
         val bcOpen = "/*"
         val bcClose = "*/"
-
         val bcOpenIndexes = mutableListOf<Int>()
         val bcCloseIndexes = mutableListOf<Int>()
-
         var o = -1
         var c = -1
-
         if (bcOpen.isNotEmpty()) {
             o = full.indexOf(bcOpen)
             while (o != -1) {
@@ -406,7 +402,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 o = full.indexOf(bcOpen, o + 1)
             }
         }
-
         if (bcClose.isNotEmpty()) {
             c = full.indexOf(bcClose)
             while (c != -1) {
@@ -414,12 +409,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 c = full.indexOf(bcClose, c + 1)
             }
         }
-
         var d = 0
         var s = 0
         var bc = 0
         var record = 0
-
         for (i in full.indices) {
             if (full[i] == '"' && d == 0 && s == 0) {
                 d++
@@ -438,7 +431,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 d = 0
                 s = 0
             }
-
             if (bcOpenIndexes.contains(i) && d == 0 && s == 0 && bc == 0) {
                 finalText += full.substring(record, i)
                 bc = 1
@@ -449,28 +441,21 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 finalText += full.substring(record)
             }
         }
-
         if (comment.isNotEmpty()) {
             val lines = finalText.split('\n')
-
             val remComArr = mutableListOf<String>()
-
             lines.forEach { line ->
                 var rem = line
-
                 if (line.contains(comment)) {
                     val comIndexes = mutableListOf<Int>()
                     var a = -1
-
                     a = line.indexOf(comment)
                     while (a != -1) {
                         comIndexes.add(a)
                         a = line.indexOf(comment, a + 1)
                     }
-
                     var d = 0
                     var s = 0
-
                     for (i in line.indices) {
                         if (line[i] == '"' && d == 0 && s == 0) {
                             d++
@@ -482,31 +467,25 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                         } else if (line[i] == '\'' && d == 0 && s == 1) {
                             s--
                         }
-
                         if (comIndexes.contains(i) && d == 0 && s == 0) {
                             rem = line.substring(0, i)
                             break
                         }
                     }
                 }
-
                 if (rem.replace("\\s".toRegex(), "").isEmpty()) {
                     rem = "\n"
                 }
                 remComArr.add(rem)
             }
-
             finalText = remComArr.joinToString("\n")
         }
-
         while (finalText.contains("\n\n\n")) {
             finalText = finalText.replace("\n\n\n", "\n\n")
         }
-
         while (finalText.startsWith("\n")) {
             finalText = finalText.substring(1)
         }
-
         return finalText
     }
 
