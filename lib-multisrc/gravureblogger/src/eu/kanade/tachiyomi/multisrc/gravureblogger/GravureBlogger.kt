@@ -130,8 +130,8 @@ abstract class GravureBlogger(
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        return document.select("div.post-body img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("src"))
+        return document.select("div.post-body a:has(> img)").mapIndexed { i, it ->
+            Page(i, imageUrl = it.absUrl("href"))
         }
     }
 
