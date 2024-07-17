@@ -1,9 +1,9 @@
 ext {
-    extName = 'InariManga'
-    extClass = '.InariManga'
+    extName = 'InariPikav'
+    extClass = '.InariPikav'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://rukavinari.org'
-    overrideVersionCode = 10
+    baseUrl = 'https://inaripikav.org'
+    overrideVersionCode = 11
     isNsfw = true
 }
 

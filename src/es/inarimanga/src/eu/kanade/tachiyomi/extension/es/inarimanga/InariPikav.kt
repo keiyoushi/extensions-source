@@ -6,17 +6,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class InariManga : MangaThemesia(
-    "InariManga",
-    "https://rukavinari.org",
+class InariPikav : MangaThemesia(
+    "Inari Pikav",
+    "https://inaripikav.org",
     "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("en")),
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-
-    // Site moved from Madara to MangaThemesia
-    override val versionId = 2
+    override val id = 7949577653918285764
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 4, 1)
+        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
         .build()
 }
