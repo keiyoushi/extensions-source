@@ -386,6 +386,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     // Adapted from https://www.removecomments.com
     private fun removeComments(input: String): String {
+        val regx = "\\s".toRegex()
         var full = input
         var finalText = ""
         val comment = "//"
@@ -473,7 +474,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                         }
                     }
                 }
-                if (rem.replace("\\s".toRegex(), "").isEmpty()) {
+                if (rem.replace(regx, "").isEmpty()) {
                     rem = "\n"
                 }
                 remComArr.add(rem)
