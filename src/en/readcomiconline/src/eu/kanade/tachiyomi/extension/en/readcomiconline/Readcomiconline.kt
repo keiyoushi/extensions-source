@@ -214,13 +214,13 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             rguardUrl = document.selectFirst("script[src*='rguard.min.js']")?.absUrl("src")
         }
 
-        val script = document.selectFirst("script:containsData(lstImages.push)")?.data()
+        val script = document.selectFirst("script:containsData(beau)")?.data()
             ?: throw Exception("Failed to find image URLs")
 
         val images = script.substring(
             0,
             BEAU_INDEX_REGEX.find(script)!!.range.last + 1,
-        ) + "lstImages;"
+        ) + LIST_VARIABLE.find(script)!!.groupValues[1] + ";"
 
         return QuickJs.create().use { qjs ->
             qjs.execute(rguardBytecode)
@@ -389,6 +389,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val SERVER_PREF = "serverpref"
 
         private val BEAU_INDEX_REGEX = Regex("""beau\([^)]+\);""")
+        private val LIST_VARIABLE = Regex("""beau\((\w+)""")
 
         private val DISABLE_JS_SCRIPT = """
             const handler = {
