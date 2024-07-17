@@ -1,13 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.mangagalaxy
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.iken.Iken
 
-class MangaGalaxy : MangaThemesia(
+class MangaGalaxy : Iken(
     "Manga Galaxy",
-    "https://mangagalaxy.me",
     "en",
-    mangaUrlDirectory = "/series",
+    "https://mangagalaxy.org",
 ) {
-    // moved from Madara to MangaThemesia
-    override val versionId = 2
+    // moved from Madara to MangaThemesia to Iken
+    override val versionId = 3
 }
