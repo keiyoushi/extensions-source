@@ -95,7 +95,7 @@ class PandaChaika(
                     addQueryParameter("qsearch", baseLink + id)
                     addQueryParameter("json", "")
                 }.build()
-                client.newCall(GET(fullLink, headers)))
+                client.newCall(GET(fullLink, headers))
                     .asObservableSuccess()
                     .map {
                         val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
