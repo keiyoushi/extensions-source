@@ -2,8 +2,8 @@ ext {
     extName = 'Lua Scans'
     extClass = '.LuaScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://luascans.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://luacomic.com'
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"
