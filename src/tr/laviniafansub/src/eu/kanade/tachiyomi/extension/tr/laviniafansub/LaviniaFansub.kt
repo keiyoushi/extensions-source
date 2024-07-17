@@ -13,7 +13,10 @@ class LaviniaFansub : Madara(
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override val useNewChapterEndpoint = true
+
+    override val chapterUrlSelector = "a:not(:has(img))"
 
     override fun pageListParse(document: Document): List<Page> {
         val pageList = super.pageListParse(document)
