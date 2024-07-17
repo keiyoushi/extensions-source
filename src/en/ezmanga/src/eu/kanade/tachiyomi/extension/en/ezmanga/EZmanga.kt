@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
 class EZmanga : Keyoapp(
     "EZmanga",
-    "https://ezmanga.net",
+    "https://ezmanga.org",
     "en",
 ) {
     // Migrated from Madara to Keyoapp
