@@ -7,7 +7,7 @@ import okhttp3.Request
 
 class LuminousScans : MangaThemesiaAlt(
     "Luminous Scans",
-    "https://luminouscomics.org",
+    "https://luminous-scans.com",
     "en",
     mangaUrlDirectory = "/series",
     randomUrlPrefKey = "pref_permanent_manga_url_2_en",

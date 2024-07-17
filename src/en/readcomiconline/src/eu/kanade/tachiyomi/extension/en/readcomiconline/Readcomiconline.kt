@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.readcomiconline
 import android.app.Application
 import android.content.SharedPreferences
 import app.cash.quickjs.QuickJs
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -375,14 +374,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val scriptResponse = client.newCall(scriptRequest).execute()
         val scriptBody = scriptResponse.body.string()
 
-        val deobfuscatedBody = Deobfuscator.deobfuscateScript(scriptBody)
-            ?: throw Exception("Unable to de-obfuscate rguard script")
-
-        val beauFunc = RGUARD_REGEX.find(deobfuscatedBody)?.groupValues
-            ?: throw Exception("Unable to parse rguard script")
-
         QuickJs.create().use {
-            it.compile(beauFunc.joinToString("") + ATOB_SCRIPT, "?")
+            it.compile(DISABLE_JS_SCRIPT + scriptBody + ATOB_SCRIPT, "?")
         }
     }
 
@@ -407,7 +400,24 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val SERVER_PREF = "serverpref"
 
         private val CHAPTER_IMAGES_REGEX = "lstImages\\.push\\([\"'](.*)[\"']\\)".toRegex()
-        private val RGUARD_REGEX = Regex("""(function beau[\s\S]*\})""")
+
+        private val DISABLE_JS_SCRIPT = """
+            const handler = {
+                get: function(target, _) {
+                    return function() {
+                        return target;
+                    };
+                },
+                apply: function(_, __, ___) {
+                    return new Proxy({}, handler);
+                }
+            };
+
+            document = new Proxy({}, handler);
+            window = new Proxy({}, handler);
+            console = new Proxy({}, handler);
+            ${'$'} = new Proxy(function() {}, handler);
+        """.trimIndent()
 
         /*
          * The MIT License (MIT)

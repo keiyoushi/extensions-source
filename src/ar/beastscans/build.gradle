@@ -3,7 +3,7 @@ ext {
     extClass = '.UmiManga'
     themePkg = 'mangathemesia'
     baseUrl = 'https://www.umimanga.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"

@@ -6,7 +6,7 @@ import java.util.Locale
 
 class EpsilonScan : Madara(
     "Epsilon Scan",
-    "https://epsilonscan.fr",
+    "https://epsilonscan.to",
     "fr",
     SimpleDateFormat("dd/MM/yy", Locale.FRENCH),
 ) {

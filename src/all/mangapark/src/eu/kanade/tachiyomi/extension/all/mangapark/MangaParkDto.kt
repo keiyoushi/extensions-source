@@ -12,34 +12,34 @@ typealias ChapterListResponse = Data<ChapterList>
 typealias PageListResponse = Data<ChapterPages>
 
 @Serializable
-data class Data<T>(val data: T)
+class Data<T>(val data: T)
 
 @Serializable
-data class Items<T>(val items: List<T>)
+class Items<T>(val items: List<T>)
 
 @Serializable
-data class SearchComics(
+class SearchComics(
     @SerialName("get_searchComic") val searchComics: Items<Data<MangaParkComic>>,
 )
 
 @Serializable
-data class ComicNode(
+class ComicNode(
     @SerialName("get_comicNode") val comic: Data<MangaParkComic>,
 )
 
 @Serializable
-data class MangaParkComic(
-    val id: String,
-    val name: String,
-    val altNames: List<String>? = null,
-    val authors: List<String>? = null,
-    val artists: List<String>? = null,
-    val genres: List<String>? = null,
-    val originalStatus: String? = null,
-    val uploadStatus: String? = null,
-    val summary: String? = null,
-    @SerialName("urlCoverOri") val cover: String? = null,
-    val urlPath: String,
+class MangaParkComic(
+    private val id: String,
+    private val name: String,
+    private val altNames: List<String>? = null,
+    private val authors: List<String>? = null,
+    private val artists: List<String>? = null,
+    private val genres: List<String>? = null,
+    private val originalStatus: String? = null,
+    private val uploadStatus: String? = null,
+    private val summary: String? = null,
+    @SerialName("urlCoverOri") private val cover: String? = null,
+    private val urlPath: String,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "$urlPath#$id"
@@ -100,18 +100,21 @@ data class MangaParkComic(
 }
 
 @Serializable
-data class ChapterList(
+class ChapterList(
     @SerialName("get_comicChapterList") val chapterList: List<Data<MangaParkChapter>>,
 )
 
 @Serializable
-data class MangaParkChapter(
-    val id: String,
-    @SerialName("dname") val displayName: String,
-    val title: String? = null,
-    val dateCreate: Long? = null,
-    val dateModify: Long? = null,
-    val urlPath: String,
+class MangaParkChapter(
+    private val id: String,
+    @SerialName("dname") private val displayName: String,
+    private val title: String? = null,
+    private val dateCreate: Long? = null,
+    private val dateModify: Long? = null,
+    private val urlPath: String,
+    private val srcTitle: String? = null,
+    private val userNode: Data<Name>? = null,
+    val dupChapters: List<Data<MangaParkChapter>> = emptyList(),
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = "$urlPath#$id"
@@ -120,20 +123,24 @@ data class MangaParkChapter(
             title?.let { append(": ", it) }
         }
         date_upload = dateModify ?: dateCreate ?: 0L
+        scanlator = userNode?.data?.name ?: srcTitle ?: "Unknown"
     }
 }
 
 @Serializable
-data class ChapterPages(
+class Name(val name: String)
+
+@Serializable
+class ChapterPages(
     @SerialName("get_chapterNode") val chapterPages: Data<ImageFiles>,
 )
 
 @Serializable
-data class ImageFiles(
+class ImageFiles(
     val imageFile: UrlList,
 )
 
 @Serializable
-data class UrlList(
+class UrlList(
     val urlList: List<String>,
 )

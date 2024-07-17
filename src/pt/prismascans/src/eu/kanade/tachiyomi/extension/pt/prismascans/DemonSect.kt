@@ -4,7 +4,9 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.MangasPage
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.IOException
 import rx.Observable
 import java.text.SimpleDateFormat
@@ -27,6 +29,20 @@ class DemonSect : Madara(
             val pathSegments = response.request.url.pathSegments
             if (pathSegments.contains("login")) {
                 throw IOException("Faça o login na WebView para acessar o contéudo")
+            }
+            response
+        }
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            val mime = response.headers["Content-Type"]
+            if (response.isSuccessful) {
+                if (mime == "application/octet-stream" || mime == null) {
+                    // Fix image content type
+                    val type = "image/jpeg".toMediaType()
+                    val body = response.body.bytes().toResponseBody(type)
+                    return@addInterceptor response.newBuilder().body(body)
+                        .header("Content-Type", "image/jpeg").build()
+                }
             }
             response
         }

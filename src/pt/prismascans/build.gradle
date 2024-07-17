@@ -3,7 +3,7 @@ ext {
     extClass = '.DemonSect'
     themePkg = 'madara'
     baseUrl = 'https://dsectcomics.org'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
 }
 
 apply from: "$rootDir/common.gradle"

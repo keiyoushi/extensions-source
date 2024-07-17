@@ -2,8 +2,8 @@ ext {
     extName = 'TonizuToon'
     extClass = '.TonizuToon'
     themePkg = 'madara'
-    baseUrl = 'https://tonizu.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://tonizu.xyz'
+    overrideVersionCode = 2
     isNsfw = true
 }
 

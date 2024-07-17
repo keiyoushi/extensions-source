@@ -1,9 +1,0 @@
-ext {
-    extName = 'Shea Manga'
-    extClass = '.SheaManga'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://sheakomik.com'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

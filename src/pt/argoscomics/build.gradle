@@ -2,8 +2,8 @@ ext {
     extName = 'Argos Comics'
     extClass = '.ArgosComics'
     themePkg = 'madara'
-    baseUrl = 'https://argoscomics.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://argoscomic.com'
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"

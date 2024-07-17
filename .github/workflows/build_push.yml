@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Validate Gradle Wrapper
-        uses: gradle/actions/wrapper-validation@31ae3562f68c96d481c31bc1a8a55cc1be162f83 # v3.4.1
+        uses: gradle/actions/wrapper-validation@dbbdc275be76ac10734476cc723d82dfe7ec6eda # v3.4.2
 
       - name: Get number of modules
         run: |
@@ -73,7 +73,7 @@ jobs:
           echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@31ae3562f68c96d481c31bc1a8a55cc1be162f83 # v3.4.1
+        uses: gradle/actions/setup-gradle@dbbdc275be76ac10734476cc723d82dfe7ec6eda # v3.4.2
         with:
           cache-read-only: ${{ matrix.chunk != 0 }}
 
@@ -86,7 +86,7 @@ jobs:
         run: ./gradlew -p src assembleRelease
 
       - name: Upload APKs (chunk ${{ matrix.chunk }})
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         if: "github.repository == 'keiyoushi/extensions-source'"
         with:
           name: "individual-apks-${{ matrix.chunk }}"
@@ -104,7 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download APK artifacts
-        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4.1.7
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           path: ~/apk-artifacts
 

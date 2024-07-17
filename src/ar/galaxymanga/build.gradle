@@ -1,9 +1,0 @@
-ext {
-    extName = 'Galaxy Manga'
-    extClass = '.GalaxyManga'
-    themePkg = 'flixscans'
-    baseUrl = 'https://flixscans.net'
-    overrideVersionCode = 28
-}
-
-apply from: "$rootDir/common.gradle"

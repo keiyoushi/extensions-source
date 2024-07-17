@@ -75,6 +75,28 @@ val CHAPTERS_QUERY = buildQuery {
                     dateModify
                     dateCreate
                     urlPath
+                    srcTitle
+                    userNode {
+                        data {
+                            name
+                        }
+                    }
+                    dupChapters {
+                        data {
+                            id
+                            dname
+                            title
+                            dateModify
+                            dateCreate
+                            urlPath
+                            srcTitle
+                            userNode {
+                                data {
+                                    name
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -1,9 +1,9 @@
 ext {
-    extName = 'Surya Scans'
-    extClass = '.SuryaScans'
+    extName = 'Genz Toons'
+    extClass = '.GenzToons'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://suryatoon.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://genztoons.com'
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"

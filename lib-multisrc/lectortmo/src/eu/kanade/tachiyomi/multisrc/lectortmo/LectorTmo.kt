@@ -319,7 +319,7 @@ abstract class LectorTmo(
         return GET(chapter.url, tmoHeaders)
     }
 
-    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
+    override fun pageListParse(document: Document): List<Page> {
         var doc = redirectToReadPage(document)
 
         val currentUrl = doc.location()
@@ -336,21 +336,24 @@ abstract class LectorTmo(
                 .build()
             doc = client.newCall(GET(newUrl, redirectHeaders)).execute().asJsoup()
         }
+        val imagesScript = doc.selectFirst("script:containsData(var dirPath):containsData(var images)")
 
-        doc.select("div.viewer-container img:not(noscript img)").forEach {
-            add(
-                Page(
-                    size,
-                    doc.location(),
-                    it.let {
-                        if (it.hasAttr("data-src")) {
-                            it.attr("abs:data-src")
-                        } else {
-                            it.attr("abs:src")
-                        }
-                    },
-                ),
-            )
+        imagesScript?.data()?.let {
+            val dirPath = DIRPATH_REGEX.find(imagesScript.data())?.groupValues?.get(1)
+            val images = IMAGES_REGEX.find(imagesScript.data())?.groupValues?.get(1)?.split(",")?.map { img ->
+                img.trim().removeSurrounding("\"")
+            }
+            if (dirPath != null && images != null) {
+                return images.mapIndexed { i, img ->
+                    Page(i, doc.location(), "$dirPath$img")
+                }
+            }
+        }
+
+        doc.select("div.viewer-container img:not(noscript img)").let {
+            return it.mapIndexed { i, img ->
+                Page(i, doc.location(), img.imgAttr())
+            }
         }
     }
 
@@ -418,6 +421,13 @@ abstract class LectorTmo(
         }
 
         return document
+    }
+
+    private fun Element.imgAttr(): String {
+        return when {
+            this.hasAttr("data-src") -> this.attr("abs:data-src")
+            else -> this.attr("abs:src")
+        }
     }
 
     private fun String.unescapeUrl(): String {
@@ -605,6 +615,9 @@ abstract class LectorTmo(
     }
 
     companion object {
+        val DIRPATH_REGEX = """var\s+dirPath\s*=\s*'(.*?)'\s*;""".toRegex()
+        val IMAGES_REGEX = """var\s+images\s*=.*\[(.*?)\]\s*'\s*\)\s*;""".toRegex()
+
         private const val SCANLATOR_PREF = "scanlatorPref"
         private const val SCANLATOR_PREF_TITLE = "Mostrar todos los scanlator"
         private const val SCANLATOR_PREF_SUMMARY = "Se mostraran capítulos repetidos pero con diferentes Scanlators"

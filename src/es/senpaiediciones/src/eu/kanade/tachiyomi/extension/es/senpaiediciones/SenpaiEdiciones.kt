@@ -6,7 +6,7 @@ import java.util.Locale
 
 class SenpaiEdiciones : MangaThemesia(
     "Senpai Ediciones",
-    "https://senpaiediciones.com",
+    "https://senpaimangas.online",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {

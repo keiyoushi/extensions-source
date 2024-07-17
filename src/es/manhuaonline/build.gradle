@@ -3,7 +3,7 @@ ext {
     extClass = '.SamuraiScan'
     themePkg = 'madara'
     baseUrl = 'https://spanish.visorsmr.com'
-    overrideVersionCode = 4
+    overrideVersionCode = 7
     isNsfw = false
 }
 

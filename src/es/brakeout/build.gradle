@@ -1,7 +1,7 @@
 ext {
     extName = 'Brakeout'
     extClass = '.Brakeout'
-    extVersionCode = 1
+    extVersionCode = 2
     isNsfw = false
 }
 
