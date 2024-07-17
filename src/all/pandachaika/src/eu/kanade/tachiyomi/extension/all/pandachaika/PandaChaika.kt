@@ -85,7 +85,7 @@ class PandaChaika(
                 client.newCall(GET("$baseUrl/api?archive=$id", headers))
                     .asObservable()
                     .map { response ->
-                        searchMangaParse0(response, id)
+                        searchMangaByIdParse(response, id)
                     }
             }
             query.startsWith(PREFIX_EHEN_ID_SEARCH) -> {
@@ -95,7 +95,7 @@ class PandaChaika(
                     addQueryParameter("qsearch", baseLink + id)
                     addQueryParameter("json", "")
                 }.build()
-                client.newCall(GET(fullLink))
+                client.newCall(GET(fullLink, headers)))
                     .asObservableSuccess()
                     .map {
                         val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
@@ -125,20 +125,12 @@ class PandaChaika(
                         MangasPage(listOf(archive), false)
                     }
             }
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val id = query.removePrefix(PREFIX_ID_SEARCH).toInt()
-                client.newCall(GET("$baseUrl/api?archive=$id", headers))
-                    .asObservable()
-                    .map { response ->
-                        searchMangaParse0(response, id)
-                    }
-            }
 
             else -> super.fetchSearchManga(page, query, filters)
         }
     }
 
-    private fun searchMangaParse0(response: Response, id: Int = 0): MangasPage {
+    private fun searchMangaByIdParse(response: Response, id: Int = 0): MangasPage {
         val title = response.parseAs<Archive>().title
         val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("qsearch", title)
