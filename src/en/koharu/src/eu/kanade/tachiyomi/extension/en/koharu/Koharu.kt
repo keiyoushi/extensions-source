@@ -48,7 +48,7 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val B_REGEX = Regex("""\s*[([{].*[)\]}]\s*""")
+    private val titleRegex = Regex("""\s*[(\[{].*[)\]}]\s*""")
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -64,7 +64,7 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     private fun getManga(book: Entry) = SManga.create().apply {
         setUrlWithoutDomain("${book.id}/${book.public_key}")
-        title = if (remadd()) book.title.replace(B_REGEX, "").trim() else book.title
+        title = if (remadd()) book.title.replace(titleRegex, "").trim() else book.title
         thumbnail_url = book.thumbnail.path
     }
 
@@ -164,7 +164,7 @@ class Koharu : HttpSource(), ConfigurableSource {
             listOf(
                 SManga.create().apply {
                     setUrlWithoutDomain("${entry.id}/${entry.public_key}")
-                    title = if (remadd()) entry.title.replace(B_REGEX, "").trim() else entry.title
+                    title = if (remadd()) entry.title.replace(titleRegex, "").trim() else entry.title
                     thumbnail_url = entry.thumbnails.base + entry.thumbnails.main.path
                 },
             ),
@@ -214,7 +214,7 @@ class Koharu : HttpSource(), ConfigurableSource {
 
         var appended = false
         fun List<String>.joinAndCapitalizeEach(): String? = this.emptyToNull()?.joinToString { it.capitalizeEach() }?.apply { appended = true }
-        title = if (remadd()) this@toSManga.title.replace(B_REGEX, "").trim() else this@toSManga.title
+        title = if (remadd()) this@toSManga.title.replace(titleRegex, "").trim() else this@toSManga.title
 
         author = (circles.emptyToNull() ?: artists).joinToString { it.capitalizeEach() }
         artist = artists.joinToString { it.capitalizeEach() }
