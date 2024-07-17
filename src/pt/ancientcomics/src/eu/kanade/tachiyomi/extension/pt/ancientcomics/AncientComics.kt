@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -31,4 +32,6 @@ class AncientComics : MangaThemesia(
 
         return GET(url, headers)
     }
+
+    override fun chapterListParse(response: Response) = super.chapterListParse(response).reversed()
 }
