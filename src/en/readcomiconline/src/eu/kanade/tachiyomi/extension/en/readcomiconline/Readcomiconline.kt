@@ -12,8 +12,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.encodeToJsonElement
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,7 +24,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -40,8 +37,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::captchaInterceptor)
@@ -222,8 +217,16 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val script = document.selectFirst("script:containsData(lstImages.push)")?.data()
             ?: throw Exception("Failed to find image URLs")
 
-        return CHAPTER_IMAGES_REGEX.findAll(script).toList()
-            .let { matches -> urlDecode(matches.map { it.groupValues[1] }) }
+        val images = script.substring(
+            0,
+            BEAU_INDEX_REGEX.find(script)!!.range.last + 1,
+        ) + "lstImages;"
+
+        return QuickJs.create().use { qjs ->
+            qjs.execute(rguardBytecode)
+
+            (qjs.evaluate(images) as Array<*>).map { it as String }.toList()
+        }
             .mapIndexed { i, imageUrl -> Page(i, "", imageUrl) }
     }
 
@@ -245,9 +248,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         open val selected get() = options[state].second.takeUnless { it.isEmpty() }
     }
 
-    private class PublisherFilter() : Filter.Text("Publisher")
-    private class WriterFilter() : Filter.Text("Writer")
-    private class ArtistFilter() : Filter.Text("Artist")
+    private class PublisherFilter : Filter.Text("Publisher")
+    private class WriterFilter : Filter.Text("Writer")
+    private class ArtistFilter : Filter.Text("Artist")
     private class SortFilter : SelectFilter(
         "Sort By",
         arrayOf(
@@ -326,8 +329,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val qualitypref = androidx.preference.ListPreference(screen.context).apply {
-            key = QUALITY_PREF_Title
-            title = QUALITY_PREF_Title
+            key = QUALITY_PREF_TITLE
+            title = QUALITY_PREF_TITLE
             entries = arrayOf("High Quality", "Low Quality")
             entryValues = arrayOf("hq", "lq")
             summary = "%s"
@@ -379,27 +382,13 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         }
     }
 
-    @Suppress("UNCHECKED_CAST")
-    private fun urlDecode(urls: List<String>): List<String> {
-        return QuickJs.create().use {
-            it.execute(rguardBytecode)
-
-            val script = """
-                var images = ${json.encodeToJsonElement(urls)};
-                beau(images);
-                images;
-            """.trimIndent()
-            (it.evaluate(script) as Array<Any>).map { it as String }.toList()
-        }
-    }
-
     companion object {
-        private const val QUALITY_PREF_Title = "Image Quality Selector"
+        private const val QUALITY_PREF_TITLE = "Image Quality Selector"
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
 
-        private val CHAPTER_IMAGES_REGEX = "lstImages\\.push\\([\"'](.*)[\"']\\)".toRegex()
+        private val BEAU_INDEX_REGEX = Regex("""beau\([^)]+\);""")
 
         private val DISABLE_JS_SCRIPT = """
             const handler = {
