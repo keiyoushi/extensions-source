@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.pandachaika
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservable
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -42,6 +44,9 @@ class PandaChaika(
 
     private val json: Json by injectLazy()
 
+    private val fakkuRegex = Regex("""(?:https?://)?(?:www\.)?fakku\.net/hentai/""")
+    private val ehentaiRegex = Regex("""(?:https?://)?e-hentai\.org/g/""")
+
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseSearchUrl/?tags=$searchLang&sort=rating&apply=&json=&page=$page", headers)
@@ -71,6 +76,76 @@ class PandaChaika(
             }
             else -> limitedNum() to limitedNum()
         }
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return when {
+            query.startsWith(PREFIX_ID_SEARCH) -> {
+                val id = query.removePrefix(PREFIX_ID_SEARCH).toInt()
+                client.newCall(GET("$baseUrl/api?archive=$id", headers))
+                    .asObservable()
+                    .map { response ->
+                        searchMangaByIdParse(response, id)
+                    }
+            }
+            query.startsWith(PREFIX_EHEN_ID_SEARCH) -> {
+                val id = query.removePrefix(PREFIX_EHEN_ID_SEARCH).replace(ehentaiRegex, "")
+                val baseLink = "https://e-hentai.org/g/"
+                val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
+                    addQueryParameter("qsearch", baseLink + id)
+                    addQueryParameter("json", "")
+                }.build()
+                client.newCall(GET(fullLink, headers))
+                    .asObservableSuccess()
+                    .map {
+                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        MangasPage(listOf(archive), false)
+                    }
+            }
+            query.startsWith(PREFIX_FAK_ID_SEARCH) -> {
+                val slug = query.removePrefix(PREFIX_FAK_ID_SEARCH).replace(fakkuRegex, "")
+                val baseLink = "https://www.fakku.net/hentai/"
+                val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
+                    addQueryParameter("qsearch", baseLink + slug)
+                    addQueryParameter("json", "")
+                }.build()
+                client.newCall(GET(fullLink, headers))
+                    .asObservableSuccess()
+                    .map {
+                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        MangasPage(listOf(archive), false)
+                    }
+            }
+            query.startsWith(PREFIX_SOURCE_SEARCH) -> {
+                val url = query.removePrefix(PREFIX_SOURCE_SEARCH)
+                client.newCall(GET("$baseSearchUrl/?qsearch=$url&json=", headers))
+                    .asObservableSuccess()
+                    .map {
+                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        MangasPage(listOf(archive), false)
+                    }
+            }
+
+            else -> super.fetchSearchManga(page, query, filters)
+        }
+    }
+
+    private fun searchMangaByIdParse(response: Response, id: Int = 0): MangasPage {
+        val title = response.parseAs<Archive>().title
+        val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
+            addQueryParameter("qsearch", title)
+            addQueryParameter("json", "")
+        }.build()
+        val archive = client.newCall(GET(fullLink, headers))
+            .execute()
+            .parseAs<ArchiveResponse>().archives
+            .find {
+                it.id == id
+            }
+            ?.toSManga()
+            ?: throw Exception("Invalid ID")
+
+        return MangasPage(listOf(archive), false)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -250,4 +325,11 @@ class PandaChaika(
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+
+    companion object {
+        const val PREFIX_ID_SEARCH = "id:"
+        const val PREFIX_FAK_ID_SEARCH = "fakku:"
+        const val PREFIX_EHEN_ID_SEARCH = "ehentai:"
+        const val PREFIX_SOURCE_SEARCH = "source:"
+    }
 }
