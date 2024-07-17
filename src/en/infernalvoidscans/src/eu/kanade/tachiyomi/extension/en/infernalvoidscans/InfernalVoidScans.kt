@@ -19,8 +19,12 @@ class InfernalVoidScans : MangaThemesia(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment(mangaUrlDirectory.substring(1))
-            .addQueryParameter("s", query)
             .addQueryParameter("page", page.toString())
+
+        // Filters are not loaded with the ‘s’ parameter. Fix genres filter
+        if (query.isNotBlank()) {
+            url.addQueryParameter("s", query)
+        }
 
         filters.forEach { filter ->
             when (filter) {
@@ -38,6 +42,14 @@ class InfernalVoidScans : MangaThemesia(
                 }
                 is OrderByFilter -> {
                     url.addQueryParameter("order", filter.selectedValue())
+                }
+                is GenreListFilter -> {
+                    filter.state
+                        .filter { it.state != Filter.TriState.STATE_IGNORE }
+                        .forEach {
+                            val value = if (it.state == Filter.TriState.STATE_EXCLUDE) "-${it.value}" else it.value
+                            url.addQueryParameter("genre[]", value)
+                        }
                 }
                 // if site has project page, default value "hasProjectPage" = false
                 is ProjectFilter -> {
