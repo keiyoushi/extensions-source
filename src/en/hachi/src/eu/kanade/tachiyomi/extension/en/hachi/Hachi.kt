@@ -153,7 +153,7 @@ class Hachi : HttpSource() {
         val dto = response.parseAs<ArticleResponseDto>()
         val mangas = dto.content.map { manga ->
             SManga.create().apply {
-                url = "$baseUrl/article/${manga.link}"
+                setUrlWithoutDomain("/article/${manga.link}")
                 title = manga.title
                 artist = manga.artist
                 author = manga.author
@@ -209,8 +209,10 @@ class Hachi : HttpSource() {
         val dto = response.parseAs<DetailsResponseDto>()
         val chapters = dto.pageProps.chapters.map { chapter ->
             SChapter.create().apply {
-                url = "$baseUrl/article/${dto.pageProps.article.link}/chapter/${chapter.chapterNumber.toPrettyString()}"
-                name = "Chapter ${chapter.chapterNumber.toPrettyString()}"
+                val chapterNumber = chapter.chapterNumber.toString().removeSuffix(".0")
+                setUrlWithoutDomain("/article/${dto.pageProps.article.link}/chapter/$chapterNumber")
+                name = "Chapter $chapterNumber"
+
                 date_upload = runCatching {
                     dateFormat.parse(chapter.createdAt)?.time
                 }.getOrNull() ?: 0
@@ -253,9 +255,6 @@ class Hachi : HttpSource() {
     // Other
     private inline fun <reified T> Response.parseAs(): T =
         json.decodeFromString(body.string())
-
-    private fun Float.toPrettyString() =
-        this.toString().trimEnd('0').removeSuffix(".")
 
     private fun String.parseStatus() = when (this.lowercase()) {
         "ongoing" -> SManga.ONGOING
