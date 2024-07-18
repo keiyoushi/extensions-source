@@ -2,8 +2,8 @@ ext {
     extName = 'Mode Scanlator'
     extClass = '.ModeScanlator'
     themePkg = 'heancms'
-    baseUrl = 'https://modescanlator.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://site.modescanlator.net'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
