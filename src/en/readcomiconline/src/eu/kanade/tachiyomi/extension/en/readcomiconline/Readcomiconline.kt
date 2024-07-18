@@ -217,10 +217,12 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val script = document.selectFirst("script:containsData(beau)")?.data()
             ?: throw Exception("Failed to find image URLs")
 
-        val images = script.substring(
+        val cleanedScript = removeComments(script)
+
+        val images = cleanedScript.substring(
             0,
-            BEAU_INDEX_REGEX.find(script)!!.range.last + 1,
-        ) + LIST_VARIABLE.find(script)!!.groupValues[1] + ";"
+            BEAU_INDEX_REGEX.find(cleanedScript)!!.range.last + 1,
+        ) + LIST_VARIABLE.find(cleanedScript)!!.groupValues[1] + ";"
 
         return QuickJs.create().use { qjs ->
             qjs.execute(rguardBytecode)
@@ -380,6 +382,112 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         QuickJs.create().use {
             it.compile(DISABLE_JS_SCRIPT + scriptBody + ATOB_SCRIPT, "?")
         }
+    }
+
+    // Adapted from https://www.removecomments.com
+    private fun removeComments(input: String): String {
+        val regx = "\\s".toRegex()
+        var full = input
+        var finalText = ""
+        val comment = "//"
+        val bcOpen = "/*"
+        val bcClose = "*/"
+        val bcOpenIndexes = mutableListOf<Int>()
+        val bcCloseIndexes = mutableListOf<Int>()
+        var o = -1
+        var c = -1
+        if (bcOpen.isNotEmpty()) {
+            o = full.indexOf(bcOpen)
+            while (o != -1) {
+                bcOpenIndexes.add(o)
+                o = full.indexOf(bcOpen, o + 1)
+            }
+        }
+        if (bcClose.isNotEmpty()) {
+            c = full.indexOf(bcClose)
+            while (c != -1) {
+                bcCloseIndexes.add(c)
+                c = full.indexOf(bcClose, c + 1)
+            }
+        }
+        var d = 0
+        var s = 0
+        var bc = 0
+        var record = 0
+        for (i in full.indices) {
+            if (full[i] == '"' && d == 0 && s == 0) {
+                d++
+            } else if (full[i] == '"' && d == 1 && s == 0) {
+                d--
+            }
+            if (full[i] == '\'' && d == 0 && s == 0) {
+                if (!bcOpenIndexes.contains(i)) {
+                    s++
+                }
+            } else if (full[i] == '\'' && d == 0 && s == 1) {
+                if (!bcCloseIndexes.contains(i)) {
+                    s--
+                }
+            } else if (full[i] == '\n') {
+                d = 0
+                s = 0
+            }
+            if (bcOpenIndexes.contains(i) && d == 0 && s == 0 && bc == 0) {
+                finalText += full.substring(record, i)
+                bc = 1
+            } else if (bcClose.isNotEmpty() && bcCloseIndexes.contains(i) && bc == 1) {
+                record = i + bcClose.length
+                bc = 0
+            } else if (i == full.length - 1 && bc == 0) {
+                finalText += full.substring(record)
+            }
+        }
+        if (comment.isNotEmpty()) {
+            val lines = finalText.split('\n')
+            val remComArr = mutableListOf<String>()
+            lines.forEach { line ->
+                var rem = line
+                if (line.contains(comment)) {
+                    val comIndexes = mutableListOf<Int>()
+                    var a = -1
+                    a = line.indexOf(comment)
+                    while (a != -1) {
+                        comIndexes.add(a)
+                        a = line.indexOf(comment, a + 1)
+                    }
+                    var d = 0
+                    var s = 0
+                    for (i in line.indices) {
+                        if (line[i] == '"' && d == 0 && s == 0) {
+                            d++
+                        } else if (line[i] == '"' && d == 1 && s == 0) {
+                            d--
+                        }
+                        if (line[i] == '\'' && d == 0 && s == 0) {
+                            s++
+                        } else if (line[i] == '\'' && d == 0 && s == 1) {
+                            s--
+                        }
+                        if (comIndexes.contains(i) && d == 0 && s == 0) {
+                            rem = line.substring(0, i)
+                            break
+                        }
+                    }
+                }
+                if (rem.replace(regx, "").isEmpty()) {
+                    rem = "\n"
+                }
+                remComArr.add(rem)
+            }
+            finalText = remComArr.joinToString("\n")
+        }
+        while (finalText.contains("\n\n\n")) {
+            finalText = finalText.replace("\n\n\n", "\n\n")
+        }
+        while (finalText.startsWith("\n")) {
+            finalText = finalText.substring(1)
+        }
+        return finalText
     }
 
     companion object {
