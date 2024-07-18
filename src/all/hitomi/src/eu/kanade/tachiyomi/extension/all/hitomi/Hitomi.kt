@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.hitomi
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -19,9 +24,14 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.CacheControl
 import okhttp3.Call
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -36,7 +46,7 @@ import kotlin.math.min
 class Hitomi(
     override val lang: String,
     private val nozomiLang: String,
-) : HttpSource() {
+) : HttpSource(), ConfigurableSource {
 
     override val name = "Hitomi"
 
@@ -50,7 +60,14 @@ class Hitomi(
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::Intercept)
+        .build()
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+    private fun imageType() = preferences.getString(PREF_IMAGETYPE, "webp")!!
 
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
@@ -486,6 +503,10 @@ class Hitomi(
     }
 
     private suspend fun Gallery.toSManga() = SManga.create().apply {
+        val jxl = if (files[0].hasjxl == 1) "jxl" else null
+        val avif = if (files[0].hasavif == 1) "avif" else null
+        val webp = if (files[0].haswebp == 1) "webp" else null
+
         title = this@toSManga.title
         url = galleryurl
         author = groups?.joinToString { it.formatted }
@@ -507,7 +528,9 @@ class Hitomi(
             }
             append("Type: ", type, "\n")
             append("Pages: ", files.size, "\n")
-            language?.let { append("Language: ", language) }
+            language?.let { append("Language: ", language, "\n") }
+
+            append("Available Image Types: ", listOfNotNull(webp, avif, jxl).joinToString())
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -567,14 +590,24 @@ class Hitomi(
 
         gallery.files.mapIndexed { idx, img ->
             val hash = img.hash
+
+            val avif = img.hasavif == 1 && imageType() == "avif"
+            val jxl = img.hasjxl == 1 && imageType() == "jxl"
+
             val commonId = commonImageId()
             val imageId = imageIdFromHash(hash)
             val subDomain = 'a' + subdomainOffset(imageId)
 
+            val imageUrl = when {
+                jxl -> "https://${subDomain}a.$domain/jxl/$commonId$imageId/$hash.jxl"
+                avif -> "https://${subDomain}a.$domain/avif/$commonId$imageId/$hash.avif"
+                else -> "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp"
+            }
+
             Page(
                 idx,
                 "$baseUrl/reader/$id.html",
-                "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp",
+                imageUrl,
             )
         }
     }
@@ -657,6 +690,31 @@ class Hitomi(
         return hash.replace(Regex("""^.*(..)(.)$"""), "$2/$1")
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = PREF_IMAGETYPE
+            title = "Images Type"
+            entries = arrayOf("webp", "avif", "jxl")
+            entryValues = arrayOf("webp", "avif", "jxl")
+            summary = "%s"
+            setDefaultValue("webp")
+        }.also(screen::addPreference)
+    }
+
+    private fun Intercept(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        if (response.headers["Content-Type"] != "application/octet-stream") {
+            return response
+        }
+
+        val type = "image/jxl"
+        val body = response.body.bytes().toResponseBody(type.toMediaType())
+        return response.newBuilder()
+            .body(body)
+            .header("Content-Type", type)
+            .build()
+    }
+
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
@@ -664,4 +722,8 @@ class Hitomi(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    companion object {
+        const val PREF_IMAGETYPE = "pref_image_type"
+    }
 }
