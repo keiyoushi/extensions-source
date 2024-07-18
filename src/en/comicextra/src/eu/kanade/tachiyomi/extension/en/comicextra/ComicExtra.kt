@@ -23,7 +23,7 @@ class ComicExtra : ParsedHttpSource() {
 
     override val name = "ComicExtra"
 
-    override val baseUrl = "https://comicextra.org"
+    override val baseUrl = "https://comicextra.com"
 
     override val lang = "en"
 
