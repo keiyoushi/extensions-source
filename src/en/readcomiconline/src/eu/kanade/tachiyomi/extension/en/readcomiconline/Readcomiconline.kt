@@ -219,15 +219,26 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
         val cleanedScript = removeComments(script)
 
-        val images = cleanedScript.substring(
-            0,
-            BEAU_INDEX_REGEX.find(cleanedScript)!!.range.last + 1,
-        ) + LIST_VARIABLE.find(cleanedScript)!!.groupValues[1] + ";"
+        val variableName = ARRAY_VAR.findAll(cleanedScript).map { it.groupValues[1] }
+            .groupingBy { it }.eachCount()
+            .entries.sortedByDescending { it.value }.map { it.key }
 
         return QuickJs.create().use { qjs ->
             qjs.execute(rguardBytecode)
+            qjs.evaluate(script)
 
-            (qjs.evaluate(images) as Array<*>).map { it as String }.toList()
+            variableName.forEach {
+                val bool = qjs.evaluate(
+                    """
+                        var _0x49b8c2=_0x123c;function _0x123c(_0x3a3f70,_0x153a9a){var _0x500ddc=_0x500d();return _0x123c=function(_0x123c39,_0x130bcf){_0x123c39=_0x123c39-0x6c;var _0x40ac71=_0x500ddc[_0x123c39];return _0x40ac71;},_0x123c(_0x3a3f70,_0x153a9a);}function _0x500d(){var _0x30f66a=['12914343dbcuCG','8tTIdhc','39LHaBuI','11272136IRkEic','isArray','828602mqTUSC','7SBvdKh','232292tbxHGL','10035420aRjSoi','664765erNydn','1990674vTmFDr'];_0x500d=function(){return _0x30f66a;};return _0x500d();}(function(_0x214853,_0x338d23){var _0x1dd529=_0x123c,_0x48f320=_0x214853();while(!![]){try{var _0x51e687=parseInt(_0x1dd529(0x72))/0x1+parseInt(_0x1dd529(0x74))/0x2*(-parseInt(_0x1dd529(0x6f))/0x3)+parseInt(_0x1dd529(0x6e))/0x4*(parseInt(_0x1dd529(0x76))/0x5)+parseInt(_0x1dd529(0x6c))/0x6+parseInt(_0x1dd529(0x73))/0x7*(parseInt(_0x1dd529(0x70))/0x8)+-parseInt(_0x1dd529(0x6d))/0x9+parseInt(_0x1dd529(0x75))/0xa;if(_0x51e687===_0x338d23)break;else _0x48f320['push'](_0x48f320['shift']());}catch(_0xe6b639){_0x48f320['push'](_0x48f320['shift']());}}}(_0x500d,0xda445));try{Array[_0x49b8c2(0x71)]($it);}catch(_0x15c758){![];}
+                    """.trimIndent(),
+                ) as Boolean
+
+                if (bool) {
+                    return@use (qjs.evaluate(it) as Array<*>).map { it as String }.toList()
+                }
+            }
+            emptyList()
         }
             .mapIndexed { i, imageUrl -> Page(i, "", imageUrl) }
     }
@@ -380,7 +391,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val scriptBody = scriptResponse.body.string()
 
         QuickJs.create().use {
-            it.compile(DISABLE_JS_SCRIPT + scriptBody + ATOB_SCRIPT, "?")
+            it.compile(FUNNY_JS_SCRIPT + scriptBody + ATOB_SCRIPT, "?")
         }
     }
 
@@ -496,26 +507,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
 
-        private val BEAU_INDEX_REGEX = Regex("""beau\([^)]+\);""")
-        private val LIST_VARIABLE = Regex("""beau\((\w+)""")
-
-        private val DISABLE_JS_SCRIPT = """
-            const handler = {
-                get: function(target, _) {
-                    return function() {
-                        return target;
-                    };
-                },
-                apply: function(_, __, ___) {
-                    return new Proxy({}, handler);
-                }
-            };
-
-            document = new Proxy({}, handler);
-            window = new Proxy({}, handler);
-            console = new Proxy({}, handler);
-            ${'$'} = new Proxy(function() {}, handler);
-        """.trimIndent()
+        private val ARRAY_VAR = Regex("""(\w+)\s*\.\s*push\s*\(""")
+        private val FUNNY_JS_SCRIPT = """(function(_0x55d059,_0x2a4b53){const _0x46f9ed=_0x2c15,_0x5fbbf3=_0x55d059();while(!![]){try{const _0x250626=-parseInt(_0x46f9ed(0x1c9))/0x1+-parseInt(_0x46f9ed(0x1cb))/0x2+parseInt(_0x46f9ed(0x1c1))/0x3+parseInt(_0x46f9ed(0x1bf))/0x4*(-parseInt(_0x46f9ed(0x1c0))/0x5)+parseInt(_0x46f9ed(0x1c5))/0x6*(-parseInt(_0x46f9ed(0x1c7))/0x7)+parseInt(_0x46f9ed(0x1c6))/0x8*(parseInt(_0x46f9ed(0x1be))/0x9)+-parseInt(_0x46f9ed(0x1cc))/0xa*(-parseInt(_0x46f9ed(0x1c8))/0xb);if(_0x250626===_0x2a4b53)break;else _0x5fbbf3['push'](_0x5fbbf3['shift']());}catch(_0x4a075f){_0x5fbbf3['push'](_0x5fbbf3['shift']());}}}(_0x1a8f,0xcadac));function _0x1a8f(){const _0x2ff1a8=['GwhMz','813232hXddIs','6011150dGcjKz','7851879KPoNdN','12uSzWoa','1917785LUgHvu','4699299IvmJAE','eeMSA','lHqYE','href','54wYnYWU','8jCuDDH','430220FnRNoq','22mbOOqO','699775vAmAff'];_0x1a8f=function(){return _0x2ff1a8;};return _0x1a8f();}function _0x2c15(_0x241167,_0x106b3f){const _0x1a8f75=_0x1a8f();return _0x2c15=function(_0x2c15f8,_0x3d6d3c){_0x2c15f8=_0x2c15f8-0x1be;let _0x4aab42=_0x1a8f75[_0x2c15f8];return _0x4aab42;},_0x2c15(_0x241167,_0x106b3f);}const handler={'get':function(_0x463020,_0x343d72){const _0x101204=_0x2c15;if(_0x343d72==_0x101204(0x1c4))return _0x101204(0x1c2)!==_0x101204(0x1c3)?'':new _0xaf0d53(()=>{},_0x122164);if(_0x343d72 in _0x463020)return _0x101204(0x1ca)==='dQvmR'?_0x4db6a4[_0x4cee20]:_0x463020[_0x343d72];return new Proxy(()=>{},handler);},'apply':function(_0x391c1e,_0x1ae889,_0x2daceb){return new Proxy(()=>{},handler);},'set':function(_0x49ec09,_0x4cac39,_0x48e10f){return _0x49ec09[_0x4cac39]=_0x48e10f,!![];},'construct':function(_0x41a3c1,_0x67ea52){return new Proxy(()=>{},handler);}};document=new Proxy({},handler),window=new Proxy({},handler),console=new Proxy({},handler),${'$'}=new Proxy(function(){},handler),location=new Proxy({},handler);        """.trimIndent()
 
         /*
          * The MIT License (MIT)
