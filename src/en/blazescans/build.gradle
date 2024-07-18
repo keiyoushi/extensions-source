@@ -1,9 +1,10 @@
 ext {
-    extName = 'Blazescans'
-    extClass = '.Blazescans'
+    extName = 'Fury Manga'
+    extClass = '.FuryManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://blazetoon.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://furymanga.com'
+    overrideVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
