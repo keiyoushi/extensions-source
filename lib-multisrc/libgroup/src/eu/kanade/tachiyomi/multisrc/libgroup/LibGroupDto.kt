@@ -266,8 +266,8 @@ class Pages(
 
 @Serializable
 class AuthToken(
-    private val auth: Auth,
-    private val token: Token,
+    private val auth: Auth?,
+    private val token: Token?,
 ) {
     @Serializable
     class Auth(
@@ -282,13 +282,15 @@ class AuthToken(
         @SerialName("access_token") val accessToken: String,
     )
 
+    fun isValid(): Boolean = auth != null && token != null
+
     fun isExpired(): Boolean {
         val currentTime = System.currentTimeMillis()
-        val expiresIn = token.timestamp + (token.expiresIn * 1000)
+        val expiresIn = token!!.timestamp + (token.expiresIn * 1000)
         return expiresIn < currentTime
     }
 
-    fun getToken(): String = "${token.tokenType} ${token.accessToken}"
+    fun getToken(): String = "${token!!.tokenType} ${token.accessToken}"
 
-    fun getUserId(): Int = auth.id
+    fun getUserId(): Int = auth!!.id
 }

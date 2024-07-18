@@ -188,7 +188,11 @@ abstract class LibGroup(
                             } else {
                                 it.replace("\\", "")
                             }
-                            returnValue = str.parseAs<AuthToken>()
+                            str.parseAs<AuthToken>().let { auth ->
+                                if (auth.isValid()) {
+                                    returnValue = auth
+                                }
+                            }
                         }
                         latch.countDown()
                     }
