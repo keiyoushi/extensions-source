@@ -5,7 +5,10 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
@@ -19,7 +22,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -36,6 +38,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
@@ -227,14 +230,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {
-        val script = client.newCall(
-            GET(
-                "https://raw.githubusercontent.com/AwkwardPeak7/sources/main/rco",
-                headers,
-                CacheControl.FORCE_NETWORK,
-            ),
-        ).execute().body.string()
-
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         var webView: WebView? = null
@@ -246,17 +241,49 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             webView = innerWv
             innerWv.settings.javaScriptEnabled = true
             innerWv.settings.blockNetworkImage = true
+            innerWv.settings.domStorageEnabled = true
             innerWv.settings.userAgentString = headers["User-Agent"]
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
             innerWv.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    view?.evaluateJavascript(script) {
+                override fun onLoadResource(view: WebView?, url: String?) {
+                    val i = Random.nextInt(0, Int.MAX_VALUE)
+                    view?.evaluateJavascript(
+                        """
+                        const variable$i = Object.keys(window).find(key => {
+                          const value = window[key];
+                          return Array.isArray(value) && value.every(item => typeof item === 'string' && (item.includes('blogspot') || item.includes('whatsnew247')));
+                        });
+
+                        window[variable$i];
+                        """.trimIndent(),
+                    ) {
                         try {
                             images = json.decodeFromString<List<String>>(it)
-                        } catch (_: Exception) { }
-                        latch.countDown()
+                            latch.countDown()
+                        } catch (e: Exception) {
+                            Log.e("RCO", e.stackTraceToString())
+                        }
                     }
+
+                    super.onLoadResource(view, url)
+                }
+            }
+
+            innerWv.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                    if (consoleMessage == null) { return false }
+                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
+                    when (consoleMessage.messageLevel()) {
+                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("RCO", logContent)
+                        ConsoleMessage.MessageLevel.ERROR -> Log.e("RCO", logContent)
+                        ConsoleMessage.MessageLevel.LOG -> Log.i("RCO", logContent)
+                        ConsoleMessage.MessageLevel.TIP -> Log.i("RCO", logContent)
+                        ConsoleMessage.MessageLevel.WARNING -> Log.w("RCO", logContent)
+                        else -> Log.d("RCO", logContent)
+                    }
+
+                    return true
                 }
             }
 
@@ -269,11 +296,11 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             )
         }
 
-        latch.await(10, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
-            throw Exception("Timed getting image links")
+            throw Exception("Timeout getting image links")
         }
 
         return images.mapIndexed { idx, img ->
