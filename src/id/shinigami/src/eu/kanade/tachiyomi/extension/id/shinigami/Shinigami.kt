@@ -12,7 +12,7 @@ import kotlinx.serialization.decodeFromString
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class Shinigami : Madara("Shinigami", "https://shinigami01.com", "id") {
+class Shinigami : Madara("Shinigami", "https://shinigami02.com", "id") {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
