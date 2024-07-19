@@ -3,7 +3,8 @@ ext {
     extClass = '.FreeMangaTop'
     themePkg = 'madara'
     baseUrl = 'https://freemangatop.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
