@@ -22,7 +22,7 @@ class SenshiManga : HttpSource() {
 
     override val name = "Senshi Manga"
 
-    override val baseUrl = "https://senshimanga.com"
+    override val baseUrl = "https://senshimanga.capibaratraductor.com"
 
     private val apiUrl = "https://api.senshimanga.com"
 
@@ -41,7 +41,7 @@ class SenshiManga : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     private val apiHeaders: Headers = headersBuilder()
-        .add("Organization-Domain", "senshimanga.com")
+        .add("Organization-Domain", "senshimanga.capibaratraductor.com")
         .build()
 
     override fun popularMangaRequest(page: Int): Request =
