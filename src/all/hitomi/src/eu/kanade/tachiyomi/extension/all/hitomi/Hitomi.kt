@@ -503,10 +503,6 @@ class Hitomi(
     }
 
     private suspend fun Gallery.toSManga() = SManga.create().apply {
-        val jxl = if (files[0].hasjxl == 1) "jxl" else null
-        val avif = if (files[0].hasavif == 1) "avif" else null
-        val webp = if (files[0].haswebp == 1) "webp" else null
-
         title = this@toSManga.title
         url = galleryurl
         author = groups?.joinToString { it.formatted }
@@ -528,9 +524,7 @@ class Hitomi(
             }
             append("Type: ", type, "\n")
             append("Pages: ", files.size, "\n")
-            language?.let { append("Language: ", language, "\n") }
-
-            append("Available Image Types: ", listOfNotNull(webp, avif, jxl).joinToString())
+            language?.let { append("Language: ", language) }
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -591,8 +585,9 @@ class Hitomi(
         gallery.files.mapIndexed { idx, img ->
             val hash = img.hash
 
-            val avif = img.hasavif == 1 && imageType() == "avif"
-            val jxl = img.hasjxl == 1 && imageType() == "jxl"
+            val typePref = imageType()
+            val avif = img.hasavif == 1 && typePref == "avif"
+            val jxl = img.hasjxl == 1 && typePref == "jxl"
 
             val commonId = commonImageId()
             val imageId = imageIdFromHash(hash)
@@ -696,10 +691,14 @@ class Hitomi(
             title = "Images Type"
             entries = arrayOf("webp", "avif", "jxl")
             entryValues = arrayOf("webp", "avif", "jxl")
-            summary = "%s"
+            summary = "Clear chapter cache to apply changes"
             setDefaultValue("webp")
         }.also(screen::addPreference)
     }
+
+    private fun List<Int>.toBytesList(): ByteArray = this.map { it.toByte() }.toByteArray()
+    private val signatureOne = listOf(0xFF, 0x0A).toBytesList()
+    private val signatureTwo = listOf(0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A).toBytesList()
 
     private fun Intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
@@ -707,8 +706,11 @@ class Hitomi(
             return response
         }
 
+        val bytesArray = response.body.bytes()
+        if (bytesArray.contentEquals(signatureOne) || bytesArray.contentEquals(signatureTwo)) return response
+
         val type = "image/jxl"
-        val body = response.body.bytes().toResponseBody(type.toMediaType())
+        val body = bytesArray.toResponseBody(type.toMediaType())
         return response.newBuilder()
             .body(body)
             .header("Content-Type", type)
