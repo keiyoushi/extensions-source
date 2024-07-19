@@ -247,9 +247,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onLoadResource(view: WebView?, url: String?) {
-                    val i = Random.nextInt()
+                    val i = Random.nextInt(0, Int.MAX_VALUE)
                     view?.evaluateJavascript(
-                        """;
+                        """
                         const variable$i = Object.keys(window).find(key => {
                           const value = window[key];
                           return Array.isArray(value) && value.every(item => typeof item === 'string' && (item.includes('blogspot') || item.includes('whatsnew247')));
