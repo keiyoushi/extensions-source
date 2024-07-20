@@ -699,6 +699,10 @@ class Hitomi(
     private fun List<Int>.toBytesList(): ByteArray = this.map { it.toByte() }.toByteArray()
     private val signatureOne = listOf(0xFF, 0x0A).toBytesList()
     private val signatureTwo = listOf(0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A).toBytesList()
+    fun ByteArray.startsWith(byteArray: ByteArray): Boolean {
+        if (this.size < byteArray.size) return false
+        return this.sliceArray(byteArray.indices).contentEquals(byteArray)
+    }
 
     private fun Intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
@@ -707,7 +711,9 @@ class Hitomi(
         }
 
         val bytesArray = response.body.bytes()
-        if (bytesArray.contentEquals(signatureOne) || bytesArray.contentEquals(signatureTwo)) return response
+        if (bytesArray.startsWith(signatureOne) || bytesArray.startsWith(signatureTwo)) {
+            return response
+        }
 
         val type = "image/jxl"
         val body = bytesArray.toResponseBody(type.toMediaType())
