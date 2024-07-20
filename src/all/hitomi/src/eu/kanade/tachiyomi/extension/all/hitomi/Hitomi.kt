@@ -505,7 +505,7 @@ class Hitomi(
     private suspend fun Gallery.toSManga() = SManga.create().apply {
         title = this@toSManga.title
         url = galleryurl
-        author = groups?.joinToString { it.formatted }
+        author = groups?.joinToString { it.formatted } ?: artists?.joinToString { it.formatted }
         artist = artists?.joinToString { it.formatted }
         genre = tags?.joinToString { it.formatted }
         thumbnail_url = files.first().let {
@@ -710,13 +710,13 @@ class Hitomi(
             return response
         }
 
-        val bytesArray = response.body.bytes()
-        if (bytesArray.startsWith(signatureOne) || bytesArray.startsWith(signatureTwo)) {
+        val bytesArray = response.peekBody(Long.MAX_VALUE).bytes()
+        if (!(bytesArray.startsWith(signatureOne) || bytesArray.startsWith(signatureTwo))) {
             return response
         }
 
         val type = "image/jxl"
-        val body = bytesArray.toResponseBody(type.toMediaType())
+        val body = response.body.bytes().toResponseBody(type.toMediaType())
         return response.newBuilder()
             .body(body)
             .header("Content-Type", type)
