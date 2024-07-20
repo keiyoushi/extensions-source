@@ -178,7 +178,7 @@ class Bakai : ParsedHttpSource() {
             hasAttr("data-src") -> attr("abs:data-src")
             hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
             else -> attr("abs:src")
-        }.toHttpUrl().toString()
+        }
     }
 
     companion object {
