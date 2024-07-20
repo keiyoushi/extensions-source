@@ -1,9 +1,0 @@
-ext {
-    extName = 'ReadGojo'
-    extClass = '.ReadGojo'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://readgojo.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
