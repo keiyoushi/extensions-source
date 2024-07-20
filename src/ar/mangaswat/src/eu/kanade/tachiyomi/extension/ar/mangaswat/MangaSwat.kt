@@ -24,7 +24,7 @@ import java.util.Locale
 class MangaSwat :
     MangaThemesia(
         "MangaSwat",
-        "https://t1manga.com",
+        "https://maxlevelteam.com",
         "ar",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
