@@ -1,7 +1,8 @@
 ext {
     extName = 'Galaxy'
     extClass = '.GalaxyFactory'
-    extVersionCode = 3
+    extVersionCode = 4
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
