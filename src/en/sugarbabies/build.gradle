@@ -1,9 +1,0 @@
-ext {
-    extName = 'Sugar Babies'
-    extClass = '.SugarBabies'
-    themePkg = 'madara'
-    baseUrl = 'https://sugarbbscan.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
