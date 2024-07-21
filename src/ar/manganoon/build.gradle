@@ -2,8 +2,9 @@ ext {
     extName = 'MangaNoon'
     extClass = '.MangaNoon'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://manjanoon.org'
-    overrideVersionCode = 2
+    baseUrl = 'https://manjanoon.co'
+    overrideVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
