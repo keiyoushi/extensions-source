@@ -1,0 +1,9 @@
+ext {
+    extName = 'Necro Scans'
+    extClass = '.NecroScans'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://necroscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
