@@ -10,5 +10,5 @@ class Data<T>(val data: T)
 class Comic(
     val title: String,
     val slug: String,
-    @SerialName("img_url") val cover: String,
+    @SerialName("img_url") val cover: String? = null,
 )

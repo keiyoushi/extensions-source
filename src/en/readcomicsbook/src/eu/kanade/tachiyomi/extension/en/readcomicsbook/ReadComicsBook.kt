@@ -52,6 +52,7 @@ class ReadComicsBook : HttpSource() {
                     setUrlWithoutDomain(it.absUrl("href"))
                     title = it.attr("title")
                     thumbnail_url = it.selectFirst("img")?.attr("data-original")
+                        ?.replace("http://", "https://")
                 }
             },
             hasNextPage = doc.selectFirst(".page-pagination .next-page") != null,
@@ -116,7 +117,7 @@ class ReadComicsBook : HttpSource() {
                 SManga.create().apply {
                     url = "/comic/${it.slug}"
                     title = it.title
-                    thumbnail_url = it.cover
+                    thumbnail_url = it.cover ?: "$baseUrl/images/sites/default.jpg"
                 }
             },
             hasNextPage = false,
