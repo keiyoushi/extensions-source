@@ -710,7 +710,8 @@ class Hitomi(
             return response
         }
 
-        val bytesArray = response.peekBody(Long.MAX_VALUE).bytes()
+        val bytesPeek = max(signatureOne.size, signatureTwo.size).toLong()
+        val bytesArray = response.peekBody(bytesPeek).bytes()
         if (!(bytesArray.startsWith(signatureOne) || bytesArray.startsWith(signatureTwo))) {
             return response
         }
