@@ -40,8 +40,8 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.LinkedList
 import java.util.Locale
-import kotlin.math.min
 import kotlin.math.max
+import kotlin.math.min
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Hitomi(
