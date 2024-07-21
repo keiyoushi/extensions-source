@@ -1,9 +1,9 @@
 ext {
-    extName = 'Umi Scans'
-    extClass = '.UmiScans'
+    extName = 'Kai Scans'
+    extClass = '.KaiScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://umiscans.org'
-    overrideVersionCode = 3
+    baseUrl = 'https://kaiscans.org'
+    overrideVersionCode = 4
     isNsfw = true
 }
 
