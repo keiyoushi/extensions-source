@@ -74,7 +74,7 @@ class ReadAllComics : ParsedHttpSource() {
                 .substringAfter("category-")
 
             url = "/category/$category/"
-            title = category.replace("-", " ").toCamelCase()
+            title = category.replace("-", " ").capitalizeEachWord()
             thumbnail_url = element.select("img").attr("abs:src")
         }
 
@@ -164,7 +164,7 @@ class ReadAllComics : ParsedHttpSource() {
         }
     }
 
-    private fun String.toCamelCase(): String {
+    private fun String.capitalizeEachWord(): String {
         val result = StringBuilder(length)
         var capitalize = true
         for (char in this) {
