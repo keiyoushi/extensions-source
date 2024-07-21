@@ -41,6 +41,7 @@ import java.text.SimpleDateFormat
 import java.util.LinkedList
 import java.util.Locale
 import kotlin.math.min
+import kotlin.math.max
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Hitomi(
