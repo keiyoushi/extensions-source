@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.readallcomics
+package eu.kanade.tachiyomi.extension.en.readallcomicscom
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -10,8 +10,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -19,11 +21,13 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
 
-abstract class ReadAllComics(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : ParsedHttpSource() {
+class ReadAllComics : ParsedHttpSource() {
+
+    override val name = "ReadAllComics"
+
+    override val baseUrl = "https://readallcomics.com"
+
+    override val lang = "en"
 
     override val supportsLatest = false
 
@@ -34,7 +38,7 @@ abstract class ReadAllComics(
         .rateLimit(2)
         .build()
 
-    protected open fun archivedCategoryInterceptor(chain: Interceptor.Chain): Response {
+    private fun archivedCategoryInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
 
@@ -43,7 +47,7 @@ abstract class ReadAllComics(
             request.url.toString(),
         )
 
-        val newUrl = document.selectFirst(archivedCategorySelector())
+        val newUrl = document.selectFirst(".description-archive > p > span > a")
             ?.attr("href")?.toHttpUrlOrNull()
             ?: return response
 
@@ -60,33 +64,18 @@ abstract class ReadAllComics(
         return response
     }
 
-    protected open fun archivedCategorySelector() = ".description-archive > p > span > a"
-
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl${if (page > 1)"/page/$page/" else ""}", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(popularMangaSelector()).mapNotNull {
-            nullablePopularManga(it)
-        }
-
-        val hasNextPage = document.select(popularMangaNextPageSelector()).first() != null
-
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    protected open fun nullablePopularManga(element: Element): SManga? {
+    override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create().apply {
             val category = element.classNames()
-                .firstOrNull { it.startsWith("category-") }
-                ?.substringAfter("category-")
-                ?: return null
+                .firstOrNull { it.startsWith("category-") }!!
+                .substringAfter("category-")
 
             url = "/category/$category/"
-            title = element.select(popularMangaTitleSelector()).text()
-            thumbnail_url = element.select(popularMangaThumbnailSelector()).attr("abs:src")
+            title = category.replace("-", " ").capitalizeEachWord()
+            thumbnail_url = element.select("img").attr("abs:src")
         }
 
         return manga
@@ -94,8 +83,6 @@ abstract class ReadAllComics(
 
     override fun popularMangaSelector() = "#post-area > div"
     override fun popularMangaNextPageSelector() = "div.pagenavi > a.next"
-    protected open fun popularMangaTitleSelector() = "h2"
-    protected open fun popularMangaThumbnailSelector() = "img"
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (page == 1) {
@@ -107,10 +94,15 @@ abstract class ReadAllComics(
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/?story=${query.trim()}&s=&type=${searchType()}", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addQueryParameter("story", query)
+            addQueryParameter("s", "")
+            addQueryParameter("type", "comic")
+        }.build()
 
-    protected open fun searchType() = "comic"
+        return GET(url, headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         searchPageElements = response.asJsoup().select(searchMangaSelector())
@@ -133,26 +125,31 @@ abstract class ReadAllComics(
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        title = element.text().trim()
-        thumbnail_url = searchCover
+        title = element.text()
+        thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover%0AOn%20Search&font_size=62"
     }
 
     override fun searchMangaSelector() = ".categories a"
     override fun searchMangaNextPageSelector() = null
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(mangaDetailsTitleSelector()).text().trim()
-        genre = document.select(mangaDetailsGenreSelector()).joinToString { it.text().trim() }
-        author = document.select(mangaDetailsAuthorSelector()).last()?.text()?.trim()
-        description = document.select(mangaDetailsDescriptionSelector()).text().trim()
-        thumbnail_url = document.select(mangaDetailsThumbnailSelector()).attr("abs:src")
+        title = document.selectFirst("h1")!!.text()
+        genre = document.select("p strong").joinToString { it.text() }
+        author = document.select("p > strong").last()?.text()
+        description = buildString {
+            document.select(".b > strong").forEach { element ->
+                val vol = element.previousElementSibling()
+                if (isNotBlank()) {
+                    append("\n\n")
+                }
+                if (vol?.tagName() == "span") {
+                    append(vol.text(), "\n")
+                }
+                append(element.text())
+            }
+        }
+        thumbnail_url = document.select("p img").attr("abs:src")
     }
-
-    protected open fun mangaDetailsTitleSelector() = "h1"
-    protected open fun mangaDetailsGenreSelector() = "p strong"
-    protected open fun mangaDetailsAuthorSelector() = "p > strong"
-    protected open fun mangaDetailsDescriptionSelector() = ".b > strong"
-    protected open fun mangaDetailsThumbnailSelector() = "p img"
 
     override fun chapterListSelector() = ".list-story a"
 
@@ -162,15 +159,25 @@ abstract class ReadAllComics(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListSelector()).mapIndexed { idx, element ->
+        return document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->
             Page(idx, "", element.attr("abs:src"))
         }
     }
 
-    protected open fun pageListSelector() = "body > div img"
-
-    companion object {
-        private const val searchCover = "https://fakeimg.pl/200x300/?text=No%20Cover%0AOn%20Search&font_size=62"
+    private fun String.capitalizeEachWord(): String {
+        val result = StringBuilder(length)
+        var capitalize = true
+        for (char in this) {
+            result.append(
+                if (capitalize) {
+                    char.uppercase()
+                } else {
+                    char.lowercase()
+                },
+            )
+            capitalize = char.isWhitespace()
+        }
+        return result.toString()
     }
 
     override fun imageUrlParse(document: Document) =
@@ -182,7 +189,5 @@ abstract class ReadAllComics(
     override fun latestUpdatesSelector() =
         throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector() =
-        throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element) =
         throw UnsupportedOperationException()
 }
