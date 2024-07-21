@@ -139,13 +139,13 @@ class ReadAllComics : ParsedHttpSource() {
         description = buildString {
             document.select(".b > strong").forEach { element ->
                 val vol = element.previousElementSibling()
-                if (vol?.tagName() == "span") {
-                    if (isNotBlank()) {
-                        append("\n\n")
-                    }
-                    append(vol.text(), "\n")
-                    append(element.text())
+                if (isNotBlank()) {
+                    append("\n\n")
                 }
+                if (vol?.tagName() == "span") {
+                    append(vol.text(), "\n")
+                }
+                append(element.text())
             }
         }
         thumbnail_url = document.select("p img").attr("abs:src")
