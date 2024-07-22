@@ -28,56 +28,39 @@ class DarthsDroids : HttpSource() {
     override val supportsLatest = false
 
     private val mainArchiveUrl = "$baseUrl/archive.html"
-    private val seriesAuthors = "David Morgan-Mar & Co."
-    private val seriesGenres = "Campaign Comic, Comedy, Space Opera, Science Fiction"
-    private val seriesDescription = "" +
-        // Quoted from TV Tropes.
-        "What if Star Wars as we know it didn't exist, but instead the " +
-        "plot of the movies was being made up on the spot by players of " +
-        "a Tabletop Game?\n" +
-        "Well, for one, the results might actually make a lot more sense, " +
-        "from an out-of-story point of view…"
 
-    private val titleDnd1 = "$name I. The Phantasmal Malevolence"
-    private val titleDnd2 = "$name II. The Silence of the Clones"
-    private val titleDnd3 = "$name III. Revelation of the Sith"
-    private val titleDndJJ = "$name The Ballad of Jar Jar"
-    private val titleDnd4 = "$name IV. A New Generation"
-    private val titleDnd5 = "$name V. The Enemy Let Slip"
-    private val titleDnd6 = "$name VI. The Jedi Reloaded"
-    private val titleDndR1 = "$name Butch Cassian and the Sundance Droid"
-    private val titleDndMuppets = "$name The Invisible Hands"
-    private val titleDnd7 = "$name VII. The Forced-Away Kin"
-    private val titleDndSolo = "$name One Rogue, Many Identities - Greedo’s Awesome Epic Backstory"
-    private val titleDnd8 = "$name VIII. The Jedi List"
-
-    private fun dndThumbnailUrlForTitle(mangaTitle: String): String = when (mangaTitle) {
-        titleDnd1 -> "https://www.darthsanddroids.net/cast/QuiGon.jpg"
-        titleDnd2 -> "https://www.darthsanddroids.net/cast/Anakin2.jpg"
-        titleDnd3 -> "https://www.darthsanddroids.net/cast/ObiWan3.jpg"
-        titleDndJJ -> "https://www.darthsanddroids.net/cast/JarJar2.jpg"
-        titleDnd4 -> "https://www.darthsanddroids.net/cast/Leia4.jpg"
-        titleDnd5 -> "https://www.darthsanddroids.net/cast/Han5.jpg"
-        titleDnd6 -> "https://www.darthsanddroids.net/cast/Luke6.jpg"
-        titleDndR1 -> "https://www.darthsanddroids.net/cast/Cassian.jpg"
-        titleDndMuppets -> "https://www.darthsanddroids.net/cast/C3PO4.jpg"
-        titleDnd7 -> "https://www.darthsanddroids.net/cast/Finn7.jpg"
-        titleDndSolo -> "https://www.darthsanddroids.net/cast/Han4.jpg"
-        titleDnd8 -> "https://www.darthsanddroids.net/cast/Hux8.jpg"
+    private fun dndThumbnailUrlForTitle(nthManga: Int): String = when (nthManga) {
+        0 -> "https://www.darthsanddroids.net/cast/QuiGon.jpg" // D&D1
+        1 -> "https://www.darthsanddroids.net/cast/Anakin2.jpg" // D&D2
+        2 -> "https://www.darthsanddroids.net/cast/ObiWan3.jpg" // D&D3
+        3 -> "https://www.darthsanddroids.net/cast/JarJar2.jpg" // JJ
+        4 -> "https://www.darthsanddroids.net/cast/Leia4.jpg" // D&D4
+        5 -> "https://www.darthsanddroids.net/cast/Han5.jpg" // D&D5
+        6 -> "https://www.darthsanddroids.net/cast/Luke6.jpg" // D&D6
+        7 -> "https://www.darthsanddroids.net/cast/Cassian.jpg" // R1
+        8 -> "https://www.darthsanddroids.net/cast/C3PO4.jpg" // Muppets
+        9 -> "https://www.darthsanddroids.net/cast/Finn7.jpg" // D&D7
+        10 -> "https://www.darthsanddroids.net/cast/Han4.jpg" // Solo
+        11 -> "https://www.darthsanddroids.net/cast/Hux8.jpg" // D&D8
         // Just some nonsense fallback that screams »Star Wars« but is also so recognisably
         // OT that one can understand it’s a mere fallback. Better thumbnails require an
         // extension update.
         else -> "https://www.darthsanddroids.net/cast/Vader4.jpg"
     }
 
-    private fun dndManga(archiveUrl: String, mangaTitle: String, mangaStatus: Int): SManga = SManga.create().apply {
+    private fun dndManga(archiveUrl: String, mangaTitle: String, mangaStatus: Int, nthManga: Int): SManga = SManga.create().apply {
         url = archiveUrl
-        thumbnail_url = dndThumbnailUrlForTitle(mangaTitle)
+        thumbnail_url = dndThumbnailUrlForTitle(nthManga)
         title = mangaTitle
-        author = seriesAuthors
-        artist = seriesAuthors
-        description = seriesDescription
-        genre = seriesGenres
+        author = "David Morgan-Mar & Co."
+        artist = "David Morgan-Mar & Co."
+        description = """What if Star Wars as we know it didn't exist, but instead the
+            | plot of the movies was being made up on the spot by players of
+            | a Tabletop Game?\n
+            | Well, for one, the results might actually make a lot more sense,
+            | from an out-of-story point of view…
+        """.trimMargin()
+        genre = "Campaign Comic, Comedy, Space Opera, Science Fiction"
         status = mangaStatus
         update_strategy = when (mangaStatus) {
             SManga.COMPLETED -> UpdateStrategy.ONLY_FETCH_ONCE
@@ -92,21 +75,23 @@ class DarthsDroids : HttpSource() {
 
         val mangas = mutableListOf<SManga>()
         var nextMangaTitle = name
+        var nthManga = 0
 
         run stop@{
             archiveData.forEach {
-                val maybeTitle = it.selectFirst("th")?.text()
+                val maybeTitle = it.selectFirst("th")?.text()?.trim()
                 if (maybeTitle != null) {
                     nextMangaTitle = "$name $maybeTitle"
                 } else {
                     val maybeArchive = it.selectFirst("""td[colspan="3"] > a""")?.attr("href")
                     if (maybeArchive != null) {
-                        mangas.add(dndManga(baseUrl + maybeArchive, nextMangaTitle, SManga.COMPLETED))
+                        mangas.add(dndManga(maybeArchive, nextMangaTitle, SManga.COMPLETED, nthManga))
+                        nthManga += 1
                     } else {
                         // We reached the end, assuming the page layout stays consistent beyond D&D8.
                         // Thus, we append our final manga with this current page as its archive.
                         // Unfortunately this means we will needlessly fetch this page twice.
-                        mangas.add(dndManga(mainArchiveUrl, nextMangaTitle, SManga.ONGOING))
+                        mangas.add(dndManga("/archive.html", nextMangaTitle, SManga.ONGOING, nthManga))
                         return@stop
                     }
                 }
@@ -116,9 +101,14 @@ class DarthsDroids : HttpSource() {
         return Observable.just(MangasPage(mangas, false))
     }
 
-    // Have the user manually fetch data again on a backup restore. Branching on
-    // titles is rather un-fun.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+    // Not efficient, but the simplest way for me to refresh
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        fetchPopularManga(0)
+            .map { mangasPage ->
+                mangasPage
+                    .mangas
+                    .first { it.url == manga.url }!!
+            }
 
     // This implementation here is needlessly complicated, for it has to automatically detect
     // whether we’re in a date-annotated archive, the main archive, or a dateless archive.
@@ -144,7 +134,7 @@ class DarthsDroids : HttpSource() {
                 )
                 i += 1
             } else if (!pageData.hasAttr("colspan")) {
-                // Are we in a date-less archive?
+                // Are we in a dateless archive?
                 pageAnchor = pageData.getOrNull(0)?.selectFirst("a")
                 if (pageAnchor != null) {
                     // For now we assume all dateless archives were published the same day
@@ -169,20 +159,23 @@ class DarthsDroids : HttpSource() {
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        var archiveResponse = client.newCall(GET(manga.url, headers)).execute()
+        var archiveResponse = client.newCall(GET(baseUrl + manga.url, headers)).execute()
         if (!archiveResponse.isSuccessful) {
-            archiveResponse = client.newCall(GET("$baseUrl/archive.html", headers)).execute()
+            archiveResponse = client.newCall(GET(mainArchiveUrl, headers)).execute()
         }
 
         // Fingers crossed they don’t come up with yet another different archive structure.
         return Observable.just(fetchChaptersForDatedAndDatelessArchives(archiveResponse.asJsoup()))
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(listOf(Page(0, chapter.url)))
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
+        Observable.just(listOf(Page(0, chapter.url)))
 
     override fun fetchImageUrl(page: Page): Observable<String> {
         val comicPage = client.newCall(GET(baseUrl + page.url, headers)).execute().asJsoup()
-        val imageUrl = comicPage.selectFirst("div.center > p > img")!!.attr("src")
+        // Careful. For almost all images it’s `div.center>p>img`, except for pages released on
+        // April’s Fools day, when it’s `div.center>p>a>img`.
+        val imageUrl = comicPage.selectFirst("div.center img")!!.attr("src")
         return Observable.just(baseUrl + imageUrl)
     }
 
