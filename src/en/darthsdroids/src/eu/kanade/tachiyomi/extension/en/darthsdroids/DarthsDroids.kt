@@ -114,7 +114,7 @@ class DarthsDroids : HttpSource() {
     // whether we’re in a date-annotated archive, the main archive, or a dateless archive.
     // All three are largely similar, there are just *some* (annoying) differences we have to
     // deal with.
-    private fun fetchChaptersForDatedAndDatelessArchives(archivePages: Document): List<SChapter> {
+    private fun fetchChaptersForDatedAndDatelessArchives(archivePages: Document, archivePath: String): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
         var i = 0
         archivePages.select("""div.text > table.text > tbody > tr""").forEach {
@@ -129,7 +129,7 @@ class DarthsDroids : HttpSource() {
                         name = a.text()
                         chapter_number = i.toFloat()
                         date_upload = DATE_FMT.parse(pageData[0].text().trim())?.time ?: 0L
-                        url = a.attr("href")
+                        url = absolutePageUrl(a.attr("href"), archivePath)
                     },
                 )
                 i += 1
@@ -147,7 +147,7 @@ class DarthsDroids : HttpSource() {
                             name = a.text()
                             chapter_number = i.toFloat()
                             date_upload = pageDate
-                            url = a.attr("href")
+                            url = absolutePageUrl(a.attr("href"), archivePath)
                         },
                     )
                     i += 1
@@ -158,6 +158,16 @@ class DarthsDroids : HttpSource() {
         return chapters
     }
 
+    private fun absolutePageUrl(pageUrl: String, maybeRelativeTo: String): String =
+        if (pageUrl.startsWith('/')) {
+            pageUrl
+        } else {
+            // This happens because for whatever reason, the `solo` index isn’t
+            // a `.html` page, but a directory path with an `index.html`. So
+            // we’re returning `solo/$pageUrl`.
+            maybeRelativeTo + pageUrl
+        }
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         var archiveResponse = client.newCall(GET(baseUrl + manga.url, headers)).execute()
         if (!archiveResponse.isSuccessful) {
@@ -165,7 +175,10 @@ class DarthsDroids : HttpSource() {
         }
 
         // Fingers crossed they don’t come up with yet another different archive structure.
-        return Observable.just(fetchChaptersForDatedAndDatelessArchives(archiveResponse.asJsoup()))
+        // Technically `manga.url` is »incorrect« for the main archive, but that parameter
+        // is ignored for almost all archives anyway. Only those not pointing at a `.html`
+        // page matter.
+        return Observable.just(fetchChaptersForDatedAndDatelessArchives(archiveResponse.asJsoup(), manga.url))
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
