@@ -59,7 +59,7 @@ class Bakai : ParsedHttpSource() {
     override fun popularMangaSelector() = "#elCmsPageWrap ul > li > article"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
         with(element.selectFirst("h2.ipsType_pageTitle a")!!) {
             title = text()
             setUrlWithoutDomain(attr("href"))
@@ -117,7 +117,7 @@ class Bakai : ParsedHttpSource() {
     override fun searchMangaSelector() = "ol > li > div"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.selectFirst(".ipsThumb img")?.absUrl("src")
+        thumbnail_url = element.selectFirst(".ipsThumb img")?.imgAttr()
 
         with(element.selectFirst("h2.ipsStreamItem_title a")!!) {
             title = text()
@@ -130,7 +130,7 @@ class Bakai : ParsedHttpSource() {
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.ipsType_pageTitle")?.text() ?: "Hentai"
-        thumbnail_url = document.selectFirst("div.cCmsRecord_image img")?.absUrl("src")
+        thumbnail_url = document.selectFirst("div.cCmsRecord_image img")?.imgAttr()
         artist = document.selectFirst("span.mangaInfo:has(strong:contains(Artist)) + a")?.text()
         genre = document.selectFirst("span.mangaInfo:has(strong:contains(Tags)) + span")?.text()
         description = document.selectFirst("h2.ipsFieldRow_desc")?.let {
@@ -164,12 +164,21 @@ class Bakai : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         return document.select("div.ipsGrid div.ipsType_center > img")
             .mapIndexed { index, item ->
-                Page(index, "", item.absUrl("data-src"))
+                Page(index, "", item.imgAttr())
             }
     }
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException()
+    }
+
+    private fun Element.imgAttr(): String {
+        return when {
+            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+            hasAttr("data-src") -> attr("abs:data-src")
+            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+            else -> attr("abs:src")
+        }
     }
 
     companion object {
