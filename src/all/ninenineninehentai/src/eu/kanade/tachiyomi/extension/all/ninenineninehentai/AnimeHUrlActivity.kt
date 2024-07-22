@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class NineNineNineHentaiUrlActivity : Activity() {
+class AnimeHUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
@@ -15,17 +15,17 @@ class NineNineNineHentaiUrlActivity : Activity() {
             val id = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${NineNineNineHentai.SEARCH_PREFIX}$id")
+                putExtra("query", "${AnimeH.SEARCH_PREFIX}$id")
                 putExtra("filter", packageName)
             }
 
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("999HentaiUrlActivity", e.toString())
+                Log.e("AnimeHUrlActivity", e.toString())
             }
         } else {
-            Log.e("999HentaiUrlActivity", "could not parse uri from intent $intent")
+            Log.e("AnimeHUrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()
