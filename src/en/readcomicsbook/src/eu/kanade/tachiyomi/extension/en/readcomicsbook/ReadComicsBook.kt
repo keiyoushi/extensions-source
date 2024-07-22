@@ -138,6 +138,7 @@ class ReadComicsBook : HttpSource() {
                 }
             }
             thumbnail_url = doc.selectFirst("div.manga-thumb img")?.absUrl("data-original")
+                ?.replace("http://", "https://")
             genre = doc.select("div.meta-data a[href*=/genre/]").eachText().joinToString()
             description = buildString {
                 doc.selectFirst(".summary-content")?.text()?.let(::append)
