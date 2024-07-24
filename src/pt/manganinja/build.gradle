@@ -1,0 +1,9 @@
+ext {
+    extName = 'Mangá Ninja'
+    extClass = '.MangaNinja'
+    themePkg = 'madara'
+    baseUrl = 'https://manganinja.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
