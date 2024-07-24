@@ -59,7 +59,7 @@ class AsuraScans : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1, 3)
         .build()
 
