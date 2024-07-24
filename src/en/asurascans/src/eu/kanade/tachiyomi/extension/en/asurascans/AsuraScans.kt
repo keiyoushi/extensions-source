@@ -30,8 +30,6 @@ import kotlin.concurrent.thread
 
 class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
-    override val versionId = 2
-
     override val name = "Asura Scans"
 
     override val baseUrl = "https://asuracomic.net"
@@ -185,15 +183,17 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun getMangaUrl(manga: SManga): String {
         if (!preferences.dynamicUrl()) return super.getMangaUrl(manga)
-        val slug = manga.url.substringAfter("/series/").substringBefore("/")
-        val savedSlug = preferences.slugMap[slug] ?: slug
+        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(1)
+        val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
+        val savedSlug = preferences.slugMap[slug] ?: "$slug-"
         return baseUrl + manga.url.replace(slug, savedSlug)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (!preferences.dynamicUrl()) return super.mangaDetailsRequest(manga)
-        val slug = manga.url.substringAfter("/series/").substringBefore("/")
-        val savedSlug = preferences.slugMap[slug] ?: slug
+        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(1)
+        val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
+        val savedSlug = preferences.slugMap[slug] ?: "$slug-"
         return GET("$baseUrl/series/$savedSlug", headers)
     }
 
@@ -254,14 +254,16 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun getChapterUrl(chapter: SChapter): String {
         if (!preferences.dynamicUrl()) return super.getChapterUrl(chapter)
         val slug = chapter.url.substringAfter("/series/").substringBefore("/")
-        val savedSlug = preferences.slugMap[slug] ?: slug
+        val savedSlug = preferences.slugMap[slug] ?: "$slug-"
         return baseUrl + chapter.url.replace(slug, savedSlug)
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (!preferences.dynamicUrl()) return super.pageListRequest(chapter)
+        val match = OLD_FORMAT_CHAPTER_REGEX.matches(chapter.url)
+        if (match) throw Exception("Please refresh the chapter list before reading.")
         val slug = chapter.url.substringAfter("/series/").substringBefore("/")
-        val savedSlug = preferences.slugMap[slug] ?: slug
+        val savedSlug = preferences.slugMap[slug] ?: "$slug-"
         return GET(baseUrl + chapter.url.replace(slug, savedSlug), headers)
     }
 
@@ -311,6 +313,8 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     companion object {
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
+        private val OLD_FORMAT_MANGA_REGEX = """^/manga/\d*(.*?)/?$""".toRegex()
+        private val OLD_FORMAT_CHAPTER_REGEX = """^/\d+-[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
         private const val PREF_SLUG_MAP = "pref_slug_map"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
         private const val PREF_DYNAMIC_URL_TITLE = "Automatically update dynamic URLs"
