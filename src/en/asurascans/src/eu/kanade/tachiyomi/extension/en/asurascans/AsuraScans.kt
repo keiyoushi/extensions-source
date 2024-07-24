@@ -25,6 +25,8 @@ import kotlin.concurrent.thread
 
 class AsuraScans : ParsedHttpSource() {
 
+    override val versionId = 2
+
     override val name = "Asura Scans"
 
     override val baseUrl = "https://asuracomic.net"
