@@ -49,7 +49,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     init {
         // remove legacy preferences
-        preferences.run {
+        Injekt.get<Application>().getSharedPreferences("source_6247824327199706550", 0x0000).run {
             if (contains("pref_url_map")) {
                 edit().remove("pref_url_map").apply()
             }
