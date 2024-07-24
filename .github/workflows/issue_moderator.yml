@@ -64,6 +64,7 @@ jobs:
                 "type": "both",
                 "regex": "(centralnovel\\.com)",
                 "ignoreCase": true,
+                "labels": ["invalid"],
                 "message": "Novels aren't supported"
               }
             ]
