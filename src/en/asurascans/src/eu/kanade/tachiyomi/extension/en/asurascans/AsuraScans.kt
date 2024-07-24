@@ -118,7 +118,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaSelector() = "div.grid > a[href]"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("abs:href").toDynamicUrlIfNeeded())
+        setUrlWithoutDomain(element.attr("abs:href").toPermSlugIfNeeded())
         title = element.selectFirst("div.block > span.block")!!.ownText()
         thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
     }
@@ -240,7 +240,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListSelector() = "div.scrollbar-thumb-themecolor > a.block"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("abs:href").toDynamicUrlIfNeeded())
+        setUrlWithoutDomain(element.attr("abs:href").toPermSlugIfNeeded())
         name = element.selectFirst("h3:eq(0)")!!.ownText()
         date_upload = try {
             val text = element.selectFirst("h3:eq(1)")!!.ownText()
@@ -301,7 +301,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     private fun SharedPreferences.dynamicUrl(): Boolean = getBoolean(PREF_DYNAMIC_URL, PREF_DYNAMIC_URL_DEFAULT)
 
-    private fun String.toDynamicUrlIfNeeded(): String {
+    private fun String.toPermSlugIfNeeded(): String {
         if (!preferences.dynamicUrl()) return this
         val slug = this.substringAfter("/series/").substringBefore("/")
         val absSlug = slug.substringBeforeLast("-")
