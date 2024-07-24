@@ -35,16 +35,16 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class NineNineNineHentai(
+open class AnimeH(
     final override val lang: String,
     private val siteLang: String = lang,
 ) : HttpSource(), ConfigurableSource {
 
-    override val name = "999Hentai"
+    override val name = "AnimeH"
 
-    override val baseUrl = "https://999hentai.net"
+    override val baseUrl = "https://animeh.to"
 
-    private val apiUrl = "https://hapi.999hentai.net/api"
+    private val apiUrl = "https://api.animeh.to/api"
 
     override val supportsLatest = true
 

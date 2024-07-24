@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application android:icon="@mipmap/ic_launcher">
         <activity
-            android:name=".all.ninenineninehentai.NineNineNineHentaiUrlActivity"
+            android:name=".all.ninenineninehentai.AnimeHUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -12,7 +12,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:host="999hentai.net"/>
+                <data android:host="animeh.to"/>
                 <data android:scheme="https"/>
                 <data android:pathPattern="/hchapter/..*"/>
             </intent-filter>

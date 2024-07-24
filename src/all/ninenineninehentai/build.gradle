@@ -1,7 +1,7 @@
 ext {
-    extName = '999Hentai'
-    extClass = '.NineNineNineHentaiFactory'
-    extVersionCode = 6
+    extName = 'AnimeH'
+    extClass = '.AnimeHFactory'
+    extVersionCode = 7
     isNsfw = true
 }
 
