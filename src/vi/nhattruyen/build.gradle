@@ -2,7 +2,7 @@ ext {
     extName = 'NhatTruyen'
     extClass = '.NhatTruyen'
     themePkg = 'wpcomics'
-    baseUrl = 'https://nhattruyenup.com'
+    baseUrl = 'https://nhattruyenvn.com'
     overrideVersionCode = 17
 }
 
