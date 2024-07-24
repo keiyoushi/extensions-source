@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Bin'
-    extClass = '.MangaBin'
-    themePkg = 'madara'
-    baseUrl = 'https://mangabin.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
