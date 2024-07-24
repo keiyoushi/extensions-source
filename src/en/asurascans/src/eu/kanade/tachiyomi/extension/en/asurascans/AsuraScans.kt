@@ -4,19 +4,24 @@ import android.app.Application
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.concurrent.thread
 
 class AsuraScans : ParsedHttpSource() {
 
@@ -50,6 +55,8 @@ class AsuraScans : ParsedHttpSource() {
         }
     }
 
+    private val json: Json by injectLazy()
+
     override val client = super.client.newBuilder()
         .rateLimit(1, 3)
         .build()
@@ -78,9 +85,25 @@ class AsuraScans : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/series".toHttpUrl().newBuilder()
 
+        url.addQueryParameter("page", page.toString())
+
         if (query.isNotBlank()) {
             url.addQueryParameter("name", query)
         }
+
+        val genres = filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
+            .filter(Genre::state)
+            .map(Genre::id)
+            .joinToString(",")
+
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart() ?: "-1"
+        val types = filters.firstInstanceOrNull<TypeFilter>()?.toUriPart() ?: "-1"
+        val order = filters.firstInstanceOrNull<OrderFilter>()?.toUriPart() ?: "rating"
+
+        url.addQueryParameter("genres", genres)
+        url.addQueryParameter("status", status)
+        url.addQueryParameter("types", types)
+        url.addQueryParameter("order", order)
 
         return GET(url.build(), headers)
     }
@@ -96,7 +119,61 @@ class AsuraScans : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = "div.flex > a.flex.bg-themecolor:contains(Next)"
 
     override fun getFilterList(): FilterList {
-        return super.getFilterList()
+        fetchFilters()
+        val filters = mutableListOf<Filter<*>>()
+        if (filtersState == FiltersState.FETCHED) {
+            filters += listOf(
+                GenreFilter("Genres", getGenreFilters()),
+                StatusFilter("Status", getStatusFilters()),
+                TypeFilter("Types", getTypeFilters()),
+            )
+        } else {
+            filters += Filter.Header("Press 'Reset' to attempt to fetch the filters")
+        }
+
+        filters += OrderFilter(
+            "Order by",
+            listOf(
+                Pair("Rating", "rating"),
+                Pair("Update", "update"),
+                Pair("Latest", "latest"),
+                Pair("Z-A", "desc"),
+                Pair("A-Z", "asc"),
+            ),
+        )
+
+        return FilterList(filters)
+    }
+
+    private fun getGenreFilters(): List<Genre> = genresList.map { Genre(it.first, it.second) }
+    private fun getStatusFilters(): List<Pair<String, String>> = statusesList.map { it.first to it.second.toString() }
+    private fun getTypeFilters(): List<Pair<String, String>> = typesList.map { it.first to it.second.toString() }
+
+    private var genresList: List<Pair<String, Int>> = emptyList()
+    private var statusesList: List<Pair<String, Int>> = emptyList()
+    private var typesList: List<Pair<String, Int>> = emptyList()
+
+    private var fetchFiltersAttempts = 0
+    private var filtersState = FiltersState.NOT_FETCHED
+
+    private fun fetchFilters() {
+        if (filtersState != FiltersState.NOT_FETCHED || fetchFiltersAttempts >= 3) return
+        filtersState = FiltersState.FETCHING
+        fetchFiltersAttempts++
+        thread {
+            try {
+                val response = client.newCall(GET("$apiUrl/series/filters", headers)).execute()
+                val filters = json.decodeFromString<FiltersDto>(response.body.string())
+
+                genresList = filters.genres.filter { it.id > 0 }.map { it.name.trim() to it.id }
+                statusesList = filters.statuses.map { it.name.trim() to it.id }
+                typesList = filters.types.map { it.name.trim() to it.id }
+
+                filtersState = FiltersState.FETCHED
+            } catch (e: Throwable) {
+                filtersState = FiltersState.NOT_FETCHED
+            }
+        }
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -138,6 +215,11 @@ class AsuraScans : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
+
+    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
+        filterIsInstance<R>().firstOrNull()
 
     companion object {
         val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
