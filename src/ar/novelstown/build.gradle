@@ -1,9 +1,0 @@
-ext {
-    extName = 'Novels Town'
-    extClass = '.NovelsTown'
-    themePkg = 'madara'
-    baseUrl = 'https://novelstown.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
