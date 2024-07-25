@@ -59,6 +59,13 @@ jobs:
                 "ignoreCase": true,
                 "labels": ["invalid"],
                 "message": "{match} will not be added back as it is too difficult to maintain."
+              },
+              {
+                "type": "both",
+                "regex": "(centralnovel\\.com)",
+                "ignoreCase": true,
+                "labels": ["invalid"],
+                "message": "Novels aren't supported"
               }
             ]
           auto-close-ignore-label: do-not-autoclose
