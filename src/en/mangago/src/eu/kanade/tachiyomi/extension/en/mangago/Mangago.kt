@@ -151,11 +151,17 @@ class Mangago : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = genreListingNextPageSelector
 
+    private val descriptionRegex = Regex("""The following content is intended for mature audiences and may contain sexual themes, gore, violence and/or strong language\. Discretion is advised\.""")
+    private fun cleanDescription(description: String) = description.replace(descriptionRegex, "").trim()
+
+    private val titleRegex = Regex("""\(yaoi\)|\{Official\}|«Official»|〘Official〙|\(Official\)|\s\[Official]|\s「Official」|『Official』|\s?/Official\b""")
+    private fun cleanTitle(title: String) = title.replace(titleRegex, "").substringBeforeLast("(").trim()
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst(".w-title h1")!!.text()
+        title = cleanTitle(document.select(".w-title h1").text())
         document.getElementById("information")!!.let {
             thumbnail_url = it.selectFirst("img")!!.attr("abs:src")
-            description = it.selectFirst(".manga_summary")!!.text()
+            description = cleanDescription(it.selectFirst(".manga_summary")!!.text())
             it.select(".manga_info li, .manga_right tr").forEach { el ->
                 when (el.selectFirst("b, label")!!.text().lowercase()) {
                     "alternative:" -> description += "\n\n${el.text()}"
@@ -183,6 +189,9 @@ class Mangago : ParsedHttpSource() {
             dateFormat.parse(element.select("td:last-child").text().trim())?.time
         }.getOrNull() ?: 0L
         scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")?.text()?.trim()
+        if (scanlator.isNullOrBlank()) {
+            scanlator = "Mangago" // Or any name you prefer
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
