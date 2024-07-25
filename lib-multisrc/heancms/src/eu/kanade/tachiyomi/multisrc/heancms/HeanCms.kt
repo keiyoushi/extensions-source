@@ -225,13 +225,13 @@ abstract class HeanCms(
             throw Exception(intl.format("url_changed_error", name, name))
         }
 
-        val seriesId = manga.url.substringAfterLast("#")
+        val seriesSlug = manga.url.substringAfterLast("/").substringBefore("#")
 
         val apiHeaders = headersBuilder()
             .add("Accept", ACCEPT_JSON)
             .build()
 
-        return GET("$apiUrl/series/id/$seriesId", apiHeaders)
+        return GET("$apiUrl/series/$seriesSlug", apiHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
