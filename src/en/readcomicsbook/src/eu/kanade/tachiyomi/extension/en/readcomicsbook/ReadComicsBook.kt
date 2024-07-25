@@ -194,8 +194,8 @@ class ReadComicsBook : HttpSource() {
     override fun imageRequest(page: Page): Request {
         var url = page.imageUrl!!
 
-        if (url.toHttpUrl().host.contains("blogspot") && url.contains("=s1600")) {
-            url = url.substringBeforeLast("=s1600").plus("=s0")
+        if (url.toHttpUrl().host.contains("blogspot") && url.contains("s1600")) {
+            url = url.replace("s1600", "s0")
         }
 
         return GET(url, headers)
