@@ -118,7 +118,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("abs:href").toPermSlugIfNeeded())
         title = element.selectFirst("div.block > span.block")!!.ownText()
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
 
     override fun searchMangaNextPageSelector() = "div.flex > a.flex.bg-themecolor:contains(Next)"
@@ -181,17 +181,9 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        if (!preferences.dynamicUrl()) return super.getMangaUrl(manga)
-        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(1)
-        val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
-        val savedSlug = preferences.slugMap[slug] ?: "$slug-"
-        return baseUrl + manga.url.replace(slug, savedSlug)
-    }
-
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (!preferences.dynamicUrl()) return super.mangaDetailsRequest(manga)
-        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(1)
+        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
         val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
         val savedSlug = preferences.slugMap[slug] ?: "$slug-"
         return GET("$baseUrl/series/$savedSlug", headers)
@@ -209,15 +201,15 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("span.text-xl.font-bold")!!.ownText()
-        thumbnail_url = document.selectFirst("img[alt=poster]")!!.attr("abs:src")
-        description = document.selectFirst("span.font-medium.text-sm")!!.text()
-        author = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Author)) > h3:eq(1)")!!.ownText()
-        artist = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Artist)) > h3:eq(1)")!!.ownText()
+        thumbnail_url = document.selectFirst("img[alt=poster]")?.attr("abs:src")
+        description = document.selectFirst("span.font-medium.text-sm")?.text()
+        author = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Author)) > h3:eq(1)")?.ownText()
+        artist = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Artist)) > h3:eq(1)")?.ownText()
         genre = document.select("div[class^=space] > div.flex > button.text-white").joinToString { it.ownText() }
-        status = parseStatus(document.selectFirst("div.flex:has(h3:eq(0):containsOwn(Status)) > h3:eq(1)")!!.ownText())
+        status = parseStatus(document.selectFirst("div.flex:has(h3:eq(0):containsOwn(Status)) > h3:eq(1)")?.ownText())
     }
 
-    private fun parseStatus(status: String) = when (status) {
+    private fun parseStatus(status: String?) = when (status) {
         "Ongoing", "Season End" -> SManga.ONGOING
         "Hiatus" -> SManga.ON_HIATUS
         "Completed" -> SManga.COMPLETED
@@ -251,16 +243,9 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        if (!preferences.dynamicUrl()) return super.getChapterUrl(chapter)
-        val slug = chapter.url.substringAfter("/series/").substringBefore("/")
-        val savedSlug = preferences.slugMap[slug] ?: "$slug-"
-        return baseUrl + chapter.url.replace(slug, savedSlug)
-    }
-
     override fun pageListRequest(chapter: SChapter): Request {
         if (!preferences.dynamicUrl()) return super.pageListRequest(chapter)
-        val match = OLD_FORMAT_CHAPTER_REGEX.matches(chapter.url)
+        val match = OLD_FORMAT_CHAPTER_REGEX.containsMatchIn(chapter.url)
         if (match) throw Exception("Please refresh the chapter list before reading.")
         val slug = chapter.url.substringAfter("/series/").substringBefore("/")
         val savedSlug = preferences.slugMap[slug] ?: "$slug-"
@@ -283,8 +268,8 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_DYNAMIC_URL
-            title = PREF_DYNAMIC_URL_TITLE
-            summary = PREF_DYNAMIC_URL_SUMMARY
+            title = "Automatically update dynamic URLs"
+            summary = "Automatically update random numbers in manga URLs.\nHelps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\nNote: This setting may require clearing database in advanced settings and migrating all manga to the same source."
             setDefaultValue(PREF_DYNAMIC_URL_DEFAULT)
         }.let(screen::addPreference)
     }
@@ -292,8 +277,11 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     private var SharedPreferences.slugMap: MutableMap<String, String>
         get() {
             val jsonMap = getString(PREF_SLUG_MAP, "{}")!!
-            val slugMap = runCatching { json.decodeFromString<Map<String, String>>(jsonMap) }
-            return slugMap.getOrNull()?.toMutableMap() ?: mutableMapOf()
+            return try {
+                json.decodeFromString<Map<String, String>>(jsonMap).toMutableMap()
+            } catch (_: Exception) {
+                mutableMapOf()
+            }
         }
         set(newSlugMap) {
             edit()
@@ -313,12 +301,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     companion object {
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
-        private val OLD_FORMAT_MANGA_REGEX = """^/manga/\d*(.*?)/?$""".toRegex()
+        private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private val OLD_FORMAT_CHAPTER_REGEX = """^/\d+-[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
         private const val PREF_SLUG_MAP = "pref_slug_map"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
-        private const val PREF_DYNAMIC_URL_TITLE = "Automatically update dynamic URLs"
-        private const val PREF_DYNAMIC_URL_SUMMARY = "Automatically update random numbers in manga URLs.\nHelps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\nNote: This setting may require clearing database in advanced settings and migrating all manga to the same source."
         private const val PREF_DYNAMIC_URL_DEFAULT = true
     }
 }
