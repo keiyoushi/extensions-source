@@ -1,0 +1,7 @@
+ext {
+    extName = 'Darths & Droids'
+    extClass = '.DarthsDroids'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
