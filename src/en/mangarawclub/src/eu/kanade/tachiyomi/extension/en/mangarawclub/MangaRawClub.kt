@@ -105,7 +105,7 @@ class MangaRawClub : ParsedHttpSource() {
 
     // Manga from Element
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst(".novel-title")?.ownText() ?: ""
+        title = element.selectFirst(".novel-title")!!.ownText()
         thumbnail_url = element.select(".novel-cover img").attr("abs:data-src")
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
