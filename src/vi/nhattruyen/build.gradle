@@ -2,8 +2,8 @@ ext {
     extName = 'NhatTruyen'
     extClass = '.NhatTruyen'
     themePkg = 'wpcomics'
-    baseUrl = 'https://nhattruyenup.com'
-    overrideVersionCode = 17
+    baseUrl = 'https://nhattruyenvn.com'
+    overrideVersionCode = 18
 }
 
 apply from: "$rootDir/common.gradle"
