@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.darthsdroids
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,21 +10,26 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 // Dear Darths & Droids creators:
 // I’m sorry if this extension causes too much traffic for your site.
 // Unfortunately we can’t just download and use your Zip downloads.
-// Shall problems arise, we’ll add rate limiting ASAP.
+// Shall problems arise, we’ll reduce the rate limit.
 class DarthsDroids : HttpSource() {
     override val name = "Darths & Droids"
     override val baseUrl = "https://www.darthsanddroids.net"
     override val lang = "en"
     override val supportsLatest = false
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
+        .build()
 
     // Picks a thumbnail from the profile pictures of the »cast« pages:
     //   https://www.darthsanddroids.net/cast/
@@ -83,6 +89,36 @@ class DarthsDroids : HttpSource() {
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/archive.html", headers)
 
+    // The book and page archive feeds are rather special for this webcomic.
+    // The main archive page `/archive.html` is a combined feed for both,
+    // all previous and finished books, as well as all pages of the book that
+    // is currently releasing. Every finished book gets its own archive page
+    // like `/archive4.html` or `/archiveJJ.html` into which all page links
+    // are moved. So whatever book is currently releasing in `/archive.html`
+    // will eventually be moved into its own archive, and it’ll instead
+    // appear as a book-archive link in `/archive.html`.
+    //
+    // This means a few things:
+    // • The currently releasing book eventually changes its `url`!
+    // • The URL of the currently releasing book will be taken over by
+    //   whichever new book comes next.
+    // • There is no deterministic way of guessing a book’s future
+    //   archive name.
+    //   ◦ This is especially apparent with the »Solo« book, which’s
+    //     archive page is `/solo/`, while all others are `/archiveX.html`.
+    //
+    // So eventually, Tachiyomi & Co. will glitch out once a currently
+    // releasing book finishes. People will find the current book’s page
+    // feed to be empty. Even worse, they may find it starting anew with
+    // different pages. A manual refresh *should* change the book’s `url`
+    // to its new archive page, and all reading progress should be preserved.
+    // Then the user will have to manually add the new book to their library.
+    //
+    // The alternative would be to have a pseudo book »<Title> (ongoing)«
+    // that just disappears, being replaced by »<Title>«. But i think that’s
+    // even worse in terms of user experience. Maybe one day we’ll have new
+    // extension APIs for dealing with unique webcomic weirdnesses. ’cause
+    // trust me, there’s worse.
     override fun popularMangaParse(response: Response): MangasPage {
         val mainArchive = response.asJsoup()
         val archiveData = mainArchive.select("div.text > table.text > tbody > tr")
@@ -97,7 +133,7 @@ class DarthsDroids : HttpSource() {
                 if (maybeTitle != null) {
                     nextMangaTitle = "$name $maybeTitle"
                 } else {
-                    val maybeArchive = it.selectFirst("""td[colspan="3"] > a""")?.attr("href")
+                    val maybeArchive = it.selectFirst("""td[colspan="3"] > a""")?.absUrl("href")
                     if (maybeArchive != null) {
                         mangas.add(dndManga(maybeArchive, nextMangaTitle, SManga.COMPLETED, nthManga++))
                     } else {
@@ -194,21 +230,14 @@ class DarthsDroids : HttpSource() {
                 )
             }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("mangaDetailsParse")
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException("fetchSearchManga")
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("searchMangaRequest")
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("searchMangaParse")
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("latestUpdatesRequest")
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("latestUpdatesParse")
-
-    override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException("imageUrlRequest")
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("imageUrlParse")
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private val DATE_FMT = SimpleDateFormat("EEE d MMM, yyyy", Locale.US)
