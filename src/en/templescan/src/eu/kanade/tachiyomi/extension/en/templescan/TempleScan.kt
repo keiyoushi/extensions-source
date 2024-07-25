@@ -17,4 +17,6 @@ class TempleScan : HeanCms(
         .build()
 
     override val mangaSubDirectory = "comic"
+
+    override val enableLogin = true
 }
