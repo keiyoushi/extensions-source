@@ -8,7 +8,7 @@ import java.util.Locale
 
 class SamuraiScan : Madara(
     "SamuraiScan",
-    "https://spanish.visorsmr.com",
+    "https://samurai.ragnarokscanlation.org",
     "es",
     SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
 ) {
