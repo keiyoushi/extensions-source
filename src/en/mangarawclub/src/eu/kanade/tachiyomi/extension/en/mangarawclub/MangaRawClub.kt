@@ -49,7 +49,7 @@ class MangaRawClub : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
             // Query search
-            return GET("$baseUrl/search/?search=$query", headers)
+            return GET("$baseUrl/search/?search=$query".toHttpUrl(), headers)
         }
 
         // Filter search
