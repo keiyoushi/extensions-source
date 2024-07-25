@@ -270,7 +270,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             key = PREF_DYNAMIC_URL
             title = "Automatically update dynamic URLs"
             summary = "Automatically update random numbers in manga URLs.\nHelps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\nNote: This setting may require clearing database in advanced settings and migrating all manga to the same source."
-            setDefaultValue(PREF_DYNAMIC_URL_DEFAULT)
+            setDefaultValue(true)
         }.let(screen::addPreference)
     }
 
@@ -289,7 +289,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
                 .apply()
         }
 
-    private fun SharedPreferences.dynamicUrl(): Boolean = getBoolean(PREF_DYNAMIC_URL, PREF_DYNAMIC_URL_DEFAULT)
+    private fun SharedPreferences.dynamicUrl(): Boolean = getBoolean(PREF_DYNAMIC_URL, true)
 
     private fun String.toPermSlugIfNeeded(): String {
         if (!preferences.dynamicUrl()) return this
@@ -305,6 +305,5 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
         private const val PREF_SLUG_MAP = "pref_slug_map"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
-        private const val PREF_DYNAMIC_URL_DEFAULT = true
     }
 }
