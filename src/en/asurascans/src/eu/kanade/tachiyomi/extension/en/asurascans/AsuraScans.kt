@@ -302,7 +302,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     companion object {
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
-        private val OLD_FORMAT_CHAPTER_REGEX = """^/\d+-[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
+        private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
         private const val PREF_SLUG_MAP = "pref_slug_map"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
         private const val PREF_DYNAMIC_URL_DEFAULT = true
