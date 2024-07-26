@@ -1,0 +1,10 @@
+ext {
+    extName = 'Yaoi Fan Club'
+    extClass = '.YaoiFanClub'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.yaoifanclub.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
