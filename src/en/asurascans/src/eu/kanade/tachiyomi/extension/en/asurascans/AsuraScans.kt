@@ -233,7 +233,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("abs:href").toPermSlugIfNeeded())
-        name = element.selectFirst("h3:eq(0)")!!.ownText()
+        name = element.selectFirst("h3:eq(0)")!!.text()
         date_upload = try {
             val text = element.selectFirst("h3:eq(1)")!!.ownText()
             val cleanText = text.replace(CLEAN_DATE_REGEX, "$1")
