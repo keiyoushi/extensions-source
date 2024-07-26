@@ -49,7 +49,10 @@ class MangaRawClub : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
             // Query search
-            return GET("$baseUrl/search/?search=$query".toHttpUrl(), headers)
+            val url = "$baseUrl/search/".toHttpUrl().newBuilder()
+                .addQueryParameter("search", query)
+                .build()
+            return GET(url, headers)
         }
 
         // Filter search
@@ -159,7 +162,6 @@ class MangaRawClub : ParsedHttpSource() {
         val name = element.select(".chapter-title").text().removeSuffix("-eng-li")
         this.name = "Chapter $name"
 
-        chapter_number = parseChapterNumber(name) ?: 0F
         date_upload = parseChapterDate(element.select(".chapter-update").attr("datetime"))
     }
 
@@ -168,11 +170,6 @@ class MangaRawClub : ParsedHttpSource() {
         val date = string.replace(".", "").replace("Sept", "Sep")
         return runCatching { DATE_FORMATTER.parse(date)?.time }.getOrNull()
             ?: runCatching { DATE_FORMATTER_2.parse(date)?.time }.getOrNull() ?: 0L
-    }
-
-    private fun parseChapterNumber(string: String): Float? {
-        if (string.isEmpty()) return null
-        return string.split(if ('-' in string) '-' else '.')[0].toFloatOrNull()
     }
 
     // Pages
