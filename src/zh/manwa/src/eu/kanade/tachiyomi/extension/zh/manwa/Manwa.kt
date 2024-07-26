@@ -38,11 +38,22 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
+//BAIMANGU
+import android.widget.Toast
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.Filter
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.util.concurrent.TimeUnit
+import java.util.regex.Pattern
+
 class Manwa : ParsedHttpSource(), ConfigurableSource {
     override val name: String = "漫蛙"
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
-    override val baseUrl = "https://manwa.fun"
+    //BAIMANGU
+    override val baseUrl = preferences.getString(MAINSITE_URL_PREF, MAINSITE_URL_PREF_DEFAULT)!!
+    
     private val json: Json by injectLazy()
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -181,7 +192,26 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        //BAIMANGU
+		val mainSiteUrlPreference = androidx.preference.EditTextPreference(screen.context).apply {
+            key = MAINSITE_URL_PREF
+            title = MAINSITE_URL_PREF_TITLE
+            summary = MAINSITE_URL_PREF_SUMMARY
+
+            setDefaultValue(MAINSITE_URL_PREF_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    val setting = preferences.edit().putString(MAINSITE_URL_PREF, newValue as String).commit()
+                    Toast.makeText(screen.context, TOAST_RESTART, Toast.LENGTH_LONG).show()
+                    setting
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
+            }
+        }
+
+		ListPreference(screen.context).apply {
             key = IMAGE_HOST_KEY
             title = "图源"
             entries = IMAGE_HOST_ENTRIES
@@ -215,5 +245,15 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         private val IMAGE_HOST_ENTRY_VALUES = arrayOf("1", "2", "3")
 
         private const val AUTO_CLEAR_COOKIE_KEY = "CLEAR_COOKIE"
+
+		//BAIMANGU
+		// ---------------------------------------------------------------------------------------
+
+        private const val MAINSITE_URL_PREF = "mainSiteUrlPreference"
+        private const val MAINSITE_URL_PREF_DEFAULT = "https://www.darpou.com/"
+
+        private const val MAINSITE_URL_PREF_TITLE = "主站URL"
+        private const val MAINSITE_URL_PREF_SUMMARY = "需要重启软件以生效。\n默认值：$MAINSITE_URL_PREF_DEFAULT"
+
     }
 }
