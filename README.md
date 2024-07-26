@@ -1,5 +1,5 @@
 ### LANGUAGE
-ENGLISH[https://github.com/whylalacantuse/extensions-source-for-mihon-with-special-region/blob/WALL/README_IN_LANGUAGE/ENGLISH]
+[ENGLISH](https://github.com/whylalacantuse/extensions-source-for-mihon-with-special-region/blob/WALL/README_IN_LANGUAGE/ENGLISH)
 
 # 起因
 众所周知，各个地区的网络条件有所差异。而部分网站除固定的主站外还有时常变更的分流站，但是部分插件没有更改网址的功能。经过观察，发现BAIMANGU插件中拥有更改网址的功能，因此，参考其代码对没有此功能的插件进行改造。
