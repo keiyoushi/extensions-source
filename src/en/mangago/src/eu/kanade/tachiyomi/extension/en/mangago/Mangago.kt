@@ -503,7 +503,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         SwitchPreferenceCompat(screen.context).apply {
             key = REMOVE_TITLE_VERSION_PREF
             title = "Remove version information from entry titles"
-            summary = "This removes version tags like “(Official)” or “(Yaoi)” from entry titles " +
+            summary = "This removes version tags like '(Official)' or '(Yaoi)' from entry titles " +
                 "and helps identify duplicate entries in your library. " +
                 "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
                 "You might also want to clear the database in advanced settings."
