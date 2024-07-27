@@ -1,13 +1,18 @@
 package eu.kanade.tachiyomi.extension.en.mangago
 
+import android.app.Application
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -22,6 +27,8 @@ import okhttp3.Request
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.URLEncoder
@@ -31,7 +38,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class Mangago : ParsedHttpSource() {
+class Mangago : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Mangago"
 
@@ -40,6 +47,10 @@ class Mangago : ParsedHttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2)
@@ -151,11 +162,20 @@ class Mangago : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = genreListingNextPageSelector
 
+    private val titleRegex = Regex("""\(yaoi\)|\{Official\}|«Official»|〘Official〙|\(Official\)|\s\[Official]|\s「Official」|『Official』|\s?/Official\b""", RegexOption.IGNORE_CASE)
+    private fun titleVersion(title: String) = title.replace(titleRegex, "").trim()
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(".w-title h1")!!.text()
+        if (isRemoveTitleVersion()) {
+            title = titleVersion(title)
+        }
         document.getElementById("information")!!.let {
             thumbnail_url = it.selectFirst("img")!!.attr("abs:src")
-            description = it.selectFirst(".manga_summary")!!.text()
+            description = it.selectFirst(".manga_summary")?.let { summary ->
+                summary.selectFirst("font")?.remove()
+                summary.text()
+            }
             it.select(".manga_info li, .manga_right tr").forEach { el ->
                 when (el.selectFirst("b, label")!!.text().lowercase()) {
                     "alternative:" -> description += "\n\n${el.text()}"
@@ -183,6 +203,9 @@ class Mangago : ParsedHttpSource() {
             dateFormat.parse(element.select("td:last-child").text().trim())?.time
         }.getOrNull() ?: 0L
         scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")?.text()?.trim()
+        if (scanlator.isNullOrBlank()) {
+            scanlator = "Unknown"
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -472,5 +495,21 @@ class Mangago : ParsedHttpSource() {
                 "?",
             )
         }
+    }
+    private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = REMOVE_TITLE_VERSION_PREF
+            title = "Remove version information from entry titles"
+            summary = "This removes version tags like '(Official)' or '(Yaoi)' from entry titles " +
+                "and helps identify duplicate entries in your library. " +
+                "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
+                "You might also want to clear the database in advanced settings."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+    }
+    companion object {
+        private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
     }
 }
