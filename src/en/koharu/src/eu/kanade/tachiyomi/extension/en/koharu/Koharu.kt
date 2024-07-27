@@ -82,10 +82,10 @@ class Koharu : HttpSource(), ConfigurableSource {
             data.`1280` -> "1280"
             data.`980` -> "980"
             data.`780` -> "780"
-            else -> "1600"
+            else -> "0"
         }
 
-        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.public_key}/${dataKey.id}/${dataKey.public_key}?v=${entry.updated_at}&w=$realQuality", headers)).execute()
+        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.public_key}/${dataKey.id}/${dataKey.public_key}?v=${entry.updated_at ?: entry.created_at}&w=$realQuality", headers)).execute()
         val images = imagesResponse.parseAs<ImagesInfo>()
         return images
     }

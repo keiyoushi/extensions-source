@@ -43,12 +43,9 @@ internal class CategoryFilter(name: String) :
 internal open class CheckBoxFilter(name: String, val value: Int, state: Boolean) : Filter.CheckBox(name, state)
 
 private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("ID", "1"),
+    Pair("Recently Posted", "4"),
     Pair("Title", "2"),
     Pair("Pages", "3"),
-    Pair("Recently Posted", ""),
-    Pair("Recently Updated", "5"),
-    Pair("Original Posted Date", "6"),
     Pair("Most Viewed", "8"),
     Pair("Most Favorited", "9"),
 )
