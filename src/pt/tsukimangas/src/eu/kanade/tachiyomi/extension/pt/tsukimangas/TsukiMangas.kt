@@ -1,5 +1,11 @@
 package eu.kanade.tachiyomi.extension.pt.tsukimangas
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.CompleteMangaDto
 import eu.kanade.tachiyomi.extension.pt.tsukimangas.dto.MangaListDto
@@ -14,17 +20,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class TsukiMangas : HttpSource() {
 
@@ -37,6 +47,39 @@ class TsukiMangas : HttpSource() {
     override val lang = "pt-BR"
 
     override val supportsLatest = true
+
+    @get:SuppressLint("SetJavaScriptEnabled")
+    @Suppress("NAME_SHADOWING")
+    private val token: String by lazy {
+        val latch = CountDownLatch(1)
+        var token = ""
+        Handler(Looper.getMainLooper()).post {
+            val webView = WebView(Injekt.get<Application>())
+            with(webView.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+            }
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    val script = "javascript:localStorage['token']"
+                    view.evaluateJavascript(script) {
+                        view.stopLoading()
+                        view.destroy()
+                        if (it.isBlank() || it == "null" || it == "undefined") {
+                            return@evaluateJavascript
+                        }
+                        token = it.replace("[\"]+".toRegex(), "")
+                        latch.countDown()
+                    }
+                }
+            }
+            webView.loadUrl(baseUrl)
+        }
+        latch.await(10, TimeUnit.SECONDS)
+
+        token
+    }
 
     override val client by lazy {
         network.client.newBuilder()
@@ -213,7 +256,22 @@ class TsukiMangas : HttpSource() {
 
     // ============================= Utilities ==============================
     private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
+        it.body.string().let {
+            throwsPrivateContentExceptionIfPresent(it)
+            json.decodeFromString(it)
+        }
+    }
+
+    private fun throwsPrivateContentExceptionIfPresent(content: String) {
+        if (content.contains("Conteúdo removido", ignoreCase = true).not()) {
+            return
+        }
+        throw Exception(
+            """
+               Contéudo protegido ou foi removido.
+               Faça o login na WebView e tente novamente"
+            """.trimIndent(),
+        )
     }
 
     private fun HttpUrl.Builder.addIfNotBlank(query: String, value: String): HttpUrl.Builder {
@@ -284,6 +342,9 @@ class TsukiMangas : HttpSource() {
 
         val newRequest = request.newBuilder().apply {
             apiHeaders.entries.forEach { addHeader(it.key, it.value) }
+            if (token.isNotBlank()) {
+                addHeader("Authorization", "Bearer $token")
+            }
         }.build()
 
         return chain.proceed(newRequest)
