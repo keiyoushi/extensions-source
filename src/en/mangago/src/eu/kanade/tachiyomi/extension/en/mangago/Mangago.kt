@@ -163,7 +163,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = genreListingNextPageSelector
 
     private val titleRegex = Regex("""\(yaoi\)|\{Official\}|«Official»|〘Official〙|\(Official\)|\s\[Official]|\s「Official」|『Official』|\s?/Official\b""", RegexOption.IGNORE_CASE)
-    private fun titleVersion(title: String) = title.replace(titleRegex, "").substringBeforeLast("(").trim()
+    private fun titleVersion(title: String) = title.replace(titleRegex, "").trim()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(".w-title h1")!!.text()
