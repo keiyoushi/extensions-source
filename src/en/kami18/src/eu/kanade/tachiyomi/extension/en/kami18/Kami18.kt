@@ -31,7 +31,7 @@ class Kami18() : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = Headers.Builder().apply {
+    override fun headersBuilder() = super.headersBuilder().apply {
         add("Referer", "$baseUrl/")
     }
 
