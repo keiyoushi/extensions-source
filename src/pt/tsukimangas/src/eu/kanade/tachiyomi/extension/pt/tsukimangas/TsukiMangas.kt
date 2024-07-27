@@ -64,9 +64,11 @@ class TsukiMangas : HttpSource() {
                 override fun onPageFinished(view: WebView, url: String) {
                     val script = "javascript:localStorage['token']"
                     view.evaluateJavascript(script) {
-                        view.stopLoading()
-                        view.destroy()
-                        if (it.isBlank() || it == "null" || it == "undefined") {
+                        view.apply {
+                            stopLoading()
+                            destroy()
+                        }
+                        if (it.isBlank() || it in listOf("null", "undefined")) {
                             return@evaluateJavascript
                         }
                         token = it.replace("[\"]+".toRegex(), "")
@@ -269,7 +271,7 @@ class TsukiMangas : HttpSource() {
         throw Exception(
             """
                Contéudo protegido ou foi removido.
-               Faça o login na WebView e tente novamente"
+               Faça o login na WebView e tente novamente
             """.trimIndent(),
         )
     }
