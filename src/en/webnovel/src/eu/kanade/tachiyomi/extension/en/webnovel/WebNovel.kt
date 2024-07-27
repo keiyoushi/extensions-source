@@ -162,13 +162,15 @@ class WebNovel : HttpSource() {
         }
             .getOrDefault(emptyMap())
 
+        val updateTimes = chapters.map { accurateUpdateTimes[it.id] ?: it.publishTime.toDate() }
+
         // You can pay to get some chapter earlier than others. This privilege is divided into some tiers
         // We check if user's tier same or more than chapter's.
         val filteredChapters = chapters.filter { it.userLevel >= it.chapterLevel }
 
         // When new privileged chapter is released oldest privileged chapter becomes normal one (in most cases)
         // but since those normal chapter retain the original upload time we improvise. (This isn't optimal but meh)
-        return filteredChapters.map { chapter ->
+        return filteredChapters.zip(updateTimes) { chapter, updateTime ->
             val namePrefix = when {
                 chapter.isPremium && !chapter.isAccessibleByUser -> "\uD83D\uDD12 "
                 else -> ""
@@ -176,7 +178,7 @@ class WebNovel : HttpSource() {
             SChapter.create().apply {
                 name = namePrefix + chapter.name
                 url = "${comic.id}:${chapter.id}"
-                date_upload = accurateUpdateTimes[comic.id] ?: chapter.publishTime.toDate()
+                date_upload = updateTime
             }
         }.toList()
     }
