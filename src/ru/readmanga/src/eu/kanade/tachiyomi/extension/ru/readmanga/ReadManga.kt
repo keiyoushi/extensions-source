@@ -12,7 +12,7 @@ import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class ReadManga : GroupLe("ReadManga", "https://readmanga.live", "ru") {
+class ReadManga : GroupLe("ReadManga", "https://1.readmanga.io", "ru") {
 
     override val id: Long = 5
 
@@ -190,6 +190,6 @@ class ReadManga : GroupLe("ReadManga", "https://readmanga.live", "ru") {
     }
     companion object {
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://readmanga.live"
+        private const val DOMAIN_DEFAULT = "https://1.readmanga.io"
     }
 }

@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 /**
- * Springboard that accepts https://readmanga.live/xxx intents and redirects them to
+ * Springboard that accepts https://1.readmanga.io/xxx intents and redirects them to
  * the main tachiyomi process. The idea is to not install the intent filter unless
  * you have this extension installed, but still let the main tachiyomi app control
  * things.
