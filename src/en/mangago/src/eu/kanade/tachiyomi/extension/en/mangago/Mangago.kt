@@ -171,11 +171,9 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         }
         document.getElementById("information")!!.let {
             thumbnail_url = it.selectFirst("img")!!.attr("abs:src")
-            description = buildString {
-                it.selectFirst(".manga_summary")?.let { summary ->
-                    summary.selectFirst("font")?.remove()
-                    append(summary.text())
-                }
+            description = it.selectFirst(".manga_summary")?.let { summary ->
+                summary.selectFirst("font")?.remove()
+                summary.text()
             }
             it.select(".manga_info li, .manga_right tr").forEach { el ->
                 when (el.selectFirst("b, label")!!.text().lowercase()) {
