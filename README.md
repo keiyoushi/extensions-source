@@ -1,29 +1,17 @@
-### Please give the repo a :star:
+### LANGUAGE
+[ENGLISH](https://github.com/whylalacantuse/extensions-source-for-mihon-with-special-region/blob/WALL/README_IN_LANGUAGE/ENGLISH)
 
-| Build                                                                                                                                                                               | Support Server                                                                                                                                              |
-|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [![CI](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml/badge.svg)](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml) | [![Discord](https://img.shields.io/discord/1193460528052453448.svg?label=discord&labelColor=7289da&color=2c2f33&style=flat)](https://discord.gg/3FbCpdKbdY) |
+# 起因
+众所周知，各个地区的网络条件有所差异。而部分网站除固定的主站外还有时常变更的分流站，但是部分插件没有更改网址的功能。经过观察，发现[BAIMANGU](https://github.com/whylalacantuse/extensions-source-for-mihon-with-special-region/blob/WALL/src/zh/baimangu/src/eu/kanade/tachiyomi/extension/zh/baimangu/Baimangu.kt)插件中拥有更改网址的功能，因此，参考其代码对没有此功能的插件进行改造。
 
-# Usage
-
-[Getting started](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo)
-
-# Requests
-
-To request a new source or bug fix, [create an issue](https://github.com/keiyoushi/extensions-source/issues/new/choose).
-
-Please note that creating an issue does not mean that the source will be added or fixed in a timely
-fashion, because the work is volunteer-based. Some sources may also be impossible to do or prohibitively
-difficult to maintain.
-
-If you would like to see a request fulfilled and have the necessary skills to do so, consider contributing!
-Issues are up-for-grabs for any developer if there is no assigned user already.
-
-# Contributing
-
-Contributions are welcome!
-
-Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-source/issues) for source requests and bug reports.
+# ISSUE规范
+为了让反馈更加清晰明了，特制定本规范：
+1. 每个插件仅限创建一个关于地址的ISSUE和一个关于地址相关功能的ISSUE。
+2. 其它功能的反馈请前往原仓库进行提交。
+3. 尚未创建对应ISSUE的可自行创建。
+4. 重复创建ISSUE的，予以提示自行删除。30天内未删除的，由其他人员进行删除。
+5. 提交前请确认是否为自身软硬件原因导致的问题。确认为插件的缘由后，可提交反馈。
+6. 提交前请仔细查看以往的记录，确认过往的措施等无效或已失效的，可提交反馈。
 
 ## License
 
