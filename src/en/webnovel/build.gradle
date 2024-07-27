@@ -1,7 +1,7 @@
 ext {
     extName = 'WebNovel'
     extClass = '.WebNovel'
-    extVersionCode = 10
+    extVersionCode = 11
 }
 
 apply from: "$rootDir/common.gradle"
