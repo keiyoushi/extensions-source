@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.kami18
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,7 +13,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -51,7 +49,7 @@ class Kami18() : HttpSource() {
     }
 
     private fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a[href*=album]")!!.absUrl("href"))
+        setUrlWithoutDomain(element.selectFirst("a:has(button)")!!.absUrl("href"))
         title = element.selectFirst("img")!!.attr("title")
         thumbnail_url = element.selectFirst("img")?.let { img ->
             img.absUrl("src").takeIf { !it.contains("blank") } ?: img.absUrl("data-original")
@@ -66,9 +64,7 @@ class Kami18() : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment("search")
-                addPathSegment("photos")
+            val url = "$baseUrl/search/photos".toHttpUrl().newBuilder().apply {
                 addQueryParameter("main_tag", "5")
                 addQueryParameter("search_query", query)
             }.build()
@@ -94,13 +90,14 @@ class Kami18() : HttpSource() {
                     is TextFilter -> {
                         if (it.state.isNotBlank()) {
                             search = true
+                            addQueryParameter("main_tag", "3")
                             addQueryParameter("search_query", it.state.replace(",", " "))
                         }
                     }
                     else -> {}
                 }
             }
-            addPathSegment(if (search) "search/photos" else "albums")
+            addPathSegments(if (search) "search/photos" else "albums")
             if (type.isNotEmpty()) addPathSegment(type)
         }.build()
 
@@ -128,14 +125,21 @@ class Kami18() : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = response.asJsoup()
-        val episode = doc.selectFirst(".episode")
-        if (episode != null) {
-            return episode.select("ul > a").reversed().mapIndexed(::chapterFromElement)
-        }
-
-        return listOf(
+        return doc.selectFirst(".episode")?.let {
+            it.select("ul > a").reversed().mapIndexed { index, element ->
+                SChapter.create().apply {
+                    setUrlWithoutDomain("/photo/" + element.attr("data-album"))
+                    name = "Chapter $index"
+                    date_upload = try {
+                        dateFormat.parse(element.selectFirst("span")!!.text())!!.time
+                    } catch (_: Exception) {
+                        0L
+                    }
+                }
+            }
+        } ?: listOf(
             SChapter.create().apply {
-                setUrlWithoutDomain(doc.selectFirst("[id=album_id]")!!.attr("value"))
+                setUrlWithoutDomain("/photo/" + doc.selectFirst("[id=album_id]")!!.attr("value"))
                 name = "Chapter 1"
                 date_upload = try {
                     dateFormat.parse(doc.selectFirst("[itemprop=datePublished]")!!.text().substringAfter(": "))!!.time
@@ -146,33 +150,16 @@ class Kami18() : HttpSource() {
         )
     }
 
-    fun chapterFromElement(index: Int, element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("data-album"))
-        name = "Chapter $index"
-        date_upload = try {
-            dateFormat.parse(element.selectFirst("span")!!.text())!!.time
-        } catch (_: Exception) {
-            0L
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val contents = document.select("[id*=pageselect] > option")
+
+        val id = response.request.url.toString().filter { it.isDigit() }
+        return contents.mapIndexed { idx, image ->
+            val filename = image.attr("data-page")
+            Page(idx, imageUrl = "$baseImageUrl/$id/$filename")
         }
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .map { response ->
-                val document = response.asJsoup()
-                val contents = document.select("[id*=pageselect] > option")
-
-                contents.mapIndexed { idx, image ->
-                    val filename = image.attr("data-page")
-                    Page(idx, imageUrl = "$baseImageUrl/${chapter.url}/$filename")
-                }
-            }
-    }
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + "/photo/" + chapter.url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
