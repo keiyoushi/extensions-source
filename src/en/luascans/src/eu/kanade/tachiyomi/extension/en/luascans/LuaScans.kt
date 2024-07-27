@@ -10,7 +10,7 @@ import org.jsoup.Jsoup
 
 class LuaScans : MangaThemesia(
     "Lua Scans",
-    "https://luacomic.com",
+    "https://luacomic.net",
     "en",
 ) {
     override val client: OkHttpClient = super.client.newBuilder()
