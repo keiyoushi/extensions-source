@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.tsukimangas
 
-import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
@@ -48,8 +47,6 @@ class TsukiMangas : HttpSource() {
 
     override val supportsLatest = true
 
-    @get:SuppressLint("SetJavaScriptEnabled")
-    @Suppress("NAME_SHADOWING")
     private val token: String by lazy {
         val latch = CountDownLatch(1)
         var token = ""
