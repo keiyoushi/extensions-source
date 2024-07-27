@@ -19,8 +19,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -255,22 +255,16 @@ class TsukiMangas : HttpSource() {
 
     // ============================= Utilities ==============================
     private inline fun <reified T> Response.parseAs(): T = use {
-        it.body.string().let {
-            throwsPrivateContentExceptionIfPresent(it)
-            json.decodeFromString(it)
-        }
-    }
-
-    private fun throwsPrivateContentExceptionIfPresent(content: String) {
-        if (content.contains("Conteúdo removido", ignoreCase = true).not()) {
-            return
-        }
-        throw Exception(
-            """
+        try {
+            json.decodeFromStream(it.body.byteStream())
+        } catch (_: Exception) {
+            throw Exception(
+                """
                Contéudo protegido ou foi removido.
                Faça o login na WebView e tente novamente
-            """.trimIndent(),
-        )
+                """.trimIndent(),
+            )
+        }
     }
 
     private fun HttpUrl.Builder.addIfNotBlank(query: String, value: String): HttpUrl.Builder {
