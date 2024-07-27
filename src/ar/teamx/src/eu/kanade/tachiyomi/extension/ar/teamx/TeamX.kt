@@ -130,6 +130,14 @@ class TeamX : ParsedHttpSource() {
             }
             genre = document.select("div.review-author-info a").joinToString { it.text() }
             thumbnail_url = document.select("div.text-right img").first()!!.absUrl("src")
+            status = document
+                .selectFirst(".full-list-info > small:first-child:contains(الحالة) + small")
+                ?.text()
+                .toStatus()
+            author = document
+                .selectFirst(".full-list-info > small:first-child:contains(الرسام) + small")
+                ?.text()
+                ?.takeIf { it != "غير معروف" }
         }
     }
 
@@ -185,6 +193,14 @@ class TeamX : ParsedHttpSource() {
         return runCatching {
             chapterFormat.parse(date)?.time
         }.getOrNull() ?: 0
+    }
+
+    private fun String?.toStatus() = when (this) {
+        "مستمرة" -> SManga.ONGOING
+        "قادم قريبًا" -> SManga.ONGOING // "coming soon"
+        "مكتمل" -> SManga.COMPLETED
+        "متوقف" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
     }
 
     // Pages
