@@ -1,0 +1,9 @@
+ext {
+    extName = '18Kami'
+    extClass = '.Kami18'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
