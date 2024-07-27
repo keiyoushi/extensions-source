@@ -166,8 +166,9 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
     private fun titleVersion(title: String) = title.replace(titleRegex, "").substringBeforeLast("(").trim()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst(".w-title h1")!!.text()
         if (isRemoveTitleVersion()) {
-            title = titleVersion(document.select(".w-title h1").text())
+            title = titleVersion(title)
         }
         document.getElementById("information")!!.let {
             thumbnail_url = it.selectFirst("img")!!.attr("abs:src")
