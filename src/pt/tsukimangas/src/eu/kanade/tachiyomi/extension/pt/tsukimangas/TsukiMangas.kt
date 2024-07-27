@@ -260,8 +260,8 @@ class TsukiMangas : HttpSource() {
         } catch (_: Exception) {
             throw Exception(
                 """
-               Contéudo protegido ou foi removido.
-               Faça o login na WebView e tente novamente
+                    Contéudo protegido ou foi removido.
+                    Faça o login na WebView e tente novamente
                 """.trimIndent(),
             )
         }
