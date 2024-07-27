@@ -6,7 +6,6 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -78,8 +77,15 @@ class Koharu : HttpSource(), ConfigurableSource {
             "780" -> data.`780` ?: data.`980` ?: data.`0`
             else -> data.`0`
         }
+        val realQuality = when (dataKey) {
+            data.`1600` -> "1600"
+            data.`1280` -> "1280"
+            data.`980` -> "980"
+            data.`780` -> "780"
+            else -> "1600"
+        }
 
-        val imagesResponse = client.newCall(POST("$apiBooksUrl/data/${entry.id}/${entry.public_key}/${dataKey.id}/${dataKey.public_key}", headers)).execute()
+        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.public_key}/${dataKey.id}/${dataKey.public_key}?v=${entry.updated_at}&w=$realQuality", headers)).execute()
         val images = imagesResponse.parseAs<ImagesInfo>()
         return images
     }
