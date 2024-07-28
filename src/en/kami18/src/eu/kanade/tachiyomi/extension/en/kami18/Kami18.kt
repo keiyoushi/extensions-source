@@ -153,7 +153,7 @@ class Kami18() : HttpSource() {
         val document = response.asJsoup()
         val contents = document.select("[id*=pageselect] > option")
 
-        val id = response.request.url.toString().filter { it.isDigit() }
+        val id = response.request.url.toString().substringAfter("photo/").filter { it.isDigit() }
         return contents.mapIndexed { idx, image ->
             val filename = image.attr("data-page")
             Page(idx, imageUrl = "$baseImageUrl/$id/$filename")
