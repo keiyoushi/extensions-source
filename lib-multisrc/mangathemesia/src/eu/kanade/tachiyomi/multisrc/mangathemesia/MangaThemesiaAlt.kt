@@ -32,6 +32,7 @@ abstract class MangaThemesiaAlt(
 ) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat), ConfigurableSource {
 
     protected open val listUrl = "$mangaUrlDirectory/list-mode/"
+    protected open val listSelector = "div#content div.soralist ul li a.series"
 
     protected val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).also {
@@ -86,7 +87,7 @@ abstract class MangaThemesiaAlt(
         client.newCall(GET("$baseUrl$listUrl", headers)).execute().use { response ->
             val document = response.asJsoup()
 
-            return document.select("div#content div.soralist ul li a.series").associate {
+            return document.select(listSelector).associate {
                 val url = it.absUrl("href")
 
                 val slug = url.removeSuffix("/")
