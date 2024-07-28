@@ -2,8 +2,8 @@ ext {
     extName = 'Team Lanh Lung'
     extClass = '.TeamLanhLung'
     themePkg = 'a3manga'
-    baseUrl = 'https://teamlanhlung.life'
-    overrideVersionCode = 5
+    baseUrl = 'https://teamlanhlung.blog'
+    overrideVersionCode = 6
     isNsfw = true
 }
 
