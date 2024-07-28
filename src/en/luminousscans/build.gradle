@@ -3,7 +3,7 @@ ext {
     extClass = '.LuminousScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://luminous-scans.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = false
 }
 

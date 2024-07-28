@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -57,7 +58,25 @@ class RizzComic : MangaThemesiaAlt(
     override val slugRegex = Regex("""^(r\d+-)""")
 
     // don't allow disabling random part setting
-    override fun setupPreferenceScreen(screen: PreferenceScreen) { }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) = Unit
+
+    override fun fetchUrlMap(): Map<String, String> {
+        return client.newCall(GET("$baseUrl$mangaUrlDirectory", headers)).execute().use { response ->
+            val document = response.asJsoup()
+
+            document.select("div.bsx a").associate {
+                val url = it.absUrl("href")
+
+                val slug = url.removeSuffix("/")
+                    .substringAfterLast("/")
+
+                val permaSlug = slug
+                    .replaceFirst(slugRegex, "")
+
+                permaSlug to slug
+            }
+        }
+    }
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
     override fun popularMangaParse(response: Response) = searchMangaParse(response)

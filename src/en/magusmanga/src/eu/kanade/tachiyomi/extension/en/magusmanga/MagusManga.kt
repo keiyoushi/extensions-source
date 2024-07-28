@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 class MagusManga : MangaThemesiaAlt(
     "Magus Manga",
-    "https://dmvdepot.com",
+    "https://recipeslik.online",
     "en",
     mangaUrlDirectory = "/series",
     dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("en")),
