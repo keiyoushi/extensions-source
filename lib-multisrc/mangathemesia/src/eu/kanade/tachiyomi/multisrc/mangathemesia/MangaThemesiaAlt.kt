@@ -155,9 +155,9 @@ abstract class MangaThemesiaAlt(
             .substringAfterLast("/")
             .replaceFirst(slugRegex, "")
 
-        val permaSlug = getUrlMap()[slug] ?: slug
+        val randomSlug = getUrlMap()[slug] ?: slug
 
-        return GET("$baseUrl$mangaUrlDirectory/$permaSlug/", headers)
+        return GET("$baseUrl$mangaUrlDirectory/$randomSlug/", headers)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -169,9 +169,9 @@ abstract class MangaThemesiaAlt(
             .substringAfterLast("/")
             .replaceFirst(slugRegex, "")
 
-        val permaSlug = getUrlMap(true)[slug] ?: slug
+        val randomSlug = getUrlMap(true)[slug] ?: slug
 
-        return "$baseUrl$mangaUrlDirectory/$permaSlug/"
+        return "$baseUrl$mangaUrlDirectory/$randomSlug/"
     }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
