@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class ReaperScansUnoriginal : MangaThemesia(
-    "Reaper Scans Unoriginal",
+    "Reaper Scans (unoriginal)",
     "https://reaper-scans.com",
     "en",
 ) {
