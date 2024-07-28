@@ -58,6 +58,7 @@ class TsukiMangas : HttpSource() {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 databaseEnabled = true
+                blockNetworkImage = true
             }
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
