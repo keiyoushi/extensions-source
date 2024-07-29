@@ -114,7 +114,7 @@ class TempleScan : HttpSource() {
             .unescape()
             .parseAs<SeriesDetails>()
 
-        var tags = ""
+        val tags = mutableListOf<String>()
 
         return SManga.create().apply {
             url = "/comic/${details.slug}"
@@ -134,12 +134,23 @@ class TempleScan : HttpSource() {
                 document.selectFirst("div:has(> p:contains(description))")?.run {
                     selectFirst("p:contains(description)")?.remove()
                     selectFirst("div.mt-7:contains(Additional)")?.remove()
-                    selectFirst("div.mt-7:contains(tag)")?.remove()
-                    val text = wholeText().trim()
-                    DESCRIPTION_REGEX.find(text)?.groupValues?.let {
-                        tags = it.getOrNull(3).orEmpty()
-                        this@buildString.append(it[0])
+                    selectFirst("div.mt-7:contains(tag)")?.also {
+                        tags += it.select("div.flex > p[class^=bg]").eachText()
+                    }?.remove()
+                    selectFirst("p:contains(tag), p:contains(genre)")?.let {
+                        tags += it.text().substringAfter(":")
+                            .split(",")
+                            .map(String::trim)
+                        // sometimes description <p> have the tag/genre, instead of it being separate
+                        val tmp = clone()
+                        tmp.selectFirst("p:contains(tag), p:contains(genre)")
+                            ?.remove()
+                        if (tmp.text().isNotBlank()) {
+                            it.remove()
+                        }
                     }
+
+                    this@buildString.append(wholeText().trim())
                 }
 
                 if (!details.alternativeNames.isNullOrBlank()) {
@@ -155,10 +166,7 @@ class TempleScan : HttpSource() {
                 if (details.adult) {
                     add("Adult")
                 }
-                tags.substringAfter(":")
-                    .split(",")
-                    .map(String::trim)
-                    .let(::addAll)
+                addAll(tags.distinct())
             }.filterNotNull().joinToString()
         }
     }
@@ -215,11 +223,3 @@ class TempleScan : HttpSource() {
 
 private val UNESCAPE_REGEX = """\\(.)""".toRegex()
 private val DETAILS_REGEX = Regex("""info\\":(\{.*\}).*userIsFollowed""")
-private val DESCRIPTION_REGEX = Regex(
-    """(.*)(Tags?:|Genres?:)?(.*)?""",
-    setOf(
-        RegexOption.IGNORE_CASE,
-        RegexOption.MULTILINE,
-        RegexOption.DOT_MATCHES_ALL,
-    ),
-)
