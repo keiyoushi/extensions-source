@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.fr.animesama
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -62,19 +63,52 @@ class AnimeSama : ParsedHttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/template-php/defaut/fetch.php"
+        val url = "$baseUrl/catalogue/searchbar.php"
         val formBody = FormBody.Builder()
             .add("query", query)
             .build()
 
         return POST(url, headers, formBody)
     }
-    override fun searchMangaSelector() = "a[href*='catalogue']"
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val entries: MutableList<SManga> = mutableListOf()
+
+        val document = response.asJsoup()
+
+        document.select(searchMangaSelector()).forEach { element ->
+            val fetchExistentSubMangas = GET(element.select("a").attr("href"), headers)
+            val page = client.newCall(fetchExistentSubMangas).execute()
+            val page_document = page.asJsoup()
+            val scriptContent = page_document.select("script:containsData(panneauScan(\"nom\", \"url\"))").toString()
+            var splitedContent = scriptContent.split(";").toMutableList()
+            // Remove exemple
+            splitedContent.removeAt(0)
+            splitedContent.forEach { line ->
+                val pattern = """panneauScan\("(.+?)", "(.+?)"\)""".toRegex()
+                val matchResult = pattern.find(line)
+                if (matchResult != null) {
+                    val (scan_title, scan_url) = matchResult.destructured
+                    entries.add(
+                        SManga.create().apply {
+                            title = element.select("h1").text() + " " + scan_title.replace(Regex("""(Scans|\(|\))"""), "").trim()
+                            setUrlWithoutDomain(element.select("a").attr("href") + "?redirect=" + scan_url)
+                            thumbnail_url = element.select("img").attr("src")
+                        },
+                    )
+                }
+            }
+        }
+
+        return MangasPage(entries, false)
+    }
+
+    override fun searchMangaSelector() = ".cardListAnime.Scans"
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h3").text()
-            setUrlWithoutDomain(element.attr("href"))
+            title = element.select("h1").text()
+            setUrlWithoutDomain(element.select("a").attr("href"))
             thumbnail_url = element.select("img").attr("src")
         }
     }
@@ -83,7 +117,7 @@ class AnimeSama : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
         genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
-        title = document.select("#titreOeuvre").text()
+        // title = document.select("#titreOeuvre").text()
         thumbnail_url = document.select("#coverOeuvre").attr("src")
     }
 
@@ -100,7 +134,14 @@ class AnimeSama : ParsedHttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = "$baseUrl${manga.url}/scan/vf"
+        val manga_url = "$baseUrl${manga.url}".toHttpUrl()
+        val redirect: String = manga_url.queryParameter("redirect").toString()
+        var url = manga_url.newBuilder().removeAllQueryParameters("redirect").build().toString()
+        if (manga_url.querySize == 1) {
+            url += "/$redirect"
+        } else {
+            url += "/scan/vf"
+        }
         return GET(url, headers)
     }
 
@@ -118,16 +159,16 @@ class AnimeSama : ParsedHttpSource() {
             .filter { it.contains("eps") && !it.contains("drive.google.com") }
             .mapNotNull { it.replace("=", "").replace("eps", "").toIntOrNull() }
             .sorted()
-            .map { chapter ->
-            }.asReversed()
+            .asReversed()
+            .toSet() // Remove duplicate episodes
         var parsedChapterList: MutableList<SChapter> = ArrayList()
         var chapterDelay = 0
 
         var scriptContent = document.select("script:containsData(resetListe\\(\\))").toString()
         if (scriptContent.containsMultipleTimes("resetListe()")) {
-            var scriptCommandList = document.html().split(";")
-            var createListRegex = Regex("""creerListe\((\d+,\s*\d+)\)""")
-            var specialRegex = Regex("""newSP\((\d+(\.\d+)?)\)""")
+            val scriptCommandList = document.html().split(";")
+            val createListRegex = Regex("""creerListe\((\d+,\s*\d+)\)""")
+            val specialRegex = Regex("""newSP\((\d+(\.\d+)?|"(.*?)")\)""")
             scriptCommandList.forEach { command ->
                 when {
                     createListRegex.find(command) != null -> {
