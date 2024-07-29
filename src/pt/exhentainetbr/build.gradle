@@ -1,6 +1,6 @@
 ext {
-    extName = 'ExHentai'
-    extClass = '.ExHentai'
+    extName = 'ExHentai.net.br'
+    extClass = '.ExHentaiNetBR'
     extVersionCode = 1
     isNsfw = true
 }

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.exhentai
+package eu.kanade.tachiyomi.extension.pt.exhentainetbr
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -19,9 +19,9 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ExHentai : ParsedHttpSource() {
+class ExHentaiNetBR : ParsedHttpSource() {
 
-    override val name = "ExHentai"
+    override val name = "ExHentai.net.br"
 
     override val baseUrl = "https://exhentai.net.br"
 
@@ -64,7 +64,7 @@ class ExHentai : ParsedHttpSource() {
 
         val filter = filters.filterIsInstance<AlphabetFilter>().first()
 
-        if (query.isBlank() && filter.selected().isNotBlank()) {
+        if (query.isBlank() && filter.selected() != DEFAULT_FILTER_VALUE) {
             url = "$baseUrl/lista-de-mangas".toHttpUrl().newBuilder()
                 .addQueryParameter("letra", filter.selected())
                 .build()
@@ -133,20 +133,18 @@ class ExHentai : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = ""
 
     override fun getFilterList(): FilterList {
-        val alphabet = mutableListOf("").also {
+        val alphabet = mutableListOf(DEFAULT_FILTER_VALUE).also {
             it += ('A'..'Z').map { "$it" }
         }
 
         return FilterList(
-            mutableListOf<Filter<*>>(
-                Filter.Header(
-                    """
-                        Busca por título possue prioridade.
-                        Deixe em branco para pesquisar por letra
-                    """.trimIndent(),
-                ),
-                AlphabetFilter("Alfabeto", alphabet),
+            Filter.Header(
+                """
+                    Busca por título possue prioridade.
+                    Deixe em branco para pesquisar por letra
+                """.trimIndent(),
             ),
+            AlphabetFilter("Alfabeto", alphabet),
         )
     }
 
@@ -165,6 +163,7 @@ class ExHentai : ParsedHttpSource() {
     companion object {
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
         const val PREFIX_SEARCH = "id:"
+        const val DEFAULT_FILTER_VALUE = "Padrão"
     }
 
     class AlphabetFilter(displayName: String, private val vals: List<String>, state: Int = 0) :

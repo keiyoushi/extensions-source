@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.exhentai
+package eu.kanade.tachiyomi.extension.pt.exhentainetbr
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class ExHentaiUrlActivity : Activity() {
+class ExHentaiNetBRUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -18,7 +18,7 @@ class ExHentaiUrlActivity : Activity() {
             val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${ExHentai.PREFIX_SEARCH}$item")
+                putExtra("query", "${ExHentaiNetBR.PREFIX_SEARCH}$item")
                 putExtra("filter", packageName)
             }
 
