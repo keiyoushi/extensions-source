@@ -57,7 +57,10 @@ class RizzComic : MangaThemesiaAlt(
     override val slugRegex = Regex("""^(r\d+-)""")
 
     // don't allow disabling random part setting
-    override fun setupPreferenceScreen(screen: PreferenceScreen) { }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) = Unit
+
+    override val listUrl = mangaUrlDirectory
+    override val listSelector = "div.bsx a"
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
     override fun popularMangaParse(response: Response) = searchMangaParse(response)

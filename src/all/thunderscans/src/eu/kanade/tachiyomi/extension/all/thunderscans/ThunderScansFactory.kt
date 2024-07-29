@@ -21,7 +21,7 @@ class ThunderScansAR : MangaThemesiaAlt(
 
 class ThunderScansEN : MangaThemesiaAlt(
     "Thunder Scans",
-    "https://en-thunderepic.com",
+    "https://en-thunderscans.com",
     "en",
     mangaUrlDirectory = "/comics",
 )
