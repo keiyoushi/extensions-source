@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
@@ -32,8 +31,18 @@ abstract class MangaThemesiaAlt(
     private val randomUrlPrefKey: String = "pref_auto_random_url",
 ) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat), ConfigurableSource {
 
+    protected open val listUrl = "$mangaUrlDirectory/list-mode/"
+    protected open val listSelector = "div#content div.soralist ul li a.series"
+
     protected val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).also {
+            if (it.contains("__random_part_cache")) {
+                it.edit().remove("__random_part_cache").apply()
+            }
+            if (it.contains("titles_without_random_part")) {
+                it.edit().remove("titles_without_random_part").apply()
+            }
+        }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -47,183 +56,11 @@ abstract class MangaThemesiaAlt(
 
     private fun getRandomUrlPref() = preferences.getBoolean(randomUrlPrefKey, true)
 
-    private var randomPartCache = SuspendLazy(::getUpdatedRandomPart) { preferences.randomPartCache = it }
-
-    // cache in preference for webview urls
-    private var SharedPreferences.randomPartCache: String
-        get() = getString("__random_part_cache", "")!!
-        set(newValue) = edit().putString("__random_part_cache", newValue).apply()
-
-    // some new titles don't have random part
-    // se we save their slug and when they
-    // finally add it, we remove the slug in the interceptor
-    private var SharedPreferences.titlesWithoutRandomPart: MutableSet<String>
-        get() {
-            val value = getString("titles_without_random_part", null)
-                ?: return mutableSetOf()
-
-            return json.decodeFromString(value)
-        }
-        set(newValue) {
-            val encodedValue = json.encodeToString(newValue)
-
-            edit().putString("titles_without_random_part", encodedValue).apply()
-        }
-
-    protected open fun getRandomPartFromUrl(url: String): String {
-        val slug = url
-            .removeSuffix("/")
-            .substringAfterLast("/")
-
-        return slugRegex.find(slug)?.groupValues?.get(1) ?: ""
-    }
-
-    protected open fun getRandomPartFromResponse(response: Response): String {
-        return response.asJsoup()
-            .selectFirst(searchMangaSelector())!!
-            .select("a").attr("href")
-            .let(::getRandomPartFromUrl)
-    }
-
-    protected suspend fun getUpdatedRandomPart(): String =
-        client.newCall(GET("$baseUrl$mangaUrlDirectory/", headers))
-            .await()
-            .use(::getRandomPartFromResponse)
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val mp = super.searchMangaParse(response)
-
-        if (!getRandomUrlPref()) return mp
-
-        // extract random part during browsing to avoid extra call
-        mp.mangas.firstOrNull()?.run {
-            val randomPart = getRandomPartFromUrl(url)
-
-            if (randomPart.isNotEmpty()) {
-                randomPartCache.set(randomPart)
-            }
-        }
-
-        val mangas = mp.mangas.toPermanentMangaUrls()
-
-        return MangasPage(mangas, mp.hasNextPage)
-    }
-
-    protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> {
-        // some absolutely new titles don't have the random part yet
-        // save them so we know where to not apply it
-        val foundTitlesWithoutRandomPart = mutableSetOf<String>()
-
-        for (i in indices) {
-            val slug = this[i].url
-                .removeSuffix("/")
-                .substringAfterLast("/")
-
-            if (slugRegex.find(slug)?.groupValues?.get(1) == null) {
-                foundTitlesWithoutRandomPart.add(slug)
-            }
-
-            val permaSlug = slug
-                .replaceFirst(slugRegex, "")
-
-            this[i].url = "$mangaUrlDirectory/$permaSlug/"
-        }
-
-        if (foundTitlesWithoutRandomPart.isNotEmpty()) {
-            foundTitlesWithoutRandomPart.addAll(preferences.titlesWithoutRandomPart)
-
-            preferences.titlesWithoutRandomPart = foundTitlesWithoutRandomPart
-        }
-
-        return this
-    }
-
-    protected open val slugRegex = Regex("""^(\d+-)""")
-
-    override val client = super.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val response = chain.proceed(request)
-
-            if (request.url.fragment != "titlesWithoutRandomPart") {
-                return@addInterceptor response
-            }
-
-            if (!response.isSuccessful && response.code == 404) {
-                response.close()
-
-                val slug = request.url.toString()
-                    .substringBefore("#")
-                    .removeSuffix("/")
-                    .substringAfterLast("/")
-
-                preferences.titlesWithoutRandomPart.run {
-                    remove(slug)
-
-                    preferences.titlesWithoutRandomPart = this
-                }
-
-                val randomPart = randomPartCache.blockingGet()
-                val newRequest = request.newBuilder()
-                    .url("$baseUrl$mangaUrlDirectory/$randomPart$slug/")
-                    .build()
-
-                return@addInterceptor chain.proceed(newRequest)
-            }
-
-            return@addInterceptor response
-        }
-        .build()
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        if (!getRandomUrlPref()) return super.mangaDetailsRequest(manga)
-
-        val slug = manga.url
-            .substringBefore("#")
-            .removeSuffix("/")
-            .substringAfterLast("/")
-            .replaceFirst(slugRegex, "")
-
-        if (preferences.titlesWithoutRandomPart.contains(slug)) {
-            return GET("$baseUrl${manga.url}#titlesWithoutRandomPart")
-        }
-
-        val randomPart = randomPartCache.blockingGet()
-
-        return GET("$baseUrl$mangaUrlDirectory/$randomPart$slug/", headers)
-    }
-
-    override fun getMangaUrl(manga: SManga): String {
-        if (!getRandomUrlPref()) return super.getMangaUrl(manga)
-
-        val slug = manga.url
-            .substringBefore("#")
-            .removeSuffix("/")
-            .substringAfterLast("/")
-            .replaceFirst(slugRegex, "")
-
-        if (preferences.titlesWithoutRandomPart.contains(slug)) {
-            return "$baseUrl${manga.url}"
-        }
-
-        val randomPart = randomPartCache.peek() ?: preferences.randomPartCache
-
-        return "$baseUrl$mangaUrlDirectory/$randomPart$slug/"
-    }
-
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-}
-
-internal class SuspendLazy(
-    private val initializer: suspend () -> String,
-    private val saveCache: (String) -> Unit,
-) {
-
     private val mutex = Mutex()
-    private var cachedValue: SoftReference<String>? = null
+    private var cachedValue: SoftReference<Map<String, String>>? = null
     private var fetchTime = 0L
 
-    suspend fun get(): String {
+    private suspend fun getUrlMapInternal(): Map<String, String> {
         if (fetchTime + 3600000 < System.currentTimeMillis()) {
             // reset cache
             cachedValue = null
@@ -238,22 +75,104 @@ internal class SuspendLazy(
                 return it
             }
 
-            initializer().also { set(it) }
+            fetchUrlMap().also {
+                cachedValue = SoftReference(it)
+                fetchTime = System.currentTimeMillis()
+                preferences.urlMapCache = it
+            }
         }
     }
 
-    fun set(newVal: String) {
-        cachedValue = SoftReference(newVal)
-        fetchTime = System.currentTimeMillis()
+    protected open fun fetchUrlMap(): Map<String, String> {
+        client.newCall(GET("$baseUrl$listUrl", headers)).execute().use { response ->
+            val document = response.asJsoup()
 
-        saveCache(newVal)
+            return document.select(listSelector).associate {
+                val url = it.absUrl("href")
+
+                val slug = url.removeSuffix("/")
+                    .substringAfterLast("/")
+
+                val permaSlug = slug
+                    .replaceFirst(slugRegex, "")
+
+                permaSlug to slug
+            }
+        }
     }
 
-    fun peek(): String? {
-        return cachedValue?.get()
+    protected fun getUrlMap(cached: Boolean = false): Map<String, String> {
+        return if (cached && cachedValue == null) {
+            preferences.urlMapCache
+        } else {
+            runBlocking { getUrlMapInternal() }
+        }
     }
 
-    fun blockingGet(): String {
-        return runBlocking { get() }
+    // cache in preference for webview urls
+    private var SharedPreferences.urlMapCache: Map<String, String>
+        get(): Map<String, String> {
+            val value = getString("url_map_cache", "{}")!!
+            return try {
+                json.decodeFromString(value)
+            } catch (_: Exception) {
+                emptyMap()
+            }
+        }
+        set(newMap) = edit().putString("url_map_cache", json.encodeToString(newMap)).apply()
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val mp = super.searchMangaParse(response)
+
+        if (!getRandomUrlPref()) return mp
+
+        val mangas = mp.mangas.toPermanentMangaUrls()
+
+        return MangasPage(mangas, mp.hasNextPage)
     }
+
+    protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> {
+        return onEach {
+            val slug = it.url
+                .removeSuffix("/")
+                .substringAfterLast("/")
+
+            val permaSlug = slug
+                .replaceFirst(slugRegex, "")
+
+            it.url = "$mangaUrlDirectory/$permaSlug/"
+        }
+    }
+
+    protected open val slugRegex = Regex("""^(\d+-)""")
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        if (!getRandomUrlPref()) return super.mangaDetailsRequest(manga)
+
+        val slug = manga.url
+            .substringBefore("#")
+            .removeSuffix("/")
+            .substringAfterLast("/")
+            .replaceFirst(slugRegex, "")
+
+        val randomSlug = getUrlMap()[slug] ?: slug
+
+        return GET("$baseUrl$mangaUrlDirectory/$randomSlug/", headers)
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        if (!getRandomUrlPref()) return super.getMangaUrl(manga)
+
+        val slug = manga.url
+            .substringBefore("#")
+            .removeSuffix("/")
+            .substringAfterLast("/")
+            .replaceFirst(slugRegex, "")
+
+        val randomSlug = getUrlMap(true)[slug] ?: slug
+
+        return "$baseUrl$mangaUrlDirectory/$randomSlug/"
+    }
+
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 }
