@@ -34,7 +34,7 @@ class TempleScan : HttpSource() {
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
         .build()
 
