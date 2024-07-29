@@ -49,7 +49,7 @@ class Atsumaru : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<ItemsDto<MangaObjectDto>>().items
+        val data = response.parseAs<BrowseMangaDto>().items
 
         return MangasPage(data.map { it.manga.toSManga() }, false)
     }

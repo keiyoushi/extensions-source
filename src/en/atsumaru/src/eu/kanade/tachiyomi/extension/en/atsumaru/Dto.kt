@@ -8,8 +8,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-class ItemsDto<T>(
-    val items: List<T>,
+class BrowseMangaDto(
+    val items: List<MangaObjectDto>,
 )
 
 @Serializable
