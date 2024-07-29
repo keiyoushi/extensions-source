@@ -78,8 +78,8 @@ class TempleScan : HttpSource() {
     }
 
     private fun parseDirectory(page: Int, query: String, filters: FilterList): MangasPage {
+        val status = filters.get<StatusFilter>()?.selected
         val mangaList = seriesCache.filter { series ->
-            val status = filters.get<StatusFilter>()?.selected
 
             val queryFilter = query.isBlank() ||
                 series.title.contains(query, ignoreCase = true) ||
