@@ -1,0 +1,9 @@
+ext {
+    extName = 'Tecno Scans'
+    extClass = '.TecnoScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'http://tecnoscans.xyz'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
