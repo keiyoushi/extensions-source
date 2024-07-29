@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.templescan
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,7 +16,6 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 class TempleScan : HttpSource() {
@@ -35,7 +35,7 @@ class TempleScan : HttpSource() {
         .set("origin", baseUrl)
 
     override val client = super.client.newBuilder()
-        .readTimeout(1, TimeUnit.MINUTES)
+        .rateLimit(1)
         .build()
 
     private val json: Json by injectLazy()
