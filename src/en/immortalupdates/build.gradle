@@ -1,9 +1,0 @@
-ext {
-    extName = 'Immortal Updates'
-    extClass = '.ImmortalUpdates'
-    themePkg = 'madara'
-    baseUrl = 'https://immortalupdates.com'
-    overrideVersionCode = 6
-}
-
-apply from: "$rootDir/common.gradle"
