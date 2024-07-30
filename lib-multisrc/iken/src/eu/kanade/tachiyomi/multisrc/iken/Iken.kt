@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 abstract class Iken(
@@ -43,7 +44,7 @@ abstract class Iken(
                     it.genres.map { genre ->
                         genre.name to genre.id.toString()
                     }
-                }
+                }.distinct()
             }
             .associateBy { it.slug }
     }
@@ -56,7 +57,7 @@ abstract class Iken(
             .map { it.absUrl("href").substringAfterLast("/series/") }
 
         val entries = slugs.mapNotNull {
-            titleCache[it]?.toSManga(baseUrl)
+            titleCache[it]?.toSManga()
         }
 
         return MangasPage(entries, false)
@@ -84,7 +85,7 @@ abstract class Iken(
 
         val entries = data.posts
             .filterNot { it.isNovel }
-            .map { it.toSManga(baseUrl) }
+            .map { it.toSManga() }
 
         val hasNextPage = data.totalCount > (page * perPage)
 
@@ -98,32 +99,28 @@ abstract class Iken(
         Filter.Header("Open popular mangas if genre filter is empty"),
     )
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("#")
-        val url = "$baseUrl/api/chapters?postId=$id&skip=0&take=1000&order=desc&userid="
-
-        return GET(url, headers)
-    }
-
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.url.substringBeforeLast("#")
 
         return "$baseUrl/series/$slug"
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAs<Post<Manga>>()
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        val slug = manga.url.substringBeforeLast("#")
+        val update = titleCache[slug]?.toSManga() ?: manga
 
-        assert(!data.post.isNovel) { "Novels are unsupported" }
-
-        // genres are only returned in search call
-        // and not when fetching details
-        return data.post.toSManga(baseUrl).apply {
-            genre = titleCache[data.post.slug]?.getGenres()
-        }
+        return Observable.just(update)
     }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+    override fun mangaDetailsParse(response: Response) =
+        throw UnsupportedOperationException()
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val id = manga.url.substringAfterLast("#")
+        val url = "$baseUrl/api/chapters?postId=$id&skip=0&take=1000&order=desc&userid="
+
+        return GET(url, headers)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<Post<ChapterListResponse>>()
