@@ -1,9 +1,7 @@
 ext {
     extName = 'Temple Scan'
     extClass = '.TempleScan'
-    themePkg = 'heancms'
-    baseUrl = 'https://templescan.net'
-    overrideVersionCode = 17
+    extVersionCode = 43
     isNsfw = true
 }
 
