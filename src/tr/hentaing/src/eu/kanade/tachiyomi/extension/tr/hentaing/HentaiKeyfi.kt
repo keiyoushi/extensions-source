@@ -6,13 +6,17 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Hentaing : Madara(
-    "Hentaing",
-    "https://hentaing.org",
+class HentaiKeyfi : Madara(
+    "Hentai Keyfi",
+    "https://hentaikeyfi.com",
     "tr",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
 ) {
+
+    override val id = 3518858173957835738
+
     override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override val useNewChapterEndpoint = true
 
     override fun pageListParse(document: Document): List<Page> {
