@@ -1,0 +1,10 @@
+ext {
+    extName = 'Limited Time Project'
+    extClass = '.LimitedTimeProject'
+    themePkg = 'madara'
+    baseUrl = 'https://limitedtimeproject.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
