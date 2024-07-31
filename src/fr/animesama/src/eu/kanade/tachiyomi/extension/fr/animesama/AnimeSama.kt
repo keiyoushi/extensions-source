@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.fr.animesama
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -71,38 +71,6 @@ class AnimeSama : ParsedHttpSource() {
         return POST(url, headers, formBody)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val entries: MutableList<SManga> = mutableListOf()
-
-        val document = response.asJsoup()
-
-        document.select(searchMangaSelector()).forEach { element ->
-            val fetchExistentSubMangas = GET(element.select("a").attr("href"), headers)
-            val page = client.newCall(fetchExistentSubMangas).execute()
-            val page_document = page.asJsoup()
-            val scriptContent = page_document.select("script:containsData(panneauScan(\"nom\", \"url\"))").toString()
-            var splitedContent = scriptContent.split(";").toMutableList()
-            // Remove exemple
-            splitedContent.removeAt(0)
-            splitedContent.forEach { line ->
-                val pattern = """panneauScan\("(.+?)", "(.+?)"\)""".toRegex()
-                val matchResult = pattern.find(line)
-                if (matchResult != null) {
-                    val (scan_title, scan_url) = matchResult.destructured
-                    entries.add(
-                        SManga.create().apply {
-                            title = element.select("h1").text() + " " + scan_title.replace(Regex("""(Scans|\(|\))"""), "").trim()
-                            setUrlWithoutDomain(element.select("a").attr("href") + "?redirect=" + scan_url)
-                            thumbnail_url = element.select("img").attr("src")
-                        },
-                    )
-                }
-            }
-        }
-
-        return MangasPage(entries, false)
-    }
-
     override fun searchMangaSelector() = ".cardListAnime.Scans"
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaFromElement(element: Element): SManga {
@@ -117,7 +85,7 @@ class AnimeSama : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
         genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
-        // title = document.select("#titreOeuvre").text()
+        title = document.select("#titreOeuvre").text()
         thumbnail_url = document.select("#coverOeuvre").attr("src")
     }
 
@@ -134,23 +102,41 @@ class AnimeSama : ParsedHttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val manga_url = "$baseUrl${manga.url}".toHttpUrl()
-        val redirect: String = manga_url.queryParameter("redirect").toString()
-        var url = manga_url.newBuilder().removeAllQueryParameters("redirect").build().toString()
-        if (manga_url.querySize == 1) {
-            url += "/$redirect"
-        } else {
-            url += "/scan/vf"
+        var url = "$baseUrl${manga.url}".toHttpUrl().newBuilder()
+
+        val fetchExistentSubMangas = GET(url.build(), headers)
+        val page = client.newCall(fetchExistentSubMangas).execute()
+        val document = page.asJsoup()
+        val scriptContent = document.select("script:containsData(panneauScan(\"nom\", \"url\"))").toString()
+        var splitedContent = scriptContent.split(";").toMutableList()
+        // Remove exemple
+        splitedContent.removeAt(0)
+
+        url.addPathSegments("scan/vf")
+
+        splitedContent.forEach { line ->
+            val pattern = """panneauScan\("(.+?)", "(.+?)"\)""".toRegex()
+            val matchResult = pattern.find(line)
+            if (matchResult != null) {
+                val (scan_title, scan_url) = matchResult.destructured
+                url.addQueryParameter(scan_title, scan_url)
+            }
         }
-        return GET(url, headers)
+
+        return GET(url.build(), headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    fun parseChapterFromResponse(response: Response, translation_name: String): List<SChapter> {
         var document = response.asJsoup()
 
-        val baseChapterUrl = "episodes.js?title=" + document.select("#titreOeuvre").text()
+        var chapterUrl = document.baseUri().toHttpUrl()
+            .newBuilder()
+            .query(null)
+            .addPathSegment("episodes.js")
+            .addQueryParameter("title", document.select("#titreOeuvre").text())
+            .build()
 
-        val requestToFetchChapters = GET("${document.baseUri()}/$baseChapterUrl", headers)
+        val requestToFetchChapters = GET(chapterUrl, headers)
         val javascriptFile = client.newCall(requestToFetchChapters).execute()
         var javascriptFileContent = javascriptFile.body.string()
 
@@ -180,7 +166,8 @@ class AnimeSama : ParsedHttpSource() {
                             parsedChapterList.add(
                                 SChapter.create().apply {
                                     name = "Chapitre " + i
-                                    setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                                    setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                                    scanlator = translation_name
                                 },
                             )
                         }
@@ -190,7 +177,8 @@ class AnimeSama : ParsedHttpSource() {
                         parsedChapterList.add(
                             SChapter.create().apply {
                                 name = "Chapitre " + title
-                                setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                                setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                                scanlator = translation_name
                             },
                         )
                         chapterDelay++
@@ -203,10 +191,40 @@ class AnimeSama : ParsedHttpSource() {
             parsedChapterList.add(
                 SChapter.create().apply {
                     name = "Chapitre " + (parsedChapterList.size + 1 - chapterDelay)
-                    setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                    setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                    scanlator = translation_name
                 },
             )
         }
+        return parsedChapterList
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val url = response.request.url.toUrl().toHttpUrlOrNull()!!
+        var parsedChapterList: MutableList<SChapter> = mutableListOf()
+        for (index in 0 until url.querySize) {
+            val scanlator_group = url.queryParameterName(index).replace(Regex("""(Scans|\(|\))"""), "").trim()
+
+            if (index == 0) {
+                parsedChapterList.addAll(parseChapterFromResponse(response, scanlator_group))
+                continue
+            }
+
+            val fetchExistentSubMangas = GET(
+                url.newBuilder()
+                    .removePathSegment(3)
+                    .removePathSegment(2)
+                    .addPathSegments(
+                        url.queryParameterValue(index)!!,
+                    ).build(),
+                headers,
+            )
+            val res = client.newCall(fetchExistentSubMangas).execute()
+            parsedChapterList.addAll(parseChapterFromResponse(res, scanlator_group))
+        }
+
+        parsedChapterList.sortBy { chapter -> ("$baseUrl${chapter.url}").toHttpUrl().queryParameter("id")?.toIntOrNull() }
+
         return parsedChapterList.asReversed()
     }
 
