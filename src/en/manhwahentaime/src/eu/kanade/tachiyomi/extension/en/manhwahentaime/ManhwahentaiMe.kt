@@ -32,4 +32,5 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
 
         return chapterElements.map(::chapterFromElement)
     }
+    override fun searchMangaSelector() = "div.page-item-detail"
 }
