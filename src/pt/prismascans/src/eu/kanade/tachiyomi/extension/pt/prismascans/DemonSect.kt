@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.extension.pt.prismascans
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
-import okio.IOException
 import rx.Observable
 import java.util.concurrent.TimeUnit
 
@@ -23,18 +23,19 @@ class DemonSect : MangaThemesia(
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return client.newCall(chapterListRequest(manga))
             .asObservable()
             .map { response ->
                 if (!response.isSuccessful) {
-                    throw IOException(
+                    throw Exception(
                         """
-                            Obra não encontrada. Realize a migração do título para atualizar.
+                            Obra não encontrada.
+                            Realize a migração do título para atualizar.
                         """.trimIndent(),
                     )
                 }
-                mangaDetailsParse(response).apply { initialized = true }
+                chapterListParse(response)
             }
     }
 }
