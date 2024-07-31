@@ -214,7 +214,7 @@ class ReaperScans : HttpSource() {
     // Page
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("div.items-center.justify-center > img").mapIndexed { index, element ->
+        return document.select("div.container > div.items-center.justify-center > img[loading=lazy]").mapIndexed { index, element ->
             Page(index, imageUrl = element.imgAttr())
         }
     }
