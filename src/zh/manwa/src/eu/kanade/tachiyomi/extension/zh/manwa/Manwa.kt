@@ -37,8 +37,6 @@ import uy.kohesive.injekt.injectLazy
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
-
-//BAIMANGU
 import android.widget.Toast
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
@@ -248,9 +246,9 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
 
 		//BAIMANGU
 		// ---------------------------------------------------------------------------------------
-
+        private const val TOAST_RESTART = "請重新启动tachiyomi"
         private const val MAINSITE_URL_PREF = "mainSiteUrlPreference"
-        private const val MAINSITE_URL_PREF_DEFAULT = "https://www.darpou.com/"
+        private const val MAINSITE_URL_PREF_DEFAULT = "https://www.manwa.fun/"
 
         private const val MAINSITE_URL_PREF_TITLE = "主站URL"
         private const val MAINSITE_URL_PREF_SUMMARY = "需要重启软件以生效。\n默认值：$MAINSITE_URL_PREF_DEFAULT"
