@@ -49,7 +49,6 @@ class ChapterQueryItemDto(
 
 @Serializable
 class ChapterSeriesDto(
-    val id: Int,
     @SerialName("series_slug")
     val slug: String,
 )
