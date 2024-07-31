@@ -214,7 +214,7 @@ class ReaperScans : HttpSource() {
     // Page
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("div.items-center.justify-center > img[data-src]").mapIndexed { index, element ->
+        return document.select("div.items-center.justify-center > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.imgAttr())
         }
     }
@@ -245,14 +245,9 @@ class ReaperScans : HttpSource() {
     private inline fun <reified T> String.parseJson(): T = json.decodeFromString(this)
 
     private fun Element.imgAttr(): String = when {
-        // We need to check they're actually not empty because in the actual chapter page, the images have both
-        // attributes, but one is empty and the other is not.
-        // If the attribute is not present, attr() returns an empty string.
-        // <img src="..." data-src /> and <img src data-src="..." />
-        // very weird.
-        attr("data-lazy-src").isNotEmpty() -> attr("abs:data-lazy-src")
-        attr("data-src").isNotEmpty() -> attr("abs:data-src")
-        attr("data-cfsrc").isNotEmpty() -> attr("abs:data-cfsrc")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
         else -> attr("abs:src")
     }
 
