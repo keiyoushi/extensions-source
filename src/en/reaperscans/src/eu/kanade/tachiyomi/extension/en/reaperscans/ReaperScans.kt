@@ -2,19 +2,21 @@ package eu.kanade.tachiyomi.extension.en.reaperscans
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
@@ -22,7 +24,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class ReaperScans : ParsedHttpSource() {
+class ReaperScans : HttpSource() {
 
     override val name = "Reaper Scans"
 
@@ -33,6 +35,18 @@ class ReaperScans : ParsedHttpSource() {
     override val id = 5177220001642863679
 
     override val supportsLatest = true
+
+    private val apiHost = "api.reaperscans.com"
+
+    private val defaultQueryApiUrl get() = HttpUrl.Builder()
+        .scheme("https")
+        .host(apiHost)
+        .addPathSegment("query")
+        .addQueryParameter("perPage", "999")
+        .addQueryParameter("series_type", "Comic")
+        .addQueryParameter("adult", "true") // ???
+
+    override val versionId: Int = 2
 
     private val json: Json by injectLazy()
 
@@ -51,7 +65,15 @@ class ReaperScans : ParsedHttpSource() {
         .set("X-Requested-With", randomString((1..20).random())) // For WebView, removed in interceptor
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("https://api.reaperscans.com/query?page=$page&perPage=20&series_type=Comic&query_string=&order=desc&orderBy=total_views&adult=true", headers)
+    override fun popularMangaRequest(page: Int): Request = GET(
+        defaultQueryApiUrl
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("query_string", "")
+            .addQueryParameter("order", "desc")
+            .addQueryParameter("orderBy", "total_views")
+            .build(),
+        headers,
+    )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseJson<SeriesQueryDto>()
@@ -61,7 +83,7 @@ class ReaperScans : ParsedHttpSource() {
                 title = it.title
                 // Don't know what "4SRBHm" is for but it seems constant across all series
                 thumbnail_url = "https://media.reaperscans.com/file/4SRBHm/${it.thumbnail}"
-                url = "/series/${it.slug}"
+                url = "/series/${it.slug}#${it.id}"
                 status = when (it.status) {
                     "Hiatus" -> SManga.ON_HIATUS
                     "Completed" -> SManga.COMPLETED
@@ -76,12 +98,34 @@ class ReaperScans : ParsedHttpSource() {
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("https://api.reaperscans.com/query?page=$page&perPage=20&series_type=Comic&query_string=&order=desc&orderBy=updated_at&adult=true", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET(
+        defaultQueryApiUrl
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("query_string", "")
+            .addQueryParameter("order", "desc")
+            .addQueryParameter("orderBy", "updated_at")
+            .build(),
+        headers,
+    )
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("https://api.reaperscans.com/query?page=$page&perPage=20&series_type=Comic&query_string=${query.replace(' ', '+')}&order=desc&orderBy=total_views&adult=true", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val filterString = filters.filterIsInstance<TagFilter>().filter { it.state }.map { it.id }.joinToString(",")
+        android.util.Log.i("ReaperScans", "filterString: $filterString")
+        val url = defaultQueryApiUrl
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("query_string", query)
+            .addQueryParameter("order", filters.filterIsInstance<OrderBySortFilter>().first().selected)
+            .addQueryParameter("orderBy", filters.filterIsInstance<OrderFilter>().first().selected)
+            .addQueryParameter("status", filters.filterIsInstance<StatusFilter>().first().selected)
+            .addEncodedQueryParameter("tags_ids", "[$filterString]")
+        return GET(
+            url.build(),
+            headers,
+        )
+    }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -99,74 +143,98 @@ class ReaperScans : ParsedHttpSource() {
     }
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            thumbnail_url = document.select("div.bg-background > img").first()!!.imgAttr()
-            title = document.select("h1").first()!!.text()
 
-            status = when (document.select("div.flex-row > span.rounded").first()!!.text()) {
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return GET(
+            HttpUrl.Builder()
+                .scheme("https")
+                .host(apiHost)
+                .addPathSegments(manga.url.substringBefore('#').trimStart('/'))
+                .build(),
+            headers,
+        )
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl${manga.url}"
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val data = response.parseJson<SeriesDto>()
+        return SManga.create().apply {
+            title = data.title
+            thumbnail_url = "https://media.reaperscans.com/file/4SRBHm/${data.thumbnail}"
+            url = "/series/${data.slug}#${data.id}"
+            status = when (data.status) {
                 "Hiatus" -> SManga.ON_HIATUS
                 "Completed" -> SManga.COMPLETED
                 "Ongoing" -> SManga.ONGOING
                 "Dropped" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
-
-            genre = document.select("div.flex-row > span.rounded").drop(1) // drop status
-                .joinToString(", ") { it.text() }
-            author = document.select(".space-y-2 > div:nth-child(2) > span:nth-child(2)").first()!!.text()
-            description = document.select("div.text-muted-foreground > div").first()!!.text()
+            description = data.description
+            author = data.author
+            genre = data.tags.joinToString(", ") { it.name }
         }
     }
 
     // Chapters
 
     override fun chapterListRequest(manga: SManga): Request {
-        // this is extremely hacky.
-        val response = client.newCall(searchMangaRequest(1, manga.title, FilterList())).execute()
-        val data = response.parseJson<SeriesQueryDto>()
-        val seriesId = data.data.first().id
-        return GET("https://api.reaperscans.com/chapter/query?page=1&perPage=30&series_id=$seriesId", headers)
+        val seriesId = manga.url.substringAfter('#')
+        return GET(
+            HttpUrl.Builder()
+                .scheme("https")
+                .host(apiHost)
+                .addPathSegments("chapter/query")
+                .addQueryParameter("page", "1")
+                .addQueryParameter("perPage", "9999")
+                .addQueryParameter("series_id", seriesId)
+                .build(),
+            headers,
+        )
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        var data = response.parseJson<ChapterQueryDto>()
-        if (data.data.isEmpty()) {
-            return emptyList()
-        }
-        val seriesId = data.data.first().series.id
-        val chapters = mutableListOf<SChapter>()
-        do {
-            chapters.addAll(
-                data.data.map {
-                    SChapter.create().apply {
-                        name = if (it.title != null) {
-                            "${it.name} - ${it.title}"
-                        } else {
-                            it.name
-                        }
-                        url = "/series/${it.series.slug}/${it.slug}"
-                        date_upload = DATE_FORMAT.parse(it.created)!!.time
-                    }
-                },
-            )
-            if (data.meta.currentPage != data.meta.lastPage) {
-                data = client.newCall(GET("https://api.reaperscans.com/chapter/query?page=${data.meta.currentPage + 1}&perPage=30&series_id=$seriesId", headers)).execute().parseJson()
-            } else {
-                break
+        val data = response.parseJson<ChapterQueryDto>()
+
+        return data.data.map {
+            SChapter.create().apply {
+                name = if (it.title != null) {
+                    "${it.name} - ${it.title}"
+                } else {
+                    it.name
+                }
+                url = "/series/${it.series.slug}/${it.slug}"
+                date_upload = DATE_FORMAT.parse(it.created)!!.time
             }
-        } while (data.meta.currentPage <= data.meta.lastPage)
-        return chapters
+        } // if there are more then 999 chapters, we have bigger problems
     }
 
     // Page
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         return document.select("div.items-center.justify-center > img[data-src]").mapIndexed { index, element ->
-            val imageUrl = element.attr("src").ifEmpty {
-                element.attr("data-src")
-            }
-            Page(index, imageUrl = imageUrl)
+            Page(index, imageUrl = element.imgAttr())
         }
+    }
+
+    // Filters
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf<Filter<*>>()
+        filters += OrderFilter()
+        filters += OrderBySortFilter()
+        filters += StatusFilter()
+        filters += Filter.Header("Tags")
+        filters += TagFilter("Action", 1)
+        filters += TagFilter("Fantasy", 2)
+        filters += TagFilter("Romance", 3)
+        filters += TagFilter("Martial Arts", 4)
+        filters += TagFilter("Gaming", 5)
+        filters += TagFilter("Comedy", 6)
+        filters += TagFilter("Horror", 7)
+        filters += TagFilter("Drama", 8)
+        return FilterList(filters)
     }
 
     // Helpers
@@ -177,9 +245,14 @@ class ReaperScans : ParsedHttpSource() {
     private inline fun <reified T> String.parseJson(): T = json.decodeFromString(this)
 
     private fun Element.imgAttr(): String = when {
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("data-src") -> attr("abs:data-src")
-        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        // We need to check they're actually not empty because in the actual chapter page, the images have both
+        // attributes, but one is empty and the other is not.
+        // If the attribute is not present, attr() returns an empty string.
+        // <img src="..." data-src /> and <img src data-src="..." />
+        // very weird.
+        attr("data-lazy-src").isNotEmpty() -> attr("abs:data-lazy-src")
+        attr("data-src").isNotEmpty() -> attr("abs:data-src")
+        attr("data-cfsrc").isNotEmpty() -> attr("abs:data-cfsrc")
         else -> attr("abs:src")
     }
 
@@ -189,30 +262,7 @@ class ReaperScans : ParsedHttpSource() {
     }
 
     // Unused
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
-
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
-
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
 

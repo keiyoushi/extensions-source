@@ -4,21 +4,21 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MetaDto(
+class MetaDto(
     @SerialName("last_page")
     val lastPage: Int,
     @SerialName("current_page")
-    val currentPage: Int,
+    val currentPage: Int? = 1, // is null if no results
 )
 
 @Serializable
-data class SeriesQueryDto(
+class SeriesQueryDto(
     val meta: MetaDto,
     val data: List<SeriesQueryItemDto>,
 )
 
 @Serializable
-data class SeriesQueryItemDto(
+class SeriesQueryItemDto(
     val id: Int,
     val title: String,
     val description: String,
@@ -29,13 +29,12 @@ data class SeriesQueryItemDto(
 )
 
 @Serializable
-data class ChapterQueryDto(
-    val meta: MetaDto,
+class ChapterQueryDto(
     val data: List<ChapterQueryItemDto>,
 )
 
 @Serializable
-data class ChapterQueryItemDto(
+class ChapterQueryItemDto(
     @SerialName("chapter_name")
     val name: String,
     @SerialName("chapter_title")
@@ -49,8 +48,26 @@ data class ChapterQueryItemDto(
 )
 
 @Serializable
-data class ChapterSeriesDto(
+class ChapterSeriesDto(
     val id: Int,
     @SerialName("series_slug")
     val slug: String,
+)
+
+@Serializable
+class SeriesDto(
+    val id: Int,
+    val title: String,
+    val description: String,
+    @SerialName("series_slug")
+    val slug: String,
+    val thumbnail: String,
+    val status: String,
+    val author: String,
+    val tags: List<TagDto>,
+)
+
+@Serializable
+class TagDto(
+    val name: String,
 )
