@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.reaperscans
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,33 +8,19 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.addJsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import okhttp3.Headers
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
-import kotlin.random.Random
 
 class ReaperScans : ParsedHttpSource() {
 
@@ -66,104 +51,43 @@ class ReaperScans : ParsedHttpSource() {
         .set("X-Requested-With", randomString((1..20).random())) // For WebView, removed in interceptor
 
     // Popular
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/comics?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("https://api.reaperscans.com/query?page=$page&perPage=20&series_type=Comic&query_string=&order=desc&orderBy=total_views&adult=true", headers)
 
-    override fun popularMangaNextPageSelector(): String = "button[wire:click*=nextPage]"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val data = response.parseJson<SeriesQueryDto>()
 
-    override fun popularMangaSelector(): String = "li"
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("a.text-white").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
+        val mangas = data.data.map {
+            SManga.create().apply {
+                title = it.title
+                // Don't know what "4SRBHm" is for but it seems constant across all series
+                thumbnail_url = "https://media.reaperscans.com/file/4SRBHm/${it.thumbnail}"
+                url = "/series/${it.slug}"
+                status = when (it.status) {
+                    "Hiatus" -> SManga.ON_HIATUS
+                    "Completed" -> SManga.COMPLETED
+                    "Ongoing" -> SManga.ONGOING
+                    "Dropped" -> SManga.CANCELLED
+                    else -> SManga.UNKNOWN
+                }
+                description = it.description
             }
-            thumbnail_url = element.select("img").imgAttr()
         }
+        return MangasPage(mangas, data.meta.lastPage != data.meta.currentPage)
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest/comics?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("https://api.reaperscans.com/query?page=$page&perPage=20&series_type=Comic&query_string=&order=desc&orderBy=updated_at&adult=true", headers)
 
-    override fun latestUpdatesNextPageSelector(): String = "button[wire:click*=nextPage]"
-
-    override fun latestUpdatesSelector(): String = ".grid > div"
-
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("p > a").let {
-                title = it.text().trim()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.select("img").imgAttr()
-        }
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val response = client.newCall(GET(baseUrl)).execute()
-        val soup = response.asJsoup()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("https://api.reaperscans.com/query?page=$page&perPage=20&series_type=Comic&query_string=${query.replace(' ', '+')}&order=desc&orderBy=total_views&adult=true", headers)
 
-        val csrfToken = soup.selectFirst("meta[name=csrf-token]")?.attr("content")
-
-        val livewareData = soup.selectFirst("div[wire:initial-data*=comics]")
-            ?.attr("wire:initial-data")
-            ?.parseJson<LiveWireDataDto>()
-
-        if (csrfToken == null) error("Couldn't find csrf-token")
-        if (livewareData == null) error("Couldn't find LiveWireData")
-
-        val routeName = livewareData.fingerprint["name"]?.jsonPrimitive?.contentOrNull
-            ?: error("Couldn't find routeName")
-
-        //  Javascript: (Math.random() + 1).toString(36).substring(8)
-        val generateId = { -> "1.${Random.nextLong().toString(36)}".substring(10) } // Not exactly the same, but results in a 3-5 character string
-        val payload = buildJsonObject {
-            put("fingerprint", livewareData.fingerprint)
-            put("serverMemo", livewareData.serverMemo)
-            putJsonArray("updates") {
-                addJsonObject {
-                    put("type", "syncInput")
-                    putJsonObject("payload") {
-                        put("id", generateId())
-                        put("name", "query")
-                        put("value", query)
-                    }
-                }
-            }
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
-
-        val headers = Headers.Builder()
-            .add("x-csrf-token", csrfToken)
-            .add("x-livewire", "true")
-            .build()
-
-        return POST("$baseUrl/livewire/message/$routeName", headers, payload)
-    }
-
-    override fun searchMangaSelector(): String = "a[href*=/comics/]"
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val html = response.parseJson<LiveWireResponseDto>().effects.html
-        val mangas = Jsoup.parse(html, baseUrl).select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }
-        return MangasPage(mangas, false)
-    }
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            element.select("img").first()?.let {
-                thumbnail_url = it.imgAttr()
-            }
-            title = element.select("p").first()!!.text()
-        }
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val realUrl = "/comics/" + query.removePrefix(PREFIX_ID_SEARCH)
+            val realUrl = "/series/" + query.removePrefix(PREFIX_ID_SEARCH)
             val manga = SManga.create().apply {
                 url = realUrl
             }
@@ -177,119 +101,71 @@ class ReaperScans : ParsedHttpSource() {
     // Details
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            thumbnail_url = document.select("div > img").first()!!.imgAttr()
+            thumbnail_url = document.select("div.bg-background > img").first()!!.imgAttr()
             title = document.select("h1").first()!!.text()
 
-            status = when (document.select("dt:contains(Release Status)").next().first()!!.text()) {
-                "On hold" -> SManga.ON_HIATUS
-                "Complete" -> SManga.COMPLETED
+            status = when (document.select("div.flex-row > span.rounded").first()!!.text()) {
+                "Hiatus" -> SManga.ON_HIATUS
+                "Completed" -> SManga.COMPLETED
                 "Ongoing" -> SManga.ONGOING
                 "Dropped" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
 
-            genre = mutableListOf<String>().apply {
-                when (document.select("dt:contains(Source Language)").next().first()!!.text()) {
-                    "Korean" -> "Manhwa"
-                    "Chinese" -> "Manhua"
-                    "Japanese" -> "Manga"
-                    else -> null
-                }?.let { add(it) }
-            }.takeIf { it.isNotEmpty() }?.joinToString(",")
-
-            description = document.select("section > div:nth-child(1) > div > p").first()!!.text()
+            genre = document.select("div.flex-row > span.rounded").drop(1) // drop status
+                .joinToString(", ") { it.text() }
+            author = document.select(".space-y-2 > div:nth-child(2) > span:nth-child(2)").first()!!.text()
+            description = document.select("div.text-muted-foreground > div").first()!!.text()
         }
     }
 
     // Chapters
-    private fun chapterListNextPageSelector(): String = "button[wire:click*=nextPage]"
 
-    override fun chapterListSelector() = "div[wire:id] > div > ul[role=list] > li"
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = mutableListOf<SChapter>()
-        document.select(chapterListSelector()).forEach { chapters.add(chapterFromElement(it)) }
-        var hasNextPage = document.selectFirst(chapterListNextPageSelector()) != null
-
-        if (!hasNextPage) {
-            return chapters
-        }
-
-        val csrfToken = document.selectFirst("meta[name=csrf-token]")?.attr("content")
-            ?: error("Couldn't find csrf-token")
-
-        val livewareData = document.selectFirst("div[wire:initial-data*=Models\\\\Comic]")
-            ?.attr("wire:initial-data")
-            ?.parseJson<LiveWireDataDto>()
-            ?: error("Couldn't find LiveWireData")
-
-        val routeName = livewareData.fingerprint["name"]?.jsonPrimitive?.contentOrNull
-            ?: error("Couldn't find routeName")
-
-        val fingerprint = livewareData.fingerprint
-        var serverMemo = livewareData.serverMemo
-
-        var pageToQuery = 2
-
-        //  Javascript: (Math.random() + 1).toString(36).substring(8)
-        val generateId = { "1.${Random.nextLong().toString(36)}".substring(10) } // Not exactly the same, but results in a 3-5 character string
-        while (hasNextPage) {
-            val payload = buildJsonObject {
-                put("fingerprint", fingerprint)
-                put("serverMemo", serverMemo)
-                putJsonArray("updates") {
-                    addJsonObject {
-                        put("type", "callMethod")
-                        putJsonObject("payload") {
-                            put("id", generateId())
-                            put("method", "gotoPage")
-                            putJsonArray("params") {
-                                add(pageToQuery)
-                                add("page")
-                            }
-                        }
-                    }
-                }
-            }.toString().toRequestBody(JSON_MEDIA_TYPE)
-
-            val headers = Headers.Builder()
-                .add("x-csrf-token", csrfToken)
-                .add("x-livewire", "true")
-                .build()
-
-            val request = POST("$baseUrl/livewire/message/$routeName", headers, payload)
-
-            val responseData = client.newCall(request).execute().parseJson<LiveWireResponseDto>()
-
-            // response contains state that we need to preserve
-            serverMemo = serverMemo.mergeLeft(responseData.serverMemo)
-            val chaptersHtml = Jsoup.parse(responseData.effects.html, baseUrl)
-            chaptersHtml.select(chapterListSelector()).forEach { chapters.add(chapterFromElement(it)) }
-            hasNextPage = chaptersHtml.selectFirst(chapterListNextPageSelector()) != null
-            pageToQuery++
-        }
-
-        return chapters
+    override fun chapterListRequest(manga: SManga): Request {
+        // this is extremely hacky.
+        val response = client.newCall(searchMangaRequest(1, manga.title, FilterList())).execute()
+        val data = response.parseJson<SeriesQueryDto>()
+        val seriesId = data.data.first().id
+        return GET("https://api.reaperscans.com/chapter/query?page=1&perPage=30&series_id=$seriesId", headers)
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            element.selectFirst("a")?.let { urlElement ->
-                setUrlWithoutDomain(urlElement.attr("href"))
-                urlElement.select("p").let {
-                    name = it.getOrNull(0)?.text() ?: ""
-                    date_upload = it.getOrNull(1)?.text()?.parseRelativeDate() ?: 0
-                }
-            }
+    override fun chapterListParse(response: Response): List<SChapter> {
+        var data = response.parseJson<ChapterQueryDto>()
+        if (data.data.isEmpty()) {
+            return emptyList()
         }
+        val seriesId = data.data.first().series.id
+        val chapters = mutableListOf<SChapter>()
+        do {
+            chapters.addAll(
+                data.data.map {
+                    SChapter.create().apply {
+                        name = if (it.title != null) {
+                            "${it.name} - ${it.title}"
+                        } else {
+                            it.name
+                        }
+                        url = "/series/${it.series.slug}/${it.slug}"
+                        date_upload = DATE_FORMAT.parse(it.created)!!.time
+                    }
+                },
+            )
+            if (data.meta.currentPage != data.meta.lastPage) {
+                data = client.newCall(GET("https://api.reaperscans.com/chapter/query?page=${data.meta.currentPage + 1}&perPage=30&series_id=$seriesId", headers)).execute().parseJson()
+            } else {
+                break
+            }
+        } while (data.meta.currentPage <= data.meta.lastPage)
+        return chapters
     }
 
     // Page
     override fun pageListParse(document: Document): List<Page> {
-        document.select("noscript").remove()
-        return document.select("img.max-w-full").mapIndexed { index, element ->
-            Page(index, imageUrl = element.imgAttr())
+        return document.select("div.items-center.justify-center > img[data-src]").mapIndexed { index, element ->
+            val imageUrl = element.attr("src").ifEmpty {
+                element.attr("data-src")
+            }
+            Page(index, imageUrl = imageUrl)
         }
     }
 
@@ -300,51 +176,12 @@ class ReaperScans : ParsedHttpSource() {
 
     private inline fun <reified T> String.parseJson(): T = json.decodeFromString(this)
 
-    /**
-     * Recursively merges j2 onto j1 in place
-     * If j1 and j2 both contain keys whose values aren't both jsonObjects, j2's value overwrites j1's
-     *
-     */
-    private fun JsonObject.mergeLeft(j2: JsonObject): JsonObject = buildJsonObject {
-        val j1 = this@mergeLeft
-        j1.entries.forEach { (key, value) -> put(key, value) }
-        j2.entries.forEach { (key, value) ->
-            val j1Value = j1[key]
-            when {
-                j1Value !is JsonObject -> put(key, value)
-                value is JsonObject -> put(key, j1Value.mergeLeft(value))
-            }
-        }
-    }
-
-    /**
-     * Parses dates in this form: 21 hours ago
-     * Taken from multisrc/madara/Madara.kt
-     */
-    private fun String.parseRelativeDate(): Long {
-        val number = Regex("""(\d+)""").find(this)?.value?.toIntOrNull() ?: return 0
-        val cal = Calendar.getInstance()
-
-        return when {
-            contains("day") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-            contains("hour") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            contains("minute") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            contains("second") -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
-            contains("week") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number * 7) }.timeInMillis
-            contains("month") -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
-            contains("year") -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
-            else -> 0
-        }
-    }
-
     private fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
         else -> attr("abs:src")
     }
-
-    private fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')
@@ -356,8 +193,29 @@ class ReaperScans : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
+    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
+
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+
+    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
+
+    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
+
+    override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
+
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+
     companion object {
-        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val PREFIX_ID_SEARCH = "id:"
+
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     }
 }
