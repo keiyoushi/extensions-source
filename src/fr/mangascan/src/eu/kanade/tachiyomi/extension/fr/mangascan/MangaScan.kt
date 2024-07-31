@@ -7,7 +7,7 @@ import okhttp3.Request
 
 class MangaScan : MMRCMS(
     "Manga-Scan",
-    "https://mangascan-fr.com",
+    "https://mangascan-fr.net",
     "fr",
     supportsAdvancedSearch = false,
     detailsTitleSelector = "div.col-sm-12 h1",
