@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -17,7 +16,6 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
@@ -37,6 +35,8 @@ class ReaperScans : HttpSource() {
     override val supportsLatest = true
 
     private val apiHost = "api.reaperscans.com"
+
+    private val mediaHost = "https://media.reaperscans.com/file/4SRBHm/"
 
     private val defaultQueryApiUrl get() = HttpUrl.Builder()
         .scheme("https")
@@ -81,8 +81,7 @@ class ReaperScans : HttpSource() {
         val mangas = data.data.map {
             SManga.create().apply {
                 title = it.title
-                // Don't know what "4SRBHm" is for but it seems constant across all series
-                thumbnail_url = "https://media.reaperscans.com/file/4SRBHm/${it.thumbnail}"
+                thumbnail_url = "$mediaHost${it.thumbnail}"
                 url = "/series/${it.slug}#${it.id}"
                 status = when (it.status) {
                     "Hiatus" -> SManga.ON_HIATUS
@@ -163,7 +162,7 @@ class ReaperScans : HttpSource() {
         val data = response.parseJson<SeriesDto>()
         return SManga.create().apply {
             title = data.title
-            thumbnail_url = "https://media.reaperscans.com/file/4SRBHm/${data.thumbnail}"
+            thumbnail_url = "$mediaHost${data.thumbnail}"
             url = "/series/${data.slug}#${data.id}"
             status = when (data.status) {
                 "Hiatus" -> SManga.ON_HIATUS
@@ -212,10 +211,17 @@ class ReaperScans : HttpSource() {
     }
 
     // Page
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return "$baseUrl${chapter.url}"
+    }
+    // Url format is $apiUrl/chapter/$series_slug/$chapter_slug
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url.replace("/series/", "https://$apiHost/chapter/"), headers)
+
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("div.container > div.items-center.justify-center > img[loading=lazy]").mapIndexed { index, element ->
-            Page(index, imageUrl = element.imgAttr())
+        val data = response.parseJson<ChapterDataOuterDto>()
+        return data.chapter.data.images.mapIndexed { index, element ->
+            Page(index, imageUrl = "$mediaHost$element")
         }
     }
 
@@ -243,13 +249,6 @@ class ReaperScans : HttpSource() {
     }
 
     private inline fun <reified T> String.parseJson(): T = json.decodeFromString(this)
-
-    private fun Element.imgAttr(): String = when {
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("data-src") -> attr("abs:data-src")
-        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-        else -> attr("abs:src")
-    }
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')

@@ -70,3 +70,19 @@ class SeriesDto(
 class TagDto(
     val name: String,
 )
+
+@Serializable
+class ChapterDataOuterDto(
+    val chapter: ChapterDataDto,
+)
+
+@Serializable
+class ChapterDataDto(
+    @SerialName("chapter_data")
+    val data: ChapterDataInnerDto,
+)
+
+@Serializable
+class ChapterDataInnerDto(
+    val images: List<String>,
+)
