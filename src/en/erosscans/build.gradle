@@ -1,0 +1,9 @@
+ext {
+    extName = 'Eros Scans'
+    extClass = '.ErosScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://erosscans.xyz'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
