@@ -10,7 +10,5 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
     override val useNewQueryEndpoint = true
     override val enableLogin = true
 
-    override val id = 5177220001642863679
-
     override val cdnUrl = "https://media.reaperscans.com/file/4SRBHm"
 }
