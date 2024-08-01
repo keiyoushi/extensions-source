@@ -137,7 +137,8 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         val el = element.parent()!!.parent()!!
         val chapter = SChapter.create()
-        chapter.url = el.select("td:nth-child(6) a").attr("href")
+        chapter.url = "/reader" + el.select("td:nth-child(6) a").attr("href")
+            .substringAfter("/reader")
         chapter.name = el.select("td:nth-child(1) a").text()
         val date = el.select("td:nth-child(3)").text()
         if (date.endsWith("ago")) {
@@ -162,7 +163,10 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         return chapter
     }
 
-    override fun pageListRequest(chapter: SChapter) = authenticate(GET(chapter.url, headers))
+    override fun pageListRequest(chapter: SChapter): Request {
+        require(chapter.url.startsWith("/")) { "Refresh chapter list" }
+        return authenticate(GET(baseUrl + chapter.url, headers))
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val element = document.select("div#reader")
