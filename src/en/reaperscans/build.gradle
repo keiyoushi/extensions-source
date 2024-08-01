@@ -1,7 +1,9 @@
 ext {
     extName = 'Reaper Scans'
     extClass = '.ReaperScans'
-    extVersionCode = 50
+    themePkg = 'heancms'
+    baseUrl = 'https://reaperscans.com'
+    overrideVersionCode = 50
 }
 
 apply from: "$rootDir/common.gradle"
