@@ -216,6 +216,7 @@ class ReaperScans : HttpSource() {
         return "$baseUrl${chapter.url}"
     }
     // Url format is $apiUrl/chapter/$series_slug/$chapter_slug
+
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url.replace("/series/", "https://$apiHost/chapter/"), headers)
 
     override fun pageListParse(response: Response): List<Page> {
