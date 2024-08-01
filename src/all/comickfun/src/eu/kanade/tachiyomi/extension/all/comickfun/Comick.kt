@@ -463,7 +463,16 @@ abstract class Comick(
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<PageList>()
-        return result.chapter.images.mapIndexedNotNull { index, data ->
+        val images = result.chapter.images.ifEmpty {
+            // cache busting
+            val url = response.request.url.newBuilder()
+                .addQueryParameter("_", System.currentTimeMillis().toString())
+                .build()
+
+            client.newCall(GET(url, headers)).execute()
+                .parseAs<PageList>().chapter.images
+        }
+        return images.mapIndexedNotNull { index, data ->
             if (data.url == null) null else Page(index = index, imageUrl = data.url)
         }
     }
