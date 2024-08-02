@@ -12,4 +12,5 @@ gen
 generated-src/
 lib-multisrc/
 src/*/
+src/zh/*/
 !src/zh/manwa/
