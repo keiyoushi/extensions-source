@@ -208,7 +208,7 @@ abstract class HeanCms(
 
         val result = json.parseAs<HeanCmsQuerySearchDto>()
         val mangaList = result.data.map {
-            it.toSManga(apiUrl, coverPath, mangaSubDirectory)
+            it.toSManga(cdnUrl, coverPath, mangaSubDirectory)
         }
 
         return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
