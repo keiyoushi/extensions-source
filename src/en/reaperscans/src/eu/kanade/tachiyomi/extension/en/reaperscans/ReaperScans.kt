@@ -23,7 +23,6 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
     override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     override val cdnUrl = "https://media.reaperscans.com/file/4SRBHm"
 
-
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/query".toHttpUrl().newBuilder()
             .addQueryParameter("query_string", "")
@@ -38,7 +37,6 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
 
         return GET(url.build(), headers)
     }
-
 
     override fun getSortProperties(): List<SortProperty> = listOf(
         SortProperty(intl["sort_by_title"], "title"),
