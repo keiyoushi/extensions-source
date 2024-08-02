@@ -63,7 +63,7 @@ class HeanCmsSeriesDto(
 ) {
 
     fun toSManga(
-        apiUrl: String,
+        cdnUrl: String,
         coverPath: String,
         mangaSubDirectory: String,
     ): SManga = SManga.create().apply {
@@ -79,7 +79,7 @@ class HeanCmsSeriesDto(
             .sortedBy(HeanCmsTagDto::name)
             .joinToString { it.name }
         thumbnail_url = thumbnail.ifEmpty { null }
-            ?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
+            ?.toAbsoluteThumbnailUrl(cdnUrl, coverPath)
         status = this@HeanCmsSeriesDto.status?.toStatus() ?: SManga.UNKNOWN
         url = "/$mangaSubDirectory/$slug#$id"
     }
@@ -161,8 +161,8 @@ class HeanCmsGenreDto(
     val name: String,
 )
 
-private fun String.toAbsoluteThumbnailUrl(apiUrl: String, coverPath: String): String {
-    return if (startsWith("https://") || startsWith("http://")) this else "$apiUrl/$coverPath$this"
+private fun String.toAbsoluteThumbnailUrl(cdnUrl: String, coverPath: String): String {
+    return if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
 }
 
 fun String.toStatus(): Int = when (this) {
