@@ -72,6 +72,8 @@ abstract class HeanCms(
 
     protected open val coverPath: String = ""
 
+    protected open val cdnUrl = apiUrl
+
     protected open val mangaSubDirectory: String = "series"
 
     protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ", Locale.US)
@@ -206,7 +208,7 @@ abstract class HeanCms(
 
         val result = json.parseAs<HeanCmsQuerySearchDto>()
         val mangaList = result.data.map {
-            it.toSManga(apiUrl, coverPath, mangaSubDirectory)
+            it.toSManga(cdnUrl, coverPath, mangaSubDirectory)
         }
 
         return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
@@ -242,7 +244,7 @@ abstract class HeanCms(
         val seriesResult = result.getOrNull()
             ?: throw Exception(intl.format("url_changed_error", name, name))
 
-        val seriesDetails = seriesResult.toSManga(apiUrl, coverPath, mangaSubDirectory)
+        val seriesDetails = seriesResult.toSManga(cdnUrl, coverPath, mangaSubDirectory)
 
         return seriesDetails.apply {
             status = status.takeUnless { it == SManga.UNKNOWN }
@@ -345,8 +347,8 @@ abstract class HeanCms(
         }
     }
 
-    private fun String.toAbsoluteUrl(): String {
-        return if (startsWith("https://") || startsWith("http://")) this else "$apiUrl/$coverPath$this"
+    protected open fun String.toAbsoluteUrl(): String {
+        return if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
