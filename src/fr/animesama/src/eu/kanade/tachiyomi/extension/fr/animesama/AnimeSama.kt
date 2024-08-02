@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -62,19 +63,20 @@ class AnimeSama : ParsedHttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/template-php/defaut/fetch.php"
+        val url = "$baseUrl/catalogue/searchbar.php"
         val formBody = FormBody.Builder()
             .add("query", query)
             .build()
 
         return POST(url, headers, formBody)
     }
-    override fun searchMangaSelector() = "a[href*='catalogue']"
+
+    override fun searchMangaSelector() = ".cardListAnime.Scans"
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h3").text()
-            setUrlWithoutDomain(element.attr("href"))
+            title = element.select("h1").text()
+            setUrlWithoutDomain(element.select("a").attr("href"))
             thumbnail_url = element.select("img").attr("src")
         }
     }
@@ -99,57 +101,59 @@ class AnimeSama : ParsedHttpSource() {
         return count > 1
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = "$baseUrl${manga.url}/scan/vf"
-        return GET(url, headers)
-    }
+    private fun parseChapterFromResponse(response: Response, translation_name: String): List<SChapter> {
+        val document = response.asJsoup()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        var document = response.asJsoup()
+        val chapterUrl = document.baseUri().toHttpUrl()
+            .newBuilder()
+            .query(null)
+            .addPathSegment("episodes.js")
+            .addQueryParameter("title", document.select("#titreOeuvre").text())
+            .build()
 
-        val baseChapterUrl = "episodes.js?title=" + document.select("#titreOeuvre").text()
-
-        val requestToFetchChapters = GET("${document.baseUri()}/$baseChapterUrl", headers)
+        val requestToFetchChapters = GET(chapterUrl, headers)
         val javascriptFile = client.newCall(requestToFetchChapters).execute()
-        var javascriptFileContent = javascriptFile.body.string()
+        val javascriptFileContent = javascriptFile.body.string()
 
         val parsedJavascriptFileToJson = javascriptFileContent
             .split(" ", ",")
             .filter { it.contains("eps") && !it.contains("drive.google.com") }
             .mapNotNull { it.replace("=", "").replace("eps", "").toIntOrNull() }
             .sorted()
-            .map { chapter ->
-            }.asReversed()
-        var parsedChapterList: MutableList<SChapter> = ArrayList()
+            .asReversed()
+            .toSet() // Remove duplicate episodes
+        val parsedChapterList: MutableList<SChapter> = ArrayList()
         var chapterDelay = 0
 
-        var scriptContent = document.select("script:containsData(resetListe\\(\\))").toString()
+        val scriptContent = document.select("script:containsData(resetListe\\(\\))").toString()
         if (scriptContent.containsMultipleTimes("resetListe()")) {
-            var scriptCommandList = document.html().split(";")
-            var createListRegex = Regex("""creerListe\((\d+,\s*\d+)\)""")
-            var specialRegex = Regex("""newSP\((\d+(\.\d+)?)\)""")
+            val scriptCommandList = document.html().split(";")
+            val createListRegex = Regex("""creerListe\((\d+,\s*\d+)\)""")
+            val specialRegex = Regex("""newSP\((\d+(\.\d+)?|"(.*?)")\)""")
             scriptCommandList.forEach { command ->
                 when {
                     createListRegex.find(command) != null -> {
-                        var data = createListRegex.find(command)!!.groupValues[1].split(",")
-                        var start = data[0].replace(" ", "").toInt()
-                        var end = data[1].replace(" ", "").toInt()
+                        val data = createListRegex.find(command)!!.groupValues[1].split(",")
+                        val start = data[0].replace(" ", "").toInt()
+                        val end = data[1].replace(" ", "").toInt()
 
                         for (i in start..end) {
                             parsedChapterList.add(
                                 SChapter.create().apply {
-                                    name = "Chapitre " + i
-                                    setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                                    name = "Chapitre $i"
+                                    setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                                    scanlator = translation_name
                                 },
                             )
                         }
                     }
                     specialRegex.find(command) != null -> {
-                        var title = specialRegex.find(command)!!.groupValues[1]
+                        val title = specialRegex.find(command)!!.groupValues[1]
                         parsedChapterList.add(
                             SChapter.create().apply {
-                                name = "Chapitre " + title
-                                setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                                name = "Chapitre $title"
+                                setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                                scanlator = translation_name
                             },
                         )
                         chapterDelay++
@@ -162,10 +166,46 @@ class AnimeSama : ParsedHttpSource() {
             parsedChapterList.add(
                 SChapter.create().apply {
                     name = "Chapitre " + (parsedChapterList.size + 1 - chapterDelay)
-                    setUrlWithoutDomain(document.baseUri() + "/" + baseChapterUrl + "&id=${parsedChapterList.size + 1}")
+                    setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                    scanlator = translation_name
                 },
             )
         }
+        return parsedChapterList
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val url = response.request.url.toUrl().toHttpUrlOrNull()!!
+        val document = response.asJsoup()
+        val scriptContent = document.select("script:containsData(panneauScan(\"nom\", \"url\"))").toString()
+        val splitedContent = scriptContent.split(";").toMutableList()
+        // Remove exemple
+        splitedContent.removeAt(0)
+
+        val parsedChapterList: MutableList<SChapter> = mutableListOf()
+
+        splitedContent.forEach { line ->
+            val pattern = """panneauScan\("(.+?)", "(.+?)"\)""".toRegex()
+            val matchResult = pattern.find(line)
+            if (matchResult != null) {
+                val (scanTitle, scanUrl) = matchResult.destructured
+                if (!scanUrl.contains("va")) {
+                    val scanlatorGroup = scanTitle.replace(Regex("""(Scans|\(|\))"""), "").trim()
+                    val fetchExistentSubMangas = GET(
+                        url.newBuilder()
+                            .addPathSegments(
+                                scanUrl,
+                            ).build(),
+                        headers,
+                    )
+                    val res = client.newCall(fetchExistentSubMangas).execute()
+                    parsedChapterList.addAll(parseChapterFromResponse(res, scanlatorGroup))
+                }
+            }
+        }
+
+        parsedChapterList.sortBy { chapter -> ("$baseUrl${chapter.url}").toHttpUrl().queryParameter("id")?.toIntOrNull() }
+
         return parsedChapterList.asReversed()
     }
 
