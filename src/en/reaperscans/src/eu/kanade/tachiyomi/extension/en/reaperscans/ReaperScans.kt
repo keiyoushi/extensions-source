@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 
 class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
 
-    override val versionId = 2
+    override val versionId = 3
 
     override val useNewChapterEndpoint = true
     override val useNewQueryEndpoint = true
