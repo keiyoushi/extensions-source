@@ -11,5 +11,5 @@ apk/
 gen
 generated-src/
 lib-multisrc/
-src/
+src/*/
 !src/zh/manwa/
