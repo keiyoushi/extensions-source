@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.reaperscans
 
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
+import eu.kanade.tachiyomi.multisrc.heancms.SortProperty
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -18,4 +22,26 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
     override val enableLogin = true
     override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     override val cdnUrl = "https://media.reaperscans.com/file/4SRBHm"
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/query".toHttpUrl().newBuilder()
+            .addQueryParameter("query_string", "")
+            .addQueryParameter(if (useNewQueryEndpoint) "status" else "series_status", "All")
+            .addQueryParameter("order", "desc")
+            .addQueryParameter("orderBy", "updated_at")
+            .addQueryParameter("series_type", "Comic")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("perPage", "12")
+            .addQueryParameter("tags_ids", "[]")
+            .addQueryParameter("adult", "true")
+
+        return GET(url.build(), headers)
+    }
+
+    override fun getSortProperties(): List<SortProperty> = listOf(
+        SortProperty(intl["sort_by_title"], "title"),
+        SortProperty(intl["sort_by_views"], "total_views"),
+        SortProperty(intl["sort_by_latest"], "updated_at"),
+        SortProperty(intl["sort_by_created_at"], "created_at"),
+    )
 }
