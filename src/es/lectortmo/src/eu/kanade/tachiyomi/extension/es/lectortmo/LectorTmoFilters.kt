@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.lectortmo
+package eu.kanade.tachiyomi.extension.es.lectortmo
 
 import eu.kanade.tachiyomi.source.model.Filter
 

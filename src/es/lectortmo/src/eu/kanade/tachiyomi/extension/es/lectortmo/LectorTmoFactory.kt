@@ -1,7 +1,9 @@
-package eu.kanade.tachiyomi.extension.es.lectormanga
+package eu.kanade.tachiyomi.extension.es.lectortmo
 
-import eu.kanade.tachiyomi.multisrc.lectortmo.LectorTmo
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -9,9 +11,27 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.injectLazy
 
-class LectorManga : LectorTmo("LectorManga", "https://lectormanga.com", "es") {
+class LectorTmoFactory : SourceFactory {
 
+    override fun createSources() = listOf(
+        LectorManga(),
+        TuMangaOnline(),
+    )
+}
+
+private val network: NetworkHelper by injectLazy()
+
+val rateLimitClient = network.cloudflareClient.newBuilder()
+    .rateLimit(1, 2)
+    .build()
+
+class TuMangaOnline : LectorTmo("TuMangaOnline", "https://visortmo.com", "es", rateLimitClient) {
+    override val id = 4146344224513899730
+}
+
+class LectorManga : LectorTmo("LectorManga", "https://lectormanga.com", "es", rateLimitClient) {
     override val id = 7925520943983324764
 
     override fun popularMangaSelector() = ".col-6 .card"
