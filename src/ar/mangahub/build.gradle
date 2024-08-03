@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaHub'
+    extClass = '.MangaHub'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.mangahub.link'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
