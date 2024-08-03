@@ -24,7 +24,7 @@ class LectorTmoFactory : SourceFactory {
 private val network: NetworkHelper by injectLazy()
 
 val rateLimitClient = network.cloudflareClient.newBuilder()
-    .rateLimit(1, 2)
+    .rateLimit(1, 1)
     .build()
 
 class TuMangaOnline : LectorTmo("TuMangaOnline", "https://visortmo.com", "es", rateLimitClient) {
