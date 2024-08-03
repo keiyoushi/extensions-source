@@ -132,10 +132,6 @@ abstract class LectorTmo(
                 preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
                 60,
             )
-            .addInterceptor { chain ->
-                val request = chain.request()
-                rateLimitClient.newCall(request).execute()
-            }
             .build()
     }
 
