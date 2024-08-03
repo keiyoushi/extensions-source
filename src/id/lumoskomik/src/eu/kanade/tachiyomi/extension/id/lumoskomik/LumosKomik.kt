@@ -10,8 +10,8 @@ class LumosKomik : Madara(
     "id",
     dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("en")),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.AutoDetect
-    override val useNewChapterEndpoint = false
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useNewChapterEndpoint = true
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
     override val mangaSubString = "komik"
