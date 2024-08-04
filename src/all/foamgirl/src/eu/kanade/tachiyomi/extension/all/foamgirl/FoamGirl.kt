@@ -22,9 +22,8 @@ class FoamGirl() : ParsedHttpSource() {
     override val name = "FoamGirl"
     override val supportsLatest = false
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("Referer", baseUrl)
-    }
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Popular
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
