@@ -12,4 +12,6 @@ class PussyToons : Madara(
 ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
+
+    override fun popularMangaSelector() = ".main-col-inner div.page-item-detail"
 }
