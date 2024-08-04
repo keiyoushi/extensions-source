@@ -47,60 +47,55 @@ class DarkRoomFansub : ZeistManga(
     }
 
     private fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        val anchor = element.selectFirst("a:not(:has(img))")
-        title = anchor!!.ownText()
+        val anchor = element.selectFirst("a:not(:has(img))")!!
+        title = anchor.ownText()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(anchor!!.absUrl("href"))
+        setUrlWithoutDomain(anchor.absUrl("href"))
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-
-        val chapters = document
-            .select(".series-chapterlist .flexch-infoz a")
-            .map(::toSChapter)
-            .reversed()
-            .toMutableList()
-
+        val chapters = chapterListFromDocument(document).reversed()
         return chapters.takeIf { it.isNotEmpty() }
             ?: loadUngroupedChapters(document)
     }
 
     private fun loadUngroupedChapters(document: Document): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
-        val firstChapterLink = document.selectFirst("h4 a")?.absUrl("href")
+        val firstChapterURL = document.selectFirst("h4 a")?.absUrl("href")
             ?: return emptyList()
-
         return try {
-            var chapterListUrl = client.newCall(GET(firstChapterLink, headers))
-                .execute()
-                .asJsoup()
-                .selectFirst("h1 + .tac a")!!
-                .absUrl("href")
+            val chapters = mutableListOf<SChapter>()
+            var url = getChapterListURL(firstChapterURL)
 
             do {
-                val chapterUngroup = client.newCall(GET(chapterListUrl, headers))
-                    .execute()
-                    .asJsoup()
+                val chapterUngroup = fetchChapterList(url)
 
-                chapterUngroup.select(".grid.gtc-f141a > div > a")
-                    .map(::toSChapter)
-                    .also {
-                        chapters += it
-                    }
-                val nextChapterPage = chapterUngroup.selectFirst("#Blog1_blog-pager-older-link")
-                    ?.let {
-                        chapterListUrl = it.absUrl("href")
+                chapters += chapterListFromDocument(chapterUngroup)
+
+                val nextChapterPage = chapterUngroup
+                    .selectFirst("#Blog1_blog-pager-older-link")?.also {
+                        url = it.absUrl("href")
                     }
             } while (nextChapterPage != null)
 
             chapters
-                .sortedBy { it.name }
-                .reversed()
         } catch (_: Exception) {
-            chapters
+            emptyList()
         }
     }
+
+    private fun chapterListFromDocument(document: Document) =
+        document.select(".grid.gtc-f141a > div > a, .series-chapterlist .flexch-infoz a")
+            .map(::toSChapter)
+
+    private fun getChapterListURL(url: String): String =
+        fetchChapterList(url)
+            .selectFirst("h1 + .tac a")!!
+            .absUrl("href")
+
+    private fun fetchChapterList(url: String) =
+        client.newCall(GET(url, headers)).execute()
+            .asJsoup()
 
     private fun toSChapter(element: Element) = SChapter.create().apply {
         name = element.text()
