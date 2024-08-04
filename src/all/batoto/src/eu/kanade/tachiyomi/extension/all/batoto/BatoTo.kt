@@ -394,7 +394,7 @@ open class BatoTo(
         if (group.isNullOrBlank()) {
             chapter.scanlator = user
         }
-        if (user.isNullOrBlank()) {
+        else if (user.isNullOrBlank()) {
             chapter.scanlator = "Unknown"
         }
 
