@@ -11,7 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
-class FireScans : Madara("Fire Scans", "https://firescans.xyz", "en") {
+class Firecomics : Madara("Firecomics", "https://firecomics.org", "en") {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 5)
