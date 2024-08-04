@@ -1,9 +1,0 @@
-ext {
-    extName = 'Comic Scans'
-    extClass = '.ComicScans'
-    themePkg = 'madara'
-    baseUrl = 'https://www.comicscans.org'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

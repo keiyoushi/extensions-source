@@ -1,9 +1,0 @@
-ext {
-    extName = 'Ansh Scans'
-    extClass = '.AnshScans'
-    themePkg = 'madara'
-    baseUrl = 'https://anshscans.org'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
