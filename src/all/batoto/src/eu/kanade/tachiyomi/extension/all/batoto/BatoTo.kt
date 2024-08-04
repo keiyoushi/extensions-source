@@ -388,16 +388,11 @@ open class BatoTo(
         val time = element.select("div.extra > i.ps-3").text()
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
         chapter.name = urlElement.text()
-        if (group != "") {
-            chapter.scanlator = group
+        chapter.scanlator = when {
+            group.isNotBlank() -> group
+            user.isNotBlank() -> user
+            else -> "Unknown"
         }
-        if (group.isNullOrBlank()) {
-            chapter.scanlator = user
-        }
-        else if (user.isNullOrBlank()) {
-            chapter.scanlator = "Unknown"
-        }
-
         if (time != "") {
             chapter.date_upload = parseChapterDate(time)
         }
