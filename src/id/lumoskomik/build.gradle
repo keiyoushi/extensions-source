@@ -1,0 +1,10 @@
+ext {
+    extName = 'LumosKomik'
+    extClass = '.LumosKomik'
+    themePkg = 'madara'
+    baseUrl = 'https://lumoskomik.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
