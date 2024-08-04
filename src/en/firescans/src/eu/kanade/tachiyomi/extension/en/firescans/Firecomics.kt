@@ -13,6 +13,7 @@ import org.jsoup.nodes.Document
 
 class Firecomics : Madara("Firecomics", "https://firecomics.org", "en") {
 
+    override val id: Long = 5761461704760730187
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 5)
         .build()
