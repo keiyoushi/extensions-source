@@ -21,9 +21,7 @@ class LectorTmoFactory : SourceFactory {
     )
 }
 
-private val network: NetworkHelper by injectLazy()
-
-val rateLimitClient = network.cloudflareClient.newBuilder()
+val rateLimitClient = Injekt.get<NetworkHelper>().cloudflareClient.newBuilder()
     .rateLimit(1, 1)
     .build()
 
