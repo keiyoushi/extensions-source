@@ -1,17 +1,16 @@
 package eu.kanade.tachiyomi.extension.all.foamgirl
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -28,12 +27,18 @@ class FoamGirl() : ParsedHttpSource() {
     // Popular
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         thumbnail_url = element.select("img").attr("data-original")
-        val page_count = element.select(".postlist-imagenum").text()
         title = element.select("a.meta-title").text()
         setUrlWithoutDomain(element.select("a").attr("href"))
         initialized = true
     }
 
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        return Observable.just(manga)
+    }
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        throw UnsupportedOperationException()
+    }
     override fun popularMangaNextPageSelector() = "a.next"
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/page/$page", headers)
@@ -59,23 +64,18 @@ class FoamGirl() : ParsedHttpSource() {
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    // Details
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select("h1").text()
-    }
-
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        val imageCount = document.select(".post_title_topimg").text().split("(")[1].split('P')[0].toInt()
+        val imageCount = document.select(".post_title_topimg").text().substringAfter("(").substringBefore("P").toInt()
         val imageUrl = document.select(".imageclick-imgbox").attr("href").toHttpUrl()
-        val imageId = imageUrl.pathSegments[imageUrl.pathSize - 1].split(".")[0].toLong() / 10
+        val imagePrefix = imageUrl.pathSegments.last().substringBefore(".").toLong() / 10
         for (i in 0 until imageCount) {
             pages.add(
                 Page(
                     i,
                     imageUrl = imageUrl.newBuilder().apply {
                         removePathSegment(imageUrl.pathSize - 1)
-                        addPathSegment("${imageId}${i + 2}.jpg")
+                        addPathSegment("${imagePrefix}${i + 2}.jpg")
                     }.build().toString(),
                 ),
             )
@@ -87,7 +87,7 @@ class FoamGirl() : ParsedHttpSource() {
         setUrlWithoutDomain(element.select("link[rel=canonical]").attr("abs:href"))
         chapter_number = 0F
         name = "GALLERY"
-        date_upload = getDate(element.select("span.image-info-time").text())
+        date_upload = getDate(element.select("span.image-info-time").text().substring(1))
     }
 
     override fun chapterListSelector() = "html"
@@ -113,7 +113,7 @@ class FoamGirl() : ParsedHttpSource() {
 
     private fun getDate(str: String): Long {
         return try {
-            DATE_FORMAT.parse(str.substring(1))?.time ?: 0L
+            DATE_FORMAT.parse(str)?.time ?: 0L
         } catch (e: ParseException) {
             0L
         }
