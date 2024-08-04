@@ -30,12 +30,12 @@ class DarkRoomFansub : ZeistManga(
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", "$query")
             .build()
-        return GET("$url#override-search", headers)
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val url = response.request.url
-        if (url.toString().contains("override-search").not()) {
+        val pathSegments = response.request.url.pathSegments
+        if (pathSegments.contains("search").not()) {
             return super.searchMangaParse(response)
         }
 
