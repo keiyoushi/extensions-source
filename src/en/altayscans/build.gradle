@@ -1,0 +1,9 @@
+ext {
+    extName = 'Altay Scans'
+    extClass = '.AltayScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://altayscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
