@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name="eu.kanade.tachiyomi.multisrc.lectortmo.LectorTmoUrlActivity"
+            android:name="eu.kanade.tachiyomi.extension.es.lectortmo.LectorTmoUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -12,10 +12,10 @@
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:host="${SOURCEHOST}"
-                    android:pathPattern="/library/..*/..*/..*"
-                    android:scheme="${SOURCESCHEME}" />
+                <data android:scheme="https"/>
+                <data android:host="lectormanga.com"/>
+                <data android:host="visortmo.com"/>
+                <data android:pathPattern="/library/..*/..*/..*"/>
             </intent-filter>
         </activity>
     </application>
