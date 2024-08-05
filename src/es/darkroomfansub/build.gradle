@@ -1,0 +1,10 @@
+ext {
+    extName = 'Dark Room Fansub'
+    extClass = '.DarkRoomFansub'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://lector-darkroomfansub.blogspot.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
