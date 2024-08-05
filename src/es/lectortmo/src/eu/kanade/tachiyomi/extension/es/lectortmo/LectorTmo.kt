@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.lectortmo
+package eu.kanade.tachiyomi.extension.es.lectortmo
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -42,6 +42,7 @@ abstract class LectorTmo(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
+    private val rateLimitClient: OkHttpClient,
 ) : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences by lazy {
@@ -91,7 +92,7 @@ abstract class LectorTmo(
     }
 
     private val ignoreSslClient: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
+        rateLimitClient.newBuilder()
             .ignoreAllSSLErrors()
             .followRedirects(false)
             .rateLimit(
@@ -103,7 +104,7 @@ abstract class LectorTmo(
 
     private var lastCFDomain: String = ""
     override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
+        rateLimitClient.newBuilder()
             .addInterceptor { chain ->
                 val request = chain.request()
                 val url = request.url
@@ -244,6 +245,8 @@ abstract class LectorTmo(
         return super.getMangaUrl(manga)
     }
 
+    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url, tmoHeaders)
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.select("h2.element-subtitle").text()
         document.select("h5.card-title").let {
@@ -270,6 +273,8 @@ abstract class LectorTmo(
         if (lastCFDomain.isNotEmpty()) return lastCFDomain.also { lastCFDomain = "" }
         return super.getChapterUrl(chapter)
     }
+
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()

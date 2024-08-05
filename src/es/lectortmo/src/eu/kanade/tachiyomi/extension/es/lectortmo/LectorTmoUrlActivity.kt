@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.lectortmo
+package eu.kanade.tachiyomi.extension.es.lectortmo
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -19,7 +19,7 @@ class LectorTmoUrlActivity : Activity() {
 
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${LectorTmo.PREFIX_SLUG_SEARCH}$type/$id/$slug")
+                putExtra("query", "slug:$type/$id/$slug")
                 putExtra("filter", packageName)
             }
 
