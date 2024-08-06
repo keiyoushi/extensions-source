@@ -7,7 +7,7 @@ import java.util.Locale
 
 class HuntersScans : Madara(
     "Hunters Scan",
-    "https://huntersscan.xyz",
+    "https://huntersscan.net",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
