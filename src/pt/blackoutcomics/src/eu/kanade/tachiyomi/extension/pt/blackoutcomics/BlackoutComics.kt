@@ -167,9 +167,8 @@ class BlackoutComics : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         return document.select("div[class*=cap] canvas[height][width]").mapIndexed { index, item ->
             val attr = item.attributes()
-                .filter { it.value.contains("/assets/obras", ignoreCase = true) }
-                .map { it.key }
-                .firstOrNull() ?: throw Exception("Capitulo não pode ser obtido")
+                .firstOrNull { it.value.contains("/assets/obras", ignoreCase = true) }
+                ?.key ?: throw Exception("Capitulo não pode ser obtido")
 
             Page(index, "", item.absUrl(attr))
         }
