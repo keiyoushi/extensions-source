@@ -89,13 +89,7 @@ class SpyFakku : HttpSource() {
             }
         }
 
-        fun JsonElement.toName(changeCase: Boolean = false): String = this.jsonPrimitive.content.split(" ").joinToString(" ") {
-            if (changeCase) {
-                it.lowercase().replaceFirstChar { char -> char.titlecase() }
-            } else {
-                it
-            }
-        }
+        fun JsonElement.toName(): String = this.jsonPrimitive.content
 
         val hentaiIndexes = json.decodeFromJsonElement<HentaiIndexes>(data[0])
         val id = data[hentaiIndexes.id].jsonPrimitive.int
@@ -114,7 +108,7 @@ class SpyFakku : HttpSource() {
         val parodies = getNameIndex(hentaiIndexes.parodies) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
         val events = getNameIndex(hentaiIndexes.events) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
         val tags = getNameIndex(hentaiIndexes.tags) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val images = getNameIndex(hentaiIndexes.images) { data[json.decodeFromJsonElement<ImageIndex>(it).filename].toName(false) }!!
+        val images = getNameIndex(hentaiIndexes.images) { data[json.decodeFromJsonElement<ImageIndex>(it).filename].toName() }!!
 
         return Hentai(id, hash, title, description, released_at, created_at, pages, size, publishers, artists, circles, magazines, parodies, events, tags, images)
     }
