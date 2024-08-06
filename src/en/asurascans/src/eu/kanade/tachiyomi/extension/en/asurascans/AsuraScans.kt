@@ -258,7 +258,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div > img[alt=chapter]").mapIndexed { i, element ->
+        return document.select("div > img[alt*=chapter]").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
     }
