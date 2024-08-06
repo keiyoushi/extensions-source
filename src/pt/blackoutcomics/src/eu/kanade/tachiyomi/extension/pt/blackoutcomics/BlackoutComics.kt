@@ -16,6 +16,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -31,6 +32,14 @@ class BlackoutComics : ParsedHttpSource() {
 
     override val client by lazy {
         network.client.newBuilder()
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                val request = response.request
+                if (request.url.pathSegments.contains("login")) {
+                    throw IOException("Faça o login na WebView para acessar o contéudo")
+                }
+                response
+            }
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
     }
@@ -40,6 +49,7 @@ class BlackoutComics : ParsedHttpSource() {
             .add("Referer", "$baseUrl/")
             .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
             .add("Accept-Language", "en-US,en;q=0.5")
+            .add("X-Requested-With", randomString((1..20).random()))
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/ranking")
@@ -155,8 +165,12 @@ class BlackoutComics : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div[class^=chapter-image] canvas[height][width][data-src^=/assets/obras/]").mapIndexed { index, item ->
-            Page(index, "", item.absUrl("data-src"))
+        return document.select("div[class*=cap] canvas[height][width]").mapIndexed { index, item ->
+            val attr = item.attributes()
+                .firstOrNull { it.value.contains("/assets/obras", ignoreCase = true) }
+                ?.key ?: throw Exception("Capitulo não pode ser obtido")
+
+            Page(index, "", item.absUrl(attr))
         }
     }
 
@@ -168,6 +182,11 @@ class BlackoutComics : ParsedHttpSource() {
     private fun String.toDate(): Long {
         return runCatching { DATE_FORMATTER.parse(trim())?.time }
             .getOrNull() ?: 0L
+    }
+
+    private fun randomString(length: Int): String {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        return List(length) { charPool.random() }.joinToString("")
     }
 
     companion object {
