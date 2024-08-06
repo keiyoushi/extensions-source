@@ -110,7 +110,7 @@ class SpyFakku : HttpSource() {
         val parodies = getNameIndex(hentaiIndexes.parodies) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
         val events = getNameIndex(hentaiIndexes.events) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
         val tags = getNameIndex(hentaiIndexes.tags) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val images = getNameIndex(hentaiIndexes.images) { data[json.decodeFromJsonElement<ImageIndex>(it).filename].toName() }!!
+        val images = getNameIndex(hentaiIndexes.images) { data[json.decodeFromJsonElement<ImageIndex>(it).filename] }!!
 
         return Hentai(id, hash, title, description, released_at, created_at, pages, size, publishers, artists, circles, magazines, parodies, events, tags, images)
     }
@@ -233,7 +233,7 @@ class SpyFakku : HttpSource() {
         return this.ifEmpty { null }
     }
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.removeSuffix(baseApiEnd)
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
@@ -253,7 +253,7 @@ class SpyFakku : HttpSource() {
         )
     }
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.removeSuffix(baseApiEnd)
 
     override fun pageListParse(response: Response): List<Page> {
         val hentai = getManga(response.parseAs<HentaiLib>().data)
