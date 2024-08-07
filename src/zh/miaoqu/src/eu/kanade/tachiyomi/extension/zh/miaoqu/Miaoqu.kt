@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.zh.miaoshang
+package eu.kanade.tachiyomi.extension.zh.miaoqu
 
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMS
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMSConfig
@@ -9,17 +9,17 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.Jsoup
 
-class Miaoshang : MCCMS(
-    "喵上漫画",
-    "https://www.miaoshangmanhua.com",
+class Miaoqu : MCCMS(
+    "喵趣漫画",
+    "https://www.miaoqumh.com",
     "zh",
-    MiaoshangMCCMSConfig(),
+    MiaoquMCCMSConfig(),
 ) {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 
-    private class MiaoshangMCCMSConfig : MCCMSConfig(
+    private class MiaoquMCCMSConfig : MCCMSConfig(
         textSearchOnlyPageOne = true,
         lazyLoadImageAttr = "data-src",
     ) {
