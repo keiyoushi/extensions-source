@@ -1,9 +1,9 @@
 ext {
-    extName = 'MangaClick'
-    extClass = '.MangaClick'
+    extName = 'MangaHall'
+    extClass = '.MangaHall'
     themePkg = 'madara'
-    baseUrl = 'https://mangaclick.org'
-    overrideVersionCode = 0
+    baseUrl = 'https://mangahall.org'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
