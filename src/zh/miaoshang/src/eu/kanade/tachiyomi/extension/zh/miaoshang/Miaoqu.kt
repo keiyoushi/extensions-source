@@ -21,7 +21,7 @@ class Miaoqu : MCCMS(
 
     override val id = 589887691505478724
 
-    private class MiaoshangMCCMSConfig : MCCMSConfig(
+    private class MiaoquMCCMSConfig : MCCMSConfig(
         textSearchOnlyPageOne = true,
         lazyLoadImageAttr = "data-src",
     ) {
