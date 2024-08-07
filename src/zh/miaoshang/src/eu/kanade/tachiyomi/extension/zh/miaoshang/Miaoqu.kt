@@ -17,7 +17,9 @@ class Miaoqu : MCCMS(
 ) {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
-        .build()
+        .build()     
+          
+    override val id = 589887691505478724
 
     private class MiaoquMCCMSConfig : MCCMSConfig(
         textSearchOnlyPageOne = true,
@@ -41,7 +43,5 @@ class Miaoqu : MCCMS(
                 }
             }
         }
-    }
-    
-    override val id = 589887691505478724
+    }    
 }
