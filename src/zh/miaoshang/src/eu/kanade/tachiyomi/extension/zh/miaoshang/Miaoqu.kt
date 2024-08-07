@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.zh.miaoqu
+package eu.kanade.tachiyomi.extension.zh.miaoshang
 
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMS
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMSConfig
