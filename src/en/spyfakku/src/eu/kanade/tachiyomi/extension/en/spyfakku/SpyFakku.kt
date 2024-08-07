@@ -89,9 +89,7 @@ class SpyFakku : HttpSource() {
             }
         }
 
-        fun JsonElement.toName(): String = this.jsonPrimitive.content.split(" ").joinToString(" ") {
-            it.lowercase().replaceFirstChar { char -> char.titlecase() }
-        }
+        fun JsonElement.toName(): String = this.jsonPrimitive.content
 
         val hentaiIndexes = json.decodeFromJsonElement<HentaiIndexes>(data[0])
         val id = data[hentaiIndexes.id].jsonPrimitive.int
@@ -233,7 +231,7 @@ class SpyFakku : HttpSource() {
         return this.ifEmpty { null }
     }
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.removeSuffix(baseApiEnd)
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
@@ -253,7 +251,7 @@ class SpyFakku : HttpSource() {
         )
     }
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.removeSuffix(baseApiEnd)
 
     override fun pageListParse(response: Response): List<Page> {
         val hentai = getManga(response.parseAs<HentaiLib>().data)
