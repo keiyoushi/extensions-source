@@ -4,8 +4,16 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class ManhwaDesu : MangaThemesia("ManhwaDesu", "https://manhwadesu.one", "id", "/komik") {
+class ManhwaDesu : MangaThemesia(
+    "ManhwaDesu",
+    "https://manhwadesu.cc",
+    "id",
+    "/komik",
+    SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
+) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
