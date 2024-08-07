@@ -1,7 +1,7 @@
 ext {
     extName = 'Nekopost'
     extClass = '.Nekopost'
-    extVersionCode = 11
+    extVersionCode = 12
     isNsfw = true
 }
 
