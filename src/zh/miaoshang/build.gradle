@@ -1,9 +1,9 @@
 ext {
-    extName = 'Miaoshang Manhua'
-    extClass = '.Miaoshang'
+    extName = 'Miaoqu Manhua'
+    extClass = '.Miaoqu'
     themePkg = 'mccms'
-    baseUrl = 'https://www.miaoshangmanhua.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://www.miaoqumh.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"

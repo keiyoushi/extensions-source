@@ -10,14 +10,16 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 
 class Miaoshang : MCCMS(
-    "喵上漫画",
-    "https://www.miaoshangmanhua.com",
+    "喵趣漫画",
+    "https://www.miaoqumh.com",
     "zh",
-    MiaoshangMCCMSConfig(),
+    MiaoquMCCMSConfig(),
 ) {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
+
+    override val id = 589887691505478724
 
     private class MiaoshangMCCMSConfig : MCCMSConfig(
         textSearchOnlyPageOne = true,
