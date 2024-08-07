@@ -3,7 +3,7 @@ ext {
     extClass = '.Miaoqu'
     themePkg = 'mccms'
     baseUrl = 'https://www.miaoqumh.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
