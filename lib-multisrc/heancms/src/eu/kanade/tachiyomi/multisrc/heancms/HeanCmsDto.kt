@@ -103,6 +103,7 @@ class HeanCmsChapterPayloadDto(
 class HeanCmsChapterDto(
     private val id: Int,
     @SerialName("chapter_name") private val name: String,
+    @SerialName("chapter_title") private val title: String? = null,
     @SerialName("chapter_slug") private val slug: String,
     @SerialName("created_at") private val createdAt: String,
     val price: Int? = null,
@@ -113,6 +114,10 @@ class HeanCmsChapterDto(
         dateFormat: SimpleDateFormat,
     ): SChapter = SChapter.create().apply {
         name = this@HeanCmsChapterDto.name.trim()
+
+        if (title != null) {
+            name += " - ${title.trim()}"
+        }
 
         if (price != 0) {
             name += " \uD83D\uDD12"
