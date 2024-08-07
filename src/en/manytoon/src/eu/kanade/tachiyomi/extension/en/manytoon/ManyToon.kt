@@ -21,6 +21,6 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
-    
+
     override fun searchMangaSelector() = "div.page-item-detail"
 }
