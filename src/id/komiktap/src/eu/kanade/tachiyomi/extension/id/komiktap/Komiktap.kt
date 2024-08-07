@@ -5,11 +5,31 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Cookie
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
 
 class Komiktap : MangaThemesia("Komiktap", "https://komiktap.info", "id") {
-    override val client = super.client.newBuilder().addInterceptor(::sucuriInterceptor).build()
+
+    override val client = super.client.newBuilder()
+        .addInterceptor(::sucuriInterceptor)
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            val mime = response.headers["Content-Type"]
+            if (response.isSuccessful) {
+                if (mime != "application/octet-stream") {
+                    return@addInterceptor response
+                }
+                // Fix image content type
+                val type = IMG_CONTENT_TYPE.toMediaType()
+                val body = response.body.bytes().toResponseBody(type)
+                return@addInterceptor response.newBuilder().body(body)
+                    .header("Content-Type", IMG_CONTENT_TYPE).build()
+            }
+            response
+        }
+        .build()
 
     // Taken from es/ManhwasNet
     private fun sucuriInterceptor(chain: Interceptor.Chain): Response {
@@ -45,3 +65,5 @@ class Komiktap : MangaThemesia("Komiktap", "https://komiktap.info", "id") {
         return response
     }
 }
+
+private const val IMG_CONTENT_TYPE = "image/jpeg"
