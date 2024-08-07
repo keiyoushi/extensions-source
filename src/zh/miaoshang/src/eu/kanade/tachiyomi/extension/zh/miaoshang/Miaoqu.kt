@@ -9,7 +9,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.Jsoup
 
-class Miaoshang : MCCMS(
+class Miaoqu : MCCMS(
     "喵趣漫画",
     "https://www.miaoqumh.com",
     "zh",
