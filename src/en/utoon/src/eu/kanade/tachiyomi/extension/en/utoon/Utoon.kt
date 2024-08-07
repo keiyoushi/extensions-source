@@ -17,6 +17,8 @@ class Utoon : Madara(
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
+    override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)"
+
     override val chapterUrlSelector = "div > a"
 
     override fun chapterFromElement(element: Element): SChapter {
