@@ -13,7 +13,6 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
     override val sendViewCount = false
     override val fetchGenres = false
 
-    override fun searchMangaSelector() = "div.c-tabs-item .col-6"
     override fun oldXhrChaptersRequest(mangaId: String): Request {
         val form = FormBody.Builder()
             .add("action", "ajax_chap")
@@ -22,4 +21,6 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
+    
+    override fun searchMangaSelector() = "div.page-item-detail"
 }
