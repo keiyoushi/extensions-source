@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.zmanga.ZManga
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class CrotPedia : ZManga("CrotPedia", "https://crotpedia.net", "id", dateFormat = SimpleDateFormat("MMM d, yyyy", Locale("id"))) {
+class CrotPedia : ZManga("CrotPedia", "https://crotpedia.net", "id", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id"))) {
 
     override val hasProjectPage = false
 }
