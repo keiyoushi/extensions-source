@@ -3,7 +3,7 @@ ext {
     extClass = '.MikrokosmosFansub'
     themePkg = 'zeistmanga'
     baseUrl = 'https://mikrokosmosfb.blogspot.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
