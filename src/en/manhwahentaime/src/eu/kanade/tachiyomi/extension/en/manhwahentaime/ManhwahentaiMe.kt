@@ -55,23 +55,28 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
 
     override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
+        var alr = false
         url.addQueryParameter("s", query)
         url.addQueryParameter("post_type", "wp-manga")
+        
         filters.forEach { filter ->
             when (filter) {
                 is AuthorFilter -> {
-                    if (filter.state.isNotBlank()) {
+                    if (filter.state.isNotBlank() && !alr) {
                         url.addPathSegments("manga-author/${filter.state.replace(" ", "-")}")
+                        alr = true
                     }
                 }
                 is ArtistFilter -> {
-                    if (filter.state.isNotBlank()) {
+                    if (filter.state.isNotBlank() && !alr) {
                         url.addQueryParameter("artist", filter.state.replace(" ", "-"))
+                        alr = true
                     }
                 }
                 is YearFilter -> {
-                    if (filter.state.isNotBlank()) {
+                    if (filter.state.isNotBlank() && !alr) {
                         url.addPathSegments("webtoon-release/${filter.state}")
+                        alr = true
                     }
                 }
                 is OrderByFilter -> {
