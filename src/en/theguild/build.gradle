@@ -1,9 +1,0 @@
-ext {
-    extName = 'The Guild'
-    extClass = '.TheGuild'
-    themePkg = 'madara'
-    baseUrl = 'https://theguildscans.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
