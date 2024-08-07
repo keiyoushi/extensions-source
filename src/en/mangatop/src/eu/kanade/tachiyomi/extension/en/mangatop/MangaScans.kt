@@ -28,15 +28,17 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class MangaTop : ParsedHttpSource() {
+class MangaScans : ParsedHttpSource() {
 
-    override val name = "MangaTop"
+    override val name = "MangaScans"
 
-    override val baseUrl = "https://mangatop.to"
+    override val baseUrl = "https://mangascans.to"
 
     override val lang = "en"
 
     override val supportsLatest = true
+
+    override val id = 85127596998931837
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::tokenInterceptor)

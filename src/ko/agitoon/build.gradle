@@ -1,8 +1,0 @@
-ext {
-    extName = 'AgiToon'
-    extClass = '.AgiToon'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
