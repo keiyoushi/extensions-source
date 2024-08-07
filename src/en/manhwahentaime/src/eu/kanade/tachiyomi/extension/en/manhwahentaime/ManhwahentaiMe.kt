@@ -58,7 +58,7 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         var alr = false
         url.addQueryParameter("s", query)
         url.addQueryParameter("post_type", "wp-manga")
-        
+
         filters.forEach { filter ->
             when (filter) {
                 is AuthorFilter -> {
