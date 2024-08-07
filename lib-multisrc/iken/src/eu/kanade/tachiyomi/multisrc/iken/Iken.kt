@@ -135,7 +135,7 @@ abstract class Iken(
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        return document.select("main section > img").mapIndexed { idx, img ->
+        return document.select("main section img").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.absUrl("src"))
         }
     }
