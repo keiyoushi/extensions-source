@@ -28,17 +28,16 @@ import java.util.Locale
 
 class Nekopost : HttpSource() {
     private val json: Json by injectLazy()
-    override val baseUrl: String = "https://www.nekopost.net/project"
+    override val baseUrl: String = "https://www.nekopost.net"
 
     private val latestMangaEndpoint: String = "https://api.osemocphoto.com/frontAPI/getLatestChapter/m"
     private val projectDataEndpoint: String = "https://api.osemocphoto.com/frontAPI/getProjectInfo"
     private val fileHost: String = "https://www.osemocphoto.com"
-    private val nekopostUrl = "https://www.nekopost.net"
 
     override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder(): Headers.Builder {
-        return super.headersBuilder().add("Referer", baseUrl)
+        return super.headersBuilder().add("Referer", "$baseUrl/")
     }
 
     private val existingProject: HashSet<String> = HashSet()
@@ -69,6 +68,8 @@ class Nekopost : HttpSource() {
         return GET("$projectDataEndpoint/${manga.url}", headers)
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
+
     override fun mangaDetailsParse(response: Response): SManga {
         val responseBody = response.body
         val projectInfo: RawProjectInfo = json.decodeFromString(responseBody.string())
@@ -95,7 +96,7 @@ class Nekopost : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val headers = Headers.headersOf("accept", "*/*", "content-type", "text/plain;charset=UTF-8", "origin", nekopostUrl)
+        val headers = Headers.headersOf("accept", "*/*", "content-type", "text/plain;charset=UTF-8", "origin", baseUrl)
         return GET("$projectDataEndpoint/${manga.url}", headers)
     }
 
@@ -126,6 +127,9 @@ class Nekopost : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         return GET("$fileHost/collectManga/${chapter.url}", headers)
     }
+
+    override fun getChapterUrl(chapter: SChapter) =
+        "$baseUrl/manga/${chapter.url.substringBefore("/")}/${chapter.chapter_number.toString().removeSuffix(".0")}"
 
     override fun pageListParse(response: Response): List<Page> {
         val responseBody = response.body
@@ -174,9 +178,9 @@ class Nekopost : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val headers = Headers.headersOf("accept", "*/*", "content-type", "text/plain;charset=UTF-8", "origin", nekopostUrl)
+        val headers = Headers.headersOf("accept", "*/*", "content-type", "text/plain;charset=UTF-8", "origin", baseUrl)
         val requestBody = Json.encodeToString(SearchRequest(query, page)).toRequestBody()
-        return POST("$nekopostUrl/api/explore/search", headers, requestBody)
+        return POST("$baseUrl/api/explore/search", headers, requestBody)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
