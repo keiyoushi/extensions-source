@@ -2,8 +2,8 @@ ext {
     extName = 'ManhwaDesu'
     extClass = '.ManhwaDesu'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://manhwadesu.one'
-    overrideVersionCode = 4
+    baseUrl = 'https://manhwadesu.cc'
+    overrideVersionCode = 5
     isNsfw = true
 }
 
