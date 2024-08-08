@@ -3,7 +3,7 @@ ext {
     extClass = '.ManyToon'
     themePkg = 'madara'
     baseUrl = 'https://manytoon.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 
