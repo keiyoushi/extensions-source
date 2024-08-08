@@ -3,7 +3,7 @@ ext {
     extClass = '.HunlightScans'
     themePkg = 'madara'
     baseUrl = 'https://hunlight.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
