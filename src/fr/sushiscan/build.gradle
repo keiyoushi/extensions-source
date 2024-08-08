@@ -3,7 +3,11 @@ ext {
     extClass = '.SushiScan'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sushiscan.net'
-    overrideVersionCode = 11
+    overrideVersionCode = 12
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib:randomua')
+}
