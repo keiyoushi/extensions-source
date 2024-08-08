@@ -21,13 +21,15 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RizzComic : MangaThemesiaAlt(
-    "Rizz Comic",
-    "https://rizzfables.com",
+class RealMoasis : MangaThemesiaAlt(
+    "Real Moasis",
+    "https://realmoasis.com",
     "en",
     mangaUrlDirectory = "/series",
     dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
 ) {
+
+    override val id: Long = 1222303582140858680
 
     override val client = super.client.newBuilder()
         .rateLimit(1, 3)
@@ -51,8 +53,8 @@ class RizzComic : MangaThemesiaAlt(
             .set("X-API-Request", "1")
             .build()
     }
-
-    override val versionId = 2
+    
+    override val versionId = 3
 
     override val slugRegex = Regex("""^(r\d+-)""")
 
