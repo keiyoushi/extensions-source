@@ -2,8 +2,8 @@ ext {
     extName = 'Gri Melek'
     extClass = '.Siyahmelek'
     themePkg = 'madara'
-    baseUrl = 'https://grimelek.mom'
-    overrideVersionCode = 7
+    baseUrl = 'https://grimelek.me'
+    overrideVersionCode = 8
     isNsfw = true
 }
 

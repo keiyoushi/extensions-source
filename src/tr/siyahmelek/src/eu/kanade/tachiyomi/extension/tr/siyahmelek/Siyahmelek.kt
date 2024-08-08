@@ -9,7 +9,7 @@ import java.util.Locale
 
 class Siyahmelek : Madara(
     "Gri Melek",
-    "https://grimelek.mom",
+    "https://grimelek.me",
     "tr",
     SimpleDateFormat("dd MMM yyyy", Locale("tr")),
 ) {
