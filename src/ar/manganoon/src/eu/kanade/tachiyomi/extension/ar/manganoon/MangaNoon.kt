@@ -7,7 +7,7 @@ import java.util.Calendar
 
 class MangaNoon : MangaThemesia(
     "مانجا نون",
-    "https://manjanoon.co",
+    "https://noonscan.net",
     "ar",
 ) {
 
