@@ -1,8 +1,9 @@
 ext {
     extName = 'HentaiDex'
     extClass = '.HentaiDex'
+    themePkg = 'mangathemesia'
     baseUrl = 'https://dexhentai.com'
-    extVersionCode = 1
+    overrideVersionCode  = 1
     isNsfw = true
 }
 
