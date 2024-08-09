@@ -8,7 +8,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class Ngomik : MangaThemesia("Ngomik", "https://ngomik.net", "id", "/manga") {
+class Ngomik : MangaThemesia("Ngomik", "https://ngomik.mom", "id", "/manga") {
 
     private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36"
 
