@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangapro
 
-import android.util.Log
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,7 +17,6 @@ class MangaPro : MangaThemesia(
 
     override fun pageListParse(document: Document): List<Page> {
         return super.pageListParse(document).onEach {
-            Log.d(name, it.imageUrl.toString())
             val httpUrl = it.imageUrl!!.toHttpUrl()
 
             if (wpImgRegex.containsMatchIn(httpUrl.host)) {
@@ -38,7 +36,6 @@ class MangaPro : MangaThemesia(
                     }
                 }.toString()
             }
-            Log.d(name, it.imageUrl.toString())
         }
     }
 }
