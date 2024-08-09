@@ -22,7 +22,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class RealMoasis : MangaThemesiaAlt(
-    "Real Moasis",
+    "Realm Oasis",
     "https://realmoasis.com",
     "en",
     mangaUrlDirectory = "/series",

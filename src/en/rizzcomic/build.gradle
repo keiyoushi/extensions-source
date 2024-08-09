@@ -1,5 +1,5 @@
 ext {
-    extName = 'Real Moasis'
+    extName = 'Realm Oasis'
     extClass = '.RealMoasis'
     themePkg = 'mangathemesia'
     baseUrl = 'https://realmoasis.com'
