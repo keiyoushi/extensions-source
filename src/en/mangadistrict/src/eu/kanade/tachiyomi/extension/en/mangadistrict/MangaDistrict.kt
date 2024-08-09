@@ -99,8 +99,16 @@ class MangaDistrict :
     private fun getImgRes() = preferences.getString(IMG_RES_PREF, IMG_RES_DEFAULT)!!
 
     private var SharedPreferences.dates: MutableMap<String, Long>
-        get() = json.decodeFromString(getString(DATE_MAP, "{}") ?: "{}")
-        set(newVal) = edit().putString(DATE_MAP, json.encodeToString(newVal)).apply()
+        get() = try {
+            json.decodeFromString(getString(DATE_MAP, "{}") ?: "{}")
+        } catch (_: Exception) {
+            mutableMapOf()
+        }
+        set(newVal) {
+            val currentMap = dates
+            currentMap.putAll(newVal)
+            edit().putString(DATE_MAP, json.encodeToString(currentMap)).apply()
+        }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
