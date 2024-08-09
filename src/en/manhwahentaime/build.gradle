@@ -3,7 +3,7 @@ ext {
     extClass = '.ManhwahentaiMe'
     themePkg = 'madara'
     baseUrl = 'https://manhwahentai.me'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = true
 }
 
