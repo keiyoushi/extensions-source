@@ -85,7 +85,7 @@ class HentaiDex : ParsedHttpSource() {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
         with(element.selectFirst("img")!!) {
             title = this.attr("title")
-            thumbnail_url = this.absUrl("src").substringBefore("?")
+            thumbnail_url = this.absUrl("src")
         }
     }
 
@@ -166,6 +166,7 @@ class HentaiDex : ParsedHttpSource() {
             "Completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
+        thumbnail_url = document.selectFirst(".thumb > img")?.absUrl("src")
     }
 
     // Chapters
