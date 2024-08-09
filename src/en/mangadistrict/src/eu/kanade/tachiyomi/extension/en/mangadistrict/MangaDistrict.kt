@@ -7,13 +7,19 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class MangaDistrict :
     Madara(
@@ -66,8 +72,43 @@ class MangaDistrict :
         }
     }
 
+    override fun chapterFromElement(element: Element): SChapter {
+        return super.chapterFromElement(element).apply {
+            preferences.dates[url]?.also {
+                date_upload = it
+            }
+        }
+    }
+
+    private val pageListDate = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        try {
+            preferences.dates[document.location()] = pageListDate.parse(
+                document.selectFirst("meta[property=og:updated_time]")!!
+                    .attr("content").substringBeforeLast("+"),
+            )!!.time
+        } catch (_: Exception) {}
+
+        return super.pageListParse(document)
+    }
+
     private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
     private fun getImgRes() = preferences.getString(IMG_RES_PREF, IMG_RES_DEFAULT)!!
+
+    private var SharedPreferences.dates: MutableMap<String, Long>
+        get() = try {
+            json.decodeFromString(getString(DATE_MAP, "{}") ?: "{}")
+        } catch (_: Exception) {
+            mutableMapOf()
+        }
+        set(newVal) {
+            val currentMap = dates
+            currentMap.putAll(newVal)
+            edit().putString(DATE_MAP, json.encodeToString(currentMap)).apply()
+        }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -105,5 +146,7 @@ class MangaDistrict :
         private const val IMG_RES_HIGH = "high"
         private const val IMG_RES_FULL = "full"
         private const val IMG_RES_DEFAULT = IMG_RES_ALL
+
+        private const val DATE_MAP = "date_saved"
     }
 }
