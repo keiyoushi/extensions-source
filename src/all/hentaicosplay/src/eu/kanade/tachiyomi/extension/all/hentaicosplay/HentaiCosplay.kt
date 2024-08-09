@@ -24,7 +24,7 @@ class HentaiCosplay : HttpSource() {
 
     override val name = "Hentai Cosplay"
 
-    override val baseUrl = "https://hentai-cosplays.com"
+    override val baseUrl = "https://hentai-cosplay-xxx.com"
 
     override val lang = "all"
 
