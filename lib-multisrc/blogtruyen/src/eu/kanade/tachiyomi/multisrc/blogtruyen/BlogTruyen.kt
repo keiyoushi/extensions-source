@@ -291,7 +291,7 @@ abstract class BlogTruyen(
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        document.select("#content > img").forEachIndexed { i, e ->
+        document.select(".content > img, #content > img").forEachIndexed { i, e ->
             pages.add(Page(i, imageUrl = e.absUrl("src")))
         }
 
