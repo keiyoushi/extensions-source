@@ -3,7 +3,7 @@ ext {
     extClass = '.InstaManhwa'
     themePkg = 'madara'
     baseUrl = 'https://www.instamanhwa.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
