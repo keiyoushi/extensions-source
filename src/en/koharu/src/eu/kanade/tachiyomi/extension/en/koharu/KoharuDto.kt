@@ -59,9 +59,9 @@ class Data(
 
 @Serializable
 class DataKey(
-    val id: Int,
+    val id: Int? = null,
     val size: Double = 0.0,
-    val public_key: String,
+    val public_key: String? = null,
 ) {
     fun readableSize() = when {
         size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
