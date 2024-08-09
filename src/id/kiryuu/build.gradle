@@ -3,7 +3,7 @@ ext {
     extClass = '.Kiryuu'
     themePkg = 'mangathemesia'
     baseUrl = 'https://kiryuu.org'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
 }
 
 apply from: "$rootDir/common.gradle"
