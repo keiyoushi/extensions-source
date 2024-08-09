@@ -1,0 +1,9 @@
+ext {
+    extName = 'HentaiDex'
+    extClass = '.HentaiDex'
+    baseUrl = 'https://dexhentai.com'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
