@@ -71,7 +71,7 @@ class TempleScan : HttpSource() {
 
         with(script) {
             val raw = substringAfter("""allComics":""")
-                .substringBeforeLast("}]]")
+                .substringBeforeLast("}]")
 
             seriesCache = raw.parseAs()
         }
