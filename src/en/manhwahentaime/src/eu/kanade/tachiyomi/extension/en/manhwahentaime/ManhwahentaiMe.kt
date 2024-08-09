@@ -54,43 +54,45 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         }
 
     override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
-        var alr = false
-        url.addQueryParameter("s", query)
-        url.addQueryParameter("post_type", "wp-manga")
+        val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder().apply {
+            var alr = false
+            addQueryParameter("s", query)
+            addQueryParameter("post_type", "wp-manga")
 
-        filters.forEach { filter ->
-            when (filter) {
-                is AuthorFilter -> {
-                    if (filter.state.isNotBlank() && !alr) {
-                        url.addPathSegments("manga-author/${filter.state.replace(" ", "-")}")
-                        alr = true
+            filters.forEach { filter ->
+                when (filter) {
+                    is AuthorFilter -> {
+                        if (filter.state.isNotBlank() && !alr) {
+                            addPathSegments("manga-author/${filter.state.replace(" ", "-")}")
+                            alr = true
+                        }
                     }
-                }
-                is ArtistFilter -> {
-                    if (filter.state.isNotBlank() && !alr) {
-                        url.addQueryParameter("artist", filter.state.replace(" ", "-"))
-                        alr = true
+                    is ArtistFilter -> {
+                        if (filter.state.isNotBlank() && !alr) {
+                            addQueryParameter("artist", filter.state.replace(" ", "-"))
+                            alr = true
+                        }
                     }
-                }
-                is YearFilter -> {
-                    if (filter.state.isNotBlank() && !alr) {
-                        url.addPathSegments("webtoon-release/${filter.state}")
-                        alr = true
+                    is YearFilter -> {
+                        if (filter.state.isNotBlank() && !alr) {
+                            addPathSegments("webtoon-release/${filter.state}")
+                            alr = true
+                        }
                     }
-                }
-                is OrderByFilter -> {
-                    url.addQueryParameter("m_orderby", filter.toUriPart())
-                }
-                is GenreConditionFilter -> {
-                    val name = filter.toUriPart()
-                    if (name != "all") {
-                        url.addPathSegments("webtoon-genre/$name")
+                    is OrderByFilter -> {
+                        addQueryParameter("m_orderby", filter.toUriPart())
                     }
+                    is GenreConditionFilter -> {
+                        val name = filter.toUriPart()
+                        if (name != "all" && !alr) {
+                            addPathSegments("webtoon-genre/$name")
+                        }
+                    }
+                    else -> {}
                 }
-                else -> {}
             }
         }
+
         return GET(url.build(), headers)
     }
 
@@ -163,4 +165,5 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
     }
 
     override fun searchMangaSelector() = "div.page-item-detail"
+    override fun popularMangaNextPageSelector() = "a.next"
 }
