@@ -11,14 +11,6 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -32,11 +24,11 @@ class SpyFakku : HttpSource() {
 
     override val name = "SpyFakku"
 
-    override val baseUrl = "https://w1.fakku.cc"
+    override val baseUrl = "https://fakku.cc"
 
-    private val baseImageUrl = "https://i1.fakku.cc/image"
+    private val baseImageUrl = "https://cdn.fakku.cc/image"
 
-    private val baseApiEnd = "/__data.json"
+    private val baseApiUrl = "$baseUrl/api"
 
     override val lang = "en"
 
@@ -53,75 +45,28 @@ class SpyFakku : HttpSource() {
         .set("Origin", baseUrl)
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl$baseApiEnd?sort=released_at&page=$page", headers)
+        return GET("$baseApiUrl/library?sort=released_at&page=$page", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val library = response.parseAs<HentaiLib>()
-        val data = getMangasDatas(library.data)
 
-        val mangas = data.first.map(::popularManga)
+        val mangas = library.archives.map(::popularManga)
 
-        val hasNextPage = data.second
+        val hasNextPage = library.archives.isNotEmpty()
 
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun getMangasDatas(data: List<JsonElement>): Pair<List<ShortHentai>, Boolean> {
-        val indexes = json.decodeFromJsonElement<Indexes>(data[0].jsonObject)
-        val indexesIndexes = json.decodeFromJsonElement<List<Int>>(data[indexes.archives])
-        val hasNext = (data[indexes.page].jsonPrimitive.int * 24) < data[indexes.total].jsonPrimitive.int
-
-        return indexesIndexes.map {
-            val hentaiIndexes = json.decodeFromJsonElement<ShortHentaiIndexes>(data[it])
-            val id = data[hentaiIndexes.id].jsonPrimitive.content
-            val hash = data[hentaiIndexes.hash].jsonPrimitive.content
-            val title = data[hentaiIndexes.title].jsonPrimitive.content
-
-            ShortHentai(id, hash, title)
-        } to hasNext
-    }
-
-    private fun getManga(data: List<JsonElement>): Hentai {
-        fun <T> getNameIndex(index: Int?, decode: (JsonElement) -> T): List<T>? {
-            return index?.let { idx ->
-                data[idx].jsonArray.map { el -> decode(data[el.jsonPrimitive.int]) }
-            }
-        }
-
-        fun JsonElement.toName(): String = this.jsonPrimitive.content
-
-        val hentaiIndexes = json.decodeFromJsonElement<HentaiIndexes>(data[0])
-        val id = data[hentaiIndexes.id].jsonPrimitive.int
-        val hash = data[hentaiIndexes.hash].jsonPrimitive.content
-        val title = data[hentaiIndexes.title].jsonPrimitive.content
-        val description = data[hentaiIndexes.description].jsonPrimitive.contentOrNull
-        val released_at = data[hentaiIndexes.released_at].jsonPrimitive.content
-        val created_at = data[hentaiIndexes.created_at].jsonPrimitive.content
-        val pages = data[hentaiIndexes.pages].jsonPrimitive.int
-        val size = data[hentaiIndexes.size].jsonPrimitive.long
-
-        val publishers = getNameIndex(hentaiIndexes.publishers) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val artists = getNameIndex(hentaiIndexes.artists) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val circles = getNameIndex(hentaiIndexes.circles) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val magazines = getNameIndex(hentaiIndexes.magazines) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val parodies = getNameIndex(hentaiIndexes.parodies) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val events = getNameIndex(hentaiIndexes.events) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val tags = getNameIndex(hentaiIndexes.tags) { data[json.decodeFromJsonElement<NameIndex>(it).name].toName() }
-        val images = getNameIndex(hentaiIndexes.images) { data[json.decodeFromJsonElement<ImageIndex>(it).filename].toName() }!!
-
-        return Hentai(id, hash, title, description, released_at, created_at, pages, size, publishers, artists, circles, magazines, parodies, events, tags, images)
-    }
-
     private fun popularManga(hentai: ShortHentai) = SManga.create().apply {
-        setUrlWithoutDomain("$baseUrl/g/${hentai.id}" + baseApiEnd)
+        setUrlWithoutDomain("$baseUrl/g/${hentai.id}")
         title = hentai.title
         thumbnail_url = "$baseImageUrl/${hentai.hash}/1/c"
     }
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl$baseApiEnd".toHttpUrl().newBuilder().apply {
+        val url = "$baseApiUrl/library".toHttpUrl().newBuilder().apply {
             val terms = mutableListOf(query.trim())
 
             filters.forEach { filter ->
@@ -150,13 +95,13 @@ class SpyFakku : HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }
-        return GET(baseUrl + manga.url, headers)
+        manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }.replace("/__data.json", "")
+        return GET(baseApiUrl + manga.url, headers)
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }
-        return GET(baseUrl + chapter.url, headers)
+        chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }.replace("/__data.json", "")
+        return GET(baseApiUrl + chapter.url, headers)
     }
 
     override fun getFilterList() = getFilters()
@@ -165,34 +110,34 @@ class SpyFakku : HttpSource() {
     private val releasedAtFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
-    private val createdAtFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ENGLISH).apply {
+    private val createdAtFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
     private fun Hentai.toSManga() = SManga.create().apply {
         title = this@toSManga.title
         url = "/g/$id"
-        author = (circles?.emptyToNull() ?: artists)?.joinToString()
-        artist = artists?.joinToString()
-        genre = tags?.joinToString()
+        author = (circles?.emptyToNull() ?: artists)?.joinToString { it.name }
+        artist = artists?.joinToString { it.name }
+        genre = tags?.joinToString { it.name }
         thumbnail_url = "$baseImageUrl/$hash/1/c"
         description = buildString {
             this@toSManga.description?.let {
                 append(this@toSManga.description, "\n\n")
             }
-            circles?.emptyToNull()?.joinToString()?.let {
+            circles?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Circles: ", it, "\n")
             }
-            publishers?.emptyToNull()?.joinToString()?.let {
+            publishers?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Publishers: ", it, "\n")
             }
-            magazines?.emptyToNull()?.joinToString()?.let {
+            magazines?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Magazines: ", it, "\n")
             }
-            events?.emptyToNull()?.joinToString()?.let {
+            events?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Events: ", it, "\n\n")
             }
-            parodies?.emptyToNull()?.joinToString()?.let {
+            parodies?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Parodies: ", it, "\n")
             }
             append("Pages: ", pages, "\n\n")
@@ -224,24 +169,24 @@ class SpyFakku : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        return getManga(response.parseAs<HentaiLib>().data).toSManga()
+        return response.parseAs<Hentai>().toSManga()
     }
 
     private fun <T> Collection<T>.emptyToNull(): Collection<T>? {
         return this.ifEmpty { null }
     }
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.removeSuffix(baseApiEnd)
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val hentai = getManga(response.parseAs<HentaiLib>().data)
+        val hentai = response.parseAs<Hentai>()
 
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
-                url = "/g/${hentai.id}" + baseApiEnd
+                url = "/g/${hentai.id}"
                 date_upload = try {
                     releasedAtFormat.parse(hentai.released_at)!!.time
                 } catch (e: Exception) {
@@ -251,17 +196,17 @@ class SpyFakku : HttpSource() {
         )
     }
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.removeSuffix(baseApiEnd)
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     override fun pageListParse(response: Response): List<Page> {
-        val hentai = getManga(response.parseAs<HentaiLib>().data)
+        val hentai = response.parseAs<Hentai>()
         val images = hentai.images
         return images.mapIndexed { index, it ->
-            Page(index, imageUrl = "$baseImageUrl/${hentai.hash}/$it")
+            Page(index, imageUrl = "$baseImageUrl/${hentai.hash}/${it.filename}")
         }
     }
     private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string().substringAfter("\n"))
+        return json.decodeFromString(body.string())
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
