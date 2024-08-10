@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.manhwafreakxyz
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
 class ManhwaFreakXyz : MangaThemesia(
-    "Manhwa Freak.xyz",
+    "ManhwaFreak.xyz",
     "https://manhwafreak.xyz",
     "en",
 ) {

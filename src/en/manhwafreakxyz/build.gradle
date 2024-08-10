@@ -1,5 +1,5 @@
 ext {
-    extName = 'Manhwa Freak.xyz'
+    extName = 'ManhwaFreak.xyz'
     extClass = '.ManhwaFreakXyz'
     themePkg = 'mangathemesia'
     baseUrl = 'https://manhwafreak.xyz'
