@@ -13,7 +13,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="hattorimanga.com"
+                    android:host="hattorimanga.net"
                     android:pathPattern="/manga/..*"
                     android:scheme="https" />
             </intent-filter>
