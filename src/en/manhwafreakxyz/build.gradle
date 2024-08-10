@@ -1,6 +1,6 @@
 ext {
-    extName = 'Manhwa Freak'
-    extClass = '.ManhwaFreak'
+    extName = 'Manhwa Freak.xyz'
+    extClass = '.ManhwaFreakXyz'
     themePkg = 'mangathemesia'
     baseUrl = 'https://manhwafreak.xyz'
     overrideVersionCode = 0
