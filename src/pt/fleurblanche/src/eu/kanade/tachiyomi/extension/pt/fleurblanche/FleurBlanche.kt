@@ -10,7 +10,7 @@ import java.util.Locale
 
 class FleurBlanche : Madara(
     "Fleur Blanche",
-    "https://fbsscan.com",
+    "https://fbsquadx.com",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {

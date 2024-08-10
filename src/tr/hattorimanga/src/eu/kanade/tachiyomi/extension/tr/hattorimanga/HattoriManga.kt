@@ -29,7 +29,7 @@ import java.util.Locale
 class HattoriManga : HttpSource() {
     override val name: String = "Hattori Manga"
 
-    override val baseUrl: String = "https://hattorimanga.com"
+    override val baseUrl: String = "https://hattorimanga.net"
 
     override val lang: String = "tr"
 
