@@ -1,0 +1,10 @@
+ext {
+    extName = 'Snow Scans'
+    extClass = '.SnowScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://snowscans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
