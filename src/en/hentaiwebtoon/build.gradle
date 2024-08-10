@@ -3,7 +3,7 @@ ext {
     extClass = '.HentaiWebtoon'
     themePkg = 'madara'
     baseUrl = 'https://hentaiwebtoon.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
