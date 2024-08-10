@@ -1,0 +1,10 @@
+ext {
+    extName = 'Varna Scan'
+    extClass = '.VarnaScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://varnascan.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
