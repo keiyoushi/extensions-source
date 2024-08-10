@@ -1,46 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 
 @Serializable
 class HentaiLib(
-    val data: List<JsonElement>,
-)
-
-@Serializable
-class Indexes(
-    val archives: Int,
-    val page: Int,
-    val limit: Int,
-    val total: Int,
-)
-
-@Serializable
-class ShortHentaiIndexes(
-    val id: Int,
-    val hash: Int,
-    val title: Int,
-)
-
-@Serializable
-class HentaiIndexes(
-    val id: Int,
-    val hash: Int,
-    val title: Int,
-    val description: Int,
-    val released_at: Int,
-    val created_at: Int,
-    val pages: Int,
-    val size: Int,
-    val publishers: Int?,
-    val artists: Int?,
-    val circles: Int?,
-    val magazines: Int?,
-    val parodies: Int?,
-    val events: Int?,
-    val tags: Int?,
-    val images: Int,
+    val archives: List<ShortHentai>,
 )
 
 @Serializable
@@ -52,30 +16,30 @@ class Hentai(
     val released_at: String,
     val created_at: String,
     val pages: Int,
-    val size: Long = 0L,
-    val publishers: List<String>?,
-    val artists: List<String>?,
-    val circles: List<String>?,
-    val magazines: List<String>?,
-    val parodies: List<String>?,
-    val events: List<String>?,
-    val tags: List<String>?,
-    val images: List<String>,
+    val size: Int = 0,
+    val publishers: List<Name>?,
+    val artists: List<Name>?,
+    val circles: List<Name>?,
+    val magazines: List<Name>?,
+    val parodies: List<Name>?,
+    val events: List<Name>?,
+    val tags: List<Name>?,
+    val images: List<Image>,
 )
 
 @Serializable
 class ShortHentai(
-    val id: String,
+    val id: Int,
     val hash: String,
     val title: String,
 )
 
 @Serializable
-class ImageIndex(
-    val filename: Int,
+class Image(
+    val filename: String,
 )
 
 @Serializable
-class NameIndex(
-    val name: Int,
+class Name(
+    val name: String,
 )
