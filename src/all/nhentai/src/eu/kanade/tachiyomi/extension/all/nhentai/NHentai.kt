@@ -220,7 +220,7 @@ open class NHentai(
             thumbnail_url = document.select("#cover > a > img").attr("data-src")
             status = SManga.COMPLETED
             artist = getArtists(document)
-            author = artist
+            author = getGroups(document)
             // Some people want these additional details in description
             description = "Full English and Japanese titles:\n"
                 .plus("$fullTitle\n")
