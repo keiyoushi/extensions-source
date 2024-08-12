@@ -25,7 +25,8 @@ class DiskusScan : MangaThemesia(
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("Dnt", "1")
+        .set("Accept-Language", "pt-BR,en-US;q=0.7,en;q=0.3")
+        .set("Alt-Used", baseUrl.substringAfterLast("/"))
         .set("Sec-Fetch-Dest", "document")
         .set("Sec-Fetch-Mode", "navigate")
         .set("Sec-Fetch-Site", "same-origin")
