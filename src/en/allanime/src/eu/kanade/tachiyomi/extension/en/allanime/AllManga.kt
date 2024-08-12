@@ -33,6 +33,8 @@ class AllManga : ConfigurableSource, HttpSource() {
 
     override val lang = "en"
 
+    override val id = 4709139914729853090
+
     override val supportsLatest = true
 
     private val preferences by lazy {
