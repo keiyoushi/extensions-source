@@ -1,10 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.allanime
 
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.parseDate
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.parseDescription
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.parseStatus
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.parseThumbnailUrl
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.titleToSlug
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -22,39 +17,39 @@ typealias ApiChapterListResponse = Data<ChapterListData>
 typealias ApiPageListResponse = Data<PageListData>
 
 @Serializable
-data class Data<T>(val data: T)
+class Data<T>(val data: T)
 
 @Serializable
-data class Edges<T>(val edges: List<T>)
+class Edges<T>(val edges: List<T>)
 
 // Popular
 @Serializable
-data class PopularData(
+class PopularData(
     @SerialName("queryPopular") val popular: PopularMangas,
 )
 
 @Serializable
-data class PopularMangas(
+class PopularMangas(
     @SerialName("recommendations") val mangas: List<PopularManga>,
 )
 
 @Serializable
-data class PopularManga(
+class PopularManga(
     @SerialName("anyCard") val manga: SearchManga? = null,
 )
 
 // Search
 @Serializable
-data class SearchData(
+class SearchData(
     val mangas: Edges<SearchManga>,
 )
 
 @Serializable
-data class SearchManga(
+class SearchManga(
     @SerialName("_id") val id: String,
-    val name: String,
-    val thumbnail: String? = null,
-    val englishName: String? = null,
+    private val name: String,
+    private val thumbnail: String? = null,
+    private val englishName: String? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         title = englishName ?: name
@@ -65,22 +60,22 @@ data class SearchManga(
 
 // Details
 @Serializable
-data class MangaDetailsData(
+class MangaDetailsData(
     val manga: Manga,
 )
 
 @Serializable
-data class Manga(
+class Manga(
     @SerialName("_id") val id: String,
-    val name: String,
-    val thumbnail: String? = null,
-    val description: String? = null,
-    val authors: List<String>? = emptyList(),
-    val genres: List<String>? = emptyList(),
-    val tags: List<String>? = emptyList(),
-    val status: String? = null,
-    val altNames: List<String>? = emptyList(),
-    val englishName: String? = null,
+    private val name: String,
+    private val thumbnail: String? = null,
+    private val description: String? = null,
+    private val authors: List<String>? = emptyList(),
+    private val genres: List<String>? = emptyList(),
+    private val tags: List<String>? = emptyList(),
+    private val status: String? = null,
+    private val altNames: List<String>? = emptyList(),
+    private val englishName: String? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         title = englishName ?: name
@@ -108,15 +103,15 @@ data class Manga(
 
 // chapters details
 @Serializable
-data class ChapterListData(
+class ChapterListData(
     @SerialName("episodeInfos") val chapterList: List<ChapterData>? = emptyList(),
 )
 
 @Serializable
-data class ChapterData(
+class ChapterData(
     @SerialName("episodeIdNum") val chapterNum: JsonPrimitive,
     @SerialName("notes") val title: String? = null,
-    val uploadDates: DateDto? = null,
+    private val uploadDates: DateDto? = null,
 ) {
     fun toSChapter(mangaUrl: String) = SChapter.create().apply {
         name = "Chapter $chapterNum"
@@ -133,23 +128,23 @@ data class ChapterData(
 }
 
 @Serializable
-data class DateDto(
+class DateDto(
     val sub: String? = null,
 )
 
-// page lsit
+// page list
 @Serializable
-data class PageListData(
+class PageListData(
     @SerialName("chapterPages") val pageList: Edges<Servers>?,
 )
 
 @Serializable
-data class Servers(
+class Servers(
     @SerialName("pictureUrlHead") val serverUrl: String? = null,
     val pictureUrls: List<PageUrl>?,
 )
 
 @Serializable
-data class PageUrl(
+class PageUrl(
     val url: String,
 )
