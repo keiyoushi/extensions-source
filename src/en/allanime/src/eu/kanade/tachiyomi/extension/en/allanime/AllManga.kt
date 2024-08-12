@@ -249,8 +249,8 @@ class AllManga : ConfigurableSource, HttpSource() {
             return super.imageRequest(page)
         }
 
-        val oldUrl = page.imageUrl!!
-        val newUrl = oldUrl.replace(imageQualityRegex, "$IMAGE_CDN/$1?w=$quality")
+        val oldUrl = imageQualityRegex.find(page.imageUrl!!)!!.groupValues[1]
+        val newUrl = "$IMAGE_CDN/$oldUrl?w=$quality"
 
         return GET(newUrl, headers)
     }

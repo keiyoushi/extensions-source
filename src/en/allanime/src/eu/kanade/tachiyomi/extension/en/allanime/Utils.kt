@@ -65,7 +65,7 @@ inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
         .toRequestBody(JSON_MEDIA_TYPE)
 
 private const val thumbnail_cdn = "https://wp.youtube-anime.com/aln.youtube-anime.com/"
-private val titleSpecialCharactersRegex by lazy { Regex("[^a-z\\d]+") }
+private val titleSpecialCharactersRegex = Regex("[^a-z\\d]+")
 private val dateFormat by lazy {
     SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 }
