@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.mangaswat
 
 import android.app.Application
-import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
@@ -12,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -32,28 +30,52 @@ class MangaSwat :
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    private val preferences: SharedPreferences by lazy {
+    private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(1)
         .build()
 
+    override fun latestUpdatesRequest(page: Int): Request {
+        val filter = FilterList(OrderByFilter("", orderByFilterOptions, "added"))
+
+        return searchMangaRequest(page, "", filter)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val request = super.searchMangaRequest(page, query, filters)
-        if (query.isBlank()) return request
+        val urlBuilder = request.url.newBuilder()
 
-        val url = request.url.newBuilder()
-            .removePathSegment(0)
-            .removeAllQueryParameters("title")
-            .addQueryParameter("s", query)
-            .build()
+        // remove trailing slash
+        if (request.url.pathSegments.last().isBlank()) {
+            urlBuilder.removePathSegment(
+                request.url.pathSegments.lastIndex,
+            )
+        }
+
+        if (query.isNotBlank()) {
+            urlBuilder
+                .removePathSegment(0)
+                .removeAllQueryParameters("title")
+                .addQueryParameter("s", query)
+                .build()
+        }
 
         return request.newBuilder()
-            .url(url)
+            .url(urlBuilder.build())
             .build()
     }
+
+    override val orderByFilterOptions = arrayOf(
+        Pair(intl["order_by_filter_default"], ""),
+        Pair(intl["order_by_filter_az"], "a-z"),
+        Pair(intl["order_by_filter_za"], "z-a"),
+        Pair(intl["order_by_filter_latest_update"], "update"),
+        Pair(intl["order_by_filter_latest_added"], "added"),
+        Pair(intl["order_by_filter_popular"], "popular"),
+    )
 
     override fun searchMangaNextPageSelector() = "a[rel=next]"
 
@@ -82,13 +104,12 @@ class MangaSwat :
     }
 
     @Serializable
-    data class TSReader(
+    class TSReader(
         val sources: List<ReaderImageSource>,
     )
 
     @Serializable
-    data class ReaderImageSource(
-        val source: String,
+    class ReaderImageSource(
         val images: List<String>,
     )
 
