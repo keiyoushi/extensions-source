@@ -41,14 +41,14 @@ val SEARCH_QUERY: String = buildQuery {
     """
         query (
             %search: SearchInput
-            %limit: Int
+            %size: Int
             %page: Int
             %translationType: VaildTranslationTypeMangaEnumType
             %countryOrigin: VaildCountryOriginEnumType
         ) {
             mangas(
                 search: %search
-                limit: %limit
+                limit: %size
                 page: %page
                 translationType: %translationType
                 countryOrigin: %countryOrigin

@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class AllAnimeUrlActivity : Activity() {
+class AllMangaUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
@@ -15,17 +15,17 @@ class AllAnimeUrlActivity : Activity() {
             val id = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${AllAnime.SEARCH_PREFIX}$id")
+                putExtra("query", "${AllManga.SEARCH_PREFIX}$id")
                 putExtra("filter", packageName)
             }
 
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("AllAnimeUrlActivity", e.toString())
+                Log.e("AllMangaUrlActivity", e.toString())
             }
         } else {
-            Log.e("AllAnimeUrlActivity", "could not parse uri from intent $intent")
+            Log.e("AllMangaUrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()

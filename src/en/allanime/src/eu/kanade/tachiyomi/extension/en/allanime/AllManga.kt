@@ -5,10 +5,7 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.buildApiHeaders
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.firstInstanceOrNull
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.parseAs
-import eu.kanade.tachiyomi.extension.en.allanime.AllAnimeHelper.toJsonRequestBody
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -26,15 +23,17 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class AllAnime : ConfigurableSource, HttpSource() {
+class AllManga : ConfigurableSource, HttpSource() {
 
-    override val name = "AllAnime"
+    override val name = "AllManga"
 
-    override val baseUrl = "https://allanime.ai"
+    override val baseUrl = "https://allmanga.to"
 
     private val apiUrl = "https://api.allanime.day/api"
 
     override val lang = "en"
+
+    override val id = 4709139914729853090
 
     override val supportsLatest = true
 
@@ -43,24 +42,6 @@ class AllAnime : ConfigurableSource, HttpSource() {
     }
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val frag = request.url.fragment
-            val quality = preferences.imageQuality
-
-            if (frag.isNullOrEmpty() || quality == IMAGE_QUALITY_PREF_DEFAULT) {
-                return@addInterceptor chain.proceed(request)
-            }
-
-            val oldUrl = request.url.toString()
-            val newUrl = oldUrl.replace(imageQualityRegex, "$image_cdn/$1?w=$quality")
-
-            return@addInterceptor chain.proceed(
-                request.newBuilder()
-                    .url(newUrl)
-                    .build(),
-            )
-        }
         .rateLimit(1)
         .build()
 
@@ -72,7 +53,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
         val payload = GraphQL(
             PopularVariables(
                 type = "manga",
-                size = limit,
+                size = LIMIT,
                 dateRange = 0,
                 page = page,
                 allowAdult = preferences.allowAdult,
@@ -83,9 +64,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
 
         val requestBody = payload.toJsonRequestBody()
 
-        val apiHeaders = headersBuilder().buildApiHeaders(requestBody)
-
-        return POST(apiUrl, apiHeaders, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -94,7 +73,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
         val mangaList = result.data.popular.mangas
             .mapNotNull { it.manga?.toSManga() }
 
-        val hasNextPage = result.data.popular.mangas.size == limit
+        val hasNextPage = result.data.popular.mangas.size == LIMIT
 
         return MangasPage(mangaList, hasNextPage)
     }
@@ -128,7 +107,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
                     allowAdult = preferences.allowAdult,
                     allowUnknown = false,
                 ),
-                size = limit,
+                size = LIMIT,
                 page = page,
                 translationType = "sub",
                 countryOrigin = filters.firstInstanceOrNull<CountryFilter>()?.getValue() ?: "ALL",
@@ -138,9 +117,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
 
         val requestBody = payload.toJsonRequestBody()
 
-        val apiHeaders = headersBuilder().buildApiHeaders(requestBody)
-
-        return POST(apiUrl, apiHeaders, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -149,7 +126,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
         val mangaList = result.data.mangas.edges
             .map(SearchManga::toSManga)
 
-        val hasNextPage = result.data.mangas.edges.size == limit
+        val hasNextPage = result.data.mangas.edges.size == LIMIT
 
         return MangasPage(mangaList, hasNextPage)
     }
@@ -167,9 +144,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
 
         val requestBody = payload.toJsonRequestBody()
 
-        val apiHeaders = headersBuilder().buildApiHeaders(requestBody)
-
-        return POST(apiUrl, apiHeaders, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -205,9 +180,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
 
         val requestBody = payload.toJsonRequestBody()
 
-        val apiHeaders = headersBuilder().buildApiHeaders(requestBody)
-
-        return POST(apiUrl, apiHeaders, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
 
     private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
@@ -246,9 +219,7 @@ class AllAnime : ConfigurableSource, HttpSource() {
 
         val requestBody = payload.toJsonRequestBody()
 
-        val apiHeaders = headersBuilder().buildApiHeaders(requestBody)
-
-        return POST(apiUrl, apiHeaders, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -266,9 +237,22 @@ class AllAnime : ConfigurableSource, HttpSource() {
         return pages.pictureUrls?.mapIndexed { index, image ->
             Page(
                 index = index,
-                imageUrl = "$imageDomain${image.url}#page",
+                imageUrl = "$imageDomain${image.url}",
             )
         } ?: emptyList()
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val quality = preferences.imageQuality
+
+        if (quality == IMAGE_QUALITY_PREF_DEFAULT) {
+            return super.imageRequest(page)
+        }
+
+        val oldUrl = imageQualityRegex.find(page.imageUrl!!)!!.groupValues[1]
+        val newUrl = "$IMAGE_CDN/$oldUrl?w=$quality"
+
+        return GET(newUrl, headers)
     }
 
     override fun imageUrlParse(response: Response): String {
@@ -299,11 +283,11 @@ class AllAnime : ConfigurableSource, HttpSource() {
         get() = getString(IMAGE_QUALITY_PREF, IMAGE_QUALITY_PREF_DEFAULT)!!
 
     companion object {
-        private const val limit = 20
+        private const val LIMIT = 20
         const val SEARCH_PREFIX = "id:"
         val urlRegex = Regex("^https?://.*")
-        private const val image_cdn = "https://wp.youtube-anime.com"
-        private val imageQualityRegex = Regex("^https?://(.*)#.*")
+        private const val IMAGE_CDN = "https://wp.youtube-anime.com"
+        private val imageQualityRegex = Regex("^https?://([^#]+)")
 
         private const val SHOW_ADULT_PREF = "pref_adult"
         private const val SHOW_ADULT_PREF_DEFAULT = false
