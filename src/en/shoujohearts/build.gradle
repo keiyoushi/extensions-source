@@ -1,9 +1,0 @@
-ext {
-    extName = 'ShoujoHearts'
-    extClass = '.ShoujoHearts'
-    themePkg = 'madara'
-    baseUrl = 'https://shoujohearts.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
