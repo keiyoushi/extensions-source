@@ -21,6 +21,13 @@ class DiskusScan : MangaThemesia(
     override val versionId = 2
 
     override val client = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val headers = request.headers.newBuilder()
+                .set("Accept-Encoding", "")
+                .build()
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
 
