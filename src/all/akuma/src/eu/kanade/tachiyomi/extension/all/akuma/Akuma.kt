@@ -128,7 +128,7 @@ class Akuma(
             setDefaultValue(true)
 
             setOnPreferenceChangeListener { _, newValue ->
-                displayFullTitle = newValue
+                displayFullTitle = newValue == true
                 true
             }
         }.also(screen::addPreference)
