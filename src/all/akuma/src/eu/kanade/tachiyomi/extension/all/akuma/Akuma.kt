@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.akuma
 
+import android.app.Application
+import androidx.preference.PreferenceScreen
+import android.content.SharedPreferences
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -20,6 +24,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -105,6 +111,27 @@ class Akuma(
         return storedToken!!
     }
 
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private var displayFullTitle: Boolean = preferences.getBoolean(PREF_TITLE, true)
+
+    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+    private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreference(screen.context).apply {
+            key = PREF_TITLE
+            title = "Display manga title as full title"
+            setDefaultValue(true)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                displayFullTitle = newValue
+            }
+        }.also(screen::addPreference)
+    }
+
     override fun popularMangaRequest(page: Int): Request {
         val payload = FormBody.Builder()
             .add("view", "3")
@@ -149,7 +176,9 @@ class Akuma(
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             setUrlWithoutDomain(element.select("a").attr("href"))
-            title = element.select(".overlay-title").text()
+            title = element.select(".overlay-title").text().replace("\"", "").let {
+                if (displayFullTitle) it.trim() else it.shortenTitle()
+            }
             thumbnail_url = element.select("img").attr("abs:src")
         }
     }
@@ -302,6 +331,7 @@ class Akuma(
 
     companion object {
         const val PREFIX_ID = "id:"
+        private const val PREF_TITLE = "pref_title"
     }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
