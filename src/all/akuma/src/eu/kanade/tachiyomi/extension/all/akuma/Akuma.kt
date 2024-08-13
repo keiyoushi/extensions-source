@@ -176,7 +176,7 @@ class Akuma(
         val finalQuery: MutableList<String> = mutableListOf(query)
 
         if (lang != "all") {
-            finalQuery.add("language: $akumaLang$")
+            finalQuery.add("language:$akumaLang$")
         }
         filters.forEach { filter ->
             when (filter) {
