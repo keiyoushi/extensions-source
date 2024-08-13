@@ -121,7 +121,7 @@ class Akuma(
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreference(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_TITLE
             title = "Display manga title as full title"
             setDefaultValue(true)
