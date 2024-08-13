@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.akuma
 
 import android.app.Application
-import androidx.preference.PreferenceScreen
 import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
