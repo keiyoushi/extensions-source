@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
-            android:name=".en.allanime.AllAnimeUrlActivity"
+            android:name=".en.allanime.AllMangaUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -12,7 +12,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:host="allanime.ai"/>
+                <data android:host="allmanga.to"/>
                 <data android:scheme="https"/>
                 <data android:pathPattern="/manga/..*"/>
                 <data android:pathPattern="/read/..*"/>
