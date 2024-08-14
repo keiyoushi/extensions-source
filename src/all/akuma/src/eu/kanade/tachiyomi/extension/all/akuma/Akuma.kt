@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.akuma
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -20,6 +25,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -29,7 +36,7 @@ import java.util.TimeZone
 class Akuma(
     override val lang: String,
     private val akumaLang: String,
-) : ParsedHttpSource() {
+) : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "Akuma"
 
@@ -105,6 +112,23 @@ class Akuma(
         return storedToken!!
     }
 
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private val displayFullTitle: Boolean get() = preferences.getBoolean(PREF_TITLE, false)
+
+    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+    private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_TITLE
+            title = "Display manga title as full title"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     override fun popularMangaRequest(page: Int): Request {
         val payload = FormBody.Builder()
             .add("view", "3")
@@ -149,7 +173,9 @@ class Akuma(
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             setUrlWithoutDomain(element.select("a").attr("href"))
-            title = element.select(".overlay-title").text()
+            title = element.select(".overlay-title").text().replace("\"", "").let {
+                if (displayFullTitle) it.trim() else it.shortenTitle()
+            }
             thumbnail_url = element.select("img").attr("abs:src")
         }
     }
@@ -176,7 +202,7 @@ class Akuma(
         val finalQuery: MutableList<String> = mutableListOf(query)
 
         if (lang != "all") {
-            finalQuery.add("language: $akumaLang$")
+            finalQuery.add("language:$akumaLang$")
         }
         filters.forEach { filter ->
             when (filter) {
@@ -220,7 +246,9 @@ class Akuma(
 
     override fun mangaDetailsParse(document: Document) = with(document) {
         SManga.create().apply {
-            title = select(".entry-title").text()
+            title = select(".entry-title").text().replace("\"", "").let {
+                if (displayFullTitle) it.trim() else it.shortenTitle()
+            }
             thumbnail_url = select(".img-thumbnail").attr("abs:src")
 
             author = select(".group~.value").eachText().joinToString()
@@ -302,6 +330,7 @@ class Akuma(
 
     companion object {
         const val PREFIX_ID = "id:"
+        private const val PREF_TITLE = "pref_title"
     }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
