@@ -125,6 +125,7 @@ class Akuma(
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_TITLE
             title = "Display manga title as full title"
+            setDefaultValue(false)
         }.also(screen::addPreference)
     }
 
