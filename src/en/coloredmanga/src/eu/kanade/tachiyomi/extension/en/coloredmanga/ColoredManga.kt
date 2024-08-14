@@ -141,7 +141,6 @@ class ColoredManga : HttpSource() {
 
             val regularSearch = it.name.contains(title, true) || it.synopsis.contains(title, true)
 
-
             includeGenre && !excludeGenre &&
                 includeType && !excludeType &&
                 includeColor && !excludeColor &&
