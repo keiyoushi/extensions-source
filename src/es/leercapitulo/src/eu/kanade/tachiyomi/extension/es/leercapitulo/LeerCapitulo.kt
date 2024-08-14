@@ -170,35 +170,45 @@ class LeerCapitulo : ParsedHttpSource() {
         }
     }
 
+    private var cachedScriptUrl: String? = null
     override fun pageListParse(document: Document): List<Page> {
         val orderList = document.selectFirst("meta[property=ad:check]")?.attr("content")
-            ?.replace("[^\\d]+".toRegex(), "-")
+            ?.replace(ORDER_LIST_REGEX, "-")
             ?.split("-")
 
         val useReversedString = orderList?.any { it == "01" }
 
         val arrayData = document.selectFirst("#array_data")!!.text()
 
-        val scripts = document.select("head > script[src^=/assets/][src$=.js]")
+        val scripts = document.select("head > script[src^=/assets/][src$=.js]").map { it.attr("abs:src") }
 
         var dataScript: String? = null
 
-        for (script in scripts) {
-            val scriptData = notRateLimitClient.newCall(GET(script.attr("abs:src"), headers)).execute().body.string()
+        if (cachedScriptUrl != null && scripts.contains(cachedScriptUrl!!)) {
+            val scriptData = notRateLimitClient.newCall(GET(cachedScriptUrl!!, headers)).execute().body.string()
             val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
             if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
                 dataScript = deobfuscatedScript
-                break
+            }
+        }
+
+        if (dataScript == null) {
+            for (scriptUrl in scripts.reversed()) {
+                val scriptData = notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().body.string()
+                val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
+                if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
+                    dataScript = deobfuscatedScript
+                    cachedScriptUrl = scriptUrl
+                    break
+                }
             }
         }
 
         if (dataScript == null) throw Exception("Unable to find the script")
 
-        val keyRegex = """'([A-Z0-9]{62})'""".toRegex(RegexOption.IGNORE_CASE)
+        val (key1, key2) = KEY_REGEX.findAll(dataScript).map { it.groupValues[1] }.toList()
 
-        val (key1, key2) = keyRegex.findAll(dataScript).map { it.groupValues[1] }.toList()
-
-        val encodedUrls = arrayData.replace(Regex("[A-Z0-9]", RegexOption.IGNORE_CASE)) {
+        val encodedUrls = arrayData.replace(DECODE_REGEX) {
             val index = key2.indexOf(it.value)
             key1[index].toString()
         }
@@ -237,4 +247,10 @@ class LeerCapitulo : ParsedHttpSource() {
         val link: String,
         val thumbnail: String,
     )
+
+    companion object {
+        private val ORDER_LIST_REGEX = "[^\\d]+".toRegex()
+        private val KEY_REGEX = """'([A-Z0-9]{62})'""".toRegex(RegexOption.IGNORE_CASE)
+        private val DECODE_REGEX = Regex("[A-Z0-9]", RegexOption.IGNORE_CASE)
+    }
 }
