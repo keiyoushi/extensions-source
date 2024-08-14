@@ -37,7 +37,7 @@ class LeerCapitulo : ParsedHttpSource() {
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
         .build()
 
-    private val notRateLimitClient = network.cloudflareClient.newBuilder().build()
+    private val notRateLimitClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
