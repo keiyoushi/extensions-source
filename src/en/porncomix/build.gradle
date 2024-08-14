@@ -2,7 +2,7 @@ ext {
     extName = 'PornComix'
     extClass = '.PornComix'
     themePkg = 'madara'
-    baseUrl = ' https://porncomix.online'
+    baseUrl = 'https://porncomix.online'
     overrideVersionCode = 2
     isNsfw = true
 }
