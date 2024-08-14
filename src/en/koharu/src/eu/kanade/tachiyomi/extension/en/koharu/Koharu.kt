@@ -139,7 +139,7 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiBooksUrl.toHttpUrl().newBuilder().apply {
-            val terms = mutableListOf(query.trim())
+            val terms: MutableList<String> = mutableListOf()
 
             filters.forEach { filter ->
                 when (filter) {
@@ -154,18 +154,9 @@ class Koharu : HttpSource(), ConfigurableSource {
 
                     is TextFilter -> {
                         if (filter.state.isNotEmpty()) {
-                            terms += filter.state.split(",").filter(String::isNotBlank).map { tag ->
-                                val trimmed = tag.trim()
-                                buildString {
-                                    if (trimmed.startsWith('-')) {
-                                        append("-")
-                                    }
-                                    append(filter.type)
-                                    append("!:")
-                                    append("\"")
-                                    append(trimmed.lowercase().removePrefix("-"))
-                                    append("\"")
-                                }
+                            val tags = filter.state.split(",").filter(String::isNotBlank).joinToString(",")
+                            if (tags.isNotBlank()) {
+                                terms += "${filter.type}!:" + '"' + tags + '"'
                             }
                         }
                     }
