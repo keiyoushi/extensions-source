@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.leercapitulo
 
 import android.util.Base64
+import android.util.Log
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -33,9 +34,11 @@ class LeerCapitulo : ParsedHttpSource() {
 
     override val baseUrl = "https://www.leercapitulo.co"
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
         .build()
+
+    private val notRateLimitClient = network.cloudflareClient.newBuilder().build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -177,17 +180,24 @@ class LeerCapitulo : ParsedHttpSource() {
 
         val arrayData = document.selectFirst("#array_data")!!.text()
 
-        val scriptUrl = document.selectFirst("section.bodycontainer > script[src$=.js]")?.attr("abs:src")
-            ?: throw Exception("Script not found")
+        val scripts = document.select("head > script[src^=/assets/][src$=.js]")
 
-        val scriptData = client.newCall(GET(scriptUrl, headers)).execute().body.string()
+        var dataScript: String? = null
 
-        val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
-            ?: throw Exception("Unable to deobfuscate script")
+        for (script in scripts) {
+            val scriptData = notRateLimitClient.newCall(GET(script.attr("abs:src"), headers)).execute().body.string()
+            val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
+            if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
+                dataScript = deobfuscatedScript
+                break
+            }
+        }
+
+        if (dataScript == null) throw Exception("Unable to find the script")
 
         val keyRegex = """'([A-Z0-9]{62})'""".toRegex(RegexOption.IGNORE_CASE)
 
-        val (key1, key2) = keyRegex.findAll(deobfuscatedScript).map { it.groupValues[1] }.toList()
+        val (key1, key2) = keyRegex.findAll(dataScript).map { it.groupValues[1] }.toList()
 
         val encodedUrls = arrayData.replace(Regex("[A-Z0-9]", RegexOption.IGNORE_CASE)) {
             val index = key2.indexOf(it.value)
