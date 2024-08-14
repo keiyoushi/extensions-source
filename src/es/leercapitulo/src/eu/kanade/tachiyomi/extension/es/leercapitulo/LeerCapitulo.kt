@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.leercapitulo
 
 import android.util.Base64
-import android.util.Log
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
