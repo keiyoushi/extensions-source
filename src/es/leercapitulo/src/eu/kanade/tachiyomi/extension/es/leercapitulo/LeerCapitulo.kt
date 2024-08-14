@@ -180,7 +180,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
         val arrayData = document.selectFirst("#array_data")!!.text()
 
-        val scripts = document.select("head > script[src^=/assets/][src$=.js]").map { it.attr("abs:src") }.toMutableList()
+        val scripts = document.select("head > script[src^=/assets/][src$=.js]").map { it.attr("abs:src") }.reversed().toMutableList()
 
         var dataScript: String? = null
 
@@ -190,7 +190,7 @@ class LeerCapitulo : ParsedHttpSource() {
             }
         }
 
-        for (scriptUrl in scripts.reversed()) {
+        for (scriptUrl in scripts) {
             val scriptData = notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().body.string()
             val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
             if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
