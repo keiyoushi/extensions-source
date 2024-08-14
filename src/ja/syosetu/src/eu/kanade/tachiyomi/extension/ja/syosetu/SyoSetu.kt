@@ -8,7 +8,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 
-class SyoSetu : MangaRawTheme("SyoSetu", "https://syosetu.top") {
+class SyoSetu : MangaRawTheme("SyoSetu", "https://syosetu.gs") {
     // syosetu.top doesn't have a popular manga page redirect to latest manga request
     override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)
 
