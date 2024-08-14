@@ -56,7 +56,8 @@ internal open class SortFilter(name: String, selection: Selection, private val v
 }
 
 private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("Newest", "lat"),
+    Pair("Last Updated", "lat"),
+    Pair("Newest", "new"),
     Pair("Popularity", "pop"),
     Pair("Title", "tit"),
 )
