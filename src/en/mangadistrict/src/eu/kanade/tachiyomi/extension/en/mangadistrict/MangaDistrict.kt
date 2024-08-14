@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangadistrict
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
@@ -12,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -74,7 +76,8 @@ class MangaDistrict :
 
     override fun chapterFromElement(element: Element): SChapter {
         return super.chapterFromElement(element).apply {
-            preferences.dates[url]?.also {
+            val urlKey = url.urlKey()
+            preferences.dates[urlKey]?.also {
                 date_upload = it
             }
         }
@@ -86,13 +89,24 @@ class MangaDistrict :
 
     override fun pageListParse(document: Document): List<Page> {
         try {
-            preferences.dates[document.location()] = pageListDate.parse(
+            pageListDate.parse(
                 document.selectFirst("meta[property=og:updated_time]")!!
                     .attr("content").substringBeforeLast("+"),
-            )!!.time
+            )!!.time.also {
+                val dates = preferences.dates
+                val urlKey = document.location().urlKey()
+                dates[urlKey] = it
+                preferences.dates = dates
+            }
         } catch (_: Exception) {}
 
         return super.pageListParse(document)
+    }
+
+    private fun String.urlKey(): String {
+        return toHttpUrl().pathSegments.let { path ->
+            "${path[1]}/${path[2]}"
+        }
     }
 
     private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
@@ -104,10 +118,10 @@ class MangaDistrict :
         } catch (_: Exception) {
             mutableMapOf()
         }
+
+        @SuppressLint("ApplySharedPref")
         set(newVal) {
-            val currentMap = dates
-            currentMap.putAll(newVal)
-            edit().putString(DATE_MAP, json.encodeToString(currentMap)).apply()
+            edit().putString(DATE_MAP, json.encodeToString(newVal)).commit()
         }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
