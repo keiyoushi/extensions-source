@@ -116,7 +116,7 @@ class Akuma(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private var displayFullTitle: Boolean = preferences.getBoolean(PREF_TITLE, true)
+    private var displayFullTitle: Boolean get() = preferences.getBoolean(PREF_TITLE, false)
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
@@ -125,12 +125,6 @@ class Akuma(
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_TITLE
             title = "Display manga title as full title"
-            setDefaultValue(true)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                displayFullTitle = newValue == true
-                true
-            }
         }.also(screen::addPreference)
     }
 
