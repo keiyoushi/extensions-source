@@ -1,0 +1,10 @@
+ext {
+    extName = 'Eromanhwa'
+    extClass = '.Eromanhwa'
+    themePkg = 'madara'
+    baseUrl = 'https://eromanhwa.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
