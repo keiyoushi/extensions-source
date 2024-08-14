@@ -1,7 +1,7 @@
 ext {
     extName = 'Koharu'
     extClass = '.Koharu'
-    extVersionCode = 6
+    extVersionCode = 7
     isNsfw = true
 }
 
