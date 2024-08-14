@@ -116,7 +116,7 @@ class Akuma(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private var displayFullTitle: Boolean get() = preferences.getBoolean(PREF_TITLE, false)
+    private val displayFullTitle: Boolean get() = preferences.getBoolean(PREF_TITLE, false)
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
