@@ -2,8 +2,8 @@ ext {
     extName = 'YANP Fansub'
     extClass = '.YANPFansub'
     themePkg = 'madara'
-    baseUrl = 'https://yanpfansub.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://trisalyanp.com'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
