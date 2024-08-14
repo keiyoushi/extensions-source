@@ -2,8 +2,8 @@ ext {
     extName = 'Jeaz Scans'
     extClass = '.JeazScans'
     themePkg = 'madara'
-    baseUrl = 'https://jeaz.twobluescans.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://marcialhub.xyz'
+    overrideVersionCode = 4
     isNsfw = false
 }
 
