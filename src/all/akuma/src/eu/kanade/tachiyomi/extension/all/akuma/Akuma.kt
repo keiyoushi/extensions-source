@@ -246,7 +246,9 @@ class Akuma(
 
     override fun mangaDetailsParse(document: Document) = with(document) {
         SManga.create().apply {
-            title = select(".entry-title").text()
+            title = select(".entry-title").text().replace("\"", "").let {
+                if (displayFullTitle) it.trim() else it.shortenTitle()
+            }
             thumbnail_url = select(".img-thumbnail").attr("abs:src")
 
             author = select(".group~.value").eachText().joinToString()
