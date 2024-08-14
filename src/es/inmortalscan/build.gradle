@@ -2,8 +2,8 @@ ext {
     extName = 'Inmortal Scan'
     extClass = '.InmortalScan'
     themePkg = 'madara'
-    baseUrl = 'https://manga.mundodrama.site'
-    overrideVersionCode = 0
+    baseUrl = 'https://mg.mundodrama.site'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
