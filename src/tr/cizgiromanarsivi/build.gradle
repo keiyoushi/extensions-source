@@ -1,9 +1,0 @@
-ext {
-    extName = 'Çizgi Roman Arşivi'
-    extClass = '.CizgiRomanArsivi'
-    themePkg = 'madara'
-    baseUrl = 'https://cizgiromanarsivi.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
