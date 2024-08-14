@@ -180,27 +180,23 @@ class LeerCapitulo : ParsedHttpSource() {
 
         val arrayData = document.selectFirst("#array_data")!!.text()
 
-        val scripts = document.select("head > script[src^=/assets/][src$=.js]").map { it.attr("abs:src") }
+        val scripts = document.select("head > script[src^=/assets/][src$=.js]").map { it.attr("abs:src") }.toMutableList()
 
         var dataScript: String? = null
 
-        if (cachedScriptUrl != null && scripts.contains(cachedScriptUrl!!)) {
-            val scriptData = notRateLimitClient.newCall(GET(cachedScriptUrl!!, headers)).execute().body.string()
-            val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
-            if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
-                dataScript = deobfuscatedScript
+        cachedScriptUrl?.let {
+            if (scripts.remove(it)) {
+                scripts.add(0, it)
             }
         }
 
-        if (dataScript == null) {
-            for (scriptUrl in scripts.reversed()) {
-                val scriptData = notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().body.string()
-                val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
-                if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
-                    dataScript = deobfuscatedScript
-                    cachedScriptUrl = scriptUrl
-                    break
-                }
+        for (scriptUrl in scripts.reversed()) {
+            val scriptData = notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().body.string()
+            val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
+            if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
+                dataScript = deobfuscatedScript
+                cachedScriptUrl = scriptUrl
+                break
             }
         }
 
