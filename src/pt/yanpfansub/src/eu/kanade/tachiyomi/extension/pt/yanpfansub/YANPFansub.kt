@@ -12,9 +12,9 @@ import java.util.concurrent.TimeUnit
 
 class YANPFansub : Madara(
     "YANP Fansub",
-    "https://yanpfansub.com",
+    "https://trisalyanp.com",
     "pt-BR",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
+    SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
 
     // Scanlator changed the theme from WpMangaReader to Madara.
@@ -38,4 +38,6 @@ class YANPFansub : Madara(
 
     // Page has custom link to scan website.
     override val popularMangaUrlSelector = "div.post-title a:not([target])"
+
+    override val useNewChapterEndpoint = true
 }
