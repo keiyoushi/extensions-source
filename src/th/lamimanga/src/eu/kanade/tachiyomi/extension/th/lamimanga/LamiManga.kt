@@ -6,7 +6,7 @@ import java.util.Locale
 
 class LamiManga : MangaThemesia(
     "Lami-Manga",
-    "https://www.lami-manga.com",
+    "https://mangalami.com",
     "th",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")),
 )

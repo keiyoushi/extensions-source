@@ -12,7 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class PojokManga : Madara("Pojok Manga", "https://pojokmanga.org", "id", SimpleDateFormat("MMM dd, yyyy", Locale.US)) {
+class PojokManga : Madara("Pojok Manga", "https://pojokmanga.info", "id", SimpleDateFormat("MMM dd, yyyy", Locale.US)) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(10, 2, TimeUnit.SECONDS)
