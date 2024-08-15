@@ -6,7 +6,7 @@ import java.util.Locale
 
 class RuyaManga : Madara(
     "Rüya Manga",
-    "https://www.ruyamanga.com",
+    "https://www.ruya-manga.com",
     "tr",
     SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH),
 ) {
