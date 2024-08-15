@@ -1,7 +1,0 @@
-ext {
-    extName = 'WieManga'
-    extClass = '.WieManga'
-    extVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"
