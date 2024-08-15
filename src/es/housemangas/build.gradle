@@ -1,9 +1,0 @@
-ext {
-    extName = 'Visor Mangas'
-    extClass = '.VisorMangas'
-    themePkg = 'madara'
-    baseUrl = 'https://visormanga.xyz'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
