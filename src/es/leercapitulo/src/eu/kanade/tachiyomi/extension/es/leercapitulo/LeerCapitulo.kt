@@ -33,9 +33,11 @@ class LeerCapitulo : ParsedHttpSource() {
 
     override val baseUrl = "https://www.leercapitulo.co"
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
         .build()
+
+    private val notRateLimitClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -168,28 +170,41 @@ class LeerCapitulo : ParsedHttpSource() {
         }
     }
 
+    private var cachedScriptUrl: String? = null
     override fun pageListParse(document: Document): List<Page> {
         val orderList = document.selectFirst("meta[property=ad:check]")?.attr("content")
-            ?.replace("[^\\d]+".toRegex(), "-")
+            ?.replace(ORDER_LIST_REGEX, "-")
             ?.split("-")
 
         val useReversedString = orderList?.any { it == "01" }
 
         val arrayData = document.selectFirst("#array_data")!!.text()
 
-        val scriptUrl = document.selectFirst("section.bodycontainer > script[src$=.js]")?.attr("abs:src")
-            ?: throw Exception("Script not found")
+        val scripts = document.select("head > script[src^=/assets/][src$=.js]").map { it.attr("abs:src") }.reversed().toMutableList()
 
-        val scriptData = client.newCall(GET(scriptUrl, headers)).execute().body.string()
+        var dataScript: String? = null
 
-        val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
-            ?: throw Exception("Unable to deobfuscate script")
+        cachedScriptUrl?.let {
+            if (scripts.remove(it)) {
+                scripts.add(0, it)
+            }
+        }
 
-        val keyRegex = """'([A-Z0-9]{62})'""".toRegex(RegexOption.IGNORE_CASE)
+        for (scriptUrl in scripts) {
+            val scriptData = notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().body.string()
+            val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
+            if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
+                dataScript = deobfuscatedScript
+                cachedScriptUrl = scriptUrl
+                break
+            }
+        }
 
-        val (key1, key2) = keyRegex.findAll(deobfuscatedScript).map { it.groupValues[1] }.toList()
+        if (dataScript == null) throw Exception("Unable to find the script")
 
-        val encodedUrls = arrayData.replace(Regex("[A-Z0-9]", RegexOption.IGNORE_CASE)) {
+        val (key1, key2) = KEY_REGEX.findAll(dataScript).map { it.groupValues[1] }.toList()
+
+        val encodedUrls = arrayData.replace(DECODE_REGEX) {
             val index = key2.indexOf(it.value)
             key1[index].toString()
         }
@@ -228,4 +243,10 @@ class LeerCapitulo : ParsedHttpSource() {
         val link: String,
         val thumbnail: String,
     )
+
+    companion object {
+        private val ORDER_LIST_REGEX = "[^\\d]+".toRegex()
+        private val KEY_REGEX = """'([A-Z0-9]{62})'""".toRegex(RegexOption.IGNORE_CASE)
+        private val DECODE_REGEX = Regex("[A-Z0-9]", RegexOption.IGNORE_CASE)
+    }
 }
