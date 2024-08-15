@@ -8,7 +8,7 @@ import java.util.Locale
 
 class ManhwaLandMom : MangaThemesia(
     "ManhwaLand.mom",
-    "https://manhwaland.ink",
+    "https://www.manhwaland.ink",
     "id",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("id")),
 ) {
