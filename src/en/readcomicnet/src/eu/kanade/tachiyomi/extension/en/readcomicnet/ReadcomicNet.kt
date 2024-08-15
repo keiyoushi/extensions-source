@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.readcomic
+package eu.kanade.tachiyomi.extension.en.readcomicnet
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -14,9 +14,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Readcomic : ParsedHttpSource() {
+class ReadcomicNet : ParsedHttpSource() {
 
-    override val name = "ReadComic"
+    override val name = "ReadComicNet"
 
     override val baseUrl = "https://readcomic.net"
 
@@ -52,7 +52,7 @@ class Readcomic : ParsedHttpSource() {
                     for (filter in filters) {
                         when (filter) {
                             is StatusFilter -> {
-                                addQueryParameter("status", arrayOf("", "CMP", "ONG")[filter.state])
+                                addQueryParameter("status", filter.stateAsQueryString())
                             }
 
                             is GenreList -> {
@@ -72,7 +72,7 @@ class Readcomic : ParsedHttpSource() {
         SManga.create().apply {
             setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
             title = element.selectFirst("h3")!!.text()
-            thumbnail_url = element.selectFirst(".image")!!.selectFirst("img")!!.attr("abs:src")
+            thumbnail_url = element.selectFirst(".image")?.selectFirst("img")?.attr("abs:src")
         }
 
     override fun latestUpdatesFromElement(element: Element): SManga =
@@ -86,15 +86,14 @@ class Readcomic : ParsedHttpSource() {
     }
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val infoElement = document.selectFirst(".manga-details tbody")
+        val infoElement = document.selectFirst(".manga-details tbody")!!
 
-        title = infoElement!!.selectFirst("td:contains(Name:)")!!.nextElementSibling()!!.text()
-        author = infoElement.selectFirst("td:contains(Author:)")!!.nextElementSibling()!!.text()
-        genre = infoElement.selectFirst("td:contains(Genre:)")!!.nextElementSibling()!!.text()
-        status = infoElement.selectFirst("td:contains(Status:)")!!.nextElementSibling()!!.text()
+        author = infoElement.selectFirst("td:contains(Author:)+ td")?.text()
+        genre = infoElement.selectFirst("td:contains(Genre:)+ td")?.text()
+        status = infoElement.selectFirst("td:contains(Status:)+ td")?.text()
             .orEmpty().let { parseStatus(it) }
-        description = document.select(".pdesc").first()!!.text()
-        thumbnail_url = document.select(".manga-image img").first()!!.attr("abs:src")
+        description = document.select(".pdesc").first()?.text()
+        thumbnail_url = document.select(".manga-image img").first()?.attr("abs:src")
     }
 
     private fun parseStatus(status: String) = when {
@@ -105,12 +104,16 @@ class Readcomic : ParsedHttpSource() {
 
     override fun chapterListSelector() = ".ch-name"
 
+    private val dateFormat = SimpleDateFormat("MM/dd/yy", Locale.getDefault())
+
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("abs:href") + "/full")
         name = element.text()
-        date_upload = element.nextElementSibling()!!.text().let {
-            SimpleDateFormat("MM/dd/yy", Locale.getDefault()).parse(it)?.time ?: 0L
-        }
+        try {
+            date_upload = element.nextElementSibling()!!.text().let {
+                dateFormat.parse(it)?.time ?: 0L
+            }
+        } catch (exception: Exception) {}
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -120,7 +123,12 @@ class Readcomic : ParsedHttpSource() {
     }
 
     private class StatusFilter :
-        Filter.Select<String>("Status", arrayOf("", "Complete", "On Going"), 0)
+        Filter.Select<String>("Status", arrayOf("", "Complete", "On Going"), 0) {
+        val stateArray = arrayOf("", "CMP", "ONG")
+        fun stateAsQueryString(): String {
+            return stateArray[this.state]
+        }
+    }
     private class Genre(name: String, val gid: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
         val included: List<String>

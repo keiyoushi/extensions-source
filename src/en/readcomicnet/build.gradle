@@ -1,6 +1,6 @@
 ext {
-    extName = 'ReadComic'
-    extClass = '.Readcomic'
+    extName = 'ReadComicNet'
+    extClass = '.ReadcomicNet'
     extVersionCode = 1
 }
 
