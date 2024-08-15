@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaShiro'
-    extClass = '.MangaShiro'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://mangashiro.me'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
