@@ -20,7 +20,7 @@ class MangaBTT : ParsedHttpSource() {
 
     override val name = "MangaBTT"
 
-    override val baseUrl = "https://mangabtt.com"
+    override val baseUrl = "https://manhwalampo.com"
 
     override val lang = "en"
 
