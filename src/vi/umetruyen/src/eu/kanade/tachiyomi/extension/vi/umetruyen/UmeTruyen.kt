@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
 
 class UmeTruyen : ManhwaZ(
     "UmeTruyen",
-    "https://umetruyenvip.com",
+    "https://umetruyenz.com",
     "vi",
     mangaDetailsAuthorHeading = "Tác giả",
     mangaDetailsStatusHeading = "Trạng thái",

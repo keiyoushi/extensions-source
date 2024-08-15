@@ -2,8 +2,8 @@ ext {
     extName = 'Rüya Manga'
     extClass = '.RuyaManga'
     themePkg = 'madara'
-    baseUrl = 'https://www.ruyamanga.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://www.ruya-manga.com'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
