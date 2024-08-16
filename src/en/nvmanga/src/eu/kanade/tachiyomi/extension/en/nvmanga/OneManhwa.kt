@@ -13,7 +13,7 @@ class OneManhwa : Madara(
     override val seriesTypeSelector = ".post-content_item:contains(Origination) .summary-content"
 
     override val useLoadMoreRequest = LoadMoreStrategy.AutoDetect
-    override val useNewChapterEndpoint = false
+    override val useNewChapterEndpoint = true
 
     override val mangaSubString = "webtoon"
 
