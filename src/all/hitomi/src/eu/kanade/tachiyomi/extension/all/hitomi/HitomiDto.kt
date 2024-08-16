@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 class Gallery(
     val galleryurl: String,
     val title: String,
+    val japaneseTitle: String?,
     val date: String,
     val type: String?,
     val language: String?,
