@@ -3,7 +3,7 @@ ext {
     extClass = '.Eromanhwa'
     themePkg = 'madara'
     baseUrl = 'https://eromanhwa.org'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
