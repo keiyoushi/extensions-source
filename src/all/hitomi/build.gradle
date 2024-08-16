@@ -1,7 +1,7 @@
 ext {
     extName = 'Hitomi'
     extClass = '.HitomiFactory'
-    extVersionCode = 32
+    extVersionCode = 33
     isNsfw = true
 }
 

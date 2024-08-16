@@ -517,6 +517,9 @@ class Hitomi(
             "https://${subDomain}tn.$domain/webpbigtn/${thumbPathFromHash(hash)}/$hash.webp"
         }
         description = buildString {
+            japaneseTitle?.let {
+                append("Japanese title: ", it, "\n")
+            }
             parodys?.joinToString { it.formatted }?.let {
                 append("Series: ", it, "\n")
             }
