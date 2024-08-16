@@ -4,9 +4,9 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NvManga : Madara(
-    "NvManga",
-    "https://nvmanga.com",
+class OneManhwa : Madara(
+    "1Manhwa",
+    "https://1manhwa.com",
     "en",
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
