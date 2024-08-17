@@ -1,0 +1,9 @@
+ext {
+    extName = 'KDT Scans'
+    extClass = '.KdtScans'
+    themePkg = 'madara'
+    baseUrl = 'https://kdtscans.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
