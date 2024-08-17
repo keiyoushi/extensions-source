@@ -19,7 +19,7 @@ class KappaBeast : MangaThemesia(
         .build()
 
     override val typeFilterOptions = arrayOf(
-        Pair(intl["type_filter_option_manga"], "Manga"),
+        Pair(intl["type_filter_option_manga"], "manga"),
     )
 
     private val popularMangaFilter = FilterList(
