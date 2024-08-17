@@ -2,8 +2,8 @@ ext {
     extName = 'Manga Şehri.net'
     extClass = '.MangaSehriNet'
     themePkg = 'madara'
-    baseUrl = 'https://mangasehri.net'
-    overrideVersionCode = 0
+    baseUrl = 'https://manga-sehri.net'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

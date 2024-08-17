@@ -7,7 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaWeebs : Madara("Manga Weebs", "https://mangaweebs.org", "en", dateFormat = SimpleDateFormat("dd MMMM HH:mm", Locale.US)) {
+class MangaWeebs : Madara("Manga Weebs", "https://mangaweebs.in", "en", dateFormat = SimpleDateFormat("dd MMMM HH:mm", Locale.US)) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 4, TimeUnit.SECONDS)

@@ -1,9 +1,9 @@
 ext {
-    extName = 'NvManga'
-    extClass = '.NvManga'
+    extName = '1Manhwa'
+    extClass = '.OneManhwa'
     themePkg = 'madara'
-    baseUrl = 'https://nvmanga.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://1manhwa.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

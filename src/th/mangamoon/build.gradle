@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga-Moon'
-    extClass = '.MangaMoon'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://manga-moons.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
