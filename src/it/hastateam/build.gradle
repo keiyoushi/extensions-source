@@ -1,0 +1,9 @@
+ext {
+    extName = 'Hasta Team'
+    extClass = '.HastaTeam'
+    themePkg = 'pizzareader'
+    baseUrl = 'https://reader.hastateam.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
