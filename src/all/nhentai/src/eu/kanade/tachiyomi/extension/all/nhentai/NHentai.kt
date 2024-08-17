@@ -136,7 +136,7 @@ open class NHentai(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val fixedQuery = query.ifEmpty { "\"\"" }
+        val fixedQuery = query.ifEmpty { "" }
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val nhLangSearch = if (nhLang.isBlank()) "" else "language:$nhLang "
         val advQuery = combineQuery(filterList)
@@ -146,13 +146,13 @@ open class NHentai(
             filterList.findInstance<OffsetPageFilter>()?.state?.toIntOrNull()?.plus(page) ?: page
 
         if (favoriteFilter?.state == true) {
-            val url = "$baseUrl/favorites".toHttpUrl().newBuilder()
+            val url = "$baseUrl/favorites/".toHttpUrl().newBuilder()
                 .addQueryParameter("q", "$fixedQuery $advQuery")
                 .addQueryParameter("page", offsetPage.toString())
 
             return GET(url.build(), headers)
         } else {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            val url = "$baseUrl/search/".toHttpUrl().newBuilder()
                 .addQueryParameter("q", "$fixedQuery $nhLangSearch$advQuery")
                 .addQueryParameter("page", offsetPage.toString())
 
