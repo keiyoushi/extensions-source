@@ -8,5 +8,5 @@ class ReaperTrans : MangaThemesia(
     "ReaperTrans",
     "https://reapertrans.com",
     "th",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")),
+    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("en")),
 )
