@@ -15,13 +15,13 @@ import java.util.Locale
 class EmpireWebtoon :
     Madara(
         "Empire Webtoon",
-        "https://webtoonsempireron.com",
+        "https://webtoonempire-ron.com",
         "ar",
         SimpleDateFormat("d MMMM، yyyy", Locale("ar")),
     ),
     ConfigurableSource {
 
-    private val defaultBaseUrl = "https://webtoonsempireron.com"
+    private val defaultBaseUrl = "https://webtoonempire-ron.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
