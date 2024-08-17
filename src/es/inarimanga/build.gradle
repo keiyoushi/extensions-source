@@ -1,0 +1,10 @@
+ext {
+    extName = 'InariPikav'
+    extClass = '.InariPikav'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://inaripikav.org'
+    overrideVersionCode = 11
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
