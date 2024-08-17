@@ -1,0 +1,10 @@
+ext {
+    extName = 'ReaperTrans'
+    extClass = '.ReaperTrans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://reapertrans.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
