@@ -138,7 +138,7 @@ open class NHentai(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val fixedQuery = query.ifEmpty { "\"\"" }
         val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val nhLangSearch = if (nhLang.isBlank()) "" else "+language:$nhLang "
+        val nhLangSearch = if (nhLang.isBlank()) "" else "language:$nhLang "
         val advQuery = combineQuery(filterList)
         val favoriteFilter = filterList.findInstance<FavoriteFilter>()
         val isOkayToSort = filterList.findInstance<UploadedFilter>()?.state?.isBlank() ?: true
@@ -173,7 +173,7 @@ open class NHentai(
                 .filterNot(String::isBlank)
                 .forEach { tag ->
                     if (tag.startsWith("-")) append("-")
-                    append(filter.name, "\"", tag.removePrefix("-"), "\" ")
+                    append(filter.name, ":\"", tag.removePrefix("-"), "\" ")
                 }
         }
     }
