@@ -7,7 +7,7 @@ import java.util.Locale
 
 class RightdarkScan : Madara(
     "Rightdark Scan",
-    "https://darken-scan.com",
+    "https://rsdleft.com",
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {

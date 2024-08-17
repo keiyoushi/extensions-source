@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class TecnoScans : MangaThemesia(
     "Tecno Scans",
-    "http://tecnoscans.xyz",
+    "https://olyscans.xyz",
     "en",
 ) {
     override val client = super.client.newBuilder()
