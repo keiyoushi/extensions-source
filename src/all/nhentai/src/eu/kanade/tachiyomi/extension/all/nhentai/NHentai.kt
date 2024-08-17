@@ -166,26 +166,17 @@ open class NHentai(
         }
     }
 
-    private fun combineQuery(filters: FilterList): String {
-        val stringBuilder = StringBuilder()
-        val advSearch = filters.filterIsInstance<AdvSearchEntryFilter>().flatMap { filter ->
-            val splitState = filter.state.split(",").map(String::trim).filterNot(String::isBlank)
-            splitState.map {
-                AdvSearchEntry(filter.name, it.removePrefix("-"), it.startsWith("-"))
-            }
+    private fun combineQuery(filters: FilterList): String = buildString {
+        filters.filterIsInstance<AdvSearchEntryFilter>().forEach { filter ->
+            filter.state.split(",")
+                .map(String::trim)
+                .filterNot(String::isBlank)
+                .forEach { tag ->
+                    if (tag.startsWith("-")) append("-")
+                    append(filter.name, "\"", tag.removePrefix("-"), "\" ")
+                }
         }
-
-        advSearch.forEach { entry ->
-            if (entry.exclude) stringBuilder.append("-")
-            stringBuilder.append("${entry.name}:")
-            stringBuilder.append(entry.text)
-            stringBuilder.append(" ")
-        }
-
-        return stringBuilder.toString()
     }
-
-    data class AdvSearchEntry(val name: String, val text: String, val exclude: Boolean)
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/g/$id", headers)
 
