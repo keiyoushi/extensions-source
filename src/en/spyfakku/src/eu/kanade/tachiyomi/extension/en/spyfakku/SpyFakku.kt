@@ -24,7 +24,7 @@ class SpyFakku : HttpSource() {
 
     override val name = "SpyFakku"
 
-    override val baseUrl = "https://fakku.cc"
+    override val baseUrl = "https://hentalk.pw"
 
     private val baseImageUrl = "https://cdn.fakku.cc/image"
 
