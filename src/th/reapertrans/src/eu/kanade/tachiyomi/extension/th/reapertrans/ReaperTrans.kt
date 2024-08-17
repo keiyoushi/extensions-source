@@ -6,7 +6,7 @@ import java.util.Locale
 
 class ReaperTrans : MangaThemesia(
     "ReaperTrans",
-    "https://www.reapertrans.com",
+    "https://reapertrans.com",
     "th",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")),
 )

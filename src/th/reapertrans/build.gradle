@@ -2,7 +2,7 @@ ext {
     extName = 'ReaperTrans'
     extClass = '.ReaperTrans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.reapertrans.com'
+    baseUrl = 'https://reapertrans.com'
     overrideVersionCode = 0
     isNsfw = true
 }
