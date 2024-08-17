@@ -19,8 +19,6 @@ class Utoon : Madara(
 
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)"
 
-    override val chapterUrlSelector = "div > a"
-
     override fun chapterFromElement(element: Element): SChapter {
         return super.chapterFromElement(element).apply {
             val currentYear = Calendar.getInstance().get(Calendar.YEAR)
