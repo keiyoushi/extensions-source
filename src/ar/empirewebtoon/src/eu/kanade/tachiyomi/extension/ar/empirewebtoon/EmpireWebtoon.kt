@@ -57,7 +57,7 @@ class EmpireWebtoon :
         screen.addPreference(baseUrlPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, DEFAULT_BASE_URL_PREF)!!
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
 
     companion object {
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
