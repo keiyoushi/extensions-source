@@ -48,6 +48,7 @@ class ReadcomicNet : ParsedHttpSource() {
         GET(
             "$baseUrl/advanced-search".toHttpUrl().newBuilder().apply {
                 addQueryParameter("key", query)
+                addQueryParameter("page", page.toString())
                 if (!filters.isEmpty()) {
                     for (filter in filters) {
                         when (filter) {
@@ -113,7 +114,8 @@ class ReadcomicNet : ParsedHttpSource() {
             date_upload = element.nextElementSibling()!!.text().let {
                 dateFormat.parse(it)?.time ?: 0L
             }
-        } catch (exception: Exception) {}
+        } catch (exception: Exception) {
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -129,6 +131,7 @@ class ReadcomicNet : ParsedHttpSource() {
             return stateArray[this.state]
         }
     }
+
     private class Genre(name: String, val gid: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
         val included: List<String>
