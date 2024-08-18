@@ -1,0 +1,10 @@
+ext {
+    extName = 'Culture Subs'
+    extClass = '.CultureSubs'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://culturesubs.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
