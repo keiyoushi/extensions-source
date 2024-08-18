@@ -48,7 +48,7 @@ class ReadcomicNet : ParsedHttpSource() {
         GET(
             "$baseUrl/advanced-search".toHttpUrl().newBuilder().apply {
                 addQueryParameter("key", query)
-                addQueryParameter("page", "" + page)
+                addQueryParameter("page", page.toString())
                 if (!filters.isEmpty()) {
                     for (filter in filters) {
                         when (filter) {
