@@ -11,7 +11,7 @@ class NoIndexScan : Madara(
     "No Index Scan",
     "https://noindexscan.com",
     "pt-BR",
-    SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
+    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
