@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import uy.kohesive.injekt.Injekt
@@ -64,7 +63,7 @@ class EmpireWebtoon :
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val RESTART_APP = "Restart app to apply new setting."
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
-        private const val BASE_URL_PREF = "overrideBaseUrl_v${BuildConfig.VERSION_CODE}"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
     }
 }
