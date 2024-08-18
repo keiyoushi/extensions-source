@@ -152,7 +152,9 @@ open class NHentai(
             return GET(url.build(), headers)
         } else {
             val url = "$baseUrl/search/".toHttpUrl().newBuilder()
-                .addQueryParameter("q", "$query $nhLangSearch$advQuery")
+                // Blank query (Multi + sort by popular month/week/day) shows a 404 page
+                // Searching for `""` is a hacky way to return everything without any filtering
+                .addQueryParameter("q", "$query $nhLangSearch$advQuery".ifBlank { "\"\"" })
                 .addQueryParameter("page", offsetPage.toString())
 
             if (isOkayToSort) {
