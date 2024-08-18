@@ -18,4 +18,7 @@ class NoIndexScan : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
+
+    override val mangaDetailsSelectorTitle = "div[class*='post-title'] h1"
+    override val mangaDetailsSelectorStatus = "div.summary-heading:has(h5:contains(Status)) + div.summary-content"
 }
