@@ -2,8 +2,8 @@ ext {
     extName = 'YonaBar'
     extClass = '.YonaBar'
     themePkg = 'madara'
-    baseUrl = 'https://yonabar.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://yonabar.xyz'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
