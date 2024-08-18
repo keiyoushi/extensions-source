@@ -3,7 +3,7 @@ ext {
     extClass = '.RawINU'
     themePkg = 'fmreader'
     baseUrl = 'https://rawinu.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

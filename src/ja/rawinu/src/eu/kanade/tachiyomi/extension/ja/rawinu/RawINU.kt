@@ -7,7 +7,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -20,7 +22,27 @@ class RawINU : FMReader(
 ) {
     override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .addInterceptor(::ddosChallengeInterceptor)
         .build()
+
+    private val patternDdosKey = """'([a-f0-9]{32})'""".toRegex()
+
+    private fun ddosChallengeInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        if (response.code != 200) return response
+        if (response.header("Content-Type")?.contains("text/html") != true) return response
+
+        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+        if (!responseBody.contains("DDoS protection is activated for your IP")) return response
+        val ddosKey = patternDdosKey.find(responseBody)?.groupValues?.get(1) ?: return response
+
+        val cookie = Cookie.parse(request.url, "ct_anti_ddos_key=$ddosKey")
+        client.cookieJar.saveFromResponse(request.url, listOfNotNull(cookie))
+
+        // Redo exact same request
+        return chain.proceed(request)
+    }
 
     private val apiEndpoint = "$baseUrl/app/manga/controllers"
 
