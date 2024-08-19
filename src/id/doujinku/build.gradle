@@ -2,8 +2,8 @@ ext {
     extName = 'Doujinku'
     extClass = '.Doujinku'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://doujinku.org'
-    overrideVersionCode = 0
+    baseUrl = 'https://doujinku.xyz'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
