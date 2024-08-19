@@ -1,6 +1,6 @@
 ext {
     extName = 'ComicsKingdom'
-    extClass = '.ComicsKingdom'
+    extClass = '.ComicsKingdomFactory'
     extVersionCode = 1
 }
 
