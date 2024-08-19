@@ -242,7 +242,7 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
     private fun archiveToSManga(archive: Archive) = SManga.create().apply {
         url = "/reader?id=${archive.arcid}"
         title = archive.title
-        description = archive.title
+        description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
         thumbnail_url = getThumbnailUri(archive.arcid)
         genre = archive.tags?.replace(",", ", ")
         artist = getArtist(archive.tags)
