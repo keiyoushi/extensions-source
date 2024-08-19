@@ -115,7 +115,6 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, ParsedHttpS
         thumbnail_url = document.selectFirst(".feature-header__media img")?.attr("abs:src")
     }
 
-
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaName = response.request.url.pathSegments.last()
 
