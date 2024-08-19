@@ -3,7 +3,7 @@ ext {
     extClass = '.NoIndexScan'
     themePkg = 'madara'
     baseUrl = 'https://noindexscan.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
