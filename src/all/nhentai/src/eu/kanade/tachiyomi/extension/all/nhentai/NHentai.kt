@@ -140,7 +140,6 @@ open class NHentai(
         val nhLangSearch = if (nhLang.isBlank()) "" else "language:$nhLang "
         val advQuery = combineQuery(filterList)
         val favoriteFilter = filterList.findInstance<FavoriteFilter>()
-        val isOkayToSort = filterList.findInstance<UploadedFilter>()?.state?.isBlank() ?: true
         val offsetPage =
             filterList.findInstance<OffsetPageFilter>()?.state?.toIntOrNull()?.plus(page) ?: page
 
@@ -157,10 +156,8 @@ open class NHentai(
                 .addQueryParameter("q", "$query $nhLangSearch$advQuery".ifBlank { "\"\"" })
                 .addQueryParameter("page", offsetPage.toString())
 
-            if (isOkayToSort) {
-                filterList.findInstance<SortFilter>()?.let { f ->
-                    url.addQueryParameter("sort", f.toUriPart())
-                }
+            filterList.findInstance<SortFilter>()?.let { f ->
+                url.addQueryParameter("sort", f.toUriPart())
             }
 
             return GET(url.build(), headers)
@@ -173,8 +170,13 @@ open class NHentai(
                 .map(String::trim)
                 .filterNot(String::isBlank)
                 .forEach { tag ->
+                    val y = !(filter.name == "Pages" || filter.name == "Uploaded")
                     if (tag.startsWith("-")) append("-")
-                    append(filter.name, ":\"", tag.removePrefix("-"), "\" ")
+                    append(filter.name, ':')
+                    if (y) append('"')
+                    append(tag.removePrefix("-"))
+                    if (y) append('"')
+                    append(" ")
                 }
         }
     }
