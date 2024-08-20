@@ -11,6 +11,7 @@ class NgamenKomik : ZeistManga("NgamenKomik", "https://ngamenkomik05.blogspot.co
         .rateLimit(3)
         .build()
 
+    // ============================== Filters ===============================
     override val hasFilters = true
 
     override val hasLanguageFilter = false
