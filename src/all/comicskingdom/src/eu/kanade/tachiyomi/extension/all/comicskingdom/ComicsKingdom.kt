@@ -237,13 +237,13 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
         fun getValue(): String = values[state]
     }
 
-    private class Genre(name: String, val gid: String) : Filter.CheckBox(name)
+    private class Genre(name: String, val gid: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
         val included: List<String>
-            get() = state.filter { it.state }.map { it.gid }
+            get() = state.filter { it.isIncluded() }.map { it.gid }
 
         val excluded: List<String>
-            get() = state.filter { it.state }.map { it.gid }
+            get() = state.filter { it.isExcluded() }.map { it.gid }
     }
 
     override fun getFilterList() = FilterList(
