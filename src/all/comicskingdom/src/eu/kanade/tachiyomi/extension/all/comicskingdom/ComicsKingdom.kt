@@ -2,21 +2,23 @@ package eu.kanade.tachiyomi.extension.all.comicskingdom
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
@@ -27,117 +29,133 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-class ComicsKingdom(override val lang: String) : ConfigurableSource, ParsedHttpSource() {
-
-    private val json: Json by injectLazy()
-    private val langText = if (lang == "en") "comics" else "spanish"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
-    private val compactChapterCountRegex = Regex("\"totalItems\":(\\d+)")
-    private val urlBase = "comicskingdom.com"
+class ComicsKingdom(override val lang: String) : ConfigurableSource,
+    ParsedHttpSource() {
 
     override val name = "Comics Kingdom"
-
-    override val baseUrl = "https://$urlBase"
-
+    override val baseUrl = "https://wp.comicskingdom.com/wp-json/wp/v2"
     override val supportsLatest = true
 
-    override fun popularMangaSelector() = ".comic-result-container .comic-card"
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun searchMangaSelector() =
-        "h2:contains(Comic Titles) ~ div .posts-container .comic-card"
+    private val json: Json by injectLazy()
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+    private val compactChapterCountRegex = Regex("\"totalItems\":(\\d+)")
+    private val thumbnailUrlRegex = Regex("thumbnailUrl\":\"(\\S+)\",\"dateP")
 
-    override fun popularMangaNextPageSelector() = ".ck-pagination__item--next"
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaNextPageSelector() =
-        "h2:contains(Comic Titles) ~ div .ck-pagination__item--next"
+    private val mangaPerPage = 20
+    private val chapterPerPage = 100
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/$langText?page=$page", headers)
+    private fun mangaApiUrl(): HttpUrl.Builder =
+        baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("ck_feature")
+            addQueryParameter("per_page", mangaPerPage.toString())
+            addQueryParameter("_fields", MangaFields)
+            addQueryParameter("ck_language", if (lang == "es") "spanish" else "english")
+        }
+
+    private fun chapterApiUrl(): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("ck_comic")
+        addQueryParameter("per_page", chapterPerPage.toString()) // 100 is max
+        addQueryParameter("_fields", ChapterFields)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/$langText?page=$page&sortby=newest", headers)
-    }
+    private fun getReq(orderBy: String, page: Int): Request = GET(
+        mangaApiUrl().apply {
+            addQueryParameter("orderBy", orderBy)
+            addQueryParameter("page", page.toString())
+        }.build(),
+        headers,
+    )
 
+    override fun popularMangaRequest(page: Int): Request = getReq("relevance", page)
+    override fun latestUpdatesRequest(page: Int): Request = getReq("modified", page)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET(
-            "$baseUrl/search".toHttpUrl().newBuilder().apply {
-                addQueryParameter("key", query)
-                // addQueryParameter("page", page.toString()) for singular strips
-                addQueryParameter("featurepage", page.toString())
+            mangaApiUrl().apply {
+                addQueryParameter("search", query)
+                addQueryParameter("page", page.toString())
+
                 if (!filters.isEmpty()) {
                     for (filter in filters) {
                         when (filter) {
-                            is SortFilter -> {
-                                addQueryParameter("sortby", filter.getSortQuery())
+                            is OrderFilter -> {
+                                addQueryParameter("orderby", filter.getValue())
                             }
 
                             is GenreList -> {
-                                // addQueryParameter("ck_genre", filter.included.joinToString(",")) for singular strips
-                                addQueryParameter(
-                                    "feature_genre",
-                                    filter.included.joinToString(","),
-                                )
+                                if (filter.included.isNotEmpty()) {
+                                    addQueryParameter(
+                                        "ck_genre",
+                                        filter.included.joinToString(","),
+                                    )
+                                }
+                                if (filter.excluded.isNotEmpty()) {
+                                    addQueryParameter(
+                                        "ck_genre_exclude",
+                                        filter.excluded.joinToString(","),
+                                    )
+                                }
                             }
 
                             else -> {}
                         }
                     }
                 }
-
-                if (lang == "es") {
-                    addQueryParameter("feature_language", "spanish")
-                    //    addQueryParameter("ck_language", "spanish")  for singular strips
-                }
             }.build(),
             headers,
         )
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(
-                element.selectFirst(".card-title__link")!!.attr("abs:href")
-                    .substringBeforeLast("/"),
-            )
-            title = element.selectFirst(".card-title__link")!!.text()
-            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-        }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
+    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val list = json.decodeFromString<List<Manga>>(response.body.string())
+        return MangasPage(
+            list.map {
+                SManga.create().apply {
+                    thumbnail_url = thumbnailUrlRegex.find(it.yoast_head)?.groupValues?.get(1)
+                    url =
+                        mangaApiUrl().apply { addPathSegment(it.id.toString()) }.build().toString()
+                    title = it.title.rendered
+                }
+            },
+            list.count() == mangaPerPage,
+        )
+    }
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val mangaData = json.decodeFromString<Manga>(response.body.string())
+        title = mangaData.title.rendered
+        author = mangaData.meta.ck_byline_on_app.substringAfter("By").trim()
+        description = Jsoup.parse(mangaData.content.rendered).text()
         status = SManga.UNKNOWN
-        author = document.selectFirst(".feature-card .card-content")?.text()
-        description = document.selectFirst(".feature-about__description")?.text()
-        thumbnail_url = document.selectFirst(".feature-header__media img")?.attr("abs:src")
+        thumbnail_url = thumbnailUrlRegex.find(mangaData.yoast_head)?.groupValues?.get(1)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaName = response.request.url.pathSegments.last()
+        val mangaData = json.decodeFromString<Manga>(response.body.string())
+        val mangaName = mangaData.link.toHttpUrl().pathSegments.last()
 
         if (shouldCompact()) {
-            val postCount = compactChapterCountRegex.findAll(response.body.string())
+            val res = client.newCall(GET(mangaData.link)).execute()
+            val postCount = compactChapterCountRegex.findAll(res.body.string())
                 .find { result -> result.groupValues[1].toDouble() > 0 }!!.groupValues[1].toDouble()
+            res.close()
             val maxPage = ceil(postCount / 100) // 100 is max for the api
             return List(maxPage.roundToInt()) { idx ->
                 SChapter.create().apply {
                     chapter_number = idx * 0.01F
                     name =
                         "${idx * 100 + 1}-${if (postCount - (idx + 1) * 100 < 0) postCount.toInt() else (idx + 1) * 100}"
-                    url =
-                        "https://wp.$urlBase/wp-json/wp/v2/ck_comic".toHttpUrl()
-                            .newBuilder() // https://wp.comicskingdom.com/wp-json/wp/v2 shows all api endpoints and possible args
-                            .apply {
-                                addQueryParameter("per_page", 100.toString()) // 100 is max
-                                addQueryParameter("orderBy", "date")
-                                addQueryParameter("order", "asc")
-                                addQueryParameter("_fields", "link,date,assets")
-                                addQueryParameter("ck_feature", mangaName)
-                                addQueryParameter("page", (idx + 1).toString())
-                            }.build().toString()
+                    url = chapterApiUrl().apply {
+                        addQueryParameter("orderBy", "date")
+                        addQueryParameter("order", "asc")
+                        addQueryParameter("ck_feature", mangaName)
+                        addQueryParameter("page", (idx + 1).toString())
+                    }.build().toString()
                 }
             }.reversed()
         }
@@ -152,9 +170,8 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, ParsedHttpS
             val list = chapterData.map {
                 chapterNum += 0.01F
                 SChapter.create().apply {
-                    Log.i("comics", it.link)
                     chapter_number = chapterNum
-                    setUrlWithoutDomain(it.link)
+                    url = chapterApiUrl().apply { addPathSegment(it.id.toString()) }.toString()
                     date_upload = dateFormat.parse(it.date).time
                     name = it.date.substringBefore("T")
                 }
@@ -162,7 +179,6 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, ParsedHttpS
             chapters.addAll(list)
 
             if (list.count() < 100) {
-                Log.i("comics", "End of chapterParse")
                 break
             }
 
@@ -179,61 +195,59 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, ParsedHttpS
         return chapters
     }
 
-    private fun getChapterList(mangaName: String, page: Int): List<ComicsKingdomDto.Chapter> {
-        val url = "https://wp.$urlBase/wp-json/wp/v2/ck_comic".toHttpUrl().newBuilder().apply {
-            addQueryParameter("per_page", "" + 100) // 100 is max
+    private fun getChapterList(mangaName: String, page: Int): List<Chapter> {
+        val url = chapterApiUrl().apply {
             addQueryParameter("order", "desc")
-            addQueryParameter("_fields", "link,date")
             addQueryParameter("ck_feature", mangaName)
-            addQueryParameter("page", "" + page)
+            addQueryParameter("page", page.toString())
         }.build()
 
         val call = client.newCall(GET(url, headers)).execute()
         val body = call.body.string()
         call.close()
-        return json.decodeFromString<List<ComicsKingdomDto.Chapter>>(body)
+        return json.decodeFromString<List<Chapter>>(body)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url.startsWith("https://wp")) return GET(chapter.url, headers)
-        return super.pageListRequest(chapter)
-    }
-
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
         if (shouldCompact()) {
-            return json.decodeFromString<List<ComicsKingdomDto.Chapter>>(document.body().text())
+            return json.decodeFromString<List<Chapter>>(response.body.string())
                 .mapIndexed { idx, chapter ->
                     Page(idx, imageUrl = chapter.assets!!.single.url)
                 }
         }
-
-        return listOf(
-            Page(
-                1,
-                imageUrl = document.selectFirst(".ck-single-panel-reader img")!!
-                    .attr("abs:src").toHttpUrl().queryParameter("url")!!.substringBefore("&"),
-            ),
-        )
+        val chapter = json.decodeFromString<Chapter>(response.body.string())
+        return listOf(Page(0, imageUrl = chapter.assets!!.single.url))
     }
 
-    private class SortFilter :
-        Filter.Select<String>("Sort by", arrayOf("Newest First", "Oldest First")) {
-        fun getSortQuery(): String {
-            return if (state == 0) "newest" else "oldest"
-        }
+    private class OrderFilter :
+        Filter.Select<String>(
+            "Order by",
+            arrayOf(
+                "author",
+                "date",
+                "id",
+                "include",
+                "modified",
+                "parent",
+                "relevance",
+                "title",
+                "rand",
+            ),
+        ) {
+        fun getValue(): String = values[state]
     }
 
     private class Genre(name: String, val gid: String) : Filter.CheckBox(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
         val included: List<String>
             get() = state.filter { it.state }.map { it.gid }
+
+        val excluded: List<String>
+            get() = state.filter { it.state }.map { it.gid }
     }
 
     override fun getFilterList() = FilterList(
-        SortFilter(),
+        OrderFilter(),
         GenreList(getGenreList()),
     )
 
@@ -268,10 +282,6 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, ParsedHttpS
             summary =
                 "Unchecking this will make each daily/weekly upload into a chapter which can be very slow because some comics have 8000+ uploads"
             isChecked = true
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean("compactPref", newValue as Boolean).commit()
-            }
         }
 
         screen.addPreference(compactpref)
@@ -282,4 +292,38 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, ParsedHttpS
     }
 
     private fun shouldCompact() = preferences.getBoolean("compactPref", true)
+
+    override fun popularMangaSelector() =
+        throw UnsupportedOperationException()
+
+    override fun latestUpdatesSelector() =
+        throw UnsupportedOperationException()
+
+    override fun searchMangaSelector() =
+        throw UnsupportedOperationException()
+
+    override fun popularMangaNextPageSelector() =
+        throw UnsupportedOperationException()
+
+    override fun latestUpdatesNextPageSelector() =
+        throw UnsupportedOperationException()
+
+    override fun searchMangaNextPageSelector() =
+        throw UnsupportedOperationException()
+
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        throw UnsupportedOperationException()
+
+    override fun searchMangaFromElement(element: Element): SManga =
+        throw UnsupportedOperationException()
+
+    override fun popularMangaFromElement(element: Element): SManga =
+        throw UnsupportedOperationException()
+
+    override fun mangaDetailsParse(document: Document): SManga =
+        throw UnsupportedOperationException()
+
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 }
