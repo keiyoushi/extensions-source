@@ -11,7 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
-class Firecomics : Madara("Firecomics", "https://firecomics.org", "en") {
+class Firescans : Madara("Firescans", "https://firescans.xyz", "en") {
 
     override val id: Long = 5761461704760730187
     override val client: OkHttpClient = super.client.newBuilder()

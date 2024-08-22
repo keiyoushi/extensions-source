@@ -1,9 +1,9 @@
 ext {
-    extName = 'Firecomics'
-    extClass = '.Firecomics'
+    extName = 'Firescans'
+    extClass = '.Firescans'
     themePkg = 'madara'
-    baseUrl = 'https://firecomics.org'
-    overrideVersionCode = 2
+    baseUrl = 'https://firescans.xyz'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
