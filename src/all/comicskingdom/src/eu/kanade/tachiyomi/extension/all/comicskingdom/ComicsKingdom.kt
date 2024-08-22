@@ -54,7 +54,7 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
 
     private fun chapterApiUrl(): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegment("ck_comic")
-        addQueryParameter("per_page", chapterPerPage.toString()) // 100 is max
+        addQueryParameter("per_page", chapterPerPage.toString())
         addQueryParameter("_fields", ChapterFields)
     }
 
@@ -144,12 +144,12 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
             val postCount = compactChapterCountRegex.findAll(res.body.string())
                 .find { result -> result.groupValues[1].toDouble() > 0 }!!.groupValues[1].toDouble()
             res.close()
-            val maxPage = ceil(postCount / 100) // 100 is max for the api
+            val maxPage = ceil(postCount / chapterPerPage)
             return List(maxPage.roundToInt()) { idx ->
                 SChapter.create().apply {
                     chapter_number = idx * 0.01F
                     name =
-                        "${idx * 100 + 1}-${if (postCount - (idx + 1) * 100 < 0) postCount.toInt() else (idx + 1) * 100}"
+                        "${idx * chapterPerPage + 1}-${if (postCount - (idx + 1) * chapterPerPage < 0) postCount.toInt() else (idx + 1) * chapterPerPage}"
                     url = chapterApiUrl().apply {
                         addQueryParameter("orderBy", "date")
                         addQueryParameter("order", "asc")
@@ -253,8 +253,6 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
 
     override fun imageUrlParse(document: Document): String = ""
 
-    // [...document.querySelectorAll(".search-checks li")].map((el) => `Genre("${el.innerText}", "${el.innerText.replaceAll(" ","+")}")`).join(',\n')
-    // on https://readcomic.net/advanced-search
     private fun getGenreList() = listOf(
         Genre("Action", "action"),
         Genre("Adventure", "adventure"),
@@ -293,35 +291,19 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
 
     private fun shouldCompact() = preferences.getBoolean("compactPref", true)
 
-    override fun popularMangaSelector() =
-        throw UnsupportedOperationException()
+    override fun popularMangaSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() =
-        throw UnsupportedOperationException()
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector() =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector() =
-        throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector() =
-        throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector() =
-        throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document): SManga =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
