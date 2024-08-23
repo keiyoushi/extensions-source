@@ -7,6 +7,7 @@ data class Archive(
     val arcid: String,
     val isnew: String,
     val tags: String?,
+    val summary: String?,
     val title: String,
 )
 
@@ -25,7 +26,6 @@ data class ArchiveSearchResult(
 @Serializable
 data class Category(
     val id: String,
-    val last_used: String,
     val name: String,
     val pinned: String,
 )
