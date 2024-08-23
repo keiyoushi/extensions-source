@@ -6,18 +6,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class LeerComicsOnline : ParsedHttpSource() {
+class LeerComicsOnline : HttpSource() {
 
     override val name = "Leer Comics Online"
     override val baseUrl = "https://leercomicsonline.com"
@@ -54,6 +52,7 @@ class LeerComicsOnline : ParsedHttpSource() {
         return MangasPage(
             comics.subList((page - 1) * comicsPerPage, page * comicsPerPage).map { comic ->
                 SManga.create().apply {
+                    initialized = true
                     title = comic.title
                     thumbnail_url = baseUrl.toHttpUrl().newBuilder().apply {
                         addPathSegment("images")
@@ -64,6 +63,7 @@ class LeerComicsOnline : ParsedHttpSource() {
                             addPathSegment("api")
                             addPathSegments("comics")
                             addQueryParameter("serieId", comic.id.toString())
+                            addQueryParameter("slug", comic.url)
                         }.build().toString(),
                     )
                 }
@@ -83,6 +83,11 @@ class LeerComicsOnline : ParsedHttpSource() {
         )
     }
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("categorias")
+        addPathSegment((baseUrl + manga.url).toHttpUrl().queryParameter("slug").toString())
+    }.build().toString()
+
     override fun chapterListParse(response: Response): List<SChapter> =
         json.decodeFromString<List<Comic>>(response.body.string()).reversed().map {
             SChapter.create().apply {
@@ -96,12 +101,15 @@ class LeerComicsOnline : ParsedHttpSource() {
                             "letter",
                             it.url.first().toString(),
                         )
+                        addQueryParameter("slug", it.url)
                     }.build().toString(),
                 )
             }
         }
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create()
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment((baseUrl + chapter.url).toHttpUrl().queryParameter("slug").toString())
+    }.build().toString()
 
     override fun pageListParse(response: Response): List<Page> {
         return try { // some chapters are just empty
@@ -120,18 +128,11 @@ class LeerComicsOnline : ParsedHttpSource() {
         val id: Int,
     )
 
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        throw UnsupportedOperationException()
+
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(response: Element): SManga = throw UnsupportedOperationException()
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga =
+        throw UnsupportedOperationException()
 }
