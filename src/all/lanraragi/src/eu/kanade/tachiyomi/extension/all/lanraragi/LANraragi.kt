@@ -242,7 +242,7 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
     private fun archiveToSManga(archive: Archive) = SManga.create().apply {
         url = "/reader?id=${archive.arcid}"
         title = archive.title
-        description = archive.title
+        description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
         thumbnail_url = getThumbnailUri(archive.arcid)
         genre = archive.tags?.replace(",", ", ")
         artist = getArtist(archive.tags)
@@ -406,12 +406,10 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
 
     private fun getCategoryPairs(categories: List<Category>): Array<Pair<String?, String>> {
         // Empty pair to disable. Sort by pinned status then name for convenience.
-        // Web client sort is pinned > last_used but reflects between page changes.
 
         val pin = "\uD83D\uDCCC "
 
-        // Maintain categories sync for next FilterList reset. If there's demand for it, it's now
-        // possible to sort by last_used similar to the web client. Maybe an option toggle?
+        // Maintain categories sync for next FilterList reset.
         getCategories()
 
         return listOf(Pair("", ""))
