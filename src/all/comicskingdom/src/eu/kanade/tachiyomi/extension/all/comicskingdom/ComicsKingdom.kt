@@ -33,7 +33,7 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
     ParsedHttpSource() {
 
     override val name = "Comics Kingdom"
-    override val baseUrl = "https://wp.comicskingdom.com/wp-json/wp/v2"
+    override val baseUrl = "https://wp.comicskingdom.com"
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
@@ -46,6 +46,7 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
 
     private fun mangaApiUrl(): HttpUrl.Builder =
         baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("wp-json/wp/v2")
             addPathSegment("ck_feature")
             addQueryParameter("per_page", mangaPerPage.toString())
             addQueryParameter("_fields", MangaFields)
@@ -53,6 +54,7 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
         }
 
     private fun chapterApiUrl(): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegments("wp-json/wp/v2")
         addPathSegment("ck_comic")
         addQueryParameter("per_page", chapterPerPage.toString())
         addQueryParameter("_fields", ChapterFields)
@@ -104,18 +106,13 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
             headers,
         )
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
-    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
-
     override fun searchMangaParse(response: Response): MangasPage {
         val list = json.decodeFromString<List<Manga>>(response.body.string())
         return MangasPage(
             list.map {
                 SManga.create().apply {
                     thumbnail_url = thumbnailUrlRegex.find(it.yoast_head)?.groupValues?.get(1)
-                    url =
-                        mangaApiUrl().apply { addPathSegment(it.id.toString()) }.build().toString()
+                    setUrlWithoutDomain(mangaApiUrl().apply { addPathSegment(it.id.toString()) }.build().toString())
                     title = it.title.rendered
                 }
             },
@@ -150,12 +147,14 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
                     chapter_number = idx * 0.01F
                     name =
                         "${idx * chapterPerPage + 1}-${if (postCount - (idx + 1) * chapterPerPage < 0) postCount.toInt() else (idx + 1) * chapterPerPage}"
-                    url = chapterApiUrl().apply {
-                        addQueryParameter("orderBy", "date")
-                        addQueryParameter("order", "asc")
-                        addQueryParameter("ck_feature", mangaName)
-                        addQueryParameter("page", (idx + 1).toString())
-                    }.build().toString()
+                    setUrlWithoutDomain(
+                        chapterApiUrl().apply {
+                            addQueryParameter("orderBy", "date")
+                            addQueryParameter("order", "asc")
+                            addQueryParameter("ck_feature", mangaName)
+                            addQueryParameter("page", (idx + 1).toString())
+                        }.build().toString(),
+                    )
                 }
             }.reversed()
         }
@@ -171,7 +170,7 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
                 chapterNum += 0.01F
                 SChapter.create().apply {
                     chapter_number = chapterNum
-                    url = chapterApiUrl().apply { addPathSegment(it.id.toString()) }.toString()
+                    setUrlWithoutDomain(chapterApiUrl().apply { addPathSegment(it.id.toString()) }.toString())
                     date_upload = dateFormat.parse(it.date).time
                     name = it.date.substringBefore("T")
                 }
