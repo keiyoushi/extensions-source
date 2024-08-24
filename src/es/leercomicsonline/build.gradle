@@ -1,0 +1,7 @@
+ext {
+    extName = 'Leer Comics Online'
+    extClass = '.LeerComicsOnline'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
