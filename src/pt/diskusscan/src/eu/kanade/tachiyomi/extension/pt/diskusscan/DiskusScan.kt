@@ -98,7 +98,7 @@ class DiskusScan : MangaThemesia(
 
                 private fun WebResourceRequest.isOriginRequest(): Boolean =
                     this.url.toString().equals(origin.url.toString(), true)
-                
+
                 private fun emptyResource() = WebResourceResponse(null, null, null)
             }
             webView.loadUrl(origin.url.toString())

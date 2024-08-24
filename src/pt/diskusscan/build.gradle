@@ -3,7 +3,7 @@ ext {
     extClass = '.DiskusScan'
     themePkg = 'mangathemesia'
     baseUrl = 'https://diskusscan.com'
-    overrideVersionCode = 11
+    overrideVersionCode = 12
 }
 
 apply from: "$rootDir/common.gradle"
