@@ -40,6 +40,8 @@ class YugenMangas : HttpSource() {
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
+    override val versionId = 2
+
     private val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
