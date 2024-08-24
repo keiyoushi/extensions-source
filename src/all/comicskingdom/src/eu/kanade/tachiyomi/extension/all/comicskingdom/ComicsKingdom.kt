@@ -11,7 +11,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
@@ -19,8 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -29,8 +27,7 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-class ComicsKingdom(override val lang: String) : ConfigurableSource,
-    ParsedHttpSource() {
+class ComicsKingdom(override val lang: String) : ConfigurableSource, HttpSource() {
 
     override val name = "Comics Kingdom"
     override val baseUrl = "https://wp.comicskingdom.com"
@@ -112,7 +109,13 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
             list.map {
                 SManga.create().apply {
                     thumbnail_url = thumbnailUrlRegex.find(it.yoast_head)?.groupValues?.get(1)
-                    setUrlWithoutDomain(mangaApiUrl().apply { addPathSegment(it.id.toString()) }.build().toString())
+                    setUrlWithoutDomain(
+                        mangaApiUrl().apply {
+                            addPathSegment(it.id.toString())
+                            addQueryParameter("slug", it.link.toHttpUrl().pathSegments.last())
+                        }
+                            .build().toString(),
+                    )
                     title = it.title.rendered
                 }
             },
@@ -131,6 +134,9 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
         status = SManga.UNKNOWN
         thumbnail_url = thumbnailUrlRegex.find(mangaData.yoast_head)?.groupValues?.get(1)
     }
+
+    override fun getMangaUrl(manga: SManga): String =
+        "$baseUrl/${(baseUrl + manga.url).toHttpUrl().queryParameter("slug")}"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaData = json.decodeFromString<Manga>(response.body.string())
@@ -170,7 +176,13 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
                 chapterNum += 0.01F
                 SChapter.create().apply {
                     chapter_number = chapterNum
-                    setUrlWithoutDomain(chapterApiUrl().apply { addPathSegment(it.id.toString()) }.toString())
+                    setUrlWithoutDomain(
+                        chapterApiUrl().apply {
+                            addPathSegment(it.id.toString())
+                            addQueryParameter("slug", it.link.substringAfter(baseUrl))
+                        }
+                            .toString(),
+                    )
                     date_upload = dateFormat.parse(it.date).time
                     name = it.date.substringBefore("T")
                 }
@@ -205,6 +217,13 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
         val body = call.body.string()
         call.close()
         return json.decodeFromString<List<Chapter>>(body)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (shouldCompact()) {
+            return "$baseUrl/${(baseUrl + chapter.url).toHttpUrl().queryParameter("ck_feature")}"
+        }
+        return "$baseUrl/${(baseUrl + chapter.url).toHttpUrl().queryParameter("slug")}"
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -250,8 +269,6 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
         GenreList(getGenreList()),
     )
 
-    override fun imageUrlParse(document: Document): String = ""
-
     private fun getGenreList() = listOf(
         Genre("Action", "action"),
         Genre("Adventure", "adventure"),
@@ -290,21 +307,5 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource,
 
     private fun shouldCompact() = preferences.getBoolean("compactPref", true)
 
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
-
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

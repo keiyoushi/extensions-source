@@ -7,6 +7,7 @@ class Chapter(
     val id: Int,
     val date: String,
     val assets: Assets?,
+    val link: String,
 )
 
 @Serializable
