@@ -1,83 +1,112 @@
 package eu.kanade.tachiyomi.extension.pt.yugenmangas
 
+import eu.kanade.tachiyomi.extension.pt.yugenmangas.YugenMangas.Companion.DATE_FORMAT
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.util.Calendar
 
 @Serializable
-class YugenMangaDto(
+class PageDto<T>(
+    @SerialName("current_page")
+    val page: Int,
+    @SerialName("total_pages")
+    val totalPages: Int,
+    val results: List<T>,
+) {
+    fun hasNext() = page < totalPages
+}
+
+@Serializable
+class MangaDto(
+    @JsonNames("series_code")
+    val code: String,
+    @JsonNames("path_cover")
+    val cover: String,
+    @JsonNames("title", "series_name")
     val name: String,
-    @JsonNames("capa", "cover") val cover: String,
-    val slug: String,
+) {
+    fun toSManga(): SManga = SManga.create().apply {
+        title = this@MangaDto.name
+        thumbnail_url = cover
+        url = "/series/$code"
+    }
+}
+
+@Serializable
+class LatestUpdatesDto(
+    val series: List<MangaDto>,
+)
+
+@Serializable
+class MangaDetailsDto(
+    val title: String,
+    @SerialName("path_cover")
+    val cover: String,
+    val code: String,
     val author: String? = null,
     val artist: String? = null,
     val genres: List<String> = emptyList(),
     val synopsis: String? = null,
     val status: String? = null,
 ) {
-
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
-        title = name
-        author = this@YugenMangaDto.author
-        artist = this@YugenMangaDto.artist
+    fun toSManga(): SManga = SManga.create().apply {
+        title = this@MangaDetailsDto.title
+        author = this@MangaDetailsDto.author
+        artist = this@MangaDetailsDto.artist
         description = synopsis
-        status = when (this@YugenMangaDto.status) {
-            "ongoing" -> SManga.ONGOING
-            "completed", "finished" -> SManga.COMPLETED
+        status = when (this@MangaDetailsDto.status) {
+            "Em Lançamento" -> SManga.ONGOING
+            "Hiato" -> SManga.ON_HIATUS
+            "Cancelado" -> SManga.CANCELLED
+            "Finalizado" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-
-        thumbnail_url = when {
-            cover.startsWith(listOf("/", "cover")) -> "$baseUrl/media/${cover.removePrefix("/")}"
-            else -> cover
-        }
-        url = "/series/$slug"
+        genre = genres.joinToString()
+        thumbnail_url = cover
+        url = "/series/$code"
     }
-
-    private fun String.startsWith(group: List<String>): Boolean = group.any(::startsWith)
 }
 
 @Serializable
-class YugenChapterListDto(val chapters: List<YugenChapterDto>)
-
-@Serializable
-class YugenChapterDto(
+class ChapterDto(
+    val code: String,
     val name: String,
-    val season: Int,
-    @SerialName("upload_date") val uploadDate: String,
-    val slug: String,
-    val group: String,
+    @SerialName("upload_date")
+    val date: String,
 ) {
-
-    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        name = this@YugenChapterDto.name
-        date_upload = runCatching { DATE_FORMATTER.parse(uploadDate)?.time }
-            .getOrNull() ?: 0L
-        chapter_number = this@YugenChapterDto.name
-            .removePrefix("Capítulo ")
-            .substringBefore(" - ")
-            .toFloatOrNull() ?: -1f
-        scanlator = group.ifEmpty { null }
-        url = "/series/$mangaSlug/$slug"
+    fun toSChapter(mangaCode: String): SChapter = SChapter.create().apply {
+        name = this@ChapterDto.name
+        date_upload = try { parseDate() } catch (_: Exception) { 0L }
+        url = "/series/$mangaCode/$code"
     }
 
-    companion object {
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
-        }
+    private fun parseDate(): Long {
+        return try {
+            if ("dia" in date) {
+                val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0L
+                return Calendar.getInstance().let {
+                    it.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+                }
+            }
+            return DATE_FORMAT.parse(date)!!.time
+        } catch (_: Exception) { 0L }
     }
 }
 
 @Serializable
-data class YugenGetChaptersBySeriesDto(
-    @SerialName("serie_slug") val seriesSlug: String,
+class SeriesDto(
+    val code: String,
 )
 
 @Serializable
-class YugenPageList(
-    @SerialName("chapter_images") val chapterImages: List<String>,
+class SearchDto(
+    val query: String,
+)
+
+@Serializable
+class PageListDto(
+    val images: List<String>,
 )
