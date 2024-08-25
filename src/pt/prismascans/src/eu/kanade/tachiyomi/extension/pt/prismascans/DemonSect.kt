@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 class DemonSect : MangaThemesia(
     "Demon Sect",
-    "https://dsectcomics.org",
+    "https://seitacelestial.com",
     "pt-BR",
     "/comics",
 ) {
