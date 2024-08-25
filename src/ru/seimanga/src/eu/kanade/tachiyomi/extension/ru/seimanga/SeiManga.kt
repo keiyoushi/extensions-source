@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ru.mintmanga
+package eu.kanade.tachiyomi.extension.ru.seimanga
 
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -8,9 +8,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Request
 
-class MintManga : GroupLe("MintManga", "https://1.mintmanga.com", "ru") {
-
-    override val id: Long = 6
+class SeiManga : GroupLe("SeiManga", "https://1.seimanga.me", "ru") {
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -192,7 +190,7 @@ class MintManga : GroupLe("MintManga", "https://1.mintmanga.com", "ru") {
     }
 
     companion object {
-        private const val DOMAIN_PREF = "Домен"
+        private const val DOMAIN_PREF = "pref_domain"
         private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
         private const val DOMAIN_TITLE = "Домен"
     }
