@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ru.mintmanga
+package eu.kanade.tachiyomi.extension.ru.seimanga
 
 import android.app.Application
 import android.widget.Toast
@@ -11,9 +11,7 @@ import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class MintManga : GroupLe("MintManga", "https://1.mintmanga.com", "ru") {
-
-    override val id: Long = 6
+class SeiManga : GroupLe("SeiManga", "https://1.seimanga.me", "ru") {
 
     private val preferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -198,7 +196,7 @@ class MintManga : GroupLe("MintManga", "https://1.mintmanga.com", "ru") {
     }
 
     companion object {
-        private const val DOMAIN_PREF = "Домен"
+        private const val DOMAIN_PREF = "pref_domain"
         private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
         private const val DOMAIN_TITLE = "Домен"
     }
