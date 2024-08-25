@@ -1,0 +1,10 @@
+ext {
+    extName = 'Scans 4u'
+    extClass = '.Scans4u'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://4uscans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
