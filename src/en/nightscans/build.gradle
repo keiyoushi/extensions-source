@@ -2,8 +2,8 @@ ext {
     extName = 'NIGHT SCANS'
     extClass = '.NightScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://night-scans.com'
-    overrideVersionCode = 7
+    baseUrl = 'https://nightsup.net'
+    overrideVersionCode = 8
     isNsfw = true
 }
 
