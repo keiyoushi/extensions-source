@@ -20,7 +20,7 @@ class Nartag : ParsedHttpSource() {
 
     override val name = "Traducciones Amistosas"
 
-    override val baseUrl = "https://nartag.com"
+    override val baseUrl = "https://visortraduccionesamistosas.com"
 
     override val lang = "es"
 

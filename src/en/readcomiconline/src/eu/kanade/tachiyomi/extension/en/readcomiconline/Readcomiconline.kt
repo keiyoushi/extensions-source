@@ -1,8 +1,16 @@
 package eu.kanade.tachiyomi.extension.en.readcomiconline
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
-import app.cash.quickjs.QuickJs
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.view.View
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -12,9 +20,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.encodeToJsonElement
-import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -29,7 +36,9 @@ import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
@@ -210,21 +219,93 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val qualitySuffix = if ((qualitypref() != "lq" && serverpref() != "s2") || (qualitypref() == "lq" && serverpref() == "s2")) "&s=${serverpref()}&quality=${qualitypref()}" else "&s=${serverpref()}"
+        val qualitySuffix = if ((qualitypref() != "lq" && serverpref() != "s2") || (qualitypref() == "lq" && serverpref() == "s2")) {
+            "&s=${serverpref()}&quality=${qualitypref()}&readType=1"
+        } else {
+            "&s=${serverpref()}&readType=1"
+        }
+
         return GET(baseUrl + chapter.url + qualitySuffix, headers)
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {
-        if (rguardUrl == null) {
-            rguardUrl = document.selectFirst("script[src*='rguard.min.js']")?.absUrl("src")
+        val handler = Handler(Looper.getMainLooper())
+        val latch = CountDownLatch(1)
+        var webView: WebView? = null
+        var images: List<String> = emptyList()
+
+        handler.post {
+            val innerWv = WebView(Injekt.get<Application>())
+
+            webView = innerWv
+            innerWv.settings.javaScriptEnabled = true
+            innerWv.settings.blockNetworkImage = true
+            innerWv.settings.domStorageEnabled = true
+            innerWv.settings.userAgentString = headers["User-Agent"]
+            innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+
+            innerWv.webViewClient = object : WebViewClient() {
+                override fun onLoadResource(view: WebView?, url: String?) {
+                    val i = Random.nextInt(0, Int.MAX_VALUE)
+                    view?.evaluateJavascript(
+                        """
+                        const variable$i = Object.keys(window).find(key => {
+                          const value = window[key];
+                          return Array.isArray(value) && value.every(item => typeof item === 'string' && (item.includes('blogspot') || item.includes('whatsnew247')));
+                        });
+
+                        window[variable$i];
+                        """.trimIndent(),
+                    ) {
+                        try {
+                            images = json.decodeFromString<List<String>>(it)
+                            latch.countDown()
+                        } catch (e: Exception) {
+                            Log.e("RCO", e.stackTraceToString())
+                        }
+                    }
+
+                    super.onLoadResource(view, url)
+                }
+            }
+
+            innerWv.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                    if (consoleMessage == null) { return false }
+                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
+                    when (consoleMessage.messageLevel()) {
+                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("RCO", logContent)
+                        ConsoleMessage.MessageLevel.ERROR -> Log.e("RCO", logContent)
+                        ConsoleMessage.MessageLevel.LOG -> Log.i("RCO", logContent)
+                        ConsoleMessage.MessageLevel.TIP -> Log.i("RCO", logContent)
+                        ConsoleMessage.MessageLevel.WARNING -> Log.w("RCO", logContent)
+                        else -> Log.d("RCO", logContent)
+                    }
+
+                    return true
+                }
+            }
+
+            innerWv.loadDataWithBaseURL(
+                document.location(),
+                document.outerHtml(),
+                "text/html",
+                "UTF-8",
+                null,
+            )
         }
 
-        val script = document.selectFirst("script:containsData(lstImages.push)")?.data()
-            ?: throw Exception("Failed to find image URLs")
+        latch.await(30, TimeUnit.SECONDS)
+        handler.post { webView?.destroy() }
 
-        return CHAPTER_IMAGES_REGEX.findAll(script).toList()
-            .let { matches -> urlDecode(matches.map { it.groupValues[1] }) }
-            .mapIndexed { i, imageUrl -> Page(i, "", imageUrl) }
+        if (latch.count == 1L) {
+            throw Exception("Timeout getting image links")
+        }
+
+        return images.mapIndexed { idx, img ->
+            Page(idx, imageUrl = img)
+        }
     }
 
     override fun imageUrlParse(document: Document) = ""
@@ -245,9 +326,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         open val selected get() = options[state].second.takeUnless { it.isEmpty() }
     }
 
-    private class PublisherFilter() : Filter.Text("Publisher")
-    private class WriterFilter() : Filter.Text("Writer")
-    private class ArtistFilter() : Filter.Text("Artist")
+    private class PublisherFilter : Filter.Text("Publisher")
+    private class WriterFilter : Filter.Text("Writer")
+    private class ArtistFilter : Filter.Text("Artist")
     private class SortFilter : SelectFilter(
         "Sort By",
         arrayOf(
@@ -326,8 +407,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val qualitypref = androidx.preference.ListPreference(screen.context).apply {
-            key = QUALITY_PREF_Title
-            title = QUALITY_PREF_Title
+            key = QUALITY_PREF_TITLE
+            title = QUALITY_PREF_TITLE
             entries = arrayOf("High Quality", "Low Quality")
             entryValues = arrayOf("hq", "lq")
             summary = "%s"
@@ -361,92 +442,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     private fun serverpref() = preferences.getString(SERVER_PREF, "")
 
-    private var rguardUrl: String? = null
-
-    private val rguardBytecode: ByteArray by lazy {
-        val cacheDays = if (rguardUrl == null) 1 else 7
-        val cacheControl = CacheControl.Builder()
-            .maxAge(cacheDays, TimeUnit.DAYS)
-            .build()
-
-        val scriptUrl = rguardUrl ?: "$baseUrl/Scripts/rguard.min.js"
-        val scriptRequest = GET(scriptUrl, headers, cache = cacheControl)
-        val scriptResponse = client.newCall(scriptRequest).execute()
-        val scriptBody = scriptResponse.body.string()
-
-        QuickJs.create().use {
-            it.compile(DISABLE_JS_SCRIPT + scriptBody + ATOB_SCRIPT, "?")
-        }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun urlDecode(urls: List<String>): List<String> {
-        return QuickJs.create().use {
-            it.execute(rguardBytecode)
-
-            val script = """
-                var images = ${json.encodeToJsonElement(urls)};
-                beau(images);
-                images;
-            """.trimIndent()
-            (it.evaluate(script) as Array<Any>).map { it as String }.toList()
-        }
-    }
-
     companion object {
-        private const val QUALITY_PREF_Title = "Image Quality Selector"
+        private const val QUALITY_PREF_TITLE = "Image Quality Selector"
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-
-        private val CHAPTER_IMAGES_REGEX = "lstImages\\.push\\([\"'](.*)[\"']\\)".toRegex()
-
-        private val DISABLE_JS_SCRIPT = """
-            const handler = {
-                get: function(target, _) {
-                    return function() {
-                        return target;
-                    };
-                },
-                apply: function(_, __, ___) {
-                    return new Proxy({}, handler);
-                }
-            };
-
-            document = new Proxy({}, handler);
-            window = new Proxy({}, handler);
-            console = new Proxy({}, handler);
-            ${'$'} = new Proxy(function() {}, handler);
-        """.trimIndent()
-
-        /*
-         * The MIT License (MIT)
-         * Copyright (c) 2014 MaxArt2501
-         */
-        private val ATOB_SCRIPT = """
-            var b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
-                b64re = /^(?:[A-Za-z\d+\/]{4})*?(?:[A-Za-z\d+\/]{2}(?:==)?|[A-Za-z\d+\/]{3}=?)?$/;
-
-            atob = function(string) {
-                // atob can work with strings with whitespaces, even inside the encoded part,
-                // but only \t, \n, \f, \r and ' ', which can be stripped.
-                string = String(string).replace(/[\t\n\f\r ]+/g, "");
-                if (!b64re.test(string))
-                    throw new TypeError("Failed to execute 'atob' on 'Window': The string to be decoded is not correctly encoded.");
-
-                // Adding the padding if missing, for semplicity
-                string += "==".slice(2 - (string.length & 3));
-                var bitmap, result = "", r1, r2, i = 0;
-                for (; i < string.length;) {
-                    bitmap = b64.indexOf(string.charAt(i++)) << 18 | b64.indexOf(string.charAt(i++)) << 12
-                            | (r1 = b64.indexOf(string.charAt(i++))) << 6 | (r2 = b64.indexOf(string.charAt(i++)));
-
-                    result += r1 === 64 ? String.fromCharCode(bitmap >> 16 & 255)
-                            : r2 === 64 ? String.fromCharCode(bitmap >> 16 & 255, bitmap >> 8 & 255)
-                            : String.fromCharCode(bitmap >> 16 & 255, bitmap >> 8 & 255, bitmap & 255);
-                }
-                return result;
-            };
-        """.trimIndent()
     }
 }

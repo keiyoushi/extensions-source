@@ -3,7 +3,7 @@ ext {
     extClass = '.WebdexScans'
     themePkg = 'madara'
     baseUrl = 'https://webdexscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

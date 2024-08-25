@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manga Okusana'
+    extClass = '.MangaOkusana'
+    themePkg = 'madara'
+    baseUrl = 'https://mangaokusana.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

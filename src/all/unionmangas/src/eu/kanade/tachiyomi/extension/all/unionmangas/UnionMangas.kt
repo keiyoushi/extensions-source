@@ -203,7 +203,7 @@ class UnionMangas(private val langOption: LanguageOption) : HttpSource() {
 
     companion object {
         const val SEARCH_PREFIX = "slug:"
-        val apiUrl = "https://app.unionmanga.xyz/api"
+        val apiUrl = "https://api.novelfull.us/api"
         val oldApiUrl = "https://api.unionmanga.xyz"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ENGLISH)
     }

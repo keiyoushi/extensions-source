@@ -1,9 +1,9 @@
 ext {
-    extName = 'Hentaing'
-    extClass = '.Hentaing'
+    extName = 'Hentai Keyfi'
+    extClass = '.HentaiKeyfi'
     themePkg = 'madara'
-    baseUrl = 'https://hentaing.org'
-    overrideVersionCode = 0
+    baseUrl = 'https://hentaikeyfi.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

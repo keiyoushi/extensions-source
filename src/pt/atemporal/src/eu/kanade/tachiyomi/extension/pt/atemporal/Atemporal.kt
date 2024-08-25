@@ -19,8 +19,6 @@ class Atemporal : Madara(
         .addNetworkInterceptor(cookieInterceptor)
         .build()
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
-
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
 }

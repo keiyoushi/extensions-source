@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ru.rumix
 
 import android.app.Application
-import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
@@ -14,12 +13,10 @@ import uy.kohesive.injekt.api.get
 
 class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
 
-    private val preferences: SharedPreferences by lazy {
+    private val preferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
-    private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
-    override val baseUrl: String = domain
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = super.searchMangaRequest(page, query, filters).url.newBuilder()
@@ -54,26 +51,34 @@ class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         super.setupPreferenceScreen(screen)
         EditTextPreference(screen.context).apply {
-            key = DOMAIN_TITLE
-            this.title = DOMAIN_TITLE
-            summary = domain
-            this.setDefaultValue(DOMAIN_DEFAULT)
+            key = DOMAIN_PREF
+            title = DOMAIN_TITLE
+            setDefaultValue(super.baseUrl)
             dialogTitle = DOMAIN_TITLE
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(DOMAIN_TITLE, newValue as String).commit()
-                    Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+            dialogMessage = "Default URL:\n\t${super.baseUrl}"
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
+                true
             }
         }.let(screen::addPreference)
     }
 
+    private fun getPrefBaseUrl(): String = preferences.getString(DOMAIN_PREF, super.baseUrl)!!
+
+    init {
+        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { defaultBaseUrl ->
+            if (defaultBaseUrl != super.baseUrl) {
+                preferences.edit()
+                    .putString(DOMAIN_PREF, super.baseUrl)
+                    .putString(DEFAULT_DOMAIN_PREF, super.baseUrl)
+                    .apply()
+            }
+        }
+    }
+
     companion object {
+        private const val DOMAIN_PREF = "Домен"
+        private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://rumix.me"
     }
 }

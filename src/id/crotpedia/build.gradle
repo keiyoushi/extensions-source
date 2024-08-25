@@ -1,0 +1,10 @@
+ext {
+    extName = 'CrotPedia'
+    extClass = '.CrotPedia'
+    themePkg = 'zmanga'
+    baseUrl = 'https://crotpedia.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

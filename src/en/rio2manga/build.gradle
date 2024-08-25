@@ -1,9 +1,0 @@
-ext {
-    extName = 'Rio2 Manga'
-    extClass = '.Rio2Manga'
-    themePkg = 'madara'
-    baseUrl = 'https://rio2manga.net'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

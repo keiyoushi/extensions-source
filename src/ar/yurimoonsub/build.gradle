@@ -3,7 +3,7 @@ ext {
     extClass = '.YuriMoonSub'
     themePkg = 'zeistmanga'
     baseUrl = 'https://yurimoonsub.blogspot.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

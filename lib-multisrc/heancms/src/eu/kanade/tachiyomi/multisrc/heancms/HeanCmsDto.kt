@@ -63,7 +63,7 @@ class HeanCmsSeriesDto(
 ) {
 
     fun toSManga(
-        apiUrl: String,
+        cdnUrl: String,
         coverPath: String,
         mangaSubDirectory: String,
     ): SManga = SManga.create().apply {
@@ -79,7 +79,7 @@ class HeanCmsSeriesDto(
             .sortedBy(HeanCmsTagDto::name)
             .joinToString { it.name }
         thumbnail_url = thumbnail.ifEmpty { null }
-            ?.toAbsoluteThumbnailUrl(apiUrl, coverPath)
+            ?.toAbsoluteThumbnailUrl(cdnUrl, coverPath)
         status = this@HeanCmsSeriesDto.status?.toStatus() ?: SManga.UNKNOWN
         url = "/$mangaSubDirectory/$slug#$id"
     }
@@ -103,6 +103,7 @@ class HeanCmsChapterPayloadDto(
 class HeanCmsChapterDto(
     private val id: Int,
     @SerialName("chapter_name") private val name: String,
+    @SerialName("chapter_title") private val title: String? = null,
     @SerialName("chapter_slug") private val slug: String,
     @SerialName("created_at") private val createdAt: String,
     val price: Int? = null,
@@ -113,6 +114,10 @@ class HeanCmsChapterDto(
         dateFormat: SimpleDateFormat,
     ): SChapter = SChapter.create().apply {
         name = this@HeanCmsChapterDto.name.trim()
+
+        if (title != null) {
+            name += " - ${title.trim()}"
+        }
 
         if (price != 0) {
             name += " \uD83D\uDD12"
@@ -161,8 +166,8 @@ class HeanCmsGenreDto(
     val name: String,
 )
 
-private fun String.toAbsoluteThumbnailUrl(apiUrl: String, coverPath: String): String {
-    return if (startsWith("https://") || startsWith("http://")) this else "$apiUrl/$coverPath$this"
+private fun String.toAbsoluteThumbnailUrl(cdnUrl: String, coverPath: String): String {
+    return if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
 }
 
 fun String.toStatus(): Int = when (this) {

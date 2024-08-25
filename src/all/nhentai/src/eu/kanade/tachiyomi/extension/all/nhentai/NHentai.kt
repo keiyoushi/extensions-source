@@ -136,56 +136,50 @@ open class NHentai(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val fixedQuery = query.ifEmpty { "\"\"" }
         val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val nhLangSearch = if (nhLang.isBlank()) "" else "+$nhLang "
+        val nhLangSearch = if (nhLang.isBlank()) "" else "language:$nhLang "
         val advQuery = combineQuery(filterList)
         val favoriteFilter = filterList.findInstance<FavoriteFilter>()
-        val isOkayToSort = filterList.findInstance<UploadedFilter>()?.state?.isBlank() ?: true
         val offsetPage =
             filterList.findInstance<OffsetPageFilter>()?.state?.toIntOrNull()?.plus(page) ?: page
 
         if (favoriteFilter?.state == true) {
-            val url = "$baseUrl/favorites".toHttpUrl().newBuilder()
-                .addQueryParameter("q", "$fixedQuery $advQuery")
+            val url = "$baseUrl/favorites/".toHttpUrl().newBuilder()
+                .addQueryParameter("q", "$query $advQuery")
                 .addQueryParameter("page", offsetPage.toString())
 
             return GET(url.build(), headers)
         } else {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", "$fixedQuery $nhLangSearch$advQuery")
+            val url = "$baseUrl/search/".toHttpUrl().newBuilder()
+                // Blank query (Multi + sort by popular month/week/day) shows a 404 page
+                // Searching for `""` is a hacky way to return everything without any filtering
+                .addQueryParameter("q", "$query $nhLangSearch$advQuery".ifBlank { "\"\"" })
                 .addQueryParameter("page", offsetPage.toString())
 
-            if (isOkayToSort) {
-                filterList.findInstance<SortFilter>()?.let { f ->
-                    url.addQueryParameter("sort", f.toUriPart())
-                }
+            filterList.findInstance<SortFilter>()?.let { f ->
+                url.addQueryParameter("sort", f.toUriPart())
             }
 
             return GET(url.build(), headers)
         }
     }
 
-    private fun combineQuery(filters: FilterList): String {
-        val stringBuilder = StringBuilder()
-        val advSearch = filters.filterIsInstance<AdvSearchEntryFilter>().flatMap { filter ->
-            val splitState = filter.state.split(",").map(String::trim).filterNot(String::isBlank)
-            splitState.map {
-                AdvSearchEntry(filter.name, it.removePrefix("-"), it.startsWith("-"))
-            }
+    private fun combineQuery(filters: FilterList): String = buildString {
+        filters.filterIsInstance<AdvSearchEntryFilter>().forEach { filter ->
+            filter.state.split(",")
+                .map(String::trim)
+                .filterNot(String::isBlank)
+                .forEach { tag ->
+                    val y = !(filter.name == "Pages" || filter.name == "Uploaded")
+                    if (tag.startsWith("-")) append("-")
+                    append(filter.name, ':')
+                    if (y) append('"')
+                    append(tag.removePrefix("-"))
+                    if (y) append('"')
+                    append(" ")
+                }
         }
-
-        advSearch.forEach { entry ->
-            if (entry.exclude) stringBuilder.append("-")
-            stringBuilder.append("${entry.name}:")
-            stringBuilder.append(entry.text)
-            stringBuilder.append(" ")
-        }
-
-        return stringBuilder.toString()
     }
-
-    data class AdvSearchEntry(val name: String, val text: String, val exclude: Boolean)
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/g/$id", headers)
 
@@ -220,13 +214,13 @@ open class NHentai(
             thumbnail_url = document.select("#cover > a > img").attr("data-src")
             status = SManga.COMPLETED
             artist = getArtists(document)
-            author = artist
+            author = getGroups(document)
             // Some people want these additional details in description
             description = "Full English and Japanese titles:\n"
                 .plus("$fullTitle\n")
                 .plus("${document.select("div#info h2").text()}\n\n")
                 .plus("Pages: ${getNumPages(document)}\n")
-                .plus("Favorited by: ${document.select("div#info i.fa-heart + span span").text().removeSurrounding("(", ")")}\n")
+                .plus("Favorited by: ${document.select("div#info i.fa-heart ~ span span").text().removeSurrounding("(", ")")}\n")
                 .plus(getTagDescription(document))
             genre = getTags(document)
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE

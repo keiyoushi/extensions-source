@@ -1,0 +1,10 @@
+ext {
+    extName = 'Prunus Scans'
+    extClass = '.PrunusScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://prunusscans.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

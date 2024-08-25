@@ -1,9 +1,0 @@
-ext {
-    extName = 'Moon Witch In Love'
-    extClass = '.MoonWitchInLove'
-    themePkg = 'madara'
-    baseUrl = 'https://moonwitchinlovescan.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

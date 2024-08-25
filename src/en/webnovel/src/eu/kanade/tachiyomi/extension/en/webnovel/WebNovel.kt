@@ -193,11 +193,11 @@ class WebNovel : HttpSource() {
 
         val number = DIGIT_REGEX.find(this)?.value?.toIntOrNull() ?: return 0
         val field = when {
-            contains("yr") -> Calendar.YEAR
-            contains("mth") -> Calendar.MONTH
-            contains("d") -> Calendar.DAY_OF_MONTH
-            contains("h") -> Calendar.HOUR
-            contains("min") -> Calendar.MINUTE
+            contains("year") -> Calendar.YEAR
+            contains("month") -> Calendar.MONTH
+            contains("day") -> Calendar.DAY_OF_MONTH
+            contains("hour") -> Calendar.HOUR
+            contains("minute") -> Calendar.MINUTE
             else -> return 0
         }
 

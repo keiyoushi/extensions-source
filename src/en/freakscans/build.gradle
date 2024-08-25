@@ -1,9 +1,0 @@
-ext {
-    extName = 'Freak Scans'
-    extClass = '.FreakScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://freakscans.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

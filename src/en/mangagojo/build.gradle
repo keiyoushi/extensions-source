@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaGojo'
+    extClass = '.MangaGojo'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangagojo.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

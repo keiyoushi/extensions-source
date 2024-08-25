@@ -1,9 +1,9 @@
 ext {
-    extName = 'Umi Scans'
-    extClass = '.UmiScans'
+    extName = 'Lua Scans (Unoriginal)'
+    extClass = '.LuaScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://umiscans.org'
-    overrideVersionCode = 3
+    baseUrl = 'https://luacomic.com'
+    overrideVersionCode = 5
     isNsfw = true
 }
 

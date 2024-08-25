@@ -139,7 +139,8 @@ class ColoredManga : HttpSource() {
             val includeColor = colorIncluded.isEmpty() || colorIncluded.contains(it.version)
             val excludeColor = colorExcluded.isNotEmpty() && colorExcluded.contains(it.version)
 
-            val regularSearch = it.name.contains(title) || it.synopsis.contains(title)
+            val regularSearch = it.name.contains(title, true) || it.synopsis.contains(title, true)
+
             includeGenre && !excludeGenre &&
                 includeType && !excludeType &&
                 includeColor && !excludeColor &&
@@ -161,7 +162,7 @@ class ColoredManga : HttpSource() {
                     mangas.sortedBy { it.name }
                 }
             }
-            else -> {
+            "new" -> {
                 if (sort.second == "desc") {
                     mangas.sortedByDescending {
                         try {
@@ -174,6 +175,25 @@ class ColoredManga : HttpSource() {
                     mangas.sortedBy {
                         try {
                             dateFormat.parse(it.date)!!.time
+                        } catch (e: Exception) {
+                            0L
+                        }
+                    }
+                }
+            }
+            else -> {
+                if (sort.second == "desc") {
+                    mangas.sortedByDescending {
+                        try {
+                            dateFormat.parse(it.chapters.last().date)!!.time
+                        } catch (e: Exception) {
+                            0L
+                        }
+                    }
+                } else {
+                    mangas.sortedBy {
+                        try {
+                            dateFormat.parse(it.chapters.last().date)!!.time
                         } catch (e: Exception) {
                             0L
                         }
@@ -360,7 +380,7 @@ class ColoredManga : HttpSource() {
         val chapterJson = spChapter!!.toJson()
 
         return Observable.just(
-            List(spChapter.totalImage - 1) {
+            List(spChapter.totalImage) {
                 val url = "https://127.0.0.1/#${it + 1}+${manga.name}"
                 val volumeInfo = if (volumes) {
                     manga.volume.find { vol -> vol.chapters.any { chap -> chap.number == chapter.name } }

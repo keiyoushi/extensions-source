@@ -1,8 +1,8 @@
 ext {
-    extName = 'Crow Scans'
-    extClass = '.CrowScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://crowscans.com'
+    extName = 'Hadess'
+    extClass = '.Hadess'
+    themePkg = 'madara'
+    baseUrl = 'https://www.hadess.xyz'
     overrideVersionCode = 0
 }
 

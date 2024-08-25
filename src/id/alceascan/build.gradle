@@ -2,8 +2,8 @@ ext {
     extName = 'Alceascan'
     extClass = '.Alceascan'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://alceascan.my.id'
-    overrideVersionCode = 0
+    baseUrl = 'https://alceacomic.my.id'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

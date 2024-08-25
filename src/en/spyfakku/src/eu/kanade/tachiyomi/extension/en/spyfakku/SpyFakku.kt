@@ -24,7 +24,7 @@ class SpyFakku : HttpSource() {
 
     override val name = "SpyFakku"
 
-    override val baseUrl = "https://fakku.cc"
+    override val baseUrl = "https://hentalk.pw"
 
     private val baseImageUrl = "https://cdn.fakku.cc/image"
 
@@ -61,7 +61,7 @@ class SpyFakku : HttpSource() {
     private fun popularManga(hentai: ShortHentai) = SManga.create().apply {
         setUrlWithoutDomain("$baseUrl/g/${hentai.id}")
         title = hentai.title
-        thumbnail_url = "$baseImageUrl/${hentai.hash}/cover"
+        thumbnail_url = "$baseImageUrl/${hentai.hash}/1/c"
     }
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
@@ -95,12 +95,12 @@ class SpyFakku : HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }
+        manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }.replace("/__data.json", "")
         return GET(baseApiUrl + manga.url, headers)
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }
+        chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }.replace("/__data.json", "")
         return GET(baseApiUrl + chapter.url, headers)
     }
 
@@ -117,27 +117,27 @@ class SpyFakku : HttpSource() {
     private fun Hentai.toSManga() = SManga.create().apply {
         title = this@toSManga.title
         url = "/g/$id"
-        author = (circles?.emptyToNull() ?: artists)?.joinToString { it.value }
-        artist = artists?.joinToString { it.value }
-        genre = tags?.joinToString { it.value }
-        thumbnail_url = "$baseImageUrl/$hash/cover"
+        author = (circles?.emptyToNull() ?: artists)?.joinToString { it.name }
+        artist = artists?.joinToString { it.name }
+        genre = tags?.joinToString { it.name }
+        thumbnail_url = "$baseImageUrl/$hash/1/c"
         description = buildString {
             this@toSManga.description?.let {
                 append(this@toSManga.description, "\n\n")
             }
-            circles?.emptyToNull()?.joinToString { it.value }?.let {
+            circles?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Circles: ", it, "\n")
             }
-            publishers?.emptyToNull()?.joinToString { it.value }?.let {
+            publishers?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Publishers: ", it, "\n")
             }
-            magazines?.emptyToNull()?.joinToString { it.value }?.let {
+            magazines?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Magazines: ", it, "\n")
             }
-            events?.emptyToNull()?.joinToString { it.value }?.let {
+            events?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Events: ", it, "\n\n")
             }
-            parodies?.emptyToNull()?.joinToString { it.value }?.let {
+            parodies?.emptyToNull()?.joinToString { it.name }?.let {
                 append("Parodies: ", it, "\n")
             }
             append("Pages: ", pages, "\n\n")
@@ -153,6 +153,15 @@ class SpyFakku : HttpSource() {
                     append("Added: ", dateReformat.format(it.time), "\n")
                 }
             } catch (_: Exception) {}
+            append(
+                "Size: ",
+                when {
+                    size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
+                    size >= 100 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0))} MB"
+                    size >= 1000 -> "${"%.2f".format(size / (1000.0))} kB"
+                    else -> "$size B"
+                },
+            )
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE

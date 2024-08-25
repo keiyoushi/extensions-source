@@ -2,8 +2,8 @@ ext {
     extName = 'Mangayaro'
     extClass = '.Mangayaro'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.mangayaro.id'
-    overrideVersionCode = 1
+    baseUrl = 'https://www.nowheartruth.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"

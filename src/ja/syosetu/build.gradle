@@ -2,8 +2,8 @@ ext {
     extName = 'SyoSetu'
     extClass = '.SyoSetu'
     themePkg = 'mangaraw'
-    baseUrl = 'https://syosetu.top'
-    overrideVersionCode = 0
+    baseUrl = 'https://syosetu.gs'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

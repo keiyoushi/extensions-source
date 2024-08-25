@@ -1,9 +1,0 @@
-ext {
-    extName = 'Edens Fairy'
-    extClass = '.Eflee'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://www.eflee.co'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Mangakik'
-    extClass = '.Mangakik'
-    themePkg = 'madara'
-    baseUrl = 'https://mangakik.org'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

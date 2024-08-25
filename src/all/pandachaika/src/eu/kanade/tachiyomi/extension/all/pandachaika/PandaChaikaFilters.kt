@@ -17,6 +17,7 @@ fun getFilters(): FilterList {
         TextFilter("Female Tags", "female"),
         TextFilter("Artists", "artist"),
         TextFilter("Parodies", "parody"),
+        TextFilter("Characters", "character"),
         Filter.Separator(),
         TextFilter("Reason", "reason"),
         TextFilter("Uploader", "reason"),
@@ -52,11 +53,11 @@ private val getTypes = listOf(
 
 private val getSortsList: List<Pair<String, String>> = listOf(
     Pair("Public Date", "public_date"),
-    Pair("Posted Date", "posted_date"),
+    Pair("Posted Date", "posted"),
     Pair("Title", "title"),
     Pair("Japanese Title", "title_jpn"),
     Pair("Rating", "rating"),
-    Pair("Images", "images"),
-    Pair("File Size", "size"),
+    Pair("Images", "filecount"),
+    Pair("File Size", "filesize"),
     Pair("Category", "category"),
 )

@@ -1,8 +1,0 @@
-ext {
-    extName = 'ManhuaKO'
-    extClass = '.ManhuaKO'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,8 +1,14 @@
 package eu.kanade.tachiyomi.extension.pt.blackoutcomics
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,16 +16,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BlackoutComics : ParsedHttpSource() {
+class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Blackout Comics"
 
@@ -31,15 +42,71 @@ class BlackoutComics : ParsedHttpSource() {
 
     override val client by lazy {
         network.client.newBuilder()
+            .addInterceptor { chain ->
+                checkingCredentials()
+
+                val request = chain.request()
+                val response = chain.proceed(request)
+
+                if (response.request.url.pathSegments.contains("temp")) {
+                    return@addInterceptor doAuth(chain, request, response)
+                }
+                response
+            }
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
     }
+
+    private val credentials: Pair<String, String> get() {
+        val username = preferences.getString(USERNAME_PREF, "")!!
+        val password = preferences.getString(PASSWORD_PREF, "")!!
+        return username to password
+    }
+
+    private fun checkingCredentials() {
+        val (username, password) = credentials
+        if (username.isBlank() || password.isBlank()) {
+            throw IOException(
+                """
+                Configure suas credencias em Extensões > $name > Configuração.
+                """.trimIndent(),
+            )
+        }
+    }
+
+    private fun doAuth(chain: Interceptor.Chain, request: Request, response: Response): Response {
+        val csrf = response.asJsoup()
+            .selectFirst("input[name='_token']")
+            ?.attr("value") ?: ""
+
+        val form = FormBody.Builder()
+            .add("_token", csrf)
+            .add("email", credentials.first)
+            .add("password", credentials.second)
+            .build()
+
+        chain.proceed(POST("$baseUrl/blackout/login", headers, form)).use {
+            if (it.request.url.pathSegments.contains("temp")) {
+                throw IOException(
+                    """
+                    Falha ao acessar recurso: Usuário ou senha incorreto.
+                    Altere suas credencias em Extensões > $name > Configuração.
+                    """.trimIndent(),
+                )
+            }
+        }
+        return chain.proceed(request)
+    }
+
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     override fun headersBuilder() =
         super.headersBuilder()
             .add("Referer", "$baseUrl/")
             .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
             .add("Accept-Language", "en-US,en;q=0.5")
+            .set("X-Requested-With", randomString((1..20).random()))
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/ranking")
@@ -155,8 +222,12 @@ class BlackoutComics : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div[class^=chapter-image] canvas[height][width][data-src^=/assets/obras/]").mapIndexed { index, item ->
-            Page(index, "", item.absUrl("data-src"))
+        return document.select("div[class*=cap] canvas[height][width]").mapIndexed { index, item ->
+            val attr = item.attributes()
+                .firstOrNull { it.value.contains("/assets/obras", ignoreCase = true) }
+                ?.key ?: throw Exception("Capitulo não pode ser obtido")
+
+            Page(index, "", item.absUrl(attr))
         }
     }
 
@@ -170,8 +241,44 @@ class BlackoutComics : ParsedHttpSource() {
             .getOrNull() ?: 0L
     }
 
+    private fun randomString(length: Int): String {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        return List(length) { charPool.random() }.joinToString("")
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val usernamePref = EditTextPreference(screen.context).apply {
+            key = USERNAME_PREF
+            summary = "Email de acesso. Necessário reiniciar o app"
+            title = "Usuário"
+
+            dialogMessage = """
+            Configure seu usuário para acessar o contéudo.
+            """.trimIndent()
+
+            setDefaultValue("")
+        }
+
+        val passwordPref = EditTextPreference(screen.context).apply {
+            key = PASSWORD_PREF
+            summary = "Senha de acesso. Necessário reiniciar o app"
+            title = "Senha"
+
+            dialogMessage = """
+            Configure seu senha para acessar o contéudo.
+            """.trimIndent()
+
+            setDefaultValue("")
+        }
+
+        screen.addPreference(usernamePref)
+        screen.addPreference(passwordPref)
+    }
+
     companion object {
         const val PREFIX_SEARCH = "id:"
+        const val USERNAME_PREF = "BLACKOUT_USERNAME"
+        const val PASSWORD_PREF = "BLACKOUT_PASSWORD"
 
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH)

@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class MantrazScan : Madara(
     "Mantraz Scan",
-    "https://mantrazscans.net",
+    "https://panconcola.com",
     "es",
     SimpleDateFormat("dd/MM/yyyy", Locale("es")),
 ) {

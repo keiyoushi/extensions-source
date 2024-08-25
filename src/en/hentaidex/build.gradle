@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiDex'
+    extClass = '.HentaiDex'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://dexhentai.com'
+    overrideVersionCode  = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -8,10 +8,8 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 
@@ -31,22 +29,11 @@ class MangaCan : MangaThemesia(
 
     override val pageSelector = "div.images img"
 
-    private var genreList: Array<Pair<String, String>> = emptyArray()
-
     override fun imageRequest(page: Page): Request {
         return super.imageRequest(page).newBuilder()
             .removeHeader("Referer")
             .addHeader("Referer", "$baseUrl/")
             .build()
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (genreList.isEmpty()) {
-            genreList += "All" to ""
-            genreList += parseGenres(response.asJsoup(response.peekBody(Long.MAX_VALUE).string()))
-        }
-
-        return super.searchMangaParse(response)
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -87,11 +74,11 @@ class MangaCan : MangaThemesia(
 
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
-        if (genreList.isNotEmpty()) {
+        if (!genrelist.isNullOrEmpty()) {
             filters.addAll(
                 listOf(
                     Filter.Header(intl["genre_exclusion_warning"]),
-                    GenreFilter(intl["genre_filter_title"], genreList),
+                    GenreFilter(intl["genre_filter_title"], genrelist?.map { it.name to it.value }!!.toTypedArray()),
                 ),
             )
         } else {
@@ -102,10 +89,12 @@ class MangaCan : MangaThemesia(
         return FilterList(filters)
     }
 
-    private fun parseGenres(document: Document): Array<Pair<String, String>> {
-        return document.select(".textwidget.custom-html-widget a").map { element ->
-            element.text() to element.attr("href")
-        }.toTypedArray()
+    override fun parseGenres(document: Document): List<GenreData> {
+        return mutableListOf(GenreData("All", "")).apply {
+            this += document.select(".textwidget.custom-html-widget a").map { element ->
+                GenreData(element.text(), element.attr("href"))
+            }
+        }
     }
 
     private class GenreFilter(

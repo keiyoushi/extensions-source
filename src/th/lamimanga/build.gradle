@@ -2,8 +2,8 @@ ext {
     extName = 'Lami-Manga'
     extClass = '.LamiManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.lami-manga.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://mangalami.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

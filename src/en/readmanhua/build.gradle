@@ -1,9 +1,0 @@
-ext {
-    extName = 'ReadManhua'
-    extClass = '.ReadManhua'
-    themePkg = 'madara'
-    baseUrl = 'https://readmanhua.net'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

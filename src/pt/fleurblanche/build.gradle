@@ -2,8 +2,8 @@ ext {
     extName = 'Fleur Blanche'
     extClass = '.FleurBlanche'
     themePkg = 'madara'
-    baseUrl = 'https://fbsscan.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://fbsquadx.com'
+    overrideVersionCode = 4
     isNsfw = true
 }
 
