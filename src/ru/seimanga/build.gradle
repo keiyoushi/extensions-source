@@ -1,0 +1,10 @@
+ext {
+    extName = 'SeiManga'
+    extClass = '.SeiManga'
+    themePkg = 'grouple'
+    baseUrl = 'https://1.seimanga.me'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
