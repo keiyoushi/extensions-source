@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Request
 
-class SeiManga : GroupLe("SeiManga", "https://seimanga.me", "ru") {
+class SeiManga : GroupLe("SeiManga", "https://1.seimanga.me", "ru") {
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
