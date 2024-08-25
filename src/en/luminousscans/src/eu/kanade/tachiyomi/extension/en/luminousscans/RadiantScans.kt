@@ -5,13 +5,16 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Request
 
-class LuminousScans : MangaThemesiaAlt(
-    "Luminous Scans",
-    "https://luminous-scans.com",
+class RadiantScans : MangaThemesiaAlt(
+    "Radiant Scans",
+    "https://radiantscans.com",
     "en",
     mangaUrlDirectory = "/series",
     randomUrlPrefKey = "pref_permanent_manga_url_2_en",
 ) {
+    // Luminous Scans -> Radiant Scans
+    override val id = 1019556752273106311
+
     init {
         // remove legacy preferences
         preferences.run {
