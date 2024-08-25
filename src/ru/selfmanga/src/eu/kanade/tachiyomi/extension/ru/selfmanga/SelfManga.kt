@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ru.selfmanga
 
 import android.app.Application
-import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
@@ -15,6 +14,9 @@ import uy.kohesive.injekt.api.get
 class SelfManga : GroupLe("SelfManga", "https://selfmanga.live", "ru") {
 
     override val id: Long = 5227602742162454547
+
+    private val preferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
