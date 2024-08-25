@@ -7,7 +7,7 @@ import java.util.Locale
 
 class HuntersScans : Madara(
     "Hunters Scan",
-    "https://huntersscan.net",
+    "https://hunterscomics.com",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
@@ -16,5 +16,8 @@ class HuntersScans : Madara(
         .build()
 
     override val mangaSubString = "series"
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override val useNewChapterEndpoint = true
 }
