@@ -262,7 +262,7 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
         EditTextPreference(screen.context).apply {
             key = DOMAIN_PREF
             title = DOMAIN_TITLE
-            setDefaultValue(DOMAIN_DEFAULT)
+            setDefaultValue(super.baseUrl)
             dialogTitle = DOMAIN_TITLE
             dialogMessage = "Default URL:\n\t${super.baseUrl}"
             setOnPreferenceChangeListener { _, _ ->
@@ -289,7 +289,5 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
         private const val DOMAIN_PREF = "Домен"
         private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://z.ahen.me"
     }
 }
-
