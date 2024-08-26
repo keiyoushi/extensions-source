@@ -39,7 +39,7 @@ class MangaSwat :
         .build()
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val filter = FilterList(OrderByFilter("", orderByFilterOptions, "added"))
+        val filter = FilterList(OrderByFilter("", orderByFilterOptions, "update"))
 
         return searchMangaRequest(page, "", filter)
     }
