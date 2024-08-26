@@ -197,7 +197,18 @@ abstract class Keyoapp(
         status = document.selectFirst("div[alt=Status]").parseStatus()
         author = document.selectFirst("div[alt=Author]")?.text()
         artist = document.selectFirst("div[alt=Artist]")?.text()
-        genre = document.select("div.grid:has(>h1) > div > a").joinToString { it.text() }
+        genre = buildList {
+            document.selectFirst("div[alt='Series Type']")?.text()?.replaceFirstChar {
+                if (it.isLowerCase()) {
+                    it.titlecase(
+                        Locale.getDefault(),
+                    )
+                } else {
+                    it.toString()
+                }
+            }.let(::add)
+            document.select("div.grid:has(>h1) > div > a").forEach { add(it.text()) }
+        }.joinToString()
     }
 
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
@@ -247,7 +258,7 @@ abstract class Keyoapp(
         return url
     }
 
-    private fun Element.getImageUrl(selector: String): String? {
+    protected open fun Element.getImageUrl(selector: String): String? {
         return this.selectFirst(selector)?.let { element ->
             element.attr("style")
                 .substringAfter(":url(", "")

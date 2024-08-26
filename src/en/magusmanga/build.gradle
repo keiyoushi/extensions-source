@@ -1,9 +1,9 @@
 ext {
     extName = 'Magus Manga'
     extClass = '.MagusManga'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://recipeslik.online'
-    overrideVersionCode = 8
+    themePkg = 'keyoapp'
+    baseUrl = 'https://magustoon.com'
+    overrideVersionCode = 34
 }
 
 apply from: "$rootDir/common.gradle"
