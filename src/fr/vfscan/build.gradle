@@ -2,8 +2,8 @@ ext {
     extName = 'VF Scan'
     extClass = '.VFScan'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.vfscan.cc'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.vfscan.net'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

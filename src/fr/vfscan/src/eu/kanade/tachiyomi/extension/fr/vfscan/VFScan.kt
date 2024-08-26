@@ -9,7 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class VFScan : MangaThemesia("VF Scan", "https://www.vfscan.cc", "fr", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.FRENCH)) {
+class VFScan : MangaThemesia("VF Scan", "https://www.vfscan.net", "fr", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.FRENCH)) {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
