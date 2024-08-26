@@ -7,7 +7,7 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangakakalots : MangaBox("Mangakakalots (unoriginal)", "https://mangakakalots.com", "en", SimpleDateFormat("MMM dd,yy", Locale.ENGLISH)) {
+class Mangakakalots : MangaBox("Mangakakalots (unoriginal)", "https://ww8.mangakakalot.tv/", "en", SimpleDateFormat("MMM dd,yy", Locale.ENGLISH)) {
     override fun searchMangaSelector(): String = "${super.searchMangaSelector()}, div.list-truyen-item-wrap"
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
