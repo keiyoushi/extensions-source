@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaSwat'
     themePkg = 'mangathemesia'
     baseUrl = 'https://healteer.com'
-    overrideVersionCode = 23
+    overrideVersionCode = 24
 }
 
 apply from: "$rootDir/common.gradle"
