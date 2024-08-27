@@ -10,6 +10,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
 
@@ -22,7 +23,7 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
     override val useNewChapterEndpoint = true
     override val useNewQueryEndpoint = true
     override val enableLogin = true
-    override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { this.timeZone = TimeZone.getTimeZone("UTC") }
     override val cdnUrl = "https://media.reaperscans.com/file/4SRBHm"
 
     override fun latestUpdatesRequest(page: Int): Request {
