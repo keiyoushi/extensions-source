@@ -6,7 +6,7 @@ import java.util.Locale
 
 class Atikrost : Madara(
     "Atikrost",
-    "https://www.atikrost.com",
+    "https://www.mangaoku.org",
     "tr",
     dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
 ) {
