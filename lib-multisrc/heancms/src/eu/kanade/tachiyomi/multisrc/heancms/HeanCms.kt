@@ -337,7 +337,7 @@ abstract class HeanCms(
         }
 
         return if (useNewChapterEndpoint) {
-            result.chapter.chapterData?.images().orEmpty().mapIndexed { i, img ->
+            result.chapter.chapterData?.images.orEmpty().mapIndexed { i, img ->
                 Page(i, imageUrl = img.toAbsoluteUrl())
             }
         } else {

@@ -157,23 +157,7 @@ class HeanCmsPageDto(
 
 @Serializable
 class HeanCmsPageDataDto(
-    private val images: List<String>? = emptyList(),
-    private val files: List<HeanCmsPageFileDto>? = emptyList(),
-) {
-    fun images(): List<String> {
-        return if (images.isNullOrEmpty()) {
-            files?.map {
-                it.url
-            }.orEmpty()
-        } else {
-            images
-        }
-    }
-}
-
-@Serializable
-class HeanCmsPageFileDto(
-    val url: String,
+    val images: List<String>? = emptyList(),
 )
 
 @Serializable
