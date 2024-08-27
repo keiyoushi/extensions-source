@@ -1,11 +1,15 @@
 package eu.kanade.tachiyomi.extension.en.reaperscans
 
+import ReaperPagePayloadDto
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
+import eu.kanade.tachiyomi.multisrc.heancms.HeanCmsPagePayloadDto
 import eu.kanade.tachiyomi.multisrc.heancms.SortProperty
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -38,10 +42,30 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
         return GET(url.build(), headers)
     }
 
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.parseAs<ReaperPagePayloadDto>()
+
+        if (result.isPaywalled() && result.chapter.chapterData == null) {
+            throw Exception(intl["paid_chapter_error"])
+        }
+
+        return if (useNewChapterEndpoint) {
+            result.chapter.chapterData?.images().orEmpty().mapIndexed { i, img ->
+                Page(i, imageUrl = img.toAbsoluteUrl())
+            }
+        } else {
+            result.data.orEmpty().mapIndexed { i, img ->
+                Page(i, imageUrl = img.toAbsoluteUrl())
+            }
+        }
+    }
+
     override fun getSortProperties(): List<SortProperty> = listOf(
         SortProperty(intl["sort_by_title"], "title"),
         SortProperty(intl["sort_by_views"], "total_views"),
         SortProperty(intl["sort_by_latest"], "updated_at"),
         SortProperty(intl["sort_by_created_at"], "created_at"),
     )
+
+
 }
