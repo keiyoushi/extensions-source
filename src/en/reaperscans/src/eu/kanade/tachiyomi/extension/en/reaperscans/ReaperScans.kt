@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.reaperscans
 
 import ReaperPagePayloadDto
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
-import eu.kanade.tachiyomi.multisrc.heancms.HeanCmsPagePayloadDto
 import eu.kanade.tachiyomi.multisrc.heancms.SortProperty
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
