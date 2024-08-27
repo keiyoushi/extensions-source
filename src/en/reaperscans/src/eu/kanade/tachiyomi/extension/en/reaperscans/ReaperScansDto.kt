@@ -1,4 +1,4 @@
-import eu.kanade.tachiyomi.multisrc.heancms.HeanCmsPageFileDto
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -19,7 +19,7 @@ class ReaperPageDto(
 @Serializable
 class ReaperPageDataDto(
     private val images: List<String>? = emptyList(),
-    private val files: List<HeanCmsPageFileDto>? = emptyList(),
+    private val files: List<ReaperPageFileDto>? = emptyList(),
 ) {
     fun images(): List<String> {
         return if (images.isNullOrEmpty()) {
@@ -31,3 +31,8 @@ class ReaperPageDataDto(
         }
     }
 }
+
+@Serializable
+class ReaperPageFileDto(
+    val url: String,
+)

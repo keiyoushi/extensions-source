@@ -65,6 +65,4 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
         SortProperty(intl["sort_by_latest"], "updated_at"),
         SortProperty(intl["sort_by_created_at"], "created_at"),
     )
-
-
 }
