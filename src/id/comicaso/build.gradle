@@ -2,8 +2,8 @@ ext {
     extName = 'Comicaso'
     extClass = '.Comicaso'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://comicaso.org'
-    overrideVersionCode = 1
+    baseUrl = 'https://comicaso.id'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"

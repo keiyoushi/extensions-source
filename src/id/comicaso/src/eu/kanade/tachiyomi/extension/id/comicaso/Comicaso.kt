@@ -11,7 +11,7 @@ import java.util.Locale
 
 class Comicaso : MangaThemesia(
     "Comicaso",
-    "https://comicaso.org",
+    "https://comicaso.id",
     "id",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("id")),
 ) {
