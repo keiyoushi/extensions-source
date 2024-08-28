@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.it.hentaiarchive
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -146,12 +145,9 @@ class HentaiArchive : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        // Log the full HTML content of the page
 
         val imageElements = document.select("div.content-inner img")
 
-        // Log the number of images found
-        Log.d("PageListParse", "Found ${imageElements.size} images.")
 
         return imageElements.mapIndexed { index, element ->
             // Extract the URL from the data-src attribute, fallback to src if not present
@@ -170,9 +166,6 @@ class HentaiArchive : ParsedHttpSource() {
 
             // Remove the part between '-' and '.jpg' if it exists
             imageUrl = imageUrl.replace(Regex("-(\\d+x\\d+)(?=\\.jpg)"), "")
-
-            // Log the image URL for debugging
-            Log.d("PageListParse", "Page $index: $imageUrl")
 
             Page(index, imageUrl = imageUrl)
         }.sortedBy { it.index }
