@@ -1,9 +1,8 @@
-package eu.kanade.tachiyomi.extension.es.hentaimode
+package eu.kanade.tachiyomi.extension.it.hentaiarchive
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -14,7 +13,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class HentaiMode : ParsedHttpSource() {
+class HentaiArchive : ParsedHttpSource() {
     override val name = "HentaiArchive"
 
     override val baseUrl = "https://www.hentai-archive.com"
@@ -37,14 +36,14 @@ class HentaiMode : ParsedHttpSource() {
         }
         .build()
 
-    override val supportsLatest = true
+    override val supportsLatest = false
 
     // ============================== Popular ===============================
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/category/hentai-recenti/page/$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/category/hentai-recenti/page/$page", headers)
 
-    override fun latestUpdatesSelector() = "div.posts-container article"
+    override fun popularMangaSelector() = "div.posts-container article"
 
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         // Extract and set the URL without domain
         setUrlWithoutDomain(element.selectFirst("a.entire-meta-link")!!.absUrl("href"))
 
@@ -52,49 +51,56 @@ class HentaiMode : ParsedHttpSource() {
         title = element.selectFirst("span.screen-reader-text")!!.text()
 
         // Extract and set the thumbnail URL
-        thumbnail_url = element.selectFirst("span.post-featured-img img.wp-post-image")
-            ?.absUrl("data-nectar-img-src")
+        thumbnail_url = element.selectFirst("span.post-featured-img img.wp-post-image")?.absUrl("data-nectar-img-src")
     }
 
-    override fun latestUpdatesNextPageSelector() = "nav#pagination a.next.page-numbers"
+    override fun popularMangaNextPageSelector() = "nav#pagination a.next.page-numbers"
 
     // =============================== Latest ===============================
-    override fun popularMangaRequest(page: Int): Request {
+    override fun latestUpdatesRequest(page: Int): Request {
         throw UnsupportedOperationException()
     }
 
-    override fun popularMangaSelector(): String {
+    override fun latestUpdatesSelector(): String {
         throw UnsupportedOperationException()
     }
 
-    override fun popularMangaFromElement(element: Element): SManga {
+    override fun latestUpdatesFromElement(element: Element): SManga {
         throw UnsupportedOperationException()
     }
 
-    override fun popularMangaNextPageSelector(): String? {
+    override fun latestUpdatesNextPageSelector(): String? {
         throw UnsupportedOperationException()
     }
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return super.fetchSearchManga(page, query, filters)
-    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        // Define the array of specific queries
+        val specialQueries = arrayOf("hentai-senza-censura", "hentai-tette-grosse", "hentai-milf", "hentai-studentesse", "hentai-full-color", "hentai-ita-controllo-mentale", "hentai-ita-bikini", "hentai-culi-grossi", "hentai-pelle-scura", "hentai-insegnanti", "hentai-tradimento", "hentai-mostri", "hentai-sesso-anale", "doujinshi", "hentai-sex-toys", "hentai-superdotati", "hentai-monster-girl", "fumetti-porno", "hentai-ita-harem", "hentai-futanari", "hentai-uomini-maturi", "hentai-ita-domestiche", "hentai-esibizioniste", "hentai-famiglia", "hentai-fantasy", "hentai-femdom", "hentai-follia", "hentai-formose", "hentai-pelose", "hentai-lesbiche", "hentai-yaoi", "hentai-x-ray", "hentai-gola-profonda", "hentai-ita-sesso-estremo", "hentai-gyaru", "hentai-ita-infermiere")
+
+        // Default behavior
         return GET("$baseUrl/?s=$query")
     }
 
-    override fun searchMangaSelector() = latestUpdatesSelector()
+    override fun searchMangaSelector() = "article.result"
 
-    override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        // Extract and set the URL without domain, handling potential null values
+        // Extract and set the URL without domain, handling potential null values
+        element.selectFirst("h2.title a")?.absUrl("href")?.let {
+            setUrlWithoutDomain(it)
+        }
 
-    override fun searchMangaNextPageSelector() = null
+        // Extract and set the title, providing a default value if not found
+        title = element.selectFirst("h2.title a")?.text() ?: "Unknown Title"
 
-    // =========================== Manga Details ============================
-    private val additionalInfos = listOf("Serie", "Tipo", "Personajes", "Idioma")
+        // Extract and set the thumbnail URL
+        thumbnail_url = element.selectFirst("a img.wp-post-image")?.absUrl("src")
+    }
+    override fun searchMangaNextPageSelector() = "a.next.page-numbers"
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        thumbnail_url = document.selectFirst("div.content-inner img")?.absUrl("src")
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         with(document.selectFirst("div.main-content")!!) {
@@ -161,6 +167,9 @@ class HentaiMode : ParsedHttpSource() {
                     imageUrl = element.absUrl("src")
                 }
             }
+
+            // Remove the part between '-' and '.jpg' if it exists
+            imageUrl = imageUrl.replace(Regex("-(\\d+x\\d+)(?=\\.jpg)"), "")
 
             // Log the image URL for debugging
             Log.d("PageListParse", "Page $index: $imageUrl")
