@@ -76,7 +76,7 @@ class HentaiArchive : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // Define the array of specific queries
-        val specialQueries = arrayOf("hentai-senza-censura", "hentai-tette-grosse", "hentai-milf", "hentai-studentesse", "hentai-full-color", "hentai-ita-controllo-mentale", "hentai-ita-bikini", "hentai-culi-grossi", "hentai-pelle-scura", "hentai-insegnanti", "hentai-tradimento", "hentai-mostri", "hentai-sesso-anale", "doujinshi", "hentai-sex-toys", "hentai-superdotati", "hentai-monster-girl", "fumetti-porno", "hentai-ita-harem", "hentai-futanari", "hentai-uomini-maturi", "hentai-ita-domestiche", "hentai-esibizioniste", "hentai-famiglia", "hentai-fantasy", "hentai-femdom", "hentai-follia", "hentai-formose", "hentai-pelose", "hentai-lesbiche", "hentai-yaoi", "hentai-x-ray", "hentai-gola-profonda", "hentai-ita-sesso-estremo", "hentai-gyaru", "hentai-ita-infermiere")
+        // val specialQueries = arrayOf("hentai-senza-censura", "hentai-tette-grosse", "hentai-milf", "hentai-studentesse", "hentai-full-color", "hentai-ita-controllo-mentale", "hentai-ita-bikini", "hentai-culi-grossi", "hentai-pelle-scura", "hentai-insegnanti", "hentai-tradimento", "hentai-mostri", "hentai-sesso-anale", "doujinshi", "hentai-sex-toys", "hentai-superdotati", "hentai-monster-girl", "fumetti-porno", "hentai-ita-harem", "hentai-futanari", "hentai-uomini-maturi", "hentai-ita-domestiche", "hentai-esibizioniste", "hentai-famiglia", "hentai-fantasy", "hentai-femdom", "hentai-follia", "hentai-formose", "hentai-pelose", "hentai-lesbiche", "hentai-yaoi", "hentai-x-ray", "hentai-gola-profonda", "hentai-ita-sesso-estremo", "hentai-gyaru", "hentai-ita-infermiere")
 
         // Default behavior
         return GET("$baseUrl/page/$page/?s=$query")
@@ -109,19 +109,14 @@ class HentaiArchive : ParsedHttpSource() {
     }
 
     private fun Element.getInfo(text: String): String? {
-        return if (text == "meta-category") {
-            // Extract class names from elements with the class 'meta-category'
-            select(".$text")
-                .flatMap { it.children() }
-                .flatMap { it.classNames() }
-                .joinToString(", ")
-                .takeUnless(String::isBlank)
-        } else {
-            // Original functionality
-            select("div.tag-container:containsOwn($text) a.tag")
-                .joinToString { it.text() }
-                .takeUnless(String::isBlank)
-        }
+        // Extract class names from elements with the class 'meta-category'
+        return select(".$text")
+            .flatMap { it.children() }
+            .flatMap { it.classNames() }
+            .joinToString(", ")
+            .replace("-", " ")
+            .replace("hentai", "")
+            .takeUnless(String::isBlank)
     }
 
     // ============================== Chapters ==============================
@@ -145,9 +140,7 @@ class HentaiArchive : ParsedHttpSource() {
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-
         val imageElements = document.select("div.content-inner img")
-
 
         return imageElements.mapIndexed { index, element ->
             // Extract the URL from the data-src attribute, fallback to src if not present
