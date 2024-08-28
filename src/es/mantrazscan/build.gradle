@@ -2,7 +2,7 @@ ext {
     extName = 'Mantraz Scan'
     extClass = '.MantrazScan'
     themePkg = 'madara'
-    baseUrl = 'https://artessupremas.com/'
+    baseUrl = 'https://artessupremas.com'
     overrideVersionCode = 3
 }
 
