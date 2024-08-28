@@ -2,8 +2,8 @@ ext {
     extName = 'Truyen tranh dam my'
     extClass = '.TruyenTranhDamMy'
     themePkg = 'madara'
-    baseUrl = 'https://truyentranhdammyy.top'
-    overrideVersionCode = 0
+    baseUrl = 'https://truyennhameo.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
