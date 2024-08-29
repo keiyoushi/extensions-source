@@ -45,7 +45,8 @@ class FlameComics : MangaThemesia(
         return document.select("#readerarea p:has(img), $composedSelector").toList()
             .filter {
                 it.select("img").all { imgEl ->
-                    imgEl.attr("abs:src").isNullOrEmpty().not()
+                    val imgUrl = imgEl.attr("abs:src")
+                    imgUrl.isNullOrEmpty().not() && imgUrl.endsWith("readonflamescans.jpg").not()
                 }
             }
             .mapIndexed { i, el ->
