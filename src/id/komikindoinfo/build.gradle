@@ -2,8 +2,8 @@ ext {
     extName = 'KomikIndo.info'
     extClass = '.KomikIndoInfo'
     themePkg = 'zmanga'
-    baseUrl = 'http://komikindo.info'
-    overrideVersionCode = 0
+    baseUrl = 'https://komikindo.info'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

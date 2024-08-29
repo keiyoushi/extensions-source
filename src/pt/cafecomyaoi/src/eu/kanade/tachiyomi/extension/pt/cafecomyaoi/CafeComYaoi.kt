@@ -9,10 +9,11 @@ import java.util.concurrent.TimeUnit
 
 class CafeComYaoi : Madara(
     "Café com Yaoi",
-    "http://cafecomyaoi.com.br",
+    "https://cafecomyaoi.com.br",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
+    override val useNewChapterEndpoint = true
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)

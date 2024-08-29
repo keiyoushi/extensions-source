@@ -16,7 +16,7 @@ import rx.Observable
 class LemonFont : ParsedHttpSource() {
     override val name = "LemonFont"
 
-    override val baseUrl = "http://lemonfontcomics.com"
+    override val baseUrl = "https://lemonfontcomics.com"
 
     override val lang = "en"
 

@@ -2,8 +2,8 @@ ext {
     extName = 'Café com Yaoi'
     extClass = '.CafeComYaoi'
     themePkg = 'madara'
-    baseUrl = 'http://cafecomyaoi.com.br'
-    overrideVersionCode = 1
+    baseUrl = 'https://cafecomyaoi.com.br'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
