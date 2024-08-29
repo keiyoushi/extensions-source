@@ -75,9 +75,6 @@ class HentaiArchive : ParsedHttpSource() {
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // Define the array of specific queries
-        // val specialQueries = arrayOf("hentai-senza-censura", "hentai-tette-grosse", "hentai-milf", "hentai-studentesse", "hentai-full-color", "hentai-ita-controllo-mentale", "hentai-ita-bikini", "hentai-culi-grossi", "hentai-pelle-scura", "hentai-insegnanti", "hentai-tradimento", "hentai-mostri", "hentai-sesso-anale", "doujinshi", "hentai-sex-toys", "hentai-superdotati", "hentai-monster-girl", "fumetti-porno", "hentai-ita-harem", "hentai-futanari", "hentai-uomini-maturi", "hentai-ita-domestiche", "hentai-esibizioniste", "hentai-famiglia", "hentai-fantasy", "hentai-femdom", "hentai-follia", "hentai-formose", "hentai-pelose", "hentai-lesbiche", "hentai-yaoi", "hentai-x-ray", "hentai-gola-profonda", "hentai-ita-sesso-estremo", "hentai-gyaru", "hentai-ita-infermiere")
-
         // Default behavior
         return GET("$baseUrl/page/$page/?s=$query")
     }
