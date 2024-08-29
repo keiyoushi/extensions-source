@@ -15,7 +15,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class ManhwaBuddy : ParsedHttpSource() {
-    override val baseUrl = "https://manhwabuddy.com/"
+    override val baseUrl = "https://manhwabuddy.com"
     override val lang = "en"
     override val name = "ManhwaBuddy"
     override val supportsLatest = true
@@ -24,7 +24,7 @@ class ManhwaBuddy : ParsedHttpSource() {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.attr("abs:href"))
             name = element.selectFirst(".chapter-name")!!.text()
-            date_upload = element.selectFirst(".ct-update")?.text()?.let { parseDate(it) }!!
+            date_upload = element.selectFirst(".ct-update")?.text().orEmpty().let { parseDate(it) }
         }
     }
 
@@ -40,44 +40,36 @@ class ManhwaBuddy : ParsedHttpSource() {
         SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH)
     }
 
-    override fun chapterListSelector(): String {
-        return ".chapter-list a"
-    }
+    override fun chapterListSelector(): String = ".chapter-list a"
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
             setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
             title = element.selectFirst("h4")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.attr("src")
+            thumbnail_url = element.selectFirst("img")?.attr("src")
         }
     }
 
-    override fun latestUpdatesNextPageSelector(): String? {
-        return ".next"
-    }
+    override fun latestUpdatesNextPageSelector(): String = ".next"
 
     override fun latestUpdatesRequest(page: Int): Request {
         return GET("$baseUrl/page/$page", headers)
     }
 
-    override fun latestUpdatesSelector(): String {
-        return ".latest-list .latest-item"
-    }
+    override fun latestUpdatesSelector(): String = ".latest-list .latest-item"
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             val info = document.selectFirst(".main-info-right")!!
-            author = info.selectFirst("li:contains(Author(s)) a")?.text()
+            author = info.selectFirst("li:contains(Author) a")?.text()
             status = when (info.selectFirst("li:contains(Status) span")?.text()) {
                 "Ongoing" -> SManga.ONGOING
                 "Complete" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            artist = info.selectFirst("li:contains(Artist(s)) a")?.text()
+            artist = info.selectFirst("li:contains(Artist) a")?.text()
             genre = info.select("li:contains(Genres) a").joinToString { it.text() }
 
             description = document.selectFirst(".short-desc-content p")?.text()
@@ -94,33 +86,27 @@ class ManhwaBuddy : ParsedHttpSource() {
         return SManga.create().apply {
             setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
             title = element.selectFirst("h3")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.attr("src")
+            thumbnail_url = element.selectFirst("img")?.attr("src")
         }
     }
 
-    override fun popularMangaNextPageSelector(): String? {
-        return null
-    }
+    override fun popularMangaNextPageSelector(): String? = null
 
     override fun popularMangaRequest(page: Int): Request {
         return GET(baseUrl, headers)
     }
 
-    override fun popularMangaSelector(): String {
-        return ".item-move"
-    }
+    override fun popularMangaSelector(): String = ".item-move"
 
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
             title = element.selectFirst("h4")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.attr("src")
+            thumbnail_url = element.selectFirst("img")?.attr("src")
         }
     }
 
-    override fun searchMangaNextPageSelector(): String? {
-        return ".next"
-    }
+    override fun searchMangaNextPageSelector(): String = ".next"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return GET(
@@ -132,7 +118,5 @@ class ManhwaBuddy : ParsedHttpSource() {
         )
     }
 
-    override fun searchMangaSelector(): String {
-        return ".latest-list .latest-item"
-    }
+    override fun searchMangaSelector(): String = ".latest-list .latest-item"
 }
