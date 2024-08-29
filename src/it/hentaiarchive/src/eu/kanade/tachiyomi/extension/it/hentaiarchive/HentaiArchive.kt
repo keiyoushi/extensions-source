@@ -89,7 +89,7 @@ class HentaiArchive : ParsedHttpSource() {
         }
 
         // Extract and set the title, providing a default value if not found
-        title = element.selectFirst("h2.title a")?.text() ?: "Unknown Title"
+        title = element.selectFirst("h2.title a")!!.text()
 
         // Extract and set the thumbnail URL
         thumbnail_url = element.selectFirst("a img.wp-post-image")?.absUrl("src")
