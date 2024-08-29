@@ -1,7 +1,11 @@
 ext {
     extName = 'Mangahere'
     extClass = '.Mangahere'
-    extVersionCode = 19
+    extVersionCode = 20
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:cookieinterceptor"))
+}
