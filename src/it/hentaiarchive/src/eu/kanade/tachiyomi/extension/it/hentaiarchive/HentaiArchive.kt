@@ -158,7 +158,7 @@ class HentaiArchive : ParsedHttpSource() {
             imageUrl = imageUrl.replace(Regex("-(\\d+x\\d+)(?=\\.jpg)"), "")
 
             Page(index, imageUrl = imageUrl)
-        }.sortedBy { it.index }
+        }
     }
 
     override fun imageUrlParse(document: Document): String {
