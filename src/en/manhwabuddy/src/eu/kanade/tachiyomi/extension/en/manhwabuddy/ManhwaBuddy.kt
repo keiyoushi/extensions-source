@@ -72,7 +72,7 @@ class ManhwaBuddy : ParsedHttpSource() {
             artist = info.selectFirst("li:contains(Artist) a")?.text()
             genre = info.select("li:contains(Genres) a").joinToString { it.text() }
 
-            description = document.selectFirst(".short-desc-content p")?.text()
+            description = document.select(".short-desc-content p").joinToString("\n") { it.text() }
         }
     }
 
