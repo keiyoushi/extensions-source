@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.HttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -75,23 +76,24 @@ class HentaiArchive : ParsedHttpSource() {
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val urlsearch = HttpUrl.Builder()
+            .scheme("https")
+            .host("your_base_url.com")
+            .addPathSegment("page")
+            .addPathSegment("$page") // Automatically adds proper encoding for path segments
+            .addQueryParameter("s", query) // Automatically encodes the query parameter
+            .build()
         // Default behavior
-        return GET("$baseUrl/page/$page/?s=$query")
+        return GET(urlsearch.toString())
     }
 
     override fun searchMangaSelector() = "article.result"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        // Extract and set the URL without domain, handling potential null values
-        // Extract and set the URL without domain, handling potential null values
-        element.selectFirst("h2.title a")?.absUrl("href")?.let {
-            setUrlWithoutDomain(it)
-        }
+        setUrlWithoutDomain(element.selectFirst("h2.title a")!!.absUrl("href"))
 
-        // Extract and set the title, providing a default value if not found
         title = element.selectFirst("h2.title a")!!.text()
 
-        // Extract and set the thumbnail URL
         thumbnail_url = element.selectFirst("a img.wp-post-image")?.absUrl("src")
     }
     override fun searchMangaNextPageSelector() = "a.next.page-numbers"
@@ -136,6 +138,8 @@ class HentaiArchive : ParsedHttpSource() {
     }
 
     // =============================== Pages ================================
+    private val imageregex = Regex("-(\\d+x\\d+)(?=\\.jpg)")
+
     override fun pageListParse(document: Document): List<Page> {
         val imageElements = document.select("div.content-inner img")
 
@@ -155,7 +159,7 @@ class HentaiArchive : ParsedHttpSource() {
             }
 
             // Remove the part between '-' and '.jpg' if it exists
-            imageUrl = imageUrl.replace(Regex("-(\\d+x\\d+)(?=\\.jpg)"), "")
+            imageUrl = imageUrl.replace(imageregex, "")
 
             Page(index, imageUrl = imageUrl)
         }
