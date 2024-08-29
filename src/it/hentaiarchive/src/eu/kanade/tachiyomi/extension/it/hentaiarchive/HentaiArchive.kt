@@ -21,7 +21,7 @@ class HentaiArchive : ParsedHttpSource() {
 
     private val cdnHeaders = super.headersBuilder()
         .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        .add("Referer", baseUrl) // Replace with the actual referer if needed
+        .add("Referer", "$baseUrl/")
         .build()
 
     override val client = super.client.newBuilder()
