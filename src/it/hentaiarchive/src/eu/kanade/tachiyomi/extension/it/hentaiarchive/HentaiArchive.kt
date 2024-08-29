@@ -164,8 +164,4 @@ class HentaiArchive : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException()
     }
-
-    companion object {
-        const val PREFIX_SEARCH = "id:"
-    }
 }
