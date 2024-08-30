@@ -45,7 +45,6 @@ class GenreFilter : Filter.Group<CheckBoxFilter>(
 
     companion object {
         private val genres = listOf(
-            Pair("All", "all"),
             Pair("Action", "1"),
             Pair("Adventure", "2"),
             Pair("Comedy", "3"),
