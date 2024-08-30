@@ -254,6 +254,9 @@ class Koharu : HttpSource(), ConfigurableSource {
             characters.joinAndCapitalizeEach()?.let {
                 append("Characters: ", it, "\n")
             }
+            other.joinAndCapitalizeEach()?.let {
+                append("Others: ", it, "\n")
+            }
 
             if (appended) append("\n")
 
