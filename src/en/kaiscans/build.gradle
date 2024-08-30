@@ -2,8 +2,8 @@ ext {
     extName = 'Lua Scans (Unoriginal)'
     extClass = '.LuaScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://luacomic.com'
-    overrideVersionCode = 5
+    baseUrl = 'https://ponvi.online'
+    overrideVersionCode = 6
     isNsfw = true
 }
 
