@@ -9,7 +9,8 @@ class ResetScans : Madara(
     "en",
     dateFormat = SimpleDateFormat("MMM dd", Locale("en")),
 ) {
+
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
-    override val chapterUrlSelector = ".li__text > a"
+    override fun chapterListSelector(): String = "li.wp-manga-chapter.free-chap"
 }

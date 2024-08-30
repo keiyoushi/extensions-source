@@ -3,7 +3,7 @@ ext {
     extClass = '.ResetScans'
     themePkg = 'madara'
     baseUrl = 'https://reset-scans.co'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 
