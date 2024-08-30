@@ -3,7 +3,7 @@ ext {
     extClass = '.LuaScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://luacomic.com'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = true
 }
 
