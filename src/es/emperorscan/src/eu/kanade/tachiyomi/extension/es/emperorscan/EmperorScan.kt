@@ -19,7 +19,7 @@ import java.util.Locale
 class EmperorScan :
     Madara(
         "Emperor Scan",
-        "https://emperorscan.org",
+        "https://emperormanga.net",
         "es",
         SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
@@ -39,7 +39,7 @@ class EmperorScan :
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 
-    override val mangaDetailsSelectorDescription = "div.tab-summary div.sinopsis p"
+    override val mangaDetailsSelectorDescription = "div.summary__content p:not(p:has(a))"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
