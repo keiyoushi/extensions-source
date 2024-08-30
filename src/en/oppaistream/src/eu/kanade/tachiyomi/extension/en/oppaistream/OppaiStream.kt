@@ -16,6 +16,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.net.URLDecoder
 import java.util.Calendar
 
 class OppaiStream : ParsedHttpSource() {
@@ -115,7 +116,13 @@ class OppaiStream : ParsedHttpSource() {
         return SManga.create().apply {
             thumbnail_url = element.select("img.read-cover").attr("src")
             title = element.select("h3.man-title").text()
-            setUrlWithoutDomain(element.absUrl("href"))
+            val rawUrl = element.absUrl("href")
+            val url = if (rawUrl.contains("/fw?to=")) {
+                URLDecoder.decode(rawUrl.substringAfter("/fw?to="), "UTF-8")
+            } else {
+                rawUrl
+            }
+            setUrlWithoutDomain(url)
         }
     }
 
