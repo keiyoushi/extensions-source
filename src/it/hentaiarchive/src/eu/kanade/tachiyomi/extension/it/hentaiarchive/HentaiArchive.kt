@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -76,15 +75,7 @@ class HentaiArchive : ParsedHttpSource() {
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlsearch = HttpUrl.Builder()
-            .scheme("https")
-            .host("your_base_url.com")
-            .addPathSegment("page")
-            .addPathSegment("$page") // Automatically adds proper encoding for path segments
-            .addQueryParameter("s", query) // Automatically encodes the query parameter
-            .build()
-        // Default behavior
-        return GET(urlsearch.toString())
+        return GET("$baseUrl/page/$page/?s=$query")
     }
 
     override fun searchMangaSelector() = "article.result"
@@ -138,25 +129,22 @@ class HentaiArchive : ParsedHttpSource() {
     }
 
     // =============================== Pages ================================
-    private val imageregex = Regex("-(\\d+x\\d+)(?=\\.jpg)")
+    private var imageregex = Regex("-(\\d+x\\d+)(?=\\.jpg)")
+
+    private fun Element.imgAttr(): String {
+        return when {
+            this.hasAttr("data-src") -> this.attr("data-src")
+            this.hasAttr("src") -> this.attr("src")
+            else -> ""
+        }
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val imageElements = document.select("div.content-inner img")
 
         return imageElements.mapIndexed { index, element ->
-            // Extract the URL from the data-src attribute, fallback to src if not present
-            var imageUrl = element.attr("data-src")
-            if (imageUrl.isEmpty()) {
-                imageUrl = element.attr("src")
-            }
 
-            // Ensure the URL is absolute
-            if (!imageUrl.startsWith("http")) {
-                imageUrl = element.absUrl("data-src")
-                if (imageUrl.isEmpty()) {
-                    imageUrl = element.absUrl("src")
-                }
-            }
+            var imageUrl = element.imgAttr()
 
             // Remove the part between '-' and '.jpg' if it exists
             imageUrl = imageUrl.replace(imageregex, "")
