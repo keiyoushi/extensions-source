@@ -3,7 +3,7 @@ ext {
     extClass = '.XoxoComics'
     themePkg = 'wpcomics'
     baseUrl = 'https://xoxocomic.com'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"
