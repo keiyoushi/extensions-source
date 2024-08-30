@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class MHScans : Madara(
     "MHScans",
-    "https://mh.twobluescans.com",
+    "https://mhscans.manhuaonline.org",
     "es",
     dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
 ) {
