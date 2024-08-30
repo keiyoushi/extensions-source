@@ -4,7 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://www.mangatilkisi.com'
     overrideVersionCode = 0
-	isNsfw = false
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
