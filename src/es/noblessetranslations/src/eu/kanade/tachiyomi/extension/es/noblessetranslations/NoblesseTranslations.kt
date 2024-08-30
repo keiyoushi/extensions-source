@@ -15,7 +15,7 @@ import java.util.Locale
 class NoblesseTranslations :
     Madara(
         "Noblesse Translations",
-        "https://www.actualizamrd.com",
+        "https://www.swordalada.org",
         "es",
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
     ),
