@@ -21,6 +21,8 @@ import java.util.Locale
 
 class MangaDemon : ParsedHttpSource() {
 
+    override val versionId = 2
+
     override val lang = "en"
     override val supportsLatest = true
     override val name = "Manga Demon"
