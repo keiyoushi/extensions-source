@@ -15,6 +15,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.net.URLEncoder
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -44,7 +45,7 @@ class MangaDemon : ParsedHttpSource() {
     override fun popularMangaSelector() = "div#advanced-content > div.advanced-element"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        setUrlWithoutDomain(element.selectFirst("a")!!.encodedAttr("href"))
         title = element.selectFirst("h1")!!.ownText()
         thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
@@ -59,7 +60,7 @@ class MangaDemon : ParsedHttpSource() {
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         with(element.selectFirst("div.updates-element-info")!!) {
-            setUrlWithoutDomain(selectFirst("a")!!.attr("abs:href"))
+            setUrlWithoutDomain(selectFirst("a")!!.encodedAttr("href"))
             title = selectFirst("a")!!.ownText()
         }
         thumbnail_url = element.selectFirst("div.thumb img")!!.attr("abs:src")
@@ -87,7 +88,7 @@ class MangaDemon : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = null
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("abs:href"))
+        setUrlWithoutDomain(element.encodedAttr("href"))
         title = element.selectFirst("div.seach-right > div")!!.ownText()
         thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
     }
@@ -141,7 +142,7 @@ class MangaDemon : ParsedHttpSource() {
     override fun chapterListSelector() = "div#chapters-list a.chplinks"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("abs:href"))
+        setUrlWithoutDomain(element.encodedAttr("href"))
         name = element.ownText()
         date_upload = parseDate(element.selectFirst("span")?.ownText())
     }
@@ -159,6 +160,8 @@ class MangaDemon : ParsedHttpSource() {
             Page(i, "", element.attr("abs:src"))
         }
     }
+
+    private fun Element.encodedAttr(attribute: String) = URLEncoder.encode(attr(attribute), "UTF-8")
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
