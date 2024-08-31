@@ -234,7 +234,7 @@ class Koharu : HttpSource(), ConfigurableSource {
 
         author = (circles.emptyToNull() ?: artists).joinToString { it.capitalizeEach() }
         artist = artists.joinToString { it.capitalizeEach() }
-        genre = (tags + males + females + mixed).joinToString { it.capitalizeEach() }
+        genre = (tags + males + females + mixed + other).joinToString { it.capitalizeEach() }
         description = buildString {
             circles.joinAndCapitalizeEach()?.let {
                 append("Circles: ", it, "\n")
@@ -253,9 +253,6 @@ class Koharu : HttpSource(), ConfigurableSource {
             }
             characters.joinAndCapitalizeEach()?.let {
                 append("Characters: ", it, "\n")
-            }
-            other.joinAndCapitalizeEach()?.let {
-                append("Others: ", it, "\n")
             }
 
             if (appended) append("\n")
