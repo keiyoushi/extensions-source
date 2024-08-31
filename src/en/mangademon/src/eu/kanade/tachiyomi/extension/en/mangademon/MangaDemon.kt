@@ -161,7 +161,7 @@ class MangaDemon : ParsedHttpSource() {
         }
     }
 
-    private fun Element.encodedAttr(attr: String) = URLEncoder.encode(attr(attr), "UTF-8")
+    private fun Element.encodedAttr(attribute: String) = URLEncoder.encode(attr(attribute), "UTF-8")
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
