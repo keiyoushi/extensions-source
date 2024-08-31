@@ -1,0 +1,10 @@
+ext {
+    extName = 'Nox Scans'
+    extClass = '.NoxScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://noxscans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
