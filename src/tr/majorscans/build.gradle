@@ -1,9 +1,0 @@
-ext {
-    extName = 'MajorScans'
-    extClass = '.MajorScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://www.majorscans.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
