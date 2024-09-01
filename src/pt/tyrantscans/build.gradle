@@ -3,7 +3,7 @@ ext {
     extClass = '.TyrantScans'
     themePkg = 'zeistmanga'
     baseUrl = 'https://www.tyrantscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
