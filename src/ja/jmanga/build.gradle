@@ -1,9 +1,0 @@
-ext {
-    extName = 'JManga'
-    extClass = '.JManga'
-    themePkg = 'wpcomics'
-    baseUrl = 'https://jmanga.vip'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
