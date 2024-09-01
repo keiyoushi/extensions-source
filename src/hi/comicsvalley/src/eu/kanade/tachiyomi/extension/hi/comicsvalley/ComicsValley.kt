@@ -8,4 +8,6 @@ class ComicsValley : Madara(
     "hi",
 ) {
     override val mangaSubString = "comics-new"
+    override val useNewChapterEndpoint = true
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 }
