@@ -159,7 +159,7 @@ class NicovideoSeiga : HttpSource() {
                                         // User needs to purchase the chapter on the official mobile app
                                         // Sidenote: Chapters can't be purchased on the site
                                         // These paid chapters only show up on the mobile app and are straight up hidden on browsers! Why!?
-                                        // "Please purchase the chapter on the official app"
+                                        // "Please buy from the official app"
                                         Observable.error(SecurityException("公式アプリで購入してください"))
                                     }
 
