@@ -166,7 +166,7 @@ class NicovideoSeiga : HttpSource() {
                                     302 -> {
                                         // User needs to login via WebView first before accessing the chapter
                                         // "Please login via WebView first"
-                                        Observable.error(SecurityException("WebViewでログインしてください"))
+                                        Observable.error(SecurityException("まず、WebViewでログインしてください"))
                                     }
 
                                     else -> Observable.error(Exception("HTTP error ${login.code}"))
