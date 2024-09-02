@@ -13,4 +13,5 @@ class ResetScans : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
     override fun chapterListSelector(): String = "li.wp-manga-chapter.free-chap"
+    override val chapterUrlSelector = "div > a"
 }
