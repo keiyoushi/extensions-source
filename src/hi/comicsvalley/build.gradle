@@ -3,7 +3,7 @@ ext {
     extClass = '.ComicsValley'
     themePkg = 'madara'
     baseUrl = 'https://comicsvalley.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
