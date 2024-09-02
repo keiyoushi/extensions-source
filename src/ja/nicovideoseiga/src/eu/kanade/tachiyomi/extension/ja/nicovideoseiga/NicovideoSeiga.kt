@@ -140,20 +140,43 @@ class NicovideoSeiga : HttpSource() {
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return client.newCall(pageListRequest(chapter))
             .asObservable()
-            .map { response ->
-                // Nicomanga historically refuses to serve pages if you don't login.
-                // However, due to the network attack against the site (as of July 2024) login is disabled
-                // Changes may be required as the site recovers
-                if (response.code == 403) {
-                    throw SecurityException("You need to purchase this chapter first")
+            .flatMap { response ->
+                // Nicovideo refuses to serve pages without login only if you are on desktop (Supposedly to provide danmaku)
+                // There's no login requirement on the mobile version of the website
+                when (response.code) {
+                    403 -> {
+                        // Check if the user is logged in
+                        // This is the account page. You get 302 if you are not logged in
+                        client.newBuilder()
+                            .followRedirects(false)
+                            .followSslRedirects(false)
+                            .build()
+                            .newCall(GET("https://www.nicovideo.jp/my"))
+                            .asObservable()
+                            .flatMap { login ->
+                                when (login.code) {
+                                    200 -> {
+                                        // User needs to purchase the chapter on the official mobile app
+                                        // Sidenote: Chapters can't be purchased on the site
+                                        // These paid chapters only show up on the mobile app and are straight up hidden on browsers! Why!?
+                                        // "Please buy from the official app"
+                                        Observable.error(SecurityException("公式アプリで購入してください"))
+                                    }
+
+                                    302 -> {
+                                        // User needs to login via WebView first before accessing the chapter
+                                        // "Please login via WebView first"
+                                        Observable.error(SecurityException("まず、WebViewでログインしてください"))
+                                    }
+
+                                    else -> Observable.error(Exception("HTTP error ${login.code}"))
+                                }
+                            }
+                    }
+
+                    200 -> Observable.just(pageListParse(response))
+                    else -> Observable.error(Exception("HTTP error ${response.code}"))
                 }
-                if (response.code == 401) {
-                    throw SecurityException("Not logged in. Please login via WebView")
-                }
-                if (response.code != 200) {
-                    throw Exception("HTTP error ${response.code}")
-                }
-                pageListParse(response)
             }
     }
 
