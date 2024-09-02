@@ -3,7 +3,7 @@ ext {
     extClass = '.Hayalistic'
     themePkg = 'madara'
     baseUrl = 'https://hayalistic.com.tr'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
