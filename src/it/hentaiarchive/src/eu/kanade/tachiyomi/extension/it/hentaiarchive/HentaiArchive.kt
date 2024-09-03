@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -75,7 +76,10 @@ class HentaiArchive : ParsedHttpSource() {
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/page/$page/?s=$query")
+        val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
+            .addQueryParameter("s", query)
+            .build()
+        return GET(url.toString())
     }
 
     override fun searchMangaSelector() = "article.result"
