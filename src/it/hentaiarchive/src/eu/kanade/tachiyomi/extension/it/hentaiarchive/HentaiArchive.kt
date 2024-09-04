@@ -79,7 +79,7 @@ class HentaiArchive : ParsedHttpSource() {
         val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
             .addQueryParameter("s", query)
             .build()
-        return GET(url.toString())
+        return GET(url, headers)
     }
 
     override fun searchMangaSelector() = "article.result"
