@@ -49,7 +49,7 @@ class RocksManga : Madara(
     override val mangaDetailsSelectorThumbnail = ".manga-poster img"
     override val mangaDetailsSelectorGenre = "div.meta span:contains(التصنيف:) + span a"
     override val altNameSelector = "div.alternative"
-    override fun chapterListSelector() = ".chapters-list li.chapter-item"
+    override fun chapterListSelector() = "li.chapter-item"
     override fun chapterDateSelector() = ".chapter-release-date"
     override val pageListParseSelector = ".chapter-reading-page img"
 
