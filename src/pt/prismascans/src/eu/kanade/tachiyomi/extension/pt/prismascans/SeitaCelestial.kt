@@ -9,14 +9,14 @@ import okhttp3.OkHttpClient
 import rx.Observable
 import java.util.concurrent.TimeUnit
 
-class DemonSect : MangaThemesia(
-    "Demon Sect",
+class SeitaCelestial : MangaThemesia(
+    "Seita Celestial",
     "https://seitacelestial.com",
     "pt-BR",
     "/comics",
 ) {
 
-    // Changed their name from Prisma Scans to Demon Sect.
+    // They changed their name from Prisma Scans to Demon Sect and now to Celestial Sect.
     override val id: Long = 8168108118738519332
 
     override val client: OkHttpClient = super.client.newBuilder()
