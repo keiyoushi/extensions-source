@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.hi.comicsvalley
+package eu.kanade.tachiyomi.extension.all.comicsvalley
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
