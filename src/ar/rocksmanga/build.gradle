@@ -3,7 +3,7 @@ ext {
     extClass = '.RocksManga'
     themePkg = 'madara'
     baseUrl = 'https://rocksmanga.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 
