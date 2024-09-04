@@ -14,4 +14,5 @@ fun getAllDynasty() =
         DynastyDoujins(),
         DynastyIssues(),
         DynastySeries(),
+        DynastyScanlator(),
     )
