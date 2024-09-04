@@ -3,7 +3,7 @@ ext {
     extClass = '.LianScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://www.lianscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
