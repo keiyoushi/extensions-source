@@ -40,15 +40,18 @@ class HentaiFantasy : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaSelector() = "div.list > div.group > div.title > a"
+    override fun popularMangaSelector() = "div.group"
 
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/most_downloaded/$page/", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.setUrlWithoutDomain(element.attr("href"))
-        manga.title = element.text().trim()
+
+        manga.setUrlWithoutDomain(element.selectFirst("div.title a")!!.attr("href"))
+        manga.title = element.selectFirst("div.title a")!!.attr("title")
+        manga.thumbnail_url = element.selectFirst("img.preview")?.attr("src")
+
         return manga
     }
 
