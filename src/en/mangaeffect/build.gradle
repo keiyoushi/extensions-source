@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaEffect'
-    extClass = '.MangaEffect'
-    themePkg = 'madara'
-    baseUrl = 'https://mangaeffect.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
