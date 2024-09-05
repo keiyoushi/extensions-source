@@ -67,6 +67,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             "Keiyoushi"
 
         val builder = super.headersBuilder().apply {
+            set("User-Agent", "Tachiyomi " + System.getProperty("http.agent"))
             set("Referer", "$baseUrl/")
             set("Origin", baseUrl)
             set("Extra", extraHeader)
