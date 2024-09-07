@@ -15,7 +15,7 @@ class MagusManga : Keyoapp(
     "https://magustoon.com",
     "en",
 ) {
-    private val cdnUrl = "https://cdn.magustoon.com"
+    private val cdnUrl = "https://cdn.igniscans.com"
 
     override val versionId = 2
 
@@ -53,7 +53,7 @@ class MagusManga : Keyoapp(
         return document.select("#pages > img").mapIndexed { idx, img ->
             val uid = img.attr("uid")
 
-            Page(idx, imageUrl = "$cdnUrl/x/$uid")
+            Page(idx, imageUrl = "$cdnUrl/uploads/$uid")
         }
     }
 
