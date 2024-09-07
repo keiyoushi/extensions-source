@@ -3,7 +3,7 @@ ext {
     extClass = '.Cat300'
     themePkg = 'madara'
     baseUrl = 'https://cat300.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
