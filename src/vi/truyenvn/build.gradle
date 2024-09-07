@@ -2,7 +2,7 @@ ext {
     extName = 'TruyenVN'
     extClass = '.TruyenVN'
     themePkg = 'madara'
-    baseUrl = 'https://truyenvn.cam'
+    baseUrl = 'https://truyenvn.mobi'
     overrideVersionCode = 4
     isNsfw = true
 }
