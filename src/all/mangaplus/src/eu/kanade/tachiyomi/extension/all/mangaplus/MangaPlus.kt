@@ -302,12 +302,10 @@ class MangaPlus(
     }
 
     private fun pageListRequest(chapterId: String): Request {
-        val splitImages = preferences.splitImages()
-        val imageQuality = preferences.imageQuality()
         val url = "$API_URL/manga_viewer".toHttpUrl().newBuilder()
             .addQueryParameter("chapter_id", chapterId)
-            .addQueryParameter("split", if (splitImages) "yes" else "no")
-            .addQueryParameter("img_quality", imageQuality)
+            .addQueryParameter("split", if (preferences.splitImages()) "yes" else "no")
+            .addQueryParameter("img_quality", preferences.imageQuality())
             .addQueryParameter("format", "json")
             .toString()
 
