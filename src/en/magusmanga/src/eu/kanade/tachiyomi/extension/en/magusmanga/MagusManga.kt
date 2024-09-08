@@ -2,21 +2,17 @@ package eu.kanade.tachiyomi.extension.en.magusmanga
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
-import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
 import okio.IOException
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 
 class MagusManga : Keyoapp(
     "Magus Manga",
     "https://magustoon.com",
     "en",
 ) {
-    private val cdnUrl = "https://cdn.igniscans.com"
-
     override val versionId = 2
 
     override val client = network.cloudflareClient.newBuilder()
@@ -46,13 +42,5 @@ class MagusManga : Keyoapp(
 
     override fun chapterListSelector(): String {
         return "${super.chapterListSelector()}:not(:has(img[src*=coin]))"
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#pages > img").mapIndexed { idx, img ->
-            val uid = img.attr("uid")
-
-            Page(idx, imageUrl = "$cdnUrl/uploads/$uid")
-        }
     }
 }
