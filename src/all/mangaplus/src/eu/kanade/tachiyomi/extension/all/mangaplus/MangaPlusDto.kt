@@ -314,11 +314,16 @@ class Chapter(
     val isExpired: Boolean
         get() = subTitle == null
 
-    fun toSChapter(): SChapter = SChapter.create().apply {
-        name = "${this@Chapter.name} - $subTitle"
+    fun toSChapter(subtitlePref: Boolean): SChapter = SChapter.create().apply {
+        name = if (subtitlePref && subTitle != null) {
+            subTitle
+        } else {
+            "${this@Chapter.name} - $subTitle"
+        }
         date_upload = 1000L * startTimeStamp
         url = "#/viewer/$chapterId"
         chapter_number = this@Chapter.name.substringAfter("#").toFloatOrNull() ?: -1f
+        scanlator = "MANGA Plus"
     }
 }
 

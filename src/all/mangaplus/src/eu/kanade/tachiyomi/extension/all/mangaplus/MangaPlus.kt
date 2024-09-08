@@ -284,10 +284,11 @@ class MangaPlus(
         }
 
         val titleDetailView = result.success.titleDetailView!!
+        val subtitleOnly = preferences.subtitleOnly()
 
         return titleDetailView.chapterList
             .filterNot(Chapter::isExpired)
-            .map(Chapter::toSChapter)
+            .map { it.toSChapter(subtitleOnly) }
             .reversed()
     }
 
@@ -303,8 +304,8 @@ class MangaPlus(
     private fun pageListRequest(chapterId: String): Request {
         val url = "$API_URL/manga_viewer".toHttpUrl().newBuilder()
             .addQueryParameter("chapter_id", chapterId)
-            .addQueryParameter("split", if (preferences.splitImages) "yes" else "no")
-            .addQueryParameter("img_quality", preferences.imageQuality)
+            .addQueryParameter("split", if (preferences.splitImages()) "yes" else "no")
+            .addQueryParameter("img_quality", preferences.imageQuality())
             .addQueryParameter("format", "json")
             .toString()
 
@@ -355,8 +356,16 @@ class MangaPlus(
             setDefaultValue(SPLIT_PREF_DEFAULT_VALUE)
         }
 
+        val titlePref = SwitchPreferenceCompat(screen.context).apply {
+            key = "${SUBTITLE_ONLY_KEY}_$lang"
+            title = intl["subtitle_only"]
+            summary = intl["subtitle_only_summary"]
+            setDefaultValue(SUBTITLE_ONLY_DEFAULT_VALUE)
+        }
+
         screen.addPreference(qualityPref)
         screen.addPreference(splitPref)
+        screen.addPreference(titlePref)
     }
 
     private fun imageIntercept(chain: Interceptor.Chain): Response {
@@ -412,11 +421,11 @@ class MangaPlus(
         json.decodeFromString(body.string())
     }
 
-    private val SharedPreferences.imageQuality: String
-        get() = getString("${QUALITY_PREF_KEY}_$lang", QUALITY_PREF_DEFAULT_VALUE)!!
+    private fun SharedPreferences.imageQuality(): String = getString("${QUALITY_PREF_KEY}_$lang", QUALITY_PREF_DEFAULT_VALUE)!!
 
-    private val SharedPreferences.splitImages: Boolean
-        get() = getBoolean("${SPLIT_PREF_KEY}_$lang", SPLIT_PREF_DEFAULT_VALUE)
+    private fun SharedPreferences.splitImages(): Boolean = getBoolean("${SPLIT_PREF_KEY}_$lang", SPLIT_PREF_DEFAULT_VALUE)
+
+    private fun SharedPreferences.subtitleOnly(): Boolean = getBoolean("${SUBTITLE_ONLY_KEY}_$lang", SUBTITLE_ONLY_DEFAULT_VALUE)
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
@@ -436,6 +445,9 @@ private val QUALITY_PREF_DEFAULT_VALUE = QUALITY_PREF_ENTRY_VALUES[2]
 
 private const val SPLIT_PREF_KEY = "splitImage"
 private const val SPLIT_PREF_DEFAULT_VALUE = true
+
+private const val SUBTITLE_ONLY_KEY = "subtitleOnly"
+private const val SUBTITLE_ONLY_DEFAULT_VALUE = false
 
 private const val NOT_FOUND_SUBJECT = "Not Found"
 
