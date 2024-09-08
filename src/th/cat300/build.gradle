@@ -2,8 +2,8 @@ ext {
     extName = 'Cat300'
     extClass = '.Cat300'
     themePkg = 'madara'
-    baseUrl = 'https://cat300.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://cat300.net'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
