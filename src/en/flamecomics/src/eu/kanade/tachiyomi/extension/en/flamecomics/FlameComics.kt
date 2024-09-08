@@ -30,6 +30,8 @@ class FlameComics : MangaThemesia(
         .addInterceptor(::composedImageIntercept)
         .build()
 
+    override val pageSelector = "div#readerarea img:not(noscript img)[class*=wp-image]"
+
     // Split Image Fixer Start
     private val composedSelector: String = "#readerarea div.figure_container div.composed_figure"
 
