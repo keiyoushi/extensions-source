@@ -15,7 +15,7 @@ class MagusManga : Keyoapp(
     "https://magustoon.com",
     "en",
 ) {
-    private val cdnUrl = "https://cdn.magustoon.com"
+    private val cdnUrl = "https://cdn.igniscans.com"
 
     override val versionId = 2
 
@@ -53,10 +53,11 @@ class MagusManga : Keyoapp(
         return document.select("#pages > img").mapIndexed { idx, img ->
             val uid = img.attr("uid")
 
-            Page(idx, imageUrl = "$cdnUrl/x/$uid")
+            Page(idx, imageUrl = "$cdnUrl/uploads/$uid")
         }
     }
 
+    private val fallBackCdn = "https://cdn.magustoon.com"
     private fun fallbackCdnInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url.toString()
@@ -64,10 +65,9 @@ class MagusManga : Keyoapp(
 
         return if (url.startsWith(cdnUrl) && !response.isSuccessful) {
             response.close()
+            val fallbackUrl = url.replace(cdnUrl, fallBackCdn).replace("/uploads/", "/x/")
             val newRequest = request.newBuilder()
-                .url(
-                    url.replace("/x/", "/v/"),
-                )
+                .url(fallbackUrl)
                 .build()
 
             chain.proceed(newRequest)
