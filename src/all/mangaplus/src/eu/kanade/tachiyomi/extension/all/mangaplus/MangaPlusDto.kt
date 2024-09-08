@@ -319,6 +319,7 @@ class Chapter(
         date_upload = 1000L * startTimeStamp
         url = "#/viewer/$chapterId"
         chapter_number = this@Chapter.name.substringAfter("#").toFloatOrNull() ?: -1f
+        scanlator = "MANGA Plus"
     }
 }
 
