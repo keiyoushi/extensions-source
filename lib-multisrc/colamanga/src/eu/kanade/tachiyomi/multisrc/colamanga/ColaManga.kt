@@ -276,7 +276,7 @@ abstract class ColaManga(
         }.also(screen::addPreference)
     }
 
-    private val keyMappingRegex = Regex("""[0-9A-Za-z_]+\s*==\s*['"](?<keyType>\d+)['"]\s*&&\s*\([0-9A-Za-z_]+\s*=\s*['"](?<key>[a-zA-Z0-9]+)['"]\)""")
+    private val keyMappingRegex = Regex("""if\s*\(\s*([a-zA-Z0-9_]+)\s*==\s*(?<keyType>\d+)\s*\)\s*\{\s*return\s*'(?<key>[a-zA-Z0-9_]+)'\s*;""")
 
     private val keyMapping by lazy {
         val obfuscatedReadJs = client.newCall(GET("$baseUrl/js/manga.read.js")).execute().body.string()
