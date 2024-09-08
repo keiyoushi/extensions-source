@@ -102,7 +102,6 @@ class SlimeRead : HttpSource() {
     override fun popularMangaRequest(page: Int) =
         GET("$apiUrl/book_search?order=1&status=0", headers)
 
-
     // Returns a large JSON, so the app can't handle the list without pagination
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         if (page == 1 || popularMangeCache == null) {
