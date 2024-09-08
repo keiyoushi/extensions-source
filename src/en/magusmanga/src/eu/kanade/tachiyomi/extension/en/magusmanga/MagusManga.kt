@@ -15,13 +15,12 @@ class MagusManga : Keyoapp(
     "https://magustoon.com",
     "en",
 ) {
-    private val cdnUrl = "https://cdn.magustoon.com"
+    private val cdnUrl = "https://cdn.igniscans.com"
 
     override val versionId = 2
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::captchaInterceptor)
-        .addInterceptor(::fallbackCdnInterceptor)
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .rateLimitHost(cdnUrl.toHttpUrl(), 1)
         .build()
@@ -53,26 +52,7 @@ class MagusManga : Keyoapp(
         return document.select("#pages > img").mapIndexed { idx, img ->
             val uid = img.attr("uid")
 
-            Page(idx, imageUrl = "$cdnUrl/x/$uid")
-        }
-    }
-
-    private fun fallbackCdnInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val url = request.url.toString()
-        val response = chain.proceed(request)
-
-        return if (url.startsWith(cdnUrl) && !response.isSuccessful) {
-            response.close()
-            val newRequest = request.newBuilder()
-                .url(
-                    url.replace("/x/", "/v/"),
-                )
-                .build()
-
-            chain.proceed(newRequest)
-        } else {
-            response
+            Page(idx, imageUrl = "$cdnUrl/uploads/$uid")
         }
     }
 }
