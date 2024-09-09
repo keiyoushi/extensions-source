@@ -115,8 +115,8 @@ class SlimeRead : HttpSource() {
 
                 currentSlice = (page - 1) * pageSize
 
-                val (startIndex, endIndex) =
-                    min(mangas.size, currentSlice) to min(mangas.size, currentSlice + pageSize)
+                val startIndex = min(mangas.size, currentSlice)
+                val endIndex = min(mangas.size, currentSlice + pageSize)
 
                 val slice = mangas.subList(startIndex, endIndex)
 
