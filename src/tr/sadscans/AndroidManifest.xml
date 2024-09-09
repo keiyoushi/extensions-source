@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name="eu.kanade.tachiyomi.multisrc.po2scans.PO2ScansUrlActivity"
+            android:name="eu.kanade.tachiyomi.extension.tr.sadscans.SadscansUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -14,9 +14,9 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="${SOURCEHOST}"
+                    android:host="sadscans.com"
                     android:pathPattern="/series/..*"
-                    android:scheme="${SOURCESCHEME}" />
+                    android:scheme="https" />
             </intent-filter>
         </activity>
     </application>
