@@ -294,7 +294,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
     private var cachedKey: ByteArray? = null
     private var cachedIv: ByteArray? = null
     private var cachedTime: Long = 0
-    private val maxCacheTime = 1000 * 60 * 10 // 10 minutes
+    private val maxCacheTime = 1000 * 60 * 5 // 5 minutes
 
     override fun imageUrlParse(document: Document): String {
         val imgsrcsScript = document.selectFirst("script:containsData(imgsrcs)")?.html()
