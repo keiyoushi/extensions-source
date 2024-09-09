@@ -45,9 +45,7 @@ class SlimeRead : HttpSource() {
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 2)
-            .rateLimitHost(apiUrl.toHttpUrl(), 1)
-            .rateLimit(3)
+            .rateLimit(2)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 val mime = response.headers["Content-Type"]
