@@ -10,10 +10,6 @@ import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -58,10 +54,6 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -238,7 +230,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         cipher.init(Cipher.DECRYPT_MODE, keyS, IvParameterSpec(iv))
 
         var imageList = cipher.doFinal(imgsrcs).toString(Charsets.UTF_8)
-        if (imageList.contains(",,")) throw Exception("Use a desktop user agent or enable random user agent in extension settings")
+
         try {
             val keyLocations = keyLocationRegex.findAll(deobfChapterJs).map {
                 it.groupValues[1].toInt()
@@ -516,9 +508,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
         }.let(screen::addPreference)
-        addRandomUAPreferenceToScreen(screen)
     }
-
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
     }
