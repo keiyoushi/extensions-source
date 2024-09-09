@@ -243,24 +243,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
         var imageList = cipher.doFinal(imgsrcs).toString(Charsets.UTF_8)
 
-        try {
-            val keyLocations = keyLocationRegex.findAll(deobfChapterJs).map {
-                it.groupValues[1].toInt()
-            }.distinct()
-
-            val unscrambleKey = keyLocations.map {
-                imageList[it].toString().toInt()
-            }.toList()
-
-            keyLocations.forEachIndexed { idx, it ->
-                imageList = imageList.removeRange(it - idx..it - idx)
-            }
-
-            imageList = imageList.unscramble(unscrambleKey)
-        } catch (e: NumberFormatException) {
-            // Only call where it should throw is imageList[it].toString().toInt().
-            // This usually means that the list is already unscrambled.
-        }
+        imageList = unescrambleImageList(imageList, deobfChapterJs)
 
         val cols = colsRegex.find(deobfChapterJs)?.groupValues?.get(1) ?: ""
 
@@ -319,24 +302,8 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         cipher.init(Cipher.DECRYPT_MODE, keyS, IvParameterSpec(cachedIv))
 
         var imageList = cipher.doFinal(imgsrcs).toString(Charsets.UTF_8)
-        try {
-            val keyLocations = keyLocationRegex.findAll(cachedDeofChapterJS!!).map {
-                it.groupValues[1].toInt()
-            }.distinct()
 
-            val unscrambleKey = keyLocations.map {
-                imageList[it].toString().toInt()
-            }.toList()
-
-            keyLocations.forEachIndexed { idx, it ->
-                imageList = imageList.removeRange(it - idx..it - idx)
-            }
-
-            imageList = imageList.unscramble(unscrambleKey)
-        } catch (e: NumberFormatException) {
-            // Only call where it should throw is imageList[it].toString().toInt().
-            // This usually means that the list is already unscrambled.
-        }
+        imageList = unescrambleImageList(imageList, cachedDeofChapterJS!!)
 
         val cols = colsRegex.find(cachedDeofChapterJS!!)?.groupValues?.get(1) ?: ""
 
@@ -471,6 +438,29 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
             }
         }
         return s
+    }
+
+    private fun unescrambleImageList(imageList: String, js: String): String {
+        var imgList = imageList
+        try {
+            val keyLocations = keyLocationRegex.findAll(js).map {
+                it.groupValues[1].toInt()
+            }.distinct()
+
+            val unscrambleKey = keyLocations.map {
+                imgList[it].toString().toInt()
+            }.toList()
+
+            keyLocations.forEachIndexed { idx, it ->
+                imgList = imgList.removeRange(it - idx..it - idx)
+            }
+
+            imgList = imgList.unscramble(unscrambleKey)
+        } catch (e: NumberFormatException) {
+            // Only call where it should throw is imageList[it].toString().toInt().
+            // This usually means that the list is already unscrambled.
+        }
+        return imgList
     }
 
     private fun unscrambleImage(image: InputStream, key: String, cols: Int): ByteArray {
