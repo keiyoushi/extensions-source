@@ -1,9 +1,0 @@
-ext {
-    extName = 'Rudra Scans'
-    extClass = '.RudraScans'
-    themePkg = 'keyoapp'
-    baseUrl = 'https://rudrascans.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

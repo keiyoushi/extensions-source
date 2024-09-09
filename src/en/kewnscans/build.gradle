@@ -4,6 +4,7 @@ ext {
     themePkg = 'keyoapp'
     baseUrl = 'https://kewnscans.org'
     overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
