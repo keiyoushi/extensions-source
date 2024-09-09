@@ -234,15 +234,27 @@ abstract class Keyoapp(
     // Image list
 
     override fun pageListParse(document: Document): List<Page> {
+        document.select("#pages > img")
+            .map { it.attr("uid") }
+            .filter { it.isNotEmpty() }
+            .mapIndexed { index, img ->
+                Page(index, document.location(), "$cdnUrl/uploads/$img")
+            }
+            .takeIf { it.isNotEmpty() }
+            ?.also { return it }
+
+        // Fallback, old method
         return document.select("#pages > img")
             .map { it.imgAttr() }
-            .filter { it.contains(imgCdnRegex) }
+            .filter { it.contains(oldImgCdnRegex) }
             .mapIndexed { index, img ->
                 Page(index, document.location(), img)
             }
     }
 
-    private val imgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
+    protected val cdnUrl = "https://cdn.igniscans.com"
+
+    private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 
     override fun imageUrlParse(document: Document) = ""
 
