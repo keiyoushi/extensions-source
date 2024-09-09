@@ -110,8 +110,7 @@ class YugenMangas : HttpSource() {
         var page = 1
         val chapters = mutableListOf<SChapter>()
         do {
-            val response = client.newCall(chapterListRequest(manga, page++))
-                .execute()
+            val response = client.newCall(chapterListRequest(manga, page++)).execute()
             val series = response.request.body!!.parseAs<SeriesDto>()
             val chapterContainer = response.parseAs<ChapterContainerDto>()
             chapters += chapterContainer.toSChapter(series.code)
