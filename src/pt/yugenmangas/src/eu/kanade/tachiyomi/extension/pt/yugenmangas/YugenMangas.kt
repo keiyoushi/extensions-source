@@ -111,13 +111,16 @@ class YugenMangas : HttpSource() {
         val chapters = mutableListOf<SChapter>()
         do {
             val response = client.newCall(chapterListRequest(manga, page++)).execute()
-            val series = response.request.body!!.parseAs<SeriesDto>()
+            val series = response.getSeriesCode()
             val chapterContainer = response.parseAs<ChapterContainerDto>()
             chapters += chapterContainer.toSChapter(series.code)
         } while (chapterContainer.next != null)
 
         return Observable.just(chapters)
     }
+
+    private fun Response.getSeriesCode(): SeriesDto =
+        this.request.body!!.parseAs<SeriesDto>()
 
     override fun pageListRequest(chapter: SChapter): Request {
         val code = chapter.url.substringAfterLast("/")
