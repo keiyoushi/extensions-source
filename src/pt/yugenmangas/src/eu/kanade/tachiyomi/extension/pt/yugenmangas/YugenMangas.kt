@@ -21,16 +21,15 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.Buffer
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class YugenMangas : HttpSource() {
 
     override val name = "Yugen Mangás"
 
-    override val baseUrl = "https://yugenweb.com"
+    override val baseUrl = "https://yugenmangasbr.voblog.xyz"
 
     override val lang = "pt-BR"
 
@@ -101,11 +100,27 @@ class YugenMangas : HttpSource() {
         return response.parseAs<MangaDetailsDto>().toSManga()
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
+    private fun chapterListRequest(manga: SManga, page: Int): Request {
         val code = manga.url.substringAfterLast("/")
         val payload = json.encodeToString(SeriesDto(code)).toRequestBody(JSON_MEDIA_TYPE)
-        return POST("$BASE_API/series/chapters/get-series-chapters/", apiHeaders, payload)
+        return POST("$BASE_API/series/chapters/get-series-chapters/?page=$page", apiHeaders, payload)
     }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        var page = 1
+        val chapters = mutableListOf<SChapter>()
+        do {
+            val response = client.newCall(chapterListRequest(manga, page++)).execute()
+            val series = response.getSeriesCode()
+            val chapterContainer = response.parseAs<ChapterContainerDto>()
+            chapters += chapterContainer.toSChapter(series.code)
+        } while (chapterContainer.next != null)
+
+        return Observable.just(chapters)
+    }
+
+    private fun Response.getSeriesCode(): SeriesDto =
+        this.request.body!!.parseAs<SeriesDto>()
 
     override fun pageListRequest(chapter: SChapter): Request {
         val code = chapter.url.substringAfterLast("/")
@@ -115,9 +130,7 @@ class YugenMangas : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val series = response.request.body!!.parseAs<SeriesDto>()
-        return response.parseAs<List<ChapterDto>>()
-            .map { it.toSChapter(series.code) }
-            .reversed()
+        return response.parseAs<ChapterContainerDto>().toSChapter(series.code)
     }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
@@ -151,6 +164,5 @@ class YugenMangas : HttpSource() {
         private const val BASE_API = "https://api.yugenweb.com/api"
         private const val BASE_MEDIA = "https://media.yugenweb.com"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-        val DATE_FORMAT = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
     }
 }
