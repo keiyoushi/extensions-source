@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaHall'
     themePkg = 'madara'
     baseUrl = 'https://mangahall.net'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
