@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.it.mitaku
+package eu.kanade.tachiyomi.extension.all.mitaku
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -63,7 +63,6 @@ class Mitaku : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val tagFilter = filterList.findInstance<TagFilter>()!!
-        val tagValue = tagFilter.state.replace(" ", "-")
         val categoryFilter = filterList.findInstance<CategoryFilter>()!!
         return when {
             query.isEmpty() && categoryFilter.state != 0 -> GET("$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/")
@@ -144,7 +143,7 @@ class Mitaku : ParsedHttpSource() {
         ),
     )
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Only one filter will be applied! Only one tag search"),
+        Filter.Header("NOTE: Only one tag search. In tag replace space with -"),
         Filter.Separator(),
         CategoryFilter(),
         TagFilter(),
