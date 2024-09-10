@@ -104,7 +104,7 @@ abstract class LectorTmo(
             .addInterceptor { chain ->
                 val request = chain.request()
                 val url = request.url
-                if (url.toString().endsWith("#imagereq")) {
+                if (url.fragment == imagereq") {
                     return@addInterceptor ignoreSslClient.newCall(request).execute()
                 }
                 chain.proceed(request)
