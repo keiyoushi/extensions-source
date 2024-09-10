@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -64,10 +66,22 @@ class Mitaku : ParsedHttpSource() {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val tagFilter = filterList.findInstance<TagFilter>()!!
         val categoryFilter = filterList.findInstance<CategoryFilter>()!!
+
         return when {
-            query.isEmpty() && categoryFilter.state != 0 -> GET("$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/")
-            query.isEmpty() && tagFilter.state.isNotEmpty() -> GET("$baseUrl/tag/${tagFilter.state}/page/$page/")
-            query.isNotEmpty() -> GET("$baseUrl/page/$page/?s=$query")
+            query.isEmpty() && categoryFilter.state != 0 -> {
+                val url = "$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/".toHttpUrl().newBuilder().build()
+                GET(url)
+            }
+            query.isEmpty() && tagFilter.state.isNotEmpty() -> {
+                val url = "$baseUrl/tag/${tagFilter.toUriPart()}/page/$page/".toHttpUrl().newBuilder().build()
+                GET(url)
+            }
+            query.isNotEmpty() -> {
+                val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
+                    .addQueryParameter("s", query)
+                    .build()
+                GET(url)
+            }
             else -> latestUpdatesRequest(page)
         }
     }
@@ -85,7 +99,7 @@ class Mitaku : ParsedHttpSource() {
             title = selectFirst("h1")!!.text()
             val catGenres = select("span.cat-links a").joinToString { it.text() }
             val tagGenres = select("span.tag-links a").joinToString { it.text() }
-            genre = listOf(catGenres, tagGenres).filter { it.isNotEmpty() }.joinToString(", ")
+            genre = listOf(catGenres, tagGenres).filter { it.isNotEmpty() }.joinToString()
         }
     }
 
@@ -116,7 +130,7 @@ class Mitaku : ParsedHttpSource() {
 
         // Extract the data-mfp-src attribute from each element and create a list of Page objects
         return imageElements.mapIndexed { index, element ->
-            val imageUrl = element.attr("data-mfp-src")
+            val imageUrl = element.absUrl("data-mfp-src")
             Page(index, imageUrl = imageUrl)
         }
     }
@@ -143,13 +157,25 @@ class Mitaku : ParsedHttpSource() {
         ),
     )
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Only one tag search. In tag replace space with -"),
+        Filter.Header("NOTE: Only one tag search"),
         Filter.Separator(),
         CategoryFilter(),
         TagFilter(),
     )
 
-    class TagFilter : Filter.Text("Tag")
+    class TagFilter : Filter.Text("Tag") {
+        fun toUriPart(): String {
+            // Replace spaces with hyphens
+            val tag = state.replace(" ", "-")
+            // Encode special characters
+            val url = HttpUrl.Builder()
+                .scheme("https")
+                .host("example.com") // Dummy host to use HttpUrl.Builder
+                .addPathSegment(tag)
+                .build()
+            return url.encodedPath.substring(1) // Remove the leading slash
+        }
+    }
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 }
