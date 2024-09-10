@@ -30,14 +30,10 @@ class Mitaku : ParsedHttpSource() {
     override fun popularMangaSelector() = "div.article-container article"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        // Extract and set the URL without domain
-
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
 
-        // Extract and set the title
         title = element.selectFirst("a")!!.attr("title")
 
-        // Extract and set the thumbnail URL
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
@@ -69,15 +65,27 @@ class Mitaku : ParsedHttpSource() {
 
         return when {
             query.isEmpty() && categoryFilter.state != 0 -> {
-                val url = "$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/".toHttpUrl().newBuilder().build()
+                val url = baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegment("category")
+                    .addPathSegment(categoryFilter.toUriPart())
+                    .addPathSegment("page")
+                    .addPathSegment(page.toString())
+                    .build()
                 GET(url)
             }
             query.isEmpty() && tagFilter.state.isNotEmpty() -> {
-                val url = "$baseUrl/tag/${tagFilter.toUriPart()}/page/$page/".toHttpUrl().newBuilder().build()
+                val url = baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegment("tag")
+                    .addPathSegment(tagFilter.toUriPart())
+                    .addPathSegment("page")
+                    .addPathSegment(page.toString())
+                    .build()
                 GET(url)
             }
             query.isNotEmpty() -> {
-                val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
+                val url = baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegment("page")
+                    .addPathSegment(page.toString())
                     .addQueryParameter("s", query)
                     .build()
                 GET(url)
@@ -125,10 +133,8 @@ class Mitaku : ParsedHttpSource() {
     // =============================== Pages ================================
 
     override fun pageListParse(document: Document): List<Page> {
-        // Select all a elements with the class msacwl-img-link
         val imageElements = document.select("a.msacwl-img-link")
 
-        // Extract the data-mfp-src attribute from each element and create a list of Page objects
         return imageElements.mapIndexed { index, element ->
             val imageUrl = element.absUrl("data-mfp-src")
             Page(index, imageUrl = imageUrl)
