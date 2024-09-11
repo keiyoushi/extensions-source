@@ -57,13 +57,9 @@ abstract class LectorTmo(
         .build()
 
     protected open val imageCDNUrls = arrayOf(
-        "https://img1.followmanga.com",
-        "https://img1.biggestchef.com",
-        "https://img1.indalchef.com",
-        "https://img1.recipesandcook.com",
-        "https://img1.cyclingte.com",
         "https://img1.japanreader.com",
         "https://japanreader.com",
+        "https://imgtmo.com",
     )
 
     private fun OkHttpClient.Builder.rateLimitImageCDNs(hosts: Array<String>, permits: Int, period: Long): OkHttpClient.Builder {
@@ -108,7 +104,7 @@ abstract class LectorTmo(
             .addInterceptor { chain ->
                 val request = chain.request()
                 val url = request.url
-                if (url.host.contains("japanreader.com")) {
+                if (url.fragment == "imagereq") {
                     return@addInterceptor ignoreSslClient.newCall(request).execute()
                 }
                 chain.proceed(request)
@@ -444,7 +440,7 @@ abstract class LectorTmo(
     }
 
     override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, tmoHeaders)
+        return GET(page.imageUrl!! + "#imagereq", tmoHeaders)
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
