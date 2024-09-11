@@ -34,6 +34,10 @@ class MangasNoSekai : Madara(
 
     override val useNewChapterEndpoint = true
 
+    override fun popularMangaRequest(page: Int): Request {
+        return GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=views", headers)
+    }
+
     override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
 
     override fun popularMangaNextPageSelector() = "a.next.page-numbers"
@@ -58,6 +62,10 @@ class MangasNoSekai : Madara(
         }
 
         return manga
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        return GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=latest", headers)
     }
 
     override fun searchMangaNextPageSelector() = "nav.navigation a.next"
