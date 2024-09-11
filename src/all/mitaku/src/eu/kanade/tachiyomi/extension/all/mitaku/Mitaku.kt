@@ -64,7 +64,7 @@ class Mitaku : ParsedHttpSource() {
 
         return when {
             query.isEmpty() && categoryFilter.state != 0 -> {
-                val url = "$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/".toHttpUrl().newBuilder().build()
+                val url = "$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/"
                 GET(url, headers)
             }
             query.isEmpty() && tagFilter.state.isNotEmpty() -> {
