@@ -1,7 +1,7 @@
 ext {
     extName = 'Mangago'
     extClass = '.Mangago'
-    extVersionCode = 16
+    extVersionCode = 17
     isNsfw = true
 }
 
@@ -9,4 +9,5 @@ apply from: "$rootDir/common.gradle"
 
 dependencies {
     implementation(project(':lib:cryptoaes'))
+    implementation(project(':lib:randomua'))
 }
