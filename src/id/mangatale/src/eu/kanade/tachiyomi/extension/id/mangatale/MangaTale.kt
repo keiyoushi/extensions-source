@@ -7,7 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 
-class MangaTale : MangaThemesia("MangaTale", "https://mangatale.co", "id") {
+class MangaTale : MangaThemesia("MangaTale", "https://mangatale.id", "id") {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 5)
