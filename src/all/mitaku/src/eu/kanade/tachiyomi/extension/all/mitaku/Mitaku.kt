@@ -71,7 +71,7 @@ class Mitaku : ParsedHttpSource() {
                     .addPathSegment("page")
                     .addPathSegment(page.toString())
                     .build()
-                GET(url)
+                GET(url, headers)
             }
             query.isEmpty() && tagFilter.state.isNotEmpty() -> {
                 val url = baseUrl.toHttpUrl().newBuilder()
@@ -80,15 +80,13 @@ class Mitaku : ParsedHttpSource() {
                     .addPathSegment("page")
                     .addPathSegment(page.toString())
                     .build()
-                GET(url)
+                GET(url, headers)
             }
             query.isNotEmpty() -> {
-                val url = baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("page")
-                    .addPathSegment(page.toString())
+                val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
                     .addQueryParameter("s", query)
                     .build()
-                GET(url)
+                GET(url, headers)
             }
             else -> latestUpdatesRequest(page)
         }
