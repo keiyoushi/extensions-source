@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.extension.pt.slimeread.dto.PopularMangaDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.toSMangaList
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -28,6 +28,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import kotlin.math.min
 
 class SlimeRead : HttpSource() {
 
@@ -43,8 +44,7 @@ class SlimeRead : HttpSource() {
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 2)
-            .rateLimitHost(apiUrl.toHttpUrl(), 1)
+            .rateLimit(2)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 val mime = response.headers["Content-Type"]
@@ -93,12 +93,41 @@ class SlimeRead : HttpSource() {
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/ranking/semana?nsfw=false", headers)
+    private var currentSlice = 0
+    private var popularMangeCache: MangasPage? = null
+
+    override fun popularMangaRequest(page: Int) =
+        GET("$apiUrl/book_search?order=1&status=0", headers)
+
+    // Returns a large JSON, so the app can't handle the list without pagination
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        if (page == 1 || popularMangeCache == null) {
+            popularMangeCache = super.fetchPopularManga(page)
+                .toBlocking()
+                .last()
+        }
+
+        // Handling a large manga list
+        return Observable.just(popularMangeCache!!)
+            .map { mangaPage ->
+                val (mangas) = mangaPage
+                val pageSize = 15
+
+                currentSlice = (page - 1) * pageSize
+
+                val startIndex = min(mangas.size, currentSlice)
+                val endIndex = min(mangas.size, currentSlice + pageSize)
+
+                val slice = mangas.subList(startIndex, endIndex)
+
+                MangasPage(slice, slice.isNotEmpty())
+            }
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val items = response.parseAs<List<PopularMangaDto>>()
         val mangaList = items.toSMangaList()
-        return MangasPage(mangaList, false)
+        return MangasPage(mangaList, mangaList.isNotEmpty())
     }
 
     // =============================== Latest ===============================
