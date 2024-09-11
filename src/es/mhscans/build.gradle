@@ -2,8 +2,8 @@ ext {
     extName = 'MHScans'
     extClass = '.MHScans'
     themePkg = 'madara'
-    baseUrl = 'https://mhscans.manhuaonline.org'
-    overrideVersionCode = 3
+    baseUrl = 'https://mh.cookni.net'
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"
