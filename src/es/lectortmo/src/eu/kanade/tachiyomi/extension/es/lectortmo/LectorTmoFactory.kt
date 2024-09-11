@@ -83,7 +83,7 @@ class LectorManga : LectorTmo("LectorManga", "https://lectormanga.com", "es", ra
     }
 
     override fun imageRequest(page: Page) = GET(
-        url = page.imageUrl!!,
+        url = page.imageUrl!! + "#imagereq",
         headers = headers.newBuilder()
             .set("Referer", page.url.substringBefore("news/"))
             .build(),
