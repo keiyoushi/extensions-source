@@ -10,6 +10,10 @@ import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -54,6 +58,10 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2)
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -209,6 +217,10 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
+        if (!document.select("div.controls ul#dropdown-menu-page").isNullOrEmpty()) {
+            return pageListParseMobile(document)
+        }
+
         val imgsrcsScript = document.selectFirst("script:containsData(imgsrcs)")?.html()
             ?: throw Exception("Could not find imgsrcs")
         val imgsrcRaw = imgSrcsRegex.find(imgsrcsScript)?.groupValues?.get(1)
@@ -231,24 +243,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
         var imageList = cipher.doFinal(imgsrcs).toString(Charsets.UTF_8)
 
-        try {
-            val keyLocations = keyLocationRegex.findAll(deobfChapterJs).map {
-                it.groupValues[1].toInt()
-            }.distinct()
-
-            val unscrambleKey = keyLocations.map {
-                imageList[it].toString().toInt()
-            }.toList()
-
-            keyLocations.forEachIndexed { idx, it ->
-                imageList = imageList.removeRange(it - idx..it - idx)
-            }
-
-            imageList = imageList.unscramble(unscrambleKey)
-        } catch (e: NumberFormatException) {
-            // Only call where it should throw is imageList[it].toString().toInt().
-            // This usually means that the list is already unscrambled.
-        }
+        imageList = unescrambleImageList(imageList, deobfChapterJs)
 
         val cols = colsRegex.find(deobfChapterJs)?.groupValues?.get(1) ?: ""
 
@@ -272,8 +267,56 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         return super.pageListRequest(chapter)
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    private fun pageListParseMobile(document: Document): List<Page> {
+        val pagesCount = document.select("div.controls ul#dropdown-menu-page li").size
+        val pageUrl = document.location().removeSuffix("/").substringBeforeLast("-")
+        return IntRange(1, pagesCount).map { Page(it, url = "$pageUrl-$it/") }
+    }
+
+    private var cachedDeofChapterJS: String? = null
+    private var cachedKey: ByteArray? = null
+    private var cachedIv: ByteArray? = null
+    private var cachedTime: Long = 0
+    private val maxCacheTime = 1000 * 60 * 5 // 5 minutes
+
+    override fun imageUrlParse(document: Document): String {
+        val imgsrcsScript = document.selectFirst("script:containsData(imgsrcs)")?.html()
+            ?: throw Exception("Could not find imgsrcs")
+        val imgsrcRaw = imgSrcsRegex.find(imgsrcsScript)?.groupValues?.get(1)
+            ?: throw Exception("Could not extract imgsrcs")
+        val imgsrcs = Base64.decode(imgsrcRaw, Base64.DEFAULT)
+        val chapterJsUrl = document.getElementsByTag("script").first {
+            it.attr("src").contains("chapter.js", ignoreCase = true)
+        }.attr("abs:src")
+
+        if (cachedDeofChapterJS == null || cachedKey == null || cachedIv == null || System.currentTimeMillis() - cachedTime > maxCacheTime) {
+            val obfuscatedChapterJs = client.newCall(GET(chapterJsUrl, headers)).execute().body.string()
+            cachedDeofChapterJS = SoJsonV4Deobfuscator.decode(obfuscatedChapterJs)
+            cachedKey = findHexEncodedVariable(cachedDeofChapterJS!!, "key").decodeHex()
+            cachedIv = findHexEncodedVariable(cachedDeofChapterJS!!, "iv").decodeHex()
+            cachedTime = System.currentTimeMillis()
+        }
+
+        val cipher = Cipher.getInstance(hashCipher)
+        val keyS = SecretKeySpec(cachedKey, aes)
+        cipher.init(Cipher.DECRYPT_MODE, keyS, IvParameterSpec(cachedIv))
+
+        var imageList = cipher.doFinal(imgsrcs).toString(Charsets.UTF_8)
+
+        imageList = unescrambleImageList(imageList, cachedDeofChapterJS!!)
+
+        val cols = colsRegex.find(cachedDeofChapterJS!!)?.groupValues?.get(1) ?: ""
+
+        val pageNumber = document.location().removeSuffix("/").substringAfterLast("-").toInt()
+
+        return imageList.split(",")[pageNumber - 1].let {
+            if (it.contains("cspiclink")) {
+                "$it#desckey=${getDescramblingKey(cachedDeofChapterJS!!, it)}&cols=$cols"
+            } else {
+                it
+            }
+        }
+    }
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Ignored if using text search"),
@@ -397,6 +440,29 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         return s
     }
 
+    private fun unescrambleImageList(imageList: String, js: String): String {
+        var imgList = imageList
+        try {
+            val keyLocations = keyLocationRegex.findAll(js).map {
+                it.groupValues[1].toInt()
+            }.distinct()
+
+            val unscrambleKey = keyLocations.map {
+                imgList[it].toString().toInt()
+            }.toList()
+
+            keyLocations.forEachIndexed { idx, it ->
+                imgList = imgList.removeRange(it - idx..it - idx)
+            }
+
+            imgList = imgList.unscramble(unscrambleKey)
+        } catch (e: NumberFormatException) {
+            // Only call where it should throw is imageList[it].toString().toInt().
+            // This usually means that the list is already unscrambled.
+        }
+        return imgList
+    }
+
     private fun unscrambleImage(image: InputStream, key: String, cols: Int): ByteArray {
         val bitmap = BitmapFactory.decodeStream(image)
 
@@ -508,6 +574,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
         }.let(screen::addPreference)
+        addRandomUAPreferenceToScreen(screen)
     }
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
