@@ -1,9 +1,9 @@
 ext {
-    extName = 'Lunar Scans Hentai'
-    extClass = '.LunarScansHentai'
+    extName = 'Pornhwa Scans'
+    extClass = '.PornhwaScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://hentai.lunarscans.fr'
-    overrideVersionCode = 0
+    baseUrl = 'https://pornhwascans.fr'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
