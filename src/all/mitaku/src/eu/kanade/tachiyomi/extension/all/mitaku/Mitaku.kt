@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -65,12 +64,7 @@ class Mitaku : ParsedHttpSource() {
 
         return when {
             query.isEmpty() && categoryFilter.state != 0 -> {
-                val url = baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("category")
-                    .addPathSegment(categoryFilter.toUriPart())
-                    .addPathSegment("page")
-                    .addPathSegment(page.toString())
-                    .build()
+                val url = "$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/".toHttpUrl().newBuilder().build()
                 GET(url, headers)
             }
             query.isEmpty() && tagFilter.state.isNotEmpty() -> {
@@ -169,15 +163,7 @@ class Mitaku : ParsedHttpSource() {
 
     class TagFilter : Filter.Text("Tag") {
         fun toUriPart(): String {
-            // Replace spaces with hyphens
-            val tag = state.replace(" ", "-")
-            // Encode special characters
-            val url = HttpUrl.Builder()
-                .scheme("https")
-                .host("example.com") // Dummy host to use HttpUrl.Builder
-                .addPathSegment(tag)
-                .build()
-            return url.encodedPath.substring(1) // Remove the leading slash
+            return state.trim().lowercase().replace(" ", "-")
         }
     }
 
