@@ -2,8 +2,8 @@ ext {
     extName = 'MangaTale'
     extClass = '.MangaTale'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://mangatale.co'
-    overrideVersionCode = 3
+    baseUrl = 'https://mangatale.id'
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"
