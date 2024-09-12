@@ -1,0 +1,8 @@
+ext {
+    extName = 'Mitaku'
+    extClass = '.Mitaku'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
