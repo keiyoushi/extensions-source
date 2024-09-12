@@ -240,7 +240,7 @@ abstract class MangaThemesia(
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
-            title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
+            title = seriesDetails.selectFirst(seriesTitleSelector)?.text() ?: ""
             artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
             author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
             description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
