@@ -8,5 +8,5 @@ class Hayalistic : Madara(
     "Hayalistic",
     "https://hayalistic.com.tr",
     "tr",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr")),
+    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH),
 )
