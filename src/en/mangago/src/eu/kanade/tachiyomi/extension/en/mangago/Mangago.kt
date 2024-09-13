@@ -41,6 +41,7 @@ import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import androidx.preference.EditTextPreference
 
 class Mangago : ParsedHttpSource(), ConfigurableSource {
 
@@ -170,14 +171,18 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaNextPageSelector() = genreListingNextPageSelector
 
-    private val titleRegex = Regex("""\(yaoi\)|\{Official\}|«Official»|〘Official〙|\(Official\)|\s\[Official]|\s「Official」|『Official』|\s?/Official\b""", RegexOption.IGNORE_CASE)
-    private fun titleVersion(title: String) = title.replace(titleRegex, "").trim()
+    private var titleRegex: Regex =
+        Regex(
+            "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)",
+            RegexOption.IGNORE_CASE,
+        )
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(".w-title h1")!!.text()
         if (isRemoveTitleVersion()) {
-            title = titleVersion(title)
+            title = title.replace(titleRegex, "").trim()
         }
+
         document.getElementById("information")!!.let {
             thumbnail_url = it.selectFirst("img")!!.attr("abs:src")
             description = it.selectFirst(".manga_summary")?.let { summary ->
@@ -574,9 +579,32 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
         }.let(screen::addPreference)
-        addRandomUAPreferenceToScreen(screen)
+
+        EditTextPreference(screen.context).apply {
+            key = TITLE_REGEX_PREF
+            title = "Custom Title Regex"
+            summary = "Enter a custom regex pattern to clean titles (advanced users only)"
+            dialogMessage = "Default: () ; {} ; [] ; «» ; 〘〙 ; 「」 ; 『』 ; ≪≫ ; ﹛﹜ ; 𖤍𖤍 ; / ; ~ ; |"
+            val defaultValue = "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)"
+            setDefaultValue(defaultValue)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val regexPattern = newValue.toString()
+                if (regexPattern.isBlank()) {
+                    text = defaultValue
+                    false
+                } else {
+                    preferences.edit().putString("TITLE_REGEX_PATTERN", regexPattern).apply()
+                    titleRegex = Regex(regexPattern, RegexOption.IGNORE_CASE)
+                    true
+                }
+            }
+        }.let(screen::addPreference)
+    addRandomUAPreferenceToScreen(screen)
+
     }
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+        private const val TITLE_REGEX_PREF = "TITLE_REGEX_PATTERN"
     }
 }
