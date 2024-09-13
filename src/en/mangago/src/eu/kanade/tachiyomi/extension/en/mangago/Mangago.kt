@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
@@ -41,7 +42,6 @@ import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
-import androidx.preference.EditTextPreference
 
 class Mangago : ParsedHttpSource(), ConfigurableSource {
 
@@ -584,7 +584,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
             key = TITLE_REGEX_PREF
             title = "Custom Title Regex"
             summary = "Enter a custom regex pattern to clean titles (advanced users only)"
-            dialogMessage = "Default: () ; {} ; [] ; «» ; 〘〙 ; 「」 ; 『』 ; ≪≫ ; ﹛﹜ ; 𖤍𖤍 ; / ; ~ ; |"
+            dialogMessage = "Put the regex between parentheses"
             val defaultValue = "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)"
             setDefaultValue(defaultValue)
 
