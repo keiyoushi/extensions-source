@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.batoto
 import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
@@ -88,12 +89,51 @@ open class BatoTo(
                 preferences.edit().putBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", checkValue).commit()
             }
         }
+        val removeOfficialPref = CheckBoxPreference(screen.context).apply {
+            key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
+            title = "Remove version information from entry titles"
+            summary = "This removes version tags like '(Official)' or '(Yaoi)' from entry titles " +
+                    "and helps identify duplicate entries in your library. " +
+                    "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
+                    "You might also want to clear the database in advanced settings."
+            setDefaultValue(false)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+                preferences.edit().putBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", checkValue).commit()
+            }
+        }
+        val titleRegexPref = EditTextPreference(screen.context).apply {
+            key = TITLE_REGEX_PREF
+            title = "Custom Title Regex"
+            summary = "Enter a custom regex pattern to clean titles (advanced users only)"
+            dialogMessage = "Do not put the regex between parentheses when not using the default"
+            val defaultValue = "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)"
+            setDefaultValue(defaultValue)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val regexPattern = newValue.toString()
+                if (regexPattern.isBlank()) {
+                    text = defaultValue
+                    false
+                } else {
+                    preferences.edit().putString("TITLE_REGEX_PATTERN", regexPattern).apply()
+                    titleRegex = Regex(regexPattern, RegexOption.IGNORE_CASE)
+                    true
+                }
+            }
+        }
         screen.addPreference(mirrorPref)
         screen.addPreference(altChapterListPref)
+        screen.addPreference(removeOfficialPref)
+        screen.addPreference(titleRegexPref)
     }
 
     private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
     private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
+    private fun isRemoveTitleVersion(): Boolean {
+        return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
+    }
 
     override val supportsLatest = true
     private val json: Json by injectLazy()
@@ -309,23 +349,36 @@ open class BatoTo(
         }
         return super.mangaDetailsRequest(manga)
     }
+    private var titleRegex: Regex =
+        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)", RegexOption.IGNORE_CASE)
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div#mainer div.container-fluid")
         val manga = SManga.create()
         val workStatus = infoElement.select("div.attr-item:contains(original work) span").text()
         val uploadStatus = infoElement.select("div.attr-item:contains(upload status) span").text()
-        manga.title = infoElement.select("h3").text().removeEntities()
+        val originalTitle = infoElement.select("h3").text().removeEntities()
+        val alternativeTitles = document.select("div.pb-2.alias-set.line-b-f").text()
+        val description = infoElement.select("div.limit-html").text() + "\n" +
+                infoElement.select(".episode-list > .alert-warning").text().trim()
+        val cleanedTitle = if (isRemoveTitleVersion()) {
+            originalTitle.replace(titleRegex) { matchResult ->
+                matchResult.groupValues.getOrNull(1)?.trim() ?: ""
+            }
+        } else {
+            originalTitle
+        }
+
+        manga.title = cleanedTitle
         manga.author = infoElement.select("div.attr-item:contains(author) span").text()
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
-        manga.description = infoElement.select("div.limit-html").text() + "\n" + infoElement.select(".episode-list > .alert-warning").text().trim()
-        manga.thumbnail_url = document.select("div.attr-cover img")
-            .attr("abs:src")
+        manga.description = description +
+                if (alternativeTitles.isNotBlank()) "\n\nAlternative Titles:\n$alternativeTitles" else ""
+        manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
         return manga
     }
-
     private fun parseStatus(workStatus: String?, uploadStatus: String?) = when {
         workStatus == null -> SManga.UNKNOWN
         workStatus.contains("Ongoing") -> SManga.ONGOING
@@ -945,6 +998,8 @@ open class BatoTo(
     companion object {
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
+        private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+        private const val TITLE_REGEX_PREF = "TITLE_REGEX_PATTERN"
         private val MIRROR_PREF_ENTRIES = arrayOf(
             "bato.to",
             "batocomic.com",
