@@ -11,5 +11,5 @@ class BegaTranslation : Madara(
     SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val useNewChapterEndpoint = true
-    override val mangaSubString = "mangas"
+    override val mangaSubString = "series"
 }
