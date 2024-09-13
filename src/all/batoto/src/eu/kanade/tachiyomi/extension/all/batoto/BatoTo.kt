@@ -86,21 +86,23 @@ open class BatoTo(
 
             setOnPreferenceChangeListener { _, newValue ->
                 val checkValue = newValue as Boolean
-                preferences.edit().putBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", checkValue).commit()
+                preferences.edit().putBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", checkValue)
+                    .commit()
             }
         }
         val removeOfficialPref = CheckBoxPreference(screen.context).apply {
             key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
             title = "Remove version information from entry titles"
             summary = "This removes version tags like '(Official)' or '(Yaoi)' from entry titles " +
-                    "and helps identify duplicate entries in your library. " +
-                    "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
-                    "You might also want to clear the database in advanced settings."
+                "and helps identify duplicate entries in your library. " +
+                "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
+                "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
 
             setOnPreferenceChangeListener { _, newValue ->
                 val checkValue = newValue as Boolean
-                preferences.edit().putBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", checkValue).commit()
+                preferences.edit().putBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", checkValue)
+                    .commit()
             }
         }
         val titleRegexPref = EditTextPreference(screen.context).apply {
@@ -108,7 +110,8 @@ open class BatoTo(
             title = "Custom Title Regex"
             summary = "Enter a custom regex pattern to clean titles (advanced users only)"
             dialogMessage = "Do not put the regex between parentheses when not using the default"
-            val defaultValue = "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)"
+            val defaultValue =
+                "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)"
             setDefaultValue(defaultValue)
 
             setOnPreferenceChangeListener { _, newValue ->
@@ -129,8 +132,14 @@ open class BatoTo(
         screen.addPreference(titleRegexPref)
     }
 
-    private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
-    private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
+    private fun getMirrorPref(): String? =
+        preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+
+    private fun getAltChapterListPref(): Boolean = preferences.getBoolean(
+        "${ALT_CHAPTER_LIST_PREF_KEY}_$lang",
+        ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE,
+    )
+
     private fun isRemoveTitleVersion(): Boolean {
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
     }
@@ -164,7 +173,8 @@ open class BatoTo(
         return manga
     }
 
-    override fun latestUpdatesNextPageSelector() = "div#mainer nav.d-none .pagination .page-item:last-of-type:not(.disabled)"
+    override fun latestUpdatesNextPageSelector() =
+        "div#mainer nav.d-none .pagination .page-item:last-of-type:not(.disabled)"
 
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/browse?langs=$siteLang&sort=views_a&page=$page")
@@ -176,7 +186,11 @@ open class BatoTo(
 
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         return when {
             query.startsWith("ID:") -> {
                 val id = query.substringAfter("ID:")
@@ -185,6 +199,7 @@ open class BatoTo(
                         queryIDParse(response)
                     }
             }
+
             query.isNotBlank() -> {
                 val url = "$baseUrl/search".toHttpUrl().newBuilder()
                     .addQueryParameter("word", query)
@@ -196,7 +211,9 @@ open class BatoTo(
                                 url.addQueryParameter("mode", "letter")
                             }
                         }
-                        else -> { /* Do Nothing */ }
+
+                        else -> { /* Do Nothing */
+                        }
                     }
                 }
                 client.newCall(GET(url.build(), headers)).asObservableSuccess()
@@ -204,6 +221,7 @@ open class BatoTo(
                         queryParse(response)
                     }
             }
+
             else -> {
                 val url = "$baseUrl/browse".toHttpUrl().newBuilder()
                 var min = ""
@@ -219,15 +237,23 @@ open class BatoTo(
                                     }
                             }
                         }
+
                         is HistoryFilter -> {
                             if (filter.state != 0) {
                                 val filterUrl = "$baseUrl/ajax.my.${filter.selected}.paging"
-                                return client.newCall(POST(filterUrl, headers, formBuilder().build())).asObservableSuccess()
+                                return client.newCall(
+                                    POST(
+                                        filterUrl,
+                                        headers,
+                                        formBuilder().build(),
+                                    ),
+                                ).asObservableSuccess()
                                     .map { response ->
                                         queryHistoryParse(response)
                                     }
                             }
                         }
+
                         is LangGroupFilter -> {
                             if (filter.selected.isEmpty()) {
                                 url.addQueryParameter("langs", siteLang)
@@ -236,6 +262,7 @@ open class BatoTo(
                                 url.addQueryParameter("langs", selection)
                             }
                         }
+
                         is GenreGroupFilter -> {
                             with(filter) {
                                 url.addQueryParameter(
@@ -244,6 +271,7 @@ open class BatoTo(
                                 )
                             }
                         }
+
                         is StatusFilter -> url.addQueryParameter("release", filter.selected)
                         is SortFilter -> {
                             if (filter.state != null) {
@@ -255,14 +283,17 @@ open class BatoTo(
                                 url.addQueryParameter("sort", "$sort.$value")
                             }
                         }
+
                         is OriginGroupFilter -> {
                             if (filter.selected.isNotEmpty()) {
                                 url.addQueryParameter("origs", filter.selected.joinToString(","))
                             }
                         }
+
                         is MinChapterTextFilter -> min = filter.state
                         is MaxChapterTextFilter -> max = filter.state
-                        else -> { /* Do Nothing */ }
+                        else -> { /* Do Nothing */
+                        }
                     }
                 }
                 url.addQueryParameter("page", page.toString())
@@ -338,7 +369,9 @@ open class BatoTo(
         add("prevPos", "null")
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        throw UnsupportedOperationException()
+
     override fun searchMangaSelector() = throw UnsupportedOperationException()
     override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
@@ -349,8 +382,12 @@ open class BatoTo(
         }
         return super.mangaDetailsRequest(manga)
     }
+
     private var titleRegex: Regex =
-        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)", RegexOption.IGNORE_CASE)
+        Regex(
+            "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)",
+            RegexOption.IGNORE_CASE,
+        )
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div#mainer div.container-fluid")
@@ -360,7 +397,7 @@ open class BatoTo(
         val originalTitle = infoElement.select("h3").text().removeEntities()
         val alternativeTitles = document.select("div.pb-2.alias-set.line-b-f").text()
         val description = infoElement.select("div.limit-html").text() + "\n" +
-                infoElement.select(".episode-list > .alert-warning").text().trim()
+            infoElement.select(".episode-list > .alert-warning").text().trim()
         val cleanedTitle = if (isRemoveTitleVersion()) {
             originalTitle.replace(titleRegex) { matchResult ->
                 matchResult.groupValues.getOrNull(1)?.trim() ?: ""
@@ -373,12 +410,14 @@ open class BatoTo(
         manga.author = infoElement.select("div.attr-item:contains(author) span").text()
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
-        manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
+        manga.genre =
+            infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
         manga.description = description +
-                if (alternativeTitles.isNotBlank()) "\n\nAlternative Titles:\n$alternativeTitles" else ""
+            if (alternativeTitles.isNotBlank()) "\n\nAlternative Titles:\n$alternativeTitles" else ""
         manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
         return manga
     }
+
     private fun parseStatus(workStatus: String?, uploadStatus: String?) = when {
         workStatus == null -> SManga.UNKNOWN
         workStatus.contains("Ongoing") -> SManga.ONGOING
@@ -388,6 +427,7 @@ open class BatoTo(
             uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
             else -> SManga.COMPLETED
         }
+
         else -> SManga.UNKNOWN
     }
 
@@ -410,18 +450,26 @@ open class BatoTo(
     }
 
     private fun altChapterParse(response: Response, title: String): List<SChapter> {
-        return Jsoup.parse(response.body.string(), response.request.url.toString(), Parser.xmlParser())
+        return Jsoup.parse(
+            response.body.string(),
+            response.request.url.toString(),
+            Parser.xmlParser(),
+        )
             .select("channel > item").map { item ->
                 SChapter.create().apply {
                     url = item.selectFirst("guid")!!.text()
                     name = item.selectFirst("title")!!.text().substringAfter(title).trim()
-                    date_upload = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US).parse(item.selectFirst("pubDate")!!.text())?.time ?: 0L
+                    date_upload = SimpleDateFormat(
+                        "E, dd MMM yyyy H:m:s Z",
+                        Locale.US,
+                    ).parse(item.selectFirst("pubDate")!!.text())?.time ?: 0L
                 }
             }
     }
 
     private fun checkChapterLists(document: Document): Boolean {
-        return document.select(".episode-list > .alert-warning").text().contains("This comic has been marked as deleted and the chapter list is not available.")
+        return document.select(".episode-list > .alert-warning").text()
+            .contains("This comic has been marked as deleted and the chapter list is not available.")
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -459,45 +507,59 @@ open class BatoTo(
             "secs" in date -> Calendar.getInstance().apply {
                 add(Calendar.SECOND, value * -1)
             }.timeInMillis
+
             "mins" in date -> Calendar.getInstance().apply {
                 add(Calendar.MINUTE, value * -1)
             }.timeInMillis
+
             "hours" in date -> Calendar.getInstance().apply {
                 add(Calendar.HOUR_OF_DAY, value * -1)
             }.timeInMillis
+
             "days" in date -> Calendar.getInstance().apply {
                 add(Calendar.DATE, value * -1)
             }.timeInMillis
+
             "weeks" in date -> Calendar.getInstance().apply {
                 add(Calendar.DATE, value * 7 * -1)
             }.timeInMillis
+
             "months" in date -> Calendar.getInstance().apply {
                 add(Calendar.MONTH, value * -1)
             }.timeInMillis
+
             "years" in date -> Calendar.getInstance().apply {
                 add(Calendar.YEAR, value * -1)
             }.timeInMillis
+
             "sec" in date -> Calendar.getInstance().apply {
                 add(Calendar.SECOND, value * -1)
             }.timeInMillis
+
             "min" in date -> Calendar.getInstance().apply {
                 add(Calendar.MINUTE, value * -1)
             }.timeInMillis
+
             "hour" in date -> Calendar.getInstance().apply {
                 add(Calendar.HOUR_OF_DAY, value * -1)
             }.timeInMillis
+
             "day" in date -> Calendar.getInstance().apply {
                 add(Calendar.DATE, value * -1)
             }.timeInMillis
+
             "week" in date -> Calendar.getInstance().apply {
                 add(Calendar.DATE, value * 7 * -1)
             }.timeInMillis
+
             "month" in date -> Calendar.getInstance().apply {
                 add(Calendar.MONTH, value * -1)
             }.timeInMillis
+
             "year" in date -> Calendar.getInstance().apply {
                 add(Calendar.YEAR, value * -1)
             }.timeInMillis
+
             else -> {
                 return 0
             }
@@ -512,17 +574,21 @@ open class BatoTo(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(imgHttps):containsData(batoWord):containsData(batoPass)")?.html()
-            ?: throw RuntimeException("Couldn't find script with image data.")
+        val script =
+            document.selectFirst("script:containsData(imgHttps):containsData(batoWord):containsData(batoPass)")
+                ?.html()
+                ?: throw RuntimeException("Couldn't find script with image data.")
 
         val imgHttpsString = script.substringAfter("const imgHttps =").substringBefore(";").trim()
-        val imageUrls = json.parseToJsonElement(imgHttpsString).jsonArray.map { it.jsonPrimitive.content }
+        val imageUrls =
+            json.parseToJsonElement(imgHttpsString).jsonArray.map { it.jsonPrimitive.content }
         val batoWord = script.substringAfter("const batoWord =").substringBefore(";").trim()
         val batoPass = script.substringAfter("const batoPass =").substringBefore(";").trim()
 
         val evaluatedPass: String = Deobfuscator.deobfuscateJsPassword(batoPass)
         val imgAccListString = CryptoAES.decrypt(batoWord.removeSurrounding("\""), evaluatedPass)
-        val imgAccList = json.parseToJsonElement(imgAccListString).jsonArray.map { it.jsonPrimitive.content }
+        val imgAccList =
+            json.parseToJsonElement(imgAccListString).jsonArray.map { it.jsonPrimitive.content }
 
         return imageUrls.mapIndexed { i, it ->
             val acc = imgAccList.getOrNull(i)
@@ -559,21 +625,31 @@ open class BatoTo(
         UtilsFilter(getUtilsFilter(), 0),
         HistoryFilter(getHistoryFilter(), 0),
     )
-    class SelectFilterOption(val name: String, val value: String)
-    class CheckboxFilterOption(val value: String, name: String, default: Boolean = false) : Filter.CheckBox(name, default)
-    class TriStateFilterOption(val value: String, name: String, default: Int = 0) : Filter.TriState(name, default)
 
-    abstract class SelectFilter(name: String, private val options: List<SelectFilterOption>, default: Int = 0) : Filter.Select<String>(name, options.map { it.name }.toTypedArray(), default) {
+    class SelectFilterOption(val name: String, val value: String)
+    class CheckboxFilterOption(val value: String, name: String, default: Boolean = false) :
+        Filter.CheckBox(name, default)
+
+    class TriStateFilterOption(val value: String, name: String, default: Int = 0) :
+        Filter.TriState(name, default)
+
+    abstract class SelectFilter(
+        name: String,
+        private val options: List<SelectFilterOption>,
+        default: Int = 0,
+    ) : Filter.Select<String>(name, options.map { it.name }.toTypedArray(), default) {
         val selected: String
             get() = options[state].value
     }
 
-    abstract class CheckboxGroupFilter(name: String, options: List<CheckboxFilterOption>) : Filter.Group<CheckboxFilterOption>(name, options) {
+    abstract class CheckboxGroupFilter(name: String, options: List<CheckboxFilterOption>) :
+        Filter.Group<CheckboxFilterOption>(name, options) {
         val selected: List<String>
             get() = state.filter { it.state }.map { it.value }
     }
 
-    abstract class TriStateGroupFilter(name: String, options: List<TriStateFilterOption>) : Filter.Group<TriStateFilterOption>(name, options) {
+    abstract class TriStateGroupFilter(name: String, options: List<TriStateFilterOption>) :
+        Filter.Group<TriStateFilterOption>(name, options) {
         val included: List<String>
             get() = state.filter { it.isIncluded() }.map { it.value }
 
@@ -584,15 +660,28 @@ open class BatoTo(
     abstract class TextFilter(name: String) : Filter.Text(name)
 
     class SortFilter(sortables: Array<String>) : Filter.Sort("Sort", sortables, Selection(5, false))
-    class StatusFilter(options: List<SelectFilterOption>, default: Int) : SelectFilter("Status", options, default)
-    class OriginGroupFilter(options: List<CheckboxFilterOption>) : CheckboxGroupFilter("Origin", options)
-    class GenreGroupFilter(options: List<TriStateFilterOption>) : TriStateGroupFilter("Genre", options)
+    class StatusFilter(options: List<SelectFilterOption>, default: Int) :
+        SelectFilter("Status", options, default)
+
+    class OriginGroupFilter(options: List<CheckboxFilterOption>) :
+        CheckboxGroupFilter("Origin", options)
+
+    class GenreGroupFilter(options: List<TriStateFilterOption>) :
+        TriStateGroupFilter("Genre", options)
+
     class MinChapterTextFilter : TextFilter("Min. Chapters")
     class MaxChapterTextFilter : TextFilter("Max. Chapters")
-    class LangGroupFilter(options: List<CheckboxFilterOption>) : CheckboxGroupFilter("Languages", options)
-    class LetterFilter(options: List<SelectFilterOption>, default: Int) : SelectFilter("Letter matching mode (Slow)", options, default)
-    class UtilsFilter(options: List<SelectFilterOption>, default: Int) : SelectFilter("Utils comic list", options, default)
-    class HistoryFilter(options: List<SelectFilterOption>, default: Int) : SelectFilter("Personal list", options, default)
+    class LangGroupFilter(options: List<CheckboxFilterOption>) :
+        CheckboxGroupFilter("Languages", options)
+
+    class LetterFilter(options: List<SelectFilterOption>, default: Int) :
+        SelectFilter("Letter matching mode (Slow)", options, default)
+
+    class UtilsFilter(options: List<SelectFilterOption>, default: Int) :
+        SelectFilter("Utils comic list", options, default)
+
+    class HistoryFilter(options: List<SelectFilterOption>, default: Int) :
+        SelectFilter("Personal list", options, default)
 
     private fun getLetterFilter() = listOf(
         SelectFilterOption("Disabled", "disabled"),
@@ -1027,12 +1116,14 @@ open class BatoTo(
             "zbato.net",
             "zbato.org",
         )
-        private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
+        private val MIRROR_PREF_ENTRY_VALUES =
+            MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 
         private const val ALT_CHAPTER_LIST_PREF_KEY = "ALT_CHAPTER_LIST"
         private const val ALT_CHAPTER_LIST_PREF_TITLE = "Alternative Chapter List"
-        private const val ALT_CHAPTER_LIST_PREF_SUMMARY = "If checked, uses an alternate chapter list"
+        private const val ALT_CHAPTER_LIST_PREF_SUMMARY =
+            "If checked, uses an alternate chapter list"
         private const val ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE = false
     }
 }
