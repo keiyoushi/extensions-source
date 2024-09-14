@@ -97,7 +97,6 @@ open class BatoTo(
                 "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
-            
         }
         val titleRegexPref = EditTextPreference(screen.context).apply {
             key = TITLE_REGEX_PREF
