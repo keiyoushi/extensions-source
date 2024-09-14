@@ -1,9 +1,9 @@
 ext {
     extName = 'Lua Scans'
     extClass = '.LuaScans'
-    themePkg = 'mangathemesia'
+    themePkg = 'keyoapp'
     baseUrl = 'https://luacomic.net'
-    overrideVersionCode = 5
+    overrideVersionCode = 29
 }
 
 apply from: "$rootDir/common.gradle"
