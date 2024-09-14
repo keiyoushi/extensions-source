@@ -1,0 +1,9 @@
+ext {
+    extName = 'Bega Translation'
+    extClass = '.BegaTranslation'
+    themePkg = 'madara'
+    baseUrl = 'https://begatranslation.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
