@@ -71,8 +71,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
             // desckey=...&cols=...
             val key = fragment.substringAfter("desckey=").substringBefore("&")
-            val cols =
-                fragment.substringAfter("&cols=").toIntOrNull() ?: return@addInterceptor response
+            val cols = fragment.substringAfter("&cols=").toIntOrNull() ?: return@addInterceptor response
 
             val image = unscrambleImage(response.body.byteStream(), key, cols)
             val body = image.toResponseBody("image/jpeg".toMediaTypeOrNull())
@@ -149,7 +148,6 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
                                 else -> {}
                             }
                         }
-
                         else -> {}
                     }
                 }
@@ -199,7 +197,6 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
                         "completed" -> SManga.COMPLETED
                         else -> SManga.UNKNOWN
                     }
-
                     "author(s):", "author:" -> author = el.select("a").joinToString { it.text() }
                     "genre(s):" -> genre = el.select("a").joinToString { it.text() }
                 }
@@ -207,8 +204,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun chapterListSelector() =
-        "table#chapter_table > tbody > tr, table.uk-table > tbody > tr"
+    override fun chapterListSelector() = "table#chapter_table > tbody > tr, table.uk-table > tbody > tr"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val link = element.select("a.chico")
@@ -299,8 +295,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         }.attr("abs:src")
 
         if (cachedDeofChapterJS == null || cachedKey == null || cachedIv == null || System.currentTimeMillis() - cachedTime > maxCacheTime) {
-            val obfuscatedChapterJs =
-                client.newCall(GET(chapterJsUrl, headers)).execute().body.string()
+            val obfuscatedChapterJs = client.newCall(GET(chapterJsUrl, headers)).execute().body.string()
             cachedDeofChapterJS = SoJsonV4Deobfuscator.decode(obfuscatedChapterJs)
             cachedKey = findHexEncodedVariable(cachedDeofChapterJS!!, "key").decodeHex()
             cachedIv = findHexEncodedVariable(cachedDeofChapterJS!!, "iv").decodeHex()
@@ -339,8 +334,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         fun addToUrl(builder: HttpUrl.Builder)
     }
 
-    private class StatusFilter(name: String, val query: String, state: Boolean) : UriFilter,
-        Filter.CheckBox(name, state) {
+    private class StatusFilter(name: String, val query: String, state: Boolean) : UriFilter, Filter.CheckBox(name, state) {
         override fun addToUrl(builder: HttpUrl.Builder) {
             builder.addQueryParameter(query, if (state) "1" else "0")
         }
@@ -573,7 +567,6 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
             )
         }
     }
-
     private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -592,8 +585,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
             title = "Custom Title Regex"
             summary = "Enter a custom regex pattern to clean titles (advanced users only)"
             dialogMessage = "Put the regex between parentheses"
-            val defaultValue =
-                "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)"
+            val defaultValue = "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)"
             setDefaultValue(defaultValue)
 
             setOnPreferenceChangeListener { _, newValue ->
@@ -610,7 +602,6 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
         addRandomUAPreferenceToScreen(screen)
     }
-
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val TITLE_REGEX_PREF = "TITLE_REGEX_PATTERN"
