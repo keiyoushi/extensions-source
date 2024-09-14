@@ -609,7 +609,6 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
             }
         }.let(screen::addPreference)
         addRandomUAPreferenceToScreen(screen)
-
     }
 
     companion object {
