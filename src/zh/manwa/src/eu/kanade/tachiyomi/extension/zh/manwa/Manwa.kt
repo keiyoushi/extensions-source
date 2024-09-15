@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.zh.manwa
 import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
+import android.util.Base64
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -159,22 +160,19 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         return GET("$baseUrl${chapter.url}?img_host=${preferences.getString(IMAGE_HOST_KEY, IMAGE_HOST_ENTRY_VALUES[0])}", headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
-        val cssQuery = "#cp_img > div.img-content > img[data-r-src]"
-        val elements = document.select(cssQuery)
-        if (elements.size == 3) {
-            val darkReader = document.selectFirst("#cp_img p")
-            if (darkReader != null) {
-                if (preferences.getBoolean(AUTO_CLEAR_COOKIE_KEY, false)) {
-                    clearCookies()
-                }
-
-                throw Exception(darkReader.text())
-            }
-        }
-
-        elements.forEachIndexed { index, it ->
-            add(Page(index, "", it.attr("data-r-src")))
+    override fun pageListParse(document: Document): List<Page> {
+        val script = document.selectFirst("script:containsData(encryptedPhotos)")!!.data()
+        // key changes every hour
+        val key = script.substringBefore("','enc'").substringAfterLast("'").toByteArray()
+        val encrypted = script.substringAfter("encryptedPhotos = '").substringBefore("'")
+        val decoded = Base64.decode(encrypted, Base64.DEFAULT)
+        val aesKey = SecretKeySpec(key, "AES")
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(Cipher.DECRYPT_MODE, aesKey, IvParameterSpec(key))
+        val decrypted = String(cipher.doFinal(decoded))
+        val jsonArray = json.parseToJsonElement(decrypted).jsonArray
+        return jsonArray.mapIndexed { index, it ->
+            Page(index, imageUrl = "${it.jsonObject["img_url"]!!.jsonPrimitive.content}?v=20220724")
         }
     }
 
