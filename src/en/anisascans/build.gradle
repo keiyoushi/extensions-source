@@ -1,0 +1,10 @@
+ext {
+    extName = 'Anisa Scans'
+    extClass = '.AnisaScans'
+    themePkg = 'madara'
+    baseUrl = 'https://anisascans.in'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
