@@ -23,6 +23,10 @@ class YaoiFanClub : ZeistManga(
     override val hasGenreFilter = true
     override val hasStatusFilter = true
 
+    override fun headersBuilder() =
+        super.headersBuilder()
+            .set("Referer", "https://www.blogger.com/blogin.g?blogspotURL=$baseUrl/&type=blog&bpli=1")
+
     override fun getGenreList(): List<Genre> = listOf(
         Genre("ABO", "ABO"),
         Genre("Ação", "Ação"),

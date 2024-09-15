@@ -3,7 +3,7 @@ ext {
     extClass = '.YaoiFanClub'
     themePkg = 'zeistmanga'
     baseUrl = 'https://www.yaoifanclub.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
