@@ -2,8 +2,8 @@ ext {
     extName = 'Luna Scans'
     extClass = '.LunaScans'
     themePkg = 'madara'
-    baseUrl = 'https://lunascans.org'
-    overrideVersionCode = 1
+    baseUrl = 'https://tuhafscans.com'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
