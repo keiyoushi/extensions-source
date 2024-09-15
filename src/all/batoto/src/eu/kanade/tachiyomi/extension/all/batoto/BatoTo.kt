@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.all.batoto
 import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
-import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
@@ -98,30 +97,9 @@ open class BatoTo(
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
         }
-        val titleRegexPref = EditTextPreference(screen.context).apply {
-            key = TITLE_REGEX_PREF
-            title = "Custom Title Regex"
-            summary = "Enter a custom regex pattern to clean titles (advanced users only)"
-            dialogMessage = "Do not put the regex between parentheses when not using the default"
-            val defaultValue = "(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)"
-            setDefaultValue(defaultValue)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val regexPattern = newValue.toString()
-                if (regexPattern.isBlank()) {
-                    text = defaultValue
-                    false
-                } else {
-                    preferences.edit().putString("TITLE_REGEX_PATTERN", regexPattern).apply()
-                    titleRegex = Regex(regexPattern, RegexOption.IGNORE_CASE)
-                    true
-                }
-            }
-        }
         screen.addPreference(mirrorPref)
         screen.addPreference(altChapterListPref)
         screen.addPreference(removeOfficialPref)
-        screen.addPreference(titleRegexPref)
     }
 
     private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
@@ -994,7 +972,6 @@ open class BatoTo(
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
-        private const val TITLE_REGEX_PREF = "TITLE_REGEX_PATTERN"
         private val MIRROR_PREF_ENTRIES = arrayOf(
             "bato.to",
             "batocomic.com",
