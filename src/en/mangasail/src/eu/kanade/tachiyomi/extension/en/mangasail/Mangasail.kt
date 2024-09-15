@@ -10,13 +10,13 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.Jsoup.parse
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -56,20 +56,19 @@ class Mangasail : ParsedHttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET(
-            "$baseUrl/sites/all/modules/authcache/modules/authcache_p13n/frontcontroller/authcache.php?r=frag/block/showmanga-lastest_list&o[q]=node",
-            headers,
-        )
+    override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
 
     override fun latestUpdatesSelector() = "ul#latest-list > li"
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         title = element.select("a strong").text()
-        element.select("a:has(img)").let {
+        element.selectFirst("a:has(img)")!!.let {
             url = it.attr("href")
             // Thumbnails are kind of low-res on latest updates page, transform the img url to get a better version
-            thumbnail_url = it.select("img").first()!!.attr("src").substringBefore("?").replace("styles/minicover/public/", "")
+            thumbnail_url = it.selectFirst("img")
+                ?.attr("src")
+                ?.substringBefore("?")
+                ?.replace("styles/minicover/public/", "")
         }
     }
 
@@ -88,64 +87,41 @@ class Mangasail : ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaSelector() = "h3.title, div.region-content h2:has(a)"
+    override fun searchMangaSelector() = "h3.title, div.view-content div.views-row"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        element.selectFirst("a")!!.let {
-            manga.setUrlWithoutDomain(it.attr("abs:href"))
-            manga.title = it.text()
-            // Search page doesn't contain cover images, have to get them from the manga's page; but first we need that page's node number
-            val node = getNodeNumber(client.newCall(GET(it.attr("href"), headers)).execute().asJsoup())
-            manga.thumbnail_url = getNodeDetail(node, "field_image2")
-        }
-        return manga
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        val anchor = element.selectFirst(".views-field-title a")
+            ?: element.selectFirst("a")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        title = anchor!!.text()
+        setUrlWithoutDomain(anchor.absUrl("href"))
     }
 
     override fun searchMangaNextPageSelector() = "li.next a"
 
     private val json: Json by injectLazy()
 
-    // Function to get data fragments from website
-    private fun getNodeDetail(node: String, field: String): String? {
-        val requestUrl =
-            "$baseUrl/sites/all/modules/authcache/modules/authcache_p13n/frontcontroller/authcache.php?a[field][0]=$node:full:en&r=asm/field/node/$field&o[q]=node/$node"
-        val responseString = client.newCall(GET(requestUrl, headers)).execute().body.string()
-        val htmlString = json.parseToJsonElement(responseString).jsonObject["field"]!!.jsonObject["$node:full:en"]!!.jsonPrimitive.content
-        return parse(htmlString).let {
-            when (field) {
-                "field_image2" -> it.selectFirst("img.img-responsive")!!.attr("src")
-                "field_status", "field_author", "field_artist" -> it.selectFirst("div.field-item.even")?.text()
-                "body" -> it.selectFirst("div.field-item.even p")?.text()?.substringAfter("summary: ")
-                "field_genres" -> it.select("a").text()
-                else -> null
-            }
-        }
-    }
-
-    // Get a page's node number so we can get data fragments for that page
-    private fun getNodeNumber(document: Document): String =
-        document.select("[rel=shortlink]").attr("href").substringAfter("/node/")
-
     // On source's website most of these details are loaded through JQuery
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            title = document.select("div.main-content-inner").select("h1").first()!!.text()
-            getNodeNumber(document).let { node ->
-                author = getNodeDetail(node, "field_author")
-                artist = getNodeDetail(node, "field_artist")
-                genre = getNodeDetail(node, "field_genres")?.replace(" ", ", ")
-                status = getNodeDetail(node, "field_status").toStatus()
-                description = getNodeDetail(node, "body")
-                thumbnail_url = getNodeDetail(node, "field_image2")
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        with(document.selectFirst("[id*=node-].node-manga[about]")!!) {
+            author = selectByText("Author")?.text()
+            artist = selectByText("Artist")?.text()
+            genre = selectByText("genres")?.select("a[href*=/tags]")
+                ?.joinToString { it.text() }
+            status = selectByText("Status")?.text().toStatus()
+            description = selectFirst(".field-type-text-with-summary p")?.text()
+            thumbnail_url = selectFirst("img")?.absUrl("src")
         }
     }
+
+    private fun Element.selectByText(key: String): Element? =
+        selectFirst(".field-label:contains($key) + .field-items .field-item")
 
     private fun String?.toStatus() = when {
         this == null -> SManga.UNKNOWN
         this.contains("Ongoing") -> SManga.ONGOING
-        this.contains("Completed") -> SManga.COMPLETED
+        this.contains("Complete") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
@@ -159,6 +135,19 @@ class Mangasail : ParsedHttpSource() {
         date_upload = parseChapterDate(element.select("td + td").text())
     }
 
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        var currentPage = 0
+        val chapters = mutableListOf<SChapter>()
+        do {
+            val url = "$baseUrl${manga.url}".toHttpUrl().newBuilder()
+                .addQueryParameter("page", "${currentPage++}")
+                .build()
+            val document = client.newCall(GET(url, headers)).execute().asJsoup()
+            chapters += document.select(chapterListSelector()).map(::chapterFromElement)
+        } while (document.selectFirst(".pagination .pager-last") != null)
+        return Observable.just(chapters)
+    }
+
     private fun parseChapterDate(string: String): Long {
         return dateFormat.parse(string.substringAfter("on "))?.time ?: 0L
     }
@@ -168,9 +157,12 @@ class Mangasail : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val imgUrlArray = document.selectFirst("script:containsData(paths)")!!.data()
             .substringAfter("paths\":").substringBefore(",\"count_p")
-        return json.parseToJsonElement(imgUrlArray).jsonArray.mapIndexed { i, el ->
-            Page(i, "", el.jsonPrimitive.content)
-        }
+        return json.parseToJsonElement(imgUrlArray).jsonArray
+            .map { it.jsonPrimitive.content }
+            .filter(URL_REGEX::matches)
+            .mapIndexed { i, imageUrl ->
+                Page(i, "", imageUrl)
+            }
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
@@ -243,8 +235,7 @@ class Mangasail : ParsedHttpSource() {
     }
 
     companion object {
-        val dateFormat by lazy {
-            SimpleDateFormat("d MMM yyyy", Locale.US)
-        }
+        val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.US)
+        val URL_REGEX = """^https?://[^\s/$.?#].[^\s]*$""".toRegex()
     }
 }
