@@ -83,8 +83,8 @@ class Post<T>(val post: T)
 
 @Serializable
 class ChapterListResponse(
-    val isNovel: Boolean,
-    val slug: String,
+    val isNovel: Boolean = false,
+    val slug: String? = null,
     val chapters: List<Chapter>,
 )
 
@@ -96,11 +96,13 @@ class Chapter(
     private val createdBy: Name,
     private val createdAt: String,
     private val chapterStatus: String,
+    private val mangaPost: ChapterPostDetails,
 ) {
     fun isPublic() = chapterStatus == "PUBLIC"
 
-    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        url = "/series/$mangaSlug/$slug#$id"
+    fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
+        val seriesSlug = mangaSlug ?: mangaPost.slug
+        url = "/series/$seriesSlug/$slug#$id"
         name = "Chapter $number"
         scanlator = createdBy.name
         date_upload = try {
@@ -110,5 +112,10 @@ class Chapter(
         }
     }
 }
+
+@Serializable
+class ChapterPostDetails(
+    val slug: String,
+)
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
