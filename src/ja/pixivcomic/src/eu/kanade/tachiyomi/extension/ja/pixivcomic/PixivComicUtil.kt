@@ -10,7 +10,7 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.abs
 
-private const val TIME_SALT = "mAtW1X8SzGS880fsjEXlM73QpS1i4kUMBhyhdaYySk8nWz533nrEunaSplg63fzT"
+private const val TIME_SALT = "M7w5HORvvX-VP4tRj2CFQOQFPocBqLvHTIbhTU36UCo"
 
 private class NoSuchTagException(message: String) : Exception(message)
 
