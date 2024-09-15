@@ -1,0 +1,9 @@
+ext {
+    extName = 'TecnoProjects'
+    extClass = '.TecnoProjects'
+    themePkg = 'madara'
+    baseUrl = 'https://tecnoprojects.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
