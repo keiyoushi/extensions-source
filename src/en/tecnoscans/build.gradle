@@ -2,8 +2,9 @@ ext {
     extName = 'Tecno Scans'
     extClass = '.TecnoScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://olyscans.xyz'
-    overrideVersionCode = 1
+    baseUrl = 'https://oliosscans.xyz'
+    overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
