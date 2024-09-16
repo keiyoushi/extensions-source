@@ -335,9 +335,7 @@ open class BatoTo(
         val description = infoElement.select("div.limit-html").text() + "\n" +
             infoElement.select(".episode-list > .alert-warning").text().trim()
         val cleanedTitle = if (isRemoveTitleVersion()) {
-            originalTitle.replace(titleRegex) { matchResult ->
-                matchResult.groupValues.getOrNull(1)?.trim() ?: ""
-            }
+            originalTitle.replace(titleRegex, "")
         } else {
             originalTitle
         }
