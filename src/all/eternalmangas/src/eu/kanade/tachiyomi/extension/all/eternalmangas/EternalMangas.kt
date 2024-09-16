@@ -32,14 +32,14 @@ open class EternalMangas(
 
         val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }
             .filter { it.language == internalLang }
-            .map { it.toSManga() }
+            .map { it.toSManga(seriesPath) }
 
         return MangasPage(mangas, false)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseData = json.decodeFromString<LatestUpdatesDto>(response.body.string())
-        val mangas = responseData.updates[internalLang]?.flatten()?.map { it.toSManga() } ?: emptyList()
+        val mangas = responseData.updates[internalLang]?.flatten()?.map { it.toSManga(seriesPath) } ?: emptyList()
         return MangasPage(mangas, false)
     }
 
