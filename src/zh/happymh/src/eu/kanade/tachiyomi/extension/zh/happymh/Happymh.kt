@@ -22,9 +22,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -36,7 +39,6 @@ class Happymh : HttpSource(), ConfigurableSource {
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
     override val baseUrl: String = "https://m.happymh.com"
-    override val client: OkHttpClient = network.cloudflareClient
     private val json: Json by injectLazy()
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -49,6 +51,23 @@ class Happymh : HttpSource(), ConfigurableSource {
             editor.apply()
         }
     }
+
+    private val rewriteOctetStream: Interceptor = Interceptor { chain ->
+        val originalResponse: Response = chain.proceed(chain.request())
+        if (originalResponse.headers("Content-Type").contains("application/octet-stream") && originalResponse.request.url.toString().contains(".jpg")) {
+            val orgBody = originalResponse.body.source()
+            val newBody = orgBody.asResponseBody("image/jpeg".toMediaType())
+            originalResponse.newBuilder()
+                .body(newBody)
+                .build()
+        } else {
+            originalResponse
+        }
+    }
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(rewriteOctetStream)
+        .build()
 
     override fun headersBuilder(): Headers.Builder {
         val builder = super.headersBuilder()
