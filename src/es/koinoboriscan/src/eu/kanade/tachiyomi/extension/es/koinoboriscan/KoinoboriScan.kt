@@ -39,7 +39,7 @@ class KoinoboriScan : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale("es"))
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2, 1)
         .build()
 
