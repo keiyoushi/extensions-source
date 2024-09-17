@@ -1,9 +1,7 @@
 ext {
     extName = 'Koinobori Scan'
     extClass = '.KoinoboriScan'
-    themePkg = 'madara'
-    baseUrl = 'https://koinoboriscan.com'
-    overrideVersionCode = 0
+    extVersionCode = 37
     isNsfw = true
 }
 
