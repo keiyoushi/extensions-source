@@ -9,7 +9,6 @@ class MyRockMangaFactory : SourceFactory {
         OtakuSanctuary("MyRockManga", "https://myrockmanga.com", "vi"),
         OtakuSanctuary("MyRockManga", "https://myrockmanga.com", "en"),
         OtakuSanctuary("MyRockManga", "https://myrockmanga.com", "it"),
-        OtakuSanctuary("MyRockManga", "https://myrockmanga.com", "fr"),
         OtakuSanctuary("MyRockManga", "https://myrockmanga.com", "es"),
     )
 }
