@@ -59,23 +59,32 @@ class hanmanwuzhe : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val genres = filters.filterIsInstance<GenreListFilter>().first()
-            .state.filter { it.state }.map { it.id }
+//        val genres = filters.filterIsInstance<GenreListFilter>().first()
+//            .state.filter { it.state }.map { it.id }
 
-        val url = if (query.isNotBlank() || genres.isEmpty()) {
+        val url = if (query.isNotBlank()) {
             "$baseUrl/index.php/search"
                 .toHttpUrl().newBuilder()
                 .addQueryParameter("key", query)
                 .toString()
         } else {
-            "$baseUrl/category/${genres.joinToString(",")}" +
+            var tagUrl = ""
+            filters.forEach { filter ->
+                when (filter) {
+                    is GenreFilter -> {
+                        tagUrl = arrayOf("list/1", "list/2", "list/3", "city/42", "city/43", "city/44", "city/45", "tags/6", "tags/7", "tags/8", "tags/9", "tags/10", "tags/11", "tags/12", "tags/13", "tags/14", "tags/15", "tags/16", "tags/17", "tags/18", "tags/19", "tags/20", "tags/21", "tags/22", "tags/23", "tags/24", "tags/25", "tags/26", "tags/27", "tags/28", "tags/29", "tags/30", "tags/31", "tags/48", "tags/49", "tags/50", "tags/51", "tags/52", "tags/53", "tags/54", "tags/55", "tags/56", "tags/57", "tags/58", "tags/59", "tags/60", "tags/61", "tags/62", "tags/63", "tags/64", "tags/65", "tags/66", "tags/67", "tags/68", "tags/69", "tags/70", "tags/71", "tags/72", "tags/73", "tags/74", "tags/75", "tags/76", "tags/77", "tags/78", "tags/79", "tags/80", "tags/81", "tags/82", "tags/83", "tags/84", "tags/85", "tags/86", "tags/87", "tags/88", "tags/89", "tags/90", "tags/91", "tags/92", "tags/93", "tags/94", "tags/95", "tags/96", "tags/97", "tags/98", "tags/99", "tags/100", "tags/101", "tags/102", "tags/103", "tags/104", "finish/1", "finish/2")[filter.state]
+                    }
+                    else -> {}
+                }
+            }
+
+            "$baseUrl/category/$tagUrl" +
                 if (page > 1) {
                     "/page/$page/"
                 } else {
                     ""
                 }
         }
-
         return GET(url, headers)
     }
 
@@ -120,107 +129,108 @@ class hanmanwuzhe : ParsedHttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class GenreListFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
-
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Text search will be ignored if genre's picked, and you can only choose one genre"),
-        GenreListFilter(getGenreList()),
+    private class GenreFilter() : Filter.Select<String>(
+        "Genre",
+        arrayOf(
+            "3D漫画",
+            "韩漫",
+            "日漫",
+            "内地",
+            "港台",
+            "韩国",
+            "日本",
+            "热血",
+            "冒险",
+            "科幻",
+            "霸总",
+            "玄幻",
+            "校园",
+            "修真",
+            "搞笑",
+            "穿越",
+            "后宫",
+            "耽美",
+            "恋爱",
+            "悬疑",
+            "恐怖",
+            "战争",
+            "动作",
+            "同人",
+            "竞技",
+            "励志",
+            "架空",
+            "灵异",
+            "百合",
+            "古风",
+            "生活",
+            "真人",
+            "都市",
+            "3D漫画",
+            "古装",
+            "御姐",
+            "肉欲",
+            "扶他",
+            "强奸",
+            "洗脑",
+            "调教",
+            "幻想",
+            "死体",
+            "死奸",
+            "淫荡",
+            "寝取",
+            "性奴",
+            "人妻",
+            "巨乳",
+            "教师",
+            "露出",
+            "黑丝",
+            "母子",
+            "乱伦",
+            "少女",
+            "催眠",
+            "皮衣",
+            "剧情",
+            "丝袜",
+            "欧美",
+            "凌辱",
+            "足交",
+            "奇幻",
+            "跨种族",
+            "卖肉",
+            "姐妹",
+            "公媳",
+            "捆绑",
+            "黑人",
+            "日常",
+            "迷奸",
+            "合集",
+            "短篇",
+            "模特",
+            "空姐",
+            "美少女",
+            "青年",
+            "韩国漫画",
+            "日本漫画",
+            "真人漫画",
+            "绿母",
+            "美乳",
+            "OL装",
+            "绿帽",
+            "出轨",
+            "母女",
+            "女同",
+            "堕落",
+            "猎奇",
+            "旗袍装",
+            "连载",
+            "完结",
+        ),
+        0,
     )
 
-    private fun getGenreList() = listOf(
-        Genre("3D漫画", "list/1"),
-        Genre("韩漫", "list/2"),
-        Genre("日漫", "list/3"),
-        Genre("内地", "city/42"),
-        Genre("港台", "city/43"),
-        Genre("韩国", "city/44"),
-        Genre("日本", "city/45"),
-        Genre("热血", "tags/6"),
-        Genre("冒险", "tags/7"),
-        Genre("科幻", "tags/8"),
-        Genre("霸总", "tags/9"),
-        Genre("玄幻", "tags/10"),
-        Genre("校园", "tags/11"),
-        Genre("修真", "tags/12"),
-        Genre("搞笑", "tags/13"),
-        Genre("穿越", "tags/14"),
-        Genre("后宫", "tags/15"),
-        Genre("耽美", "tags/16"),
-        Genre("恋爱", "tags/17"),
-        Genre("悬疑", "tags/18"),
-        Genre("恐怖", "tags/19"),
-        Genre("战争", "tags/20"),
-        Genre("动作", "tags/21"),
-        Genre("同人", "tags/22"),
-        Genre("竞技", "tags/23"),
-        Genre("励志", "tags/24"),
-        Genre("架空", "tags/25"),
-        Genre("灵异", "tags/26"),
-        Genre("百合", "tags/27"),
-        Genre("古风", "tags/28"),
-        Genre("生活", "tags/29"),
-        Genre("真人", "tags/30"),
-        Genre("都市", "tags/31"),
-        Genre("3D漫画", "tags/48"),
-        Genre("古装", "tags/49"),
-        Genre("御姐", "tags/50"),
-        Genre("肉欲", "tags/51"),
-        Genre("扶他", "tags/52"),
-        Genre("强奸", "tags/53"),
-        Genre("洗脑", "tags/54"),
-        Genre("调教", "tags/55"),
-        Genre("幻想", "tags/56"),
-        Genre("死体", "tags/57"),
-        Genre("死奸", "tags/58"),
-        Genre("淫荡", "tags/59"),
-        Genre("寝取", "tags/60"),
-        Genre("性奴", "tags/61"),
-        Genre("人妻", "tags/62"),
-        Genre("巨乳", "tags/63"),
-        Genre("教师", "tags/64"),
-        Genre("露出", "tags/65"),
-        Genre("黑丝", "tags/66"),
-        Genre("母子", "tags/67"),
-        Genre("乱伦", "tags/68"),
-        Genre("少女", "tags/69"),
-        Genre("催眠", "tags/70"),
-        Genre("皮衣", "tags/71"),
-        Genre("剧情", "tags/72"),
-        Genre("丝袜", "tags/73"),
-        Genre("欧美", "tags/74"),
-        Genre("凌辱", "tags/75"),
-        Genre("足交", "tags/76"),
-        Genre("奇幻", "tags/77"),
-        Genre("跨种族", "tags/78"),
-        Genre("卖肉", "tags/79"),
-        Genre("姐妹", "tags/80"),
-        Genre("公媳", "tags/81"),
-        Genre("捆绑", "tags/82"),
-        Genre("黑人", "tags/83"),
-        Genre("日常", "tags/84"),
-        Genre("迷奸", "tags/85"),
-        Genre("合集", "tags/86"),
-        Genre("短篇", "tags/87"),
-        Genre("模特", "tags/88"),
-        Genre("空姐", "tags/89"),
-        Genre("美少女", "tags/90"),
-        Genre("青年", "tags/91"),
-        Genre("韩国漫画", "tags/92"),
-        Genre("日本漫画", "tags/93"),
-        Genre("真人漫画", "tags/94"),
-        Genre("绿母", "tags/95"),
-        Genre("美乳", "tags/96"),
-        Genre("OL装", "tags/97"),
-        Genre("绿帽", "tags/98"),
-        Genre("出轨", "tags/99"),
-        Genre("母女", "tags/100"),
-        Genre("女同", "tags/101"),
-        Genre("堕落", "tags/102"),
-        Genre("猎奇", "tags/103"),
-        Genre("旗袍装", "tags/104"),
-        Genre("连载", "finish/1"),
-        Genre("完结", "finish/2"),
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Text search will be ignored if genre's picked"),
+        GenreFilter(),
     )
 
     private fun Element.imgAttr(): String = when {
