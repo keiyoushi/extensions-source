@@ -39,7 +39,7 @@ open class GoDa(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup().also(::parseGenres)
-        val mangas = document.select(".cardlist .pb-2 a").map { element ->
+        val mangas = document.select(".container > .cardlist .pb-2 a").map { element ->
             SManga.create().apply {
                 val imgSrc = element.selectFirst("img")!!.attr("src")
                 url = getKey(element.attr("href"))
