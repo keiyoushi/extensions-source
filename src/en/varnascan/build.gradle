@@ -2,8 +2,8 @@ ext {
     extName = 'Varna Scan'
     extClass = '.VarnaScan'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://varnascan.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://varnascan.net'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
