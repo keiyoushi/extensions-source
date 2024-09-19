@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
@@ -58,6 +59,7 @@ abstract class EXHentai(
 
     private fun genericMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
+        Log.d("DocumentContent", doc.toString())
         val mangaElements = doc.select("table.itg td.glname")
             .let { elements ->
                 if (isLangNatural() && getEnforceLanguagePref()) {
@@ -84,8 +86,8 @@ abstract class EXHentai(
                     }
                     // Get image
                     it.parent()?.select(".glthumb img")?.first().apply {
-                        thumbnail_url = this?.attr("data-src")?.nullIfBlank()
-                            ?: this?.attr("src")
+                        thumbnail_url = this?.attr("data-src")?.takeIf { it.isNotBlank() } ?: this?.attr("src")
+                        Log.d("ThumbnailURL", thumbnail_url ?: "No URL found")
                     }
                 }
             }
@@ -365,6 +367,7 @@ abstract class EXHentai(
         // Add ipb_member_id and ipb_pass_hash cookies
         cookies["ipb_member_id"] = memberId
         cookies["ipb_pass_hash"] = passHash
+        cookies["igneous"] = ""
 
         buildCookies(cookies)
     }
@@ -554,6 +557,11 @@ abstract class EXHentai(
         private const val PASS_HASH_PREF_TITLE = "ipb_pass_hash"
         private const val PASS_HASH_PREF_SUMMARY = "ipb_pass_hash value"
         private const val PASS_HASH_PREF_DEFAULT_VALUE = ""
+
+        private const val IGNEOUS_PREF_KEY = "IGNEOUS"
+        private const val IGNEOUS_PREF_TITLE = "igneous"
+        private const val IGNEOUS_PREF_SUMMARY = "igneous value"
+        private const val IGNEOUS_PREF_DEFAULT_VALUE = ""
     }
 
     // Preferences
@@ -613,4 +621,4 @@ abstract class EXHentai(
     private fun getEnforceLanguagePref(): Boolean = preferences.getBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE)
     private fun getPassHashPref(): String = preferences.getString(PASS_HASH_PREF_KEY, PASS_HASH_PREF_DEFAULT_VALUE) ?: PASS_HASH_PREF_DEFAULT_VALUE
     private fun getMemberIdPref(): String = preferences.getString(MEMBER_ID_PREF_KEY, MEMBER_ID_PREF_DEFAULT_VALUE) ?: MEMBER_ID_PREF_DEFAULT_VALUE
-}
+  }
