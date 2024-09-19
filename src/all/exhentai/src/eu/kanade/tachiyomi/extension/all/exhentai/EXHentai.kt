@@ -618,4 +618,4 @@ abstract class EXHentai(
     private fun getEnforceLanguagePref(): Boolean = preferences.getBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE)
     private fun getPassHashPref(): String = preferences.getString(PASS_HASH_PREF_KEY, PASS_HASH_PREF_DEFAULT_VALUE) ?: PASS_HASH_PREF_DEFAULT_VALUE
     private fun getMemberIdPref(): String = preferences.getString(MEMBER_ID_PREF_KEY, MEMBER_ID_PREF_DEFAULT_VALUE) ?: MEMBER_ID_PREF_DEFAULT_VALUE
-  }
+}
