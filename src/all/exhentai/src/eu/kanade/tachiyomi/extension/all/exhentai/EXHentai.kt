@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
-import android.util.Log
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
@@ -59,7 +58,6 @@ abstract class EXHentai(
 
     private fun genericMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
-        Log.d("DocumentContent", doc.toString())
         val mangaElements = doc.select("table.itg td.glname")
             .let { elements ->
                 if (isLangNatural() && getEnforceLanguagePref()) {
@@ -87,7 +85,6 @@ abstract class EXHentai(
                     // Get image
                     it.parent()?.select(".glthumb img")?.first().apply {
                         thumbnail_url = this?.attr("data-src")?.takeIf { it.isNotBlank() } ?: this?.attr("src")
-                        Log.d("ThumbnailURL", thumbnail_url ?: "No URL found")
                     }
                 }
             }
