@@ -97,7 +97,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
     override val popularMangaUrlSelector = ".manga-item__bottom a"
 
     private fun getTagId(tag: String, type: String): Int? {
-        val ajax = "https://hentairead.com/wp-admin/admin-ajax.php?action=search_manga_terms&search=$tag&taxonomy=$type".replace("artist", "manga_artist")
+        val ajax = "$baseUrl/wp-admin/admin-ajax.php?action=search_manga_terms&search=$tag&taxonomy=$type".replace("artist", "manga_artist")
         val res = client.newCall(GET(ajax, headers)).execute()
         val items = res.parseAs<Results>()
         val item = items.results.filter { it.text.lowercase() == tag.lowercase() }
