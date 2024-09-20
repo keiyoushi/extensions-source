@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".all.ehentai.EXHUrlActivity"
+            android:name=".all.exhentai.EXHUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
