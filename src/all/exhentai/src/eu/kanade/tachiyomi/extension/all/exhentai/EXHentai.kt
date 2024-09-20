@@ -45,7 +45,7 @@ abstract class EXHentai(
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
-    private val cookieManager by lazy { CookieManager.getInstance() }
+    private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
     override val name = "EXHentai"
 
     private val memberId: String? = getMemberIdPref()
@@ -362,17 +362,14 @@ abstract class EXHentai(
         // Bypass "Offensive For Everyone" content warning
         cookies["nw"] = "1"
 
-        val memberId = getMemberIdPref()
-        val passHash = getPassHashPref()
-
         // Check if either value is empty and throw an exception if true
-        if (memberId.isEmpty() || passHash.isEmpty()) {
+        if (memberId?.isEmpty() == true || passHash?.isEmpty() == true) {
             throw IllegalArgumentException("Login with WebView and restart the app")
         }
 
         // Add ipb_member_id and ipb_pass_hash cookies
-        cookies["ipb_member_id"] = memberId
-        cookies["ipb_pass_hash"] = passHash
+        cookies["ipb_member_id"] = memberId ?: ""
+        cookies["ipb_pass_hash"] = passHash ?: ""
         cookies["igneous"] = ""
 
         buildCookies(cookies)
@@ -621,8 +618,7 @@ abstract class EXHentai(
 
     private fun getEnforceLanguagePref(): Boolean = preferences.getBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE)
     private fun getCookieValue(cookieTitle: String, defaultValue: String, prefKey: String): String {
-        val cookieManager = CookieManager.getInstance()
-        val cookies = cookieManager.getCookie("forums.e-hentai.org")
+        val cookies = webViewCookieManager.getCookie("forums.e-hentai.org")
         var value: String? = null
 
         if (cookies != null) {
@@ -630,6 +626,9 @@ abstract class EXHentai(
             for (cookie in cookieArray) {
                 if (cookie.startsWith("$cookieTitle=")) {
                     value = cookie.split("=")[1]
+                    // Set the cookie with a new expiration date
+                    val newCookie = "$cookieTitle=$value; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/"
+                    webViewCookieManager.setCookie("forums.e-hentai.org", newCookie)
                     break
                 }
             }
