@@ -13,6 +13,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.util.concurrent.TimeUnit
 
 class LectorTmoFactory : SourceFactory {
 
@@ -23,7 +24,7 @@ class LectorTmoFactory : SourceFactory {
 }
 
 val rateLimitClient = Injekt.get<NetworkHelper>().cloudflareClient.newBuilder()
-    .rateLimit(1, 1)
+    .rateLimit(1, 1500, TimeUnit.MILLISECONDS)
     .build()
 
 class TuMangaOnline : LectorTmo("TuMangaOnline", "https://visortmo.com", "es", rateLimitClient) {
