@@ -2,8 +2,8 @@ ext {
     extName = 'Sinensis Scan'
     extClass = '.SinensisScan'
     themePkg = 'peachscan'
-    baseUrl = 'https://sinensistoon.com'
-    overrideVersionCode = 38
+    baseUrl = 'https://sinensis.leitorweb.com'
+    overrideVersionCode = 39
 }
 
 apply from: "$rootDir/common.gradle"
