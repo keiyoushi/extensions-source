@@ -362,6 +362,7 @@ abstract class EXHentai(
         // Bypass "Offensive For Everyone" content warning
         cookies["nw"] = "1"
 
+
         // Check if either value is empty and throw an exception if true
         if (memberId?.isEmpty() == true || passHash?.isEmpty() == true) {
             throw IllegalArgumentException("Login with WebView and restart the app")
@@ -626,9 +627,6 @@ abstract class EXHentai(
             for (cookie in cookieArray) {
                 if (cookie.startsWith("$cookieTitle=")) {
                     value = cookie.split("=")[1]
-                    // Set the cookie with a new expiration date
-                    val newCookie = "$cookieTitle=$value; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/"
-                    webViewCookieManager.setCookie("forums.e-hentai.org", newCookie)
                     break
                 }
             }
