@@ -2,8 +2,8 @@ ext {
     extName = 'DocTruyen5s'
     extClass = '.DocTruyen5s'
     themePkg = 'liliana'
-    baseUrl = 'https://manga.io.vn'
-    overrideVersionCode = 2
+    baseUrl = 'https://dongmoe.com'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
