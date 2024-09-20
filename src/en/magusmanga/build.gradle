@@ -3,7 +3,7 @@ ext {
     extClass = '.MagusManga'
     themePkg = 'keyoapp'
     baseUrl = 'https://magustoon.com'
-    overrideVersionCode = 34
+    overrideVersionCode = 35
 }
 
 apply from: "$rootDir/common.gradle"

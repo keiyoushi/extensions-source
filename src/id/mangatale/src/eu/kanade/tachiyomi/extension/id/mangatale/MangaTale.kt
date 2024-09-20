@@ -7,10 +7,10 @@ import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 
-class MangaTale : MangaThemesia("MangaTale", "https://mangatale.co", "id") {
+class MangaTale : MangaThemesia("MangaTale", "https://mangatale.id", "id") {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(20, 5)
+        .rateLimit(12, 3)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             val mime = response.headers["Content-Type"]
@@ -28,7 +28,7 @@ class MangaTale : MangaThemesia("MangaTale", "https://mangatale.co", "id") {
         }
         .build()
 
-    override val seriesTitleSelector = ".ts-breadcrumb li:last-child span"
+    override val seriesTitleSelector = ".ts-breadcrumb span:last-child span"
 
     override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
         thumbnail_url = document.selectFirst(seriesThumbnailSelector)?.imgAttr()

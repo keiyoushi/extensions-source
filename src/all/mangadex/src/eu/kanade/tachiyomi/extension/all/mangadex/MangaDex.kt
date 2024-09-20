@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.all.mangadex
 import android.app.Application
 import android.content.SharedPreferences
 import android.os.Build
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -56,6 +55,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+            .sanitizeExistingUuidPrefs()
     }
 
     private val helper = MangaDexHelper(lang)
@@ -67,6 +67,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             "Keiyoushi"
 
         val builder = super.headersBuilder().apply {
+            set("User-Agent", "Tachiyomi " + System.getProperty("http.agent"))
             set("Referer", "$baseUrl/")
             set("Origin", baseUrl)
             set("Extra", extraHeader)
@@ -78,12 +79,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
     override val client = network.client.newBuilder()
         .rateLimit(3)
         .addInterceptor(MdAtHomeReportInterceptor(network.client, headers))
-        .addInterceptor(MdUserAgentInterceptor(preferences, dexLang))
         .build()
-
-    init {
-        preferences.sanitizeExistingUuidPrefs()
-    }
 
     // Popular manga section
 
@@ -395,7 +391,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
     // Manga Details section
 
     override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url + "/" + helper.titleToSlug(manga.title)
+        return baseUrl + manga.url.replace("/manga/", "/title/") + "/" + helper.titleToSlug(manga.title)
     }
 
     /**
@@ -761,30 +757,6 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             }
         }
 
-        val userAgentPref = EditTextPreference(screen.context).apply {
-            key = MDConstants.getCustomUserAgentPrefKey(dexLang)
-            title = helper.intl["set_custom_useragent"]
-            summary = helper.intl["set_custom_useragent_summary"]
-            dialogMessage = helper.intl.format(
-                "set_custom_useragent_dialog",
-                MDConstants.defaultUserAgent,
-            )
-
-            setDefaultValue(MDConstants.defaultUserAgent)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    Headers.Builder().add("User-Agent", newValue as String)
-                    summary = newValue
-                    true
-                } catch (e: Throwable) {
-                    val errorMessage = helper.intl.format("set_custom_useragent_error_invalid", e.message)
-                    Toast.makeText(screen.context, errorMessage, Toast.LENGTH_LONG).show()
-                    false
-                }
-            }
-        }
-
         screen.addPreference(coverQualityPref)
         screen.addPreference(tryUsingFirstVolumeCoverPref)
         screen.addPreference(dataSaverPref)
@@ -794,7 +766,6 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         screen.addPreference(originalLanguagePref)
         screen.addPreference(blockedGroupsPref)
         screen.addPreference(blockedUploaderPref)
-        screen.addPreference(userAgentPref)
     }
 
     override fun getFilterList(): FilterList =
@@ -869,20 +840,14 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
     private val SharedPreferences.altTitlesInDesc
         get() = getBoolean(MDConstants.getAltTitlesInDescPrefKey(dexLang), false)
 
-    private val SharedPreferences.customUserAgent
-        get() = getString(
-            MDConstants.getCustomUserAgentPrefKey(dexLang),
-            MDConstants.defaultUserAgent,
-        )
-
     /**
      * Previous versions of the extension allowed invalid UUID values to be stored in the
      * preferences. This method clear invalid UUIDs in case the user have updated from
      * a previous version with that behaviour.
      */
-    private fun SharedPreferences.sanitizeExistingUuidPrefs() {
+    private fun SharedPreferences.sanitizeExistingUuidPrefs(): SharedPreferences {
         if (getBoolean(MDConstants.getHasSanitizedUuidsPrefKey(dexLang), false)) {
-            return
+            return this
         }
 
         val blockedGroups = getString(MDConstants.getBlockedGroupsPrefKey(dexLang), "")!!
@@ -902,5 +867,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             .putString(MDConstants.getBlockedUploaderPrefKey(dexLang), blockedUploaders)
             .putBoolean(MDConstants.getHasSanitizedUuidsPrefKey(dexLang), true)
             .apply()
+
+        return this
     }
 }

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.yugenmangas
 
-import eu.kanade.tachiyomi.extension.pt.yugenmangas.YugenMangas.Companion.DATE_FORMAT
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -71,6 +70,21 @@ class MangaDetailsDto(
 }
 
 @Serializable
+class ChapterContainerDto(
+    val results: WrapperDto,
+    val next: String?,
+) {
+    fun toSChapter(seriesCode: String): List<SChapter> {
+        return results.chapters.map { it.toSChapter(seriesCode) }
+    }
+
+    @Serializable
+    class WrapperDto(
+        val chapters: List<ChapterDto>,
+    )
+}
+
+@Serializable
 class ChapterDto(
     val code: String,
     val name: String,
@@ -79,20 +93,26 @@ class ChapterDto(
 ) {
     fun toSChapter(mangaCode: String): SChapter = SChapter.create().apply {
         name = this@ChapterDto.name
-        date_upload = try { parseDate() } catch (_: Exception) { 0L }
+        date_upload = parseDate()
         url = "/series/$mangaCode/$code"
     }
 
     private fun parseDate(): Long {
         return try {
-            if ("dia" in date) {
-                val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0L
-                return Calendar.getInstance().let {
-                    it.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+            val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0L
+            Calendar.getInstance().let {
+                when {
+                    date.contains("dia") -> it.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+                    date.contains("mês", "meses") -> it.apply { add(Calendar.MONTH, -number) }.timeInMillis
+                    date.contains("ano") -> it.apply { add(Calendar.YEAR, -number) }.timeInMillis
+                    else -> 0L
                 }
             }
-            return DATE_FORMAT.parse(date)!!.time
         } catch (_: Exception) { 0L }
+    }
+
+    private fun String.contains(vararg elements: String): Boolean {
+        return elements.any { this.contains(it, true) }
     }
 }
 

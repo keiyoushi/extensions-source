@@ -1,9 +1,11 @@
 ext {
     extName = 'Sadscans'
     extClass = '.Sadscans'
-    themePkg = 'po2scans'
-    baseUrl = 'https://sadscans.com'
-    overrideVersionCode = 0
+    extVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    api(project(":lib:dataimage"))
+}

@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
@@ -35,50 +34,8 @@ class MangasNoSekai : Madara(
 
     override val useNewChapterEndpoint = true
 
-    private var libraryPath = ""
-
-    private fun getLibraryPath() {
-        libraryPath = try {
-            val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-            val libraryUrl = document.selectFirst("ul > li[id^=menu-item] > a[href]")
-
-            libraryUrl?.attr("href")?.removeSuffix("/")?.substringAfterLast("/")
-                ?: "manganews3"
-        } catch (e: Exception) {
-            "manganews3"
-        }
-    }
-
     override fun popularMangaRequest(page: Int): Request {
-        if (libraryPath.isBlank()) getLibraryPath()
-        return GET("$baseUrl/$libraryPath/#$page", headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val page = response.request.url.fragment?.toIntOrNull() ?: 1
-        val document = response.asJsoup()
-        val orderValue = document.selectFirst("select#order_select > option:eq(5)")
-            ?.attr("value")
-            ?: "views2"
-        val url = "$baseUrl/$libraryPath/${searchPage(page)}?m_orderby=$orderValue"
-        val newResponse = client.newCall(GET(url, headers)).execute()
-        return super.popularMangaParse(newResponse)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        if (libraryPath.isBlank()) getLibraryPath()
-        return GET("$baseUrl/$libraryPath/#$page", headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val page = response.request.url.fragment?.toIntOrNull() ?: 1
-        val document = response.asJsoup()
-        val orderValue = document.selectFirst("select#order_select > option:eq(1)")
-            ?.attr("value")
-            ?: "latest2"
-        val url = "$baseUrl/$libraryPath/${searchPage(page)}?m_orderby=$orderValue"
-        val newResponse = client.newCall(GET(url, headers)).execute()
-        return super.popularMangaParse(newResponse)
+        return GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=views", headers)
     }
 
     override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
@@ -105,6 +62,10 @@ class MangasNoSekai : Madara(
         }
 
         return manga
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        return GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=latest", headers)
     }
 
     override fun searchMangaNextPageSelector() = "nav.navigation a.next"
@@ -173,11 +134,11 @@ class MangasNoSekai : Madara(
 
     override val orderByFilterOptions: Map<String, String> = mapOf(
         intl["order_by_filter_relevance"] to "",
-        intl["order_by_filter_latest"] to "latest2",
+        intl["order_by_filter_latest"] to "latest3",
         intl["order_by_filter_az"] to "alphabet",
         intl["order_by_filter_rating"] to "rating",
         intl["order_by_filter_trending"] to "trending",
-        intl["order_by_filter_views"] to "views2",
+        intl["order_by_filter_views"] to "views3",
         intl["order_by_filter_new"] to "new-manga",
     )
 
@@ -199,31 +160,26 @@ class MangasNoSekai : Madara(
         val document = response.asJsoup()
         launchIO { countViews(document) }
 
-        val txtUrl = "https://raw.githubusercontent.com/bapeey/extensions-tools/main/keiyoushi/mns/values.txt"
-        val values = client.newCall(GET(txtUrl)).execute().body.string().split("\n")
-
         val mangaSlug = response.request.url.toString().substringAfter(baseUrl).removeSuffix("/")
-        val coreScript = document.selectFirst(values[0])!!.attr("abs:src")
+        val coreScript = document.selectFirst("script#wp-manga-js")!!.attr("abs:src")
         val coreScriptBody = Deobfuscator.deobfuscateScript(client.newCall(GET(coreScript, headers)).execute().body.string())
             ?: throw Exception("No se pudo deobfuscar el script")
 
-        val url = values[5].toRegex().find(coreScriptBody)?.groupValues?.get(1)
-            ?: throw Exception("No se pudo obtener la url del capítulo")
+        val regexCapture = ACTION_REGEX.find(coreScriptBody)?.groupValues
+        val url = regexCapture?.get(1) ?: throw Exception("No se pudo obtener la url del capítulo")
+        val data = regexCapture.getOrNull(2)?.trim() ?: throw Exception("No se pudo obtener la data del capítulo")
 
-        val data = values[5].toRegex().find(coreScriptBody)?.groupValues?.get(2)?.trim()
-            ?: throw Exception("No se pudo obtener la data del capítulo")
-
-        val objects = values[6].toRegex().findAll(data)
+        val objects = OBJECTS_REGEX.findAll(data)
             .mapNotNull { matchResult ->
                 val key = matchResult.groupValues[1]
                 val value = matchResult.groupValues.getOrNull(2)
                 if (!value.isNullOrEmpty()) key to value else null
             }.toList()
 
-        val mangaId = document.selectFirst(values[1])?.data()
-            ?.let { values[7].toRegex().find(it)?.groupValues?.get(1) }
-            ?: document.selectFirst(values[2])?.data()
-                ?.let { values[8].toRegex().find(it)?.groupValues?.get(1) }
+        val mangaId = document.selectFirst("script#wp-manga-js-extra")?.data()
+            ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
+            ?: document.selectFirst("script#manga_disqus_embed-js-extra")?.data()
+                ?.let { ALT_MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
             ?: throw Exception("No se pudo obtener el id del manga")
 
         val chapterElements = mutableListOf<Element>()
@@ -257,5 +213,12 @@ class MangasNoSekai : Madara(
     private fun chaptersFromJson(jsonString: String, mangaSlug: String): List<SChapter> {
         val result = json.decodeFromString<PayloadDto>(jsonString)
         return result.manga.first().chapters.map { it.toSChapter(mangaSlug) }
+    }
+
+    companion object {
+        val ACTION_REGEX = """function\s+.*?[\s\S]*?\.ajax;?[\s\S]*?(?:'?url'?:\s*'([^']*)')(?:[\s\S]*?'?data'?:\s*\{([^}]*)\})?""".toRegex()
+        val OBJECTS_REGEX = """\s*'?(\w+)'?\s*:\s*(?:(?:'([^']*)'|([^,\r\n]+))\s*,?\s*)""".toRegex()
+        val MANGA_ID_REGEX = """\"manga_id"\s*:\s*"(.*)\"""".toRegex()
+        val ALT_MANGA_ID_REGEX = """\"postId"\s*:\s*"(.*)\"""".toRegex()
     }
 }

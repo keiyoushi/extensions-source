@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.keyoapp
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -31,9 +30,7 @@ abstract class Keyoapp(
 ) : ParsedHttpSource() {
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .build()
+    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -234,15 +231,27 @@ abstract class Keyoapp(
     // Image list
 
     override fun pageListParse(document: Document): List<Page> {
+        document.select("#pages > img")
+            .map { it.attr("uid") }
+            .filter { it.isNotEmpty() }
+            .mapIndexed { index, img ->
+                Page(index, document.location(), "$cdnUrl/uploads/$img")
+            }
+            .takeIf { it.isNotEmpty() }
+            ?.also { return it }
+
+        // Fallback, old method
         return document.select("#pages > img")
             .map { it.imgAttr() }
-            .filter { it.contains(imgCdnRegex) }
+            .filter { it.contains(oldImgCdnRegex) }
             .mapIndexed { index, img ->
                 Page(index, document.location(), img)
             }
     }
 
-    private val imgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
+    protected val cdnUrl = "https://cdn.igniscans.com"
+
+    private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 
     override fun imageUrlParse(document: Document) = ""
 
