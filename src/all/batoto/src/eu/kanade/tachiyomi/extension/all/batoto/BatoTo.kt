@@ -323,7 +323,7 @@ open class BatoTo(
         return super.mangaDetailsRequest(manga)
     }
     private var titleRegex: Regex =
-        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)", RegexOption.IGNORE_CASE)
+        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)", RegexOption.IGNORE_CASE)
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div#mainer div.container-fluid")
