@@ -19,11 +19,17 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class Shinigami : Madara("Shinigami", "https://shinigami03.com", "id"), ConfigurableSource {
+class Shinigami : Madara("Shinigami", "https://shinigami05.com", "id"), ConfigurableSource {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
     override val baseUrl by lazy { getPrefBaseUrl() }
+
+    override val mangaSubString = "semua-series"
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+
+    override val useNewChapterEndpoint = false
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -59,9 +65,6 @@ class Shinigami : Madara("Shinigami", "https://shinigami03.com", "id"), Configur
         }
     }
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = false
-
     override fun headersBuilder() = super.headersBuilder().apply {
         add("Sec-Fetch-Dest", "document")
         add("Sec-Fetch-Mode", "navigate")
@@ -81,8 +84,6 @@ class Shinigami : Madara("Shinigami", "https://shinigami03.com", "id"), Configur
         }
         .rateLimit(3)
         .build()
-
-    override val mangaSubString = "semua-series"
 
     // Tags are useless as they are just SEO keywords.
     override val mangaDetailsSelectorTag = ""
