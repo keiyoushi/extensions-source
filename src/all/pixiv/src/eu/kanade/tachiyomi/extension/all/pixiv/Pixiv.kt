@@ -86,7 +86,7 @@ class Pixiv(override val lang: String) : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         val filters = filters.list as PixivFilters
-        val hash = Pair(query, filters).hashCode()
+        val hash = Pair(query, filters.toList()).hashCode()
 
         if (hash != searchHash || page == 1) {
             searchHash = hash
