@@ -20,6 +20,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -80,15 +81,17 @@ class Photos18 : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override suspend fun getChapterList(manga: SManga): List<SChapter> {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapter = SChapter.create().apply {
             url = manga.url
             name = "Gallery"
             chapter_number = 0f
         }
-        return listOf(chapter)
+        return Observable.just(listOf(chapter))
     }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
