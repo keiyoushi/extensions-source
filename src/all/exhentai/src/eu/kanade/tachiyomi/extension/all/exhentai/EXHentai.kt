@@ -362,10 +362,9 @@ abstract class EXHentai(
         // Bypass "Offensive For Everyone" content warning
         cookies["nw"] = "1"
 
-
         // Check if either value is empty and throw an exception if true
         if (memberId?.isEmpty() == true || passHash?.isEmpty() == true) {
-            throw IllegalArgumentException("Login with WebView and restart the app")
+            throw IllegalArgumentException("Login with WebView, stay on website for 10 second and restart the app")
         }
 
         // Add ipb_member_id and ipb_pass_hash cookies
@@ -619,7 +618,7 @@ abstract class EXHentai(
 
     private fun getEnforceLanguagePref(): Boolean = preferences.getBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE)
     private fun getCookieValue(cookieTitle: String, defaultValue: String, prefKey: String): String {
-        val cookies = webViewCookieManager.getCookie("forums.e-hentai.org")
+        val cookies = webViewCookieManager.getCookie("https://forums.e-hentai.org")
         var value: String? = null
 
         if (cookies != null) {
@@ -627,6 +626,7 @@ abstract class EXHentai(
             for (cookie in cookieArray) {
                 if (cookie.startsWith("$cookieTitle=")) {
                     value = cookie.split("=")[1]
+
                     break
                 }
             }
