@@ -48,11 +48,11 @@ abstract class EXHentai(
     private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
     override val name = "EXHentai"
 
-    private val memberId: String? = getMemberIdPref()
-    private val passHash: String? = getPassHashPref()
+    private val memberId: String = getMemberIdPref()
+    private val passHash: String = getPassHashPref()
 
     override val baseUrl: String
-        get() = if (memberId.isNullOrEmpty() || passHash.isNullOrEmpty()) {
+        get() = if (memberId.isEmpty() || passHash.isEmpty()) {
             "https://forums.e-hentai.org/index.php?act=Login"
         } else {
             "https://exhentai.org"
@@ -363,13 +363,13 @@ abstract class EXHentai(
         cookies["nw"] = "1"
 
         // Check if either value is empty and throw an exception if true
-        if (memberId?.isEmpty() == true || passHash?.isEmpty() == true) {
+        if (memberId.isEmpty() || passHash.isEmpty()) {
             throw IllegalArgumentException("Login with WebView, stay on website for 10 second and restart the app")
         }
 
         // Add ipb_member_id and ipb_pass_hash cookies
-        cookies["ipb_member_id"] = memberId ?: ""
-        cookies["ipb_pass_hash"] = passHash ?: ""
+        cookies["ipb_member_id"] = memberId
+        cookies["ipb_pass_hash"] = passHash
         cookies["igneous"] = ""
 
         buildCookies(cookies)
