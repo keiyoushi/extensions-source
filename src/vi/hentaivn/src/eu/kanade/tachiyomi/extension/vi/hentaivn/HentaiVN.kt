@@ -596,7 +596,7 @@ class HentaiVN : ParsedHttpSource(), ConfigurableSource {
     )
 
     // jQuery.makeArray($('#container > div > div > div.box-box.textbox > form > ul:nth-child(8) > li').map((i, e) => `TransGroup("${e.textContent}", "${e.children[0].value}")`)).join(',\n')
-    // https://hentaivn.autos/forum/search-plus.php
+    // https://hentaihvn.tv/forum/search-plus.php
     private fun getGroupList() = arrayOf(
         TransGroup("Tất cả", "0"),
         TransGroup("Đang cập nhật", "1"),
