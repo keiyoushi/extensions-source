@@ -1,6 +1,11 @@
 package eu.kanade.tachiyomi.extension.vi.lxhentai
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,14 +21,18 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LxHentai : ParsedHttpSource() {
+class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "LXHentai"
 
-    override val baseUrl = "https://lxmanga.life"
+    private val defaultBaseUrl = "https://lxmanga.click"
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val lang = "vi"
 
@@ -176,8 +185,8 @@ class LxHentai : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> = document
-        .select("div.text-center img.lazy")
-        .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:src")) }
+        .select("div.text-center div.lazy")
+        .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:data-src")) }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -294,9 +303,49 @@ class LxHentai : ParsedHttpSource() {
         Genre("LXHENTAI", 66),
     )
 
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+        screen.addPreference(baseUrlPref)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
 
         val CHAPTER_NUMBER_REGEX = Regex("""[+\-]?([0-9]*[.])?[0-9]+""", RegexOption.IGNORE_CASE)
+
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
     }
 }
