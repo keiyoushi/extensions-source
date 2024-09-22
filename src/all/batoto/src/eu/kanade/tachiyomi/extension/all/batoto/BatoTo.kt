@@ -53,7 +53,7 @@ open class BatoTo(
     }
 
     override val name: String = "Bato.to"
-    override val baseUrl: String = getMirrorPref()!!
+    override val baseUrl: String by lazy { getMirrorPref()!! }
     override val id: Long = when (lang) {
         "zh-Hans" -> 2818874445640189582
         "zh-Hant" -> 38886079663327225
@@ -96,10 +96,6 @@ open class BatoTo(
                 "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", checkValue).commit()
-            }
         }
         screen.addPreference(mirrorPref)
         screen.addPreference(altChapterListPref)
