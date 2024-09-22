@@ -88,8 +88,8 @@ class Photos18 : HttpSource(), ConfigurableSource {
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapter = SChapter.create().apply {
             url = manga.url
-            name = manga.title
-            chapter_number = -2f
+            name = "Gallery"
+            chapter_number = 0f
         }
         return Observable.just(listOf(chapter))
     }
