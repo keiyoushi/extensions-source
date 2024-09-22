@@ -96,6 +96,10 @@ open class BatoTo(
                 "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+                preferences.edit().putBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", checkValue).commit()
+            }
         }
         screen.addPreference(mirrorPref)
         screen.addPreference(altChapterListPref)
@@ -323,7 +327,7 @@ open class BatoTo(
         return super.mangaDetailsRequest(manga)
     }
     private var titleRegex: Regex =
-        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)", RegexOption.IGNORE_CASE)
+        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)|-.*-")
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div#mainer div.container-fluid")
