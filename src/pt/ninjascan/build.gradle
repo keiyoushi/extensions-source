@@ -3,7 +3,7 @@ ext {
     extClass = '.NinjaScan'
     themePkg = 'madara'
     baseUrl = 'https://ninjacomics.xyz'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 
