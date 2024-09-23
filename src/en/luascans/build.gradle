@@ -3,7 +3,8 @@ ext {
     extClass = '.LuaScans'
     themePkg = 'keyoapp'
     baseUrl = 'https://luacomic.net'
-    overrideVersionCode = 29
+    overrideVersionCode = 30
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
