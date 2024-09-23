@@ -114,7 +114,7 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val images = document.select("div#lightgallery a img")
+        val images = document.select("div#app > div > a img")
         return images.mapIndexed { index, image ->
             Page(index, imageUrl = image.attr("src"))
         }
