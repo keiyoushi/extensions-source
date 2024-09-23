@@ -24,7 +24,7 @@ object ScrambledImageInterceptor : Interceptor {
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
 
-        // https://rouman01.xyz/_next/static/chunks/pages/books/%5Bbookid%5D/%5Bid%5D-6f60a589e82dc8db.js
+        // /_next/static/chunks/pages/books/%5Bbookid%5D/%5Bid%5D-6f60a589e82dc8db.js
         // Scrambled images are reversed by blocks. Remainder is included in the bottom (scrambled) block.
         val blocks = url.removeSuffix(SCRAMBLED_SUFFIX).substringAfterLast('/').removeSuffix(".jpg")
             .let { Base64.decode(it, Base64.DEFAULT) }
