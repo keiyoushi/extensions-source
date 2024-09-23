@@ -3,7 +3,7 @@ ext {
     extClass = '.Jiangzaitoon'
     themePkg = 'madara'
     baseUrl = 'https://jiangzaitoon.pro'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = true
 }
 

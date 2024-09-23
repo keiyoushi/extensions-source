@@ -21,4 +21,6 @@ class Jiangzaitoon : Madara(
             .readTimeout(3, TimeUnit.MINUTES) // aka shit source
             .build()
     }
+
+    override val chapterUrlSelector = "> a"
 }
