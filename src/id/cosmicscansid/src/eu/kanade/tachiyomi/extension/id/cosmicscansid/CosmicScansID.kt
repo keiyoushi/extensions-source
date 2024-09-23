@@ -10,7 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
-class CosmicScansID : MangaThemesia("CosmicScans.id", "https://cosmicscans.id", "id", "/semua-komik") {
+class CosmicScansID : MangaThemesia("CosmicScans.id", "https://cosmic1.co", "id", "/semua-komik") {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 4, TimeUnit.SECONDS)
