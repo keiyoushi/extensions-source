@@ -1,9 +1,0 @@
-ext {
-    extName = 'Komik Chan'
-    extClass = '.KomikChan'
-    themePkg = 'madara'
-    baseUrl = 'https://komikchan.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

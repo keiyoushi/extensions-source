@@ -1,9 +1,0 @@
-ext {
-    extName = 'Clover Manga'
-    extClass = '.CloverManga'
-    themePkg = 'madara'
-    baseUrl = 'https://clover-manga.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Nerds'
-    extClass = '.MangaNerds'
-    themePkg = 'madara'
-    baseUrl = 'https://manganerds.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

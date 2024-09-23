@@ -1,9 +1,0 @@
-ext {
-    extName = 'The Apollo Team'
-    extClass = '.TheApolloTeam'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://theapollo.team'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

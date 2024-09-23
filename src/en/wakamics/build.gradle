@@ -1,9 +1,0 @@
-ext {
-    extName = 'Wakamics'
-    extClass = '.Wakamics'
-    themePkg = 'madara'
-    baseUrl = 'https://wakamics.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
