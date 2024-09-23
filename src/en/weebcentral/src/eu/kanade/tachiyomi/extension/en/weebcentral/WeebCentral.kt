@@ -73,7 +73,6 @@ class WeebCentral : ParsedHttpSource() {
             }
             addQueryParameter("limit", FETCH_LIMIT.toString())
             addQueryParameter("offset", ((page - 1) * FETCH_LIMIT).toString())
-            fragment((page > 1).toString())
         }.build()
 
         return GET(url, headers)

@@ -12,12 +12,11 @@ open class UriPartFilter(
     private val param: String,
     private val vals: Array<Pair<String, String>>,
     private val default: String = "",
-) : Filter.Select<String>(
+) : UriFilter, Filter.Select<String>(
     name,
     vals.map { it.first }.toTypedArray(),
     vals.indexOfFirst { it.second == default }.takeIf { it != -1 } ?: 0,
-),
-    UriFilter {
+) {
     override fun addToUri(builder: HttpUrl.Builder) {
         builder.addQueryParameter(param, vals[state].second)
     }
