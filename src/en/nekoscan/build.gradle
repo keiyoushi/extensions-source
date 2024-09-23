@@ -1,9 +1,0 @@
-ext {
-    extName = 'NekoScan'
-    extClass = '.NekoScan'
-    themePkg = 'madara'
-    baseUrl = 'https://nekoscan.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

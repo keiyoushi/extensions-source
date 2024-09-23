@@ -1,8 +1,0 @@
-ext {
-    extName = 'Hentai Cafe'
-    extClass = '.HentaiCafe'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
