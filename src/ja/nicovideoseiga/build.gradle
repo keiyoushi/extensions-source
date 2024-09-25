@@ -1,7 +1,7 @@
 ext {
     extName = 'Nicovideo Seiga'
     extClass = '.NicovideoSeiga'
-    extVersionCode = 4
+    extVersionCode = 5
 }
 
 apply from: "$rootDir/common.gradle"
