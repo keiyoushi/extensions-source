@@ -18,7 +18,7 @@ import java.util.Locale
 
 class KomikIndoID : ParsedHttpSource() {
     override val name = "KomikIndoID"
-    override val baseUrl = "https://komikindo.tv"
+    override val baseUrl = "https://komikindo.lol"
     override val lang = "id"
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
