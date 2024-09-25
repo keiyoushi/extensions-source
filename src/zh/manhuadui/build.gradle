@@ -2,8 +2,8 @@ ext {
     extName = 'YKMH'
     extClass = '.YKMH'
     themePkg = 'sinmh'
-    baseUrl = 'http://www.ykmh.com'
-    overrideVersionCode = 17
+    baseUrl = 'https://www.ykmh.net'
+    overrideVersionCode = 18
     isNsfw = true
 }
 
