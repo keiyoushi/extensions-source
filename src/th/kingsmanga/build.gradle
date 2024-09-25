@@ -1,9 +1,0 @@
-ext {
-    extName = 'Kings-Manga'
-    extClass = '.KingsManga'
-    themePkg = 'madara'
-    baseUrl = 'https://www.kings-manga.co'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
