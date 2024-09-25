@@ -19,7 +19,7 @@ import java.util.Locale
 class EmperorScan :
     Madara(
         "Emperor Scan",
-        "https://emperormanga.net",
+        "https://seriesemperor.com",
         "es",
         SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),

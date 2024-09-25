@@ -2,8 +2,9 @@ ext {
     extName = 'Emperor Scan'
     extClass = '.EmperorScan'
     themePkg = 'madara'
-    baseUrl = 'https://emperormanga.net'
-    overrideVersionCode = 4
+    baseUrl = 'https://seriesemperor.com'
+    overrideVersionCode = 5
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
