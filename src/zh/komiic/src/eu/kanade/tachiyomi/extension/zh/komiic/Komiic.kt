@@ -312,6 +312,21 @@ class Komiic : HttpSource() {
     }
 
     /**
+     * 檢查 API 是否達到上限
+     */
+    private fun fetchAPILimit(): Boolean {
+        val data = buildJsonObject {
+            put("operationName", "getImageLimit")
+            put("query", "query getImageLimit {\n  getImageLimit {\n    limit\n    usage\n    resetInSeconds\n    __typename\n  }\n}")
+        }
+
+        val response = client.newCall(POSTJson(queryAPI, data)).execute()
+
+        val imageLimit = JSONObject(response.body.string()).getJSONObject("data").getJSONObject("getImageLimit")
+        return imageLimit.getString("limit").toInt() <= imageLimit.getString("usage").toInt()
+    }
+
+    /**
      * 解析圖片列表
      */
     private fun parsePageList(response: Response, pageUrl: String): List<Page> {
@@ -328,6 +343,10 @@ class Komiic : HttpSource() {
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        if (fetchAPILimit()) {
+            throw Error("今天的圖片讀取次數已達上限！請前去 WebView 查看更多信息。")
+        }
+
         val data = buildJsonObject {
             put("operationName", "imagesByChapterId")
             putJsonObject("variables") {
