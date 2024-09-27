@@ -36,7 +36,6 @@ class Mangahere : ParsedHttpSource() {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Cache-Control", "no-cache")
 
     private val cookieInterceptor = CookieInterceptor(
         baseUrl.substringAfter("://"),
@@ -47,13 +46,6 @@ class Mangahere : ParsedHttpSource() {
 
     private val notRateLimitClient: OkHttpClient = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(cookieInterceptor)
-        .addNetworkInterceptor { chain ->
-            val newRequest = chain.request().newBuilder()
-                .header("Cache-Control", "no-cache")
-                .removeHeader("If-Modified-Since")
-                .build()
-            chain.proceed(newRequest)
-        }
         .build()
 
     override val client: OkHttpClient = notRateLimitClient.newBuilder()
