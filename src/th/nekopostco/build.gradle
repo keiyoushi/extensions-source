@@ -1,9 +1,10 @@
 ext {
-    extName = 'NekoPost.co (unoriginal)'
-    extClass = '.NekoPostCo'
+    extName = 'Superdoujin.org'
+    extClass = '.SuperdoujinOrg'
     themePkg = 'madara'
-    baseUrl = 'https://www.nekopost.co'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.superdoujin.org'
+    overrideVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
