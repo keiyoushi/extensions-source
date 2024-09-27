@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.es.senshimanga
+package eu.kanade.tachiyomi.multisrc.lectormoe
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
