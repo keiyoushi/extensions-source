@@ -2,8 +2,8 @@ ext {
     extName = 'Manga168'
     extClass = '.Manga168'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://manga168.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://manga168.net'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
