@@ -57,6 +57,9 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             if (contains("pref_permanent_manga_url_2_en")) {
                 edit().remove("pref_permanent_manga_url_2_en").apply()
             }
+            if (contains("pref_slug_map")) {
+                edit().remove("pref_slug_map").apply()
+            }
         }
     }
 
@@ -192,9 +195,11 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response): SManga {
         if (preferences.dynamicUrl()) {
             val url = response.request.url.toString()
-            val newSlug = url.substringAfter("/series/").substringBefore("/")
-            val absSlug = newSlug.substringBeforeLast("-")
-            preferences.slugMap = preferences.slugMap.apply { put(absSlug, newSlug) }
+            val newSlug = url.substringAfter("/series/", "").substringBefore("/")
+            if (newSlug.isNotEmpty()) {
+                val absSlug = newSlug.substringBeforeLast("-")
+                preferences.slugMap = preferences.slugMap.apply { put(absSlug, newSlug) }
+            }
         }
         return super.mangaDetailsParse(response)
     }
@@ -225,9 +230,11 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         if (preferences.dynamicUrl()) {
             val url = response.request.url.toString()
-            val newSlug = url.substringAfter("/series/").substringBefore("/")
-            val absSlug = newSlug.substringBeforeLast("-")
-            preferences.slugMap = preferences.slugMap.apply { put(absSlug, newSlug) }
+            val newSlug = url.substringAfter("/series/", "").substringBefore("/")
+            if (newSlug.isNotEmpty()) {
+                val absSlug = newSlug.substringBeforeLast("-")
+                preferences.slugMap = preferences.slugMap.apply { put(absSlug, newSlug) }
+            }
         }
         return super.chapterListParse(response)
     }
@@ -308,7 +315,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
-        private const val PREF_SLUG_MAP = "pref_slug_map"
+        private const val PREF_SLUG_MAP = "pref_slug_map_2"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
     }
 }
