@@ -6,9 +6,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class InariPikav : MangaThemesia(
-    "Inari Pikav",
-    "https://inaripikav.org",
+class InariManga : MangaThemesia(
+    "Inari Manga",
+    "https://inarimanga.cooksu.net",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
