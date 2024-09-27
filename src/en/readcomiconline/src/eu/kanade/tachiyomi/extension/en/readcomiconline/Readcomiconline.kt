@@ -38,7 +38,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.random.Random
 
 class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
@@ -235,6 +234,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         var webView: WebView? = null
         var images: List<String> = emptyList()
 
+        val match = KEY_REGEX.find(document.outerHtml())
+        val key1 = match?.groups?.get(1)?.value ?: throw Exception("Fail to get image links.")
+        val key2 = match?.groups?.get(2)?.value ?: throw Exception("Fail to get image links.")
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
 
@@ -247,15 +249,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onLoadResource(view: WebView?, url: String?) {
-                    val i = Random.nextInt(0, Int.MAX_VALUE)
                     view?.evaluateJavascript(
                         """
-                        const variable$i = Object.keys(window).find(key => {
-                          const value = window[key];
-                          return Array.isArray(value) && value.every(item => typeof item === 'string' && (item.includes('blogspot') || item.includes('whatsnew247')));
-                        });
-
-                        window[variable$i];
+                        window['$key2'].map(i => $key1(i));
                         """.trimIndent(),
                     ) {
                         try {
@@ -447,5 +443,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
+        private val KEY_REGEX = """\.attr\('src',\s*([^\(]+)\(([^\[]+)\[currImage\]\)""".toRegex()
     }
 }
