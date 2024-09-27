@@ -192,9 +192,11 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response): SManga {
         if (preferences.dynamicUrl()) {
             val url = response.request.url.toString()
-            val newSlug = url.substringAfter("/series/").substringBefore("/")
-            val absSlug = newSlug.substringBeforeLast("-")
-            preferences.slugMap = preferences.slugMap.apply { put(absSlug, newSlug) }
+            val newSlug = url.substringAfter("/series/", "").substringBefore("/")
+            if (newSlug.isNotEmpty()) {
+                val absSlug = newSlug.substringBeforeLast("-")
+                preferences.slugMap = preferences.slugMap.apply { put(absSlug, newSlug) }
+            }
         }
         return super.mangaDetailsParse(response)
     }
@@ -225,9 +227,11 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         if (preferences.dynamicUrl()) {
             val url = response.request.url.toString()
-            val newSlug = url.substringAfter("/series/").substringBefore("/")
-            val absSlug = newSlug.substringBeforeLast("-")
-            preferences.slugMap = preferences.slugMap.apply { put(absSlug, newSlug) }
+            val newSlug = url.substringAfter("/series/", "").substringBefore("/")
+            if (newSlug.isNotEmpty()) {
+                val absSlug = newSlug.substringBeforeLast("-")
+                preferences.slugMap = preferences.slugMap.apply { put(absSlug, newSlug) }
+            }
         }
         return super.chapterListParse(response)
     }
