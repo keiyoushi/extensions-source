@@ -57,6 +57,9 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             if (contains("pref_permanent_manga_url_2_en")) {
                 edit().remove("pref_permanent_manga_url_2_en").apply()
             }
+            if (contains("pref_slug_map")) {
+                edit().remove("pref_slug_map").apply()
+            }
         }
     }
 
@@ -312,7 +315,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
-        private const val PREF_SLUG_MAP = "pref_slug_map"
+        private const val PREF_SLUG_MAP = "pref_slug_map_2"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
     }
 }
