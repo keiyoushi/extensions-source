@@ -1,9 +1,0 @@
-ext {
-    extName = 'LectorJPG'
-    extClass = '.LectorJpg'
-    themePkg = 'mangaesp'
-    baseUrl = 'https://lectorjpg.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
