@@ -20,7 +20,7 @@ import java.util.Locale
 class MangaDenizi : ParsedHttpSource() {
     override val name = "MangaDenizi"
 
-    override val baseUrl = "https://mangadenizi.com"
+    override val baseUrl = "https://www.mangadenizi.net"
 
     override val lang = "tr"
 
