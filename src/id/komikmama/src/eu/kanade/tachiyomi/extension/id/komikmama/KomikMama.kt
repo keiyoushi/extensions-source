@@ -6,7 +6,7 @@ import java.util.Locale
 
 class KomikMama : MangaThemesia(
     "KomikMama",
-    "https://komik-mama.com",
+    "https://komikmama.org",
     "id",
     "/komik",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
