@@ -55,6 +55,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
             userAgentType = UserAgentType.DESKTOP,
+            filterInclude = listOf("chrome"),
         )
         .addNetworkInterceptor(::captchaInterceptor)
         .build()
