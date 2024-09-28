@@ -16,11 +16,11 @@ open class MCCMSConfig(
     hasCategoryPage: Boolean = true,
     val textSearchOnlyPageOne: Boolean = false,
     val useMobilePageList: Boolean = false,
-    protected val lazyLoadImageAttr: String = "data-original",
+    private val lazyLoadImageAttr: String = "data-original",
 ) {
     val genreData = GenreData(hasCategoryPage)
 
-    open fun pageListParse(response: Response): List<Page> {
+    fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
         return if (useMobilePageList) {
