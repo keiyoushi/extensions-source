@@ -33,7 +33,7 @@ class Bakai : ParsedHttpSource() {
     override val supportsLatest = false
 
     override val client by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
             .cookieJar(
                 object : CookieJar {
@@ -52,6 +52,14 @@ class Bakai : ParsedHttpSource() {
             )
             .build()
     }
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", baseUrl)
+        .set("Cache-Control", "no-cache")
+        .set("Sec-Fetch-Dest", "image")
+        .set("Sec-Fetch-Mode", "no-cors")
+        .set("Sec-Fetch-Site", "same-site")
+        .set("Sec-GPC", "1")
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home3/page/$page/")
