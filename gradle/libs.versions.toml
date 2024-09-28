@@ -4,7 +4,7 @@ coroutines_version = "1.6.4"
 serialization_version = "1.4.0"
 
 [libraries]
-gradle-agp = { module = "com.android.tools.build:gradle", version = "8.4.1" }
+gradle-agp = { module = "com.android.tools.build:gradle", version = "8.6.1" }
 gradle-kotlin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin_version" }
 gradle-serialization = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin_version" }
 gradle-kotlinter = { module = "org.jmailen.gradle:kotlinter-gradle", version = "3.13.0" }
