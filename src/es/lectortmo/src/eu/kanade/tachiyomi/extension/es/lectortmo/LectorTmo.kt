@@ -439,9 +439,12 @@ abstract class LectorTmo(
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!! + "#imagereq", tmoHeaders)
-    }
+    override fun imageRequest(page: Page) = GET(
+        url = page.imageUrl!! + "#imagereq",
+        headers = headers.newBuilder()
+            .set("Referer", page.url.substringBefore("news/"))
+            .build(),
+    )
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 

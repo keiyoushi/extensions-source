@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.es.lectortmo
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.SourceFactory
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
@@ -27,7 +25,7 @@ val rateLimitClient = Injekt.get<NetworkHelper>().cloudflareClient.newBuilder()
     .rateLimit(1, 1500, TimeUnit.MILLISECONDS)
     .build()
 
-class TuMangaOnline : LectorTmo("TuMangaOnline", "https://visortmo.com", "es", rateLimitClient) {
+class TuMangaOnline : LectorTmo("TuMangaOnline", "https://zonatmo.com", "es", rateLimitClient) {
     override val id = 4146344224513899730
 }
 
@@ -82,11 +80,4 @@ class LectorManga : LectorTmo("LectorManga", "https://lectormanga.com", "es", ra
             parseChapterDate(it)
         } ?: 0
     }
-
-    override fun imageRequest(page: Page) = GET(
-        url = page.imageUrl!! + "#imagereq",
-        headers = headers.newBuilder()
-            .set("Referer", page.url.substringBefore("news/"))
-            .build(),
-    )
 }
