@@ -11,6 +11,8 @@ import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import eu.kanade.tachiyomi.lib.randomua.UserAgentType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -22,7 +24,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -38,7 +39,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.random.Random
 
 class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
@@ -53,6 +53,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .setRandomUserAgent(
+            userAgentType = UserAgentType.DESKTOP,
+            filterInclude = listOf("chrome"),
+        )
         .addNetworkInterceptor(::captchaInterceptor)
         .build()
 
@@ -70,10 +74,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     }
 
     private var captchaUrl: String? = null
-
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Mozilla/5.0 (Windows NT 6.3; WOW64)")
-    }
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -235,6 +235,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         var webView: WebView? = null
         var images: List<String> = emptyList()
 
+        val match = KEY_REGEX.find(document.outerHtml())
+        val key1 = match?.groups?.get(1)?.value ?: throw Exception("Fail to get image links.")
+        val key2 = match?.groups?.get(2)?.value ?: throw Exception("Fail to get image links.")
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
 
@@ -247,15 +250,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onLoadResource(view: WebView?, url: String?) {
-                    val i = Random.nextInt(0, Int.MAX_VALUE)
                     view?.evaluateJavascript(
                         """
-                        const variable$i = Object.keys(window).find(key => {
-                          const value = window[key];
-                          return Array.isArray(value) && value.every(item => typeof item === 'string' && (item.includes('blogspot') || item.includes('whatsnew247')));
-                        });
-
-                        window[variable$i];
+                        window['$key2'].map(i => $key1(i));
                         """.trimIndent(),
                     ) {
                         try {
@@ -447,5 +444,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
+        private val KEY_REGEX = """\.attr\('src',\s*([^\(]+)\(([^\[]+)\[currImage\]\)""".toRegex()
     }
 }
