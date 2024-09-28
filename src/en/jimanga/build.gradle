@@ -1,9 +1,10 @@
 ext {
-    extName = 'Jimanga'
-    extClass = '.Jimanga'
+    extName = 'S2Manga.io'
+    extClass = '.S2MangaIo'
     themePkg = 'madara'
-    baseUrl = 'https://jimanga.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://s2manga.io'
+    overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
