@@ -5,12 +5,10 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Document
-import java.util.Locale
+import org.jsoup.select.Elements
 import java.util.concurrent.TimeUnit
 
 class CosmicScansID : MangaThemesia("CosmicScans.id", "https://cosmic1.co", "id", "/semua-komik") {
@@ -58,39 +56,7 @@ class CosmicScansID : MangaThemesia("CosmicScans.id", "https://cosmic1.co", "id"
 
     // manga details
     override val seriesDescriptionSelector = ".entry-content[itemprop=description] :not(a,p:has(a))"
-
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
-            title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
-            artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
-            author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
-            description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
-            // Add alternative name to manga description
-            val altName = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText().takeIf { it.isNullOrBlank().not() }
-            altName?.let {
-                description = "$description\n\n$altNamePrefix$altName".trim()
-            }
-            val genres = seriesDetails.select(seriesGenreSelector).map { it.text() }.toMutableList()
-            // Add series type (manga/manhwa/manhua/other) to genre
-            seriesDetails.selectFirst(seriesTypeSelector)?.ownText().takeIf { it.isNullOrBlank().not() }?.let { genres.add(it) }
-            genre = genres.map { genre ->
-                genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
-                    if (char.isLowerCase()) {
-                        char.titlecase(Locale.forLanguageTag(lang))
-                    } else {
-                        char.toString()
-                    }
-                }
-            }
-                .joinToString { it.trim() }
-
-            status = seriesDetails.selectFirst(seriesStatusSelector)?.text().parseStatus()
-            val thumbnail = seriesDetails.select(seriesThumbnailSelector)
-            if (thumbnail.isNotEmpty()) {
-                thumbnail_url = seriesDetails.select(seriesThumbnailSelector).imgAttr()
-            }
-        }
-    }
+    override fun Elements.imgAttr(): String = this.first()?.imgAttr() ?: ""
 
     // pages
     override val pageSelector = "div#readerarea img:not(noscript img)"
