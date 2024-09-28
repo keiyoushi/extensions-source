@@ -147,7 +147,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
             title = cleanTitle(document.select("h1").text())
             author = cleanAuthor(document.select("h1").text())
             artist = author
-            genre = document.select(".entry-header p a[href*=genre]").joinToString { it.text() }
+            genre = document.select(".entry-header p a[href*=genre], [href*=tag]").joinToString { it.text() }
             val basicDescription = document.select("h1").text()
             // too troublesome to achieve 100% accuracy assigning scanlator group during chapterListParse
             val scanlatedBy = document.select(".entry-terms:has(a[href*=group])").firstOrNull()
