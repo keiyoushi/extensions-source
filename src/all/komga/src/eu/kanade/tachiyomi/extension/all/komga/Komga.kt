@@ -251,6 +251,10 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    override fun imageRequest(page: Page): Request {
+        return GET(page.imageUrl!!, headers = headersBuilder().add("Accept", "image/*,*/*;q=0.8").build())
+    }
+
     override fun getFilterList(): FilterList {
         fetchFilterOptions()
 
