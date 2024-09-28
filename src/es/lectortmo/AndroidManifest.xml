@@ -14,7 +14,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https"/>
                 <data android:host="lectormanga.com"/>
-                <data android:host="visortmo.com"/>
+                <data android:host="zonatmo.com"/>
                 <data android:pathPattern="/library/..*/..*/..*"/>
             </intent-filter>
         </activity>
