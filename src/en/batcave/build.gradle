@@ -1,0 +1,7 @@
+ext {
+    extName = 'BatCave'
+    extClass = '.BatCave'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
