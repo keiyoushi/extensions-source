@@ -6,6 +6,4 @@ class RackusComics : MangaThemesia(
     "Rackus Comics",
     "https://rackusreads.com",
     "en",
-) {
-    override val versionId = 3
-}
+)
