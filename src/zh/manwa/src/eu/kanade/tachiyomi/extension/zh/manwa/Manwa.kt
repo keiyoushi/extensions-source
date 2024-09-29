@@ -43,10 +43,10 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override val name: String = "漫蛙"
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
-    override val baseUrl = "https://manwa.fun"
     private val json: Json by injectLazy()
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    override val baseUrl = "https://" + MIRROR_ENTRIES.run { this[preferences.getString(MIRROR_KEY, "0")!!.toInt().coerceAtMost(size)] }
 
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
@@ -180,6 +180,14 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
+            key = MIRROR_KEY
+            title = "使用镜像网址"
+            entries = MIRROR_ENTRIES
+            entryValues = Array(entries.size, Int::toString)
+            setDefaultValue("0")
+        }.let { screen.addPreference(it) }
+
+        ListPreference(screen.context).apply {
             key = IMAGE_HOST_KEY
             title = "图源"
             entries = IMAGE_HOST_ENTRIES
@@ -208,6 +216,8 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     }
 
     companion object {
+        private const val MIRROR_KEY = "MIRROR"
+        private val MIRROR_ENTRIES get() = arrayOf("manwa.fun", "manwa.me", "manwav3.xyz", "manwasa.cc", "manwadf.cc")
         private const val IMAGE_HOST_KEY = "IMG_HOST"
         private val IMAGE_HOST_ENTRIES = arrayOf("图源1", "图源2", "图源3")
         private val IMAGE_HOST_ENTRY_VALUES = arrayOf("1", "2", "3")
