@@ -1,0 +1,10 @@
+ext {
+    extName = 'Sky Manga'
+    extClass = '.SkyManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://skymanga.work'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
