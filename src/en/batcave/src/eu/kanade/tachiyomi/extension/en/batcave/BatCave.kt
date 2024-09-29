@@ -168,8 +168,8 @@ class BatCave : HttpSource() {
             title = document.selectFirst("header.page__header h1")!!.text()
             thumbnail_url = document.selectFirst("div.page__poster img")?.absUrl("src")
             description = document.selectFirst("div.page__text")?.wholeText()
-            author = document.selectFirst(".page__list > li:has(> div:contains(Publisher))")?.text()
-            status = when (document.selectFirst(".page__list > li:has(> div:contains(release type))")?.text()?.trim()) {
+            author = document.selectFirst(".page__list > li:has(> div:contains(Publisher))")?.ownText()
+            status = when (document.selectFirst(".page__list > li:has(> div:contains(release type))")?.ownText()?.trim()) {
                 "Ongoing" -> SManga.ONGOING
                 "Complete" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
