@@ -130,7 +130,11 @@ class BatCave : HttpSource() {
             ?: return true
 
         val data = try {
-            script.data().substringAfter("=").parseAs<XFilters>()
+            script.data()
+                .substringAfter("=")
+                .trim()
+                .removeSuffix(";")
+                .parseAs<XFilters>()
         } catch (e: SerializationException) {
             Log.e(name, "filters", e)
             return false
