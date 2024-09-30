@@ -125,9 +125,13 @@ class BatCave : HttpSource() {
         return FilterList(filters)
     }
 
-    private fun parseFilters(documented: Document): Boolean {
+    private fun parseFilters(documented: Document) {
         val script = documented.selectFirst("script:containsData(__XFILTER__)")
-            ?: return true
+
+        if (script == null) {
+            filterParseFailed = true
+            return
+        }
 
         val data = try {
             script.data()
@@ -137,19 +141,22 @@ class BatCave : HttpSource() {
                 .parseAs<XFilters>()
         } catch (e: SerializationException) {
             Log.e(name, "filters", e)
-            return false
+            filterParseFailed = true
+            return
         }
 
         publishers = data.filterItems.publisher.values.map { it.value to it.id }
         genres = data.filterItems.genre.values.map { it.value to it.id }
+        filterParseFailed = false
 
-        return true
+        return
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        filterParseFailed = !parseFilters(document)
-
+        if (response.request.url.pathSegments[0] != "search") {
+            parseFilters(document)
+        }
         val entries = document.select("#dle-content > .readed").map { element ->
             SManga.create().apply {
                 with(element.selectFirst(".readed__title > a")!!) {
