@@ -18,6 +18,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -174,10 +175,13 @@ class Komiic : HttpSource() {
      * 解析日期
      * Parse date
      */
-    private fun parseDate(dateStr: String): Long {
-        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-        sdf.timeZone = TimeZone.getTimeZone("UTC")
-        return sdf.parse(dateStr)?.time ?: 0L
+    fun parseDate(dateStr: String): Long {
+        return try {
+            dateFormat.parse(dateStr)?.time ?: 0L
+        } catch (e: ParseException) {
+            e.printStackTrace()
+            0L
+        }
     }
 
     /**
@@ -287,5 +291,8 @@ class Komiic : HttpSource() {
         private const val pageSize = 20
         const val PREFIX_ID_SEARCH = "id:"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 }
