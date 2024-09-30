@@ -1,9 +1,10 @@
 ext {
-    extName = 'MangaTale'
-    extClass = '.MangaTale'
+    extName = 'Ikiru'
+    extClass = '.Ikiru'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://mangatale.id'
-    overrideVersionCode = 4
+    baseUrl = 'https://ikiru.me'
+    overrideVersionCode = 5
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
