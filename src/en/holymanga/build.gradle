@@ -2,8 +2,8 @@ ext {
     extName = 'HolyManga'
     extClass = '.HolyManga'
     themePkg = 'zbulu'
-    baseUrl = 'https://w30.holymanga.net'
-    overrideVersionCode = 2
+    baseUrl = 'https://w33.holymanga.net'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
