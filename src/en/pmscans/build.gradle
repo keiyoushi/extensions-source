@@ -1,6 +1,6 @@
 ext {
-    extName = 'PMScans'
-    extClass = '.PMScans'
+    extName = 'Rackus'
+    extClass = '.Rackus'
     themePkg = 'mangathemesia'
     baseUrl = 'https://rackusreads.com'
     overrideVersionCode = 7
