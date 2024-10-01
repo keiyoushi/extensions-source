@@ -18,13 +18,25 @@ class Hentai(
     val title: String,
     val thumbnail: Int,
     val pages: Int,
-    val publishers: List<String>?,
     val artists: List<String>?,
+    val circles: List<String>?,
+    val tags: List<String>?,
+)
+
+@Serializable
+class ShortHentai(
+    val hash: String,
+    val thumbnail: Int,
+    val description: String?,
+    val released_at: String,
+    val created_at: String,
+    val publishers: List<String>?,
     val circles: List<String>?,
     val magazines: List<String>?,
     val parodies: List<String>?,
     val events: List<String>?,
-    val tags: List<String>?,
+    val size: Long,
+    val pages: Int,
 )
 
 @Serializable
@@ -39,9 +51,16 @@ class Data(
 
 @Serializable
 class HentaiIndexes(
-    val id: Int,
+    val hash: Int,
+    val thumbnail: Int,
     val description: Int,
     val released_at: Int,
     val created_at: Int,
+    val publishers: Int,
+    val circles: Int,
+    val magazines: Int,
+    val parodies: Int,
+    val events: Int,
     val size: Int,
+    val pages: Int,
 )
