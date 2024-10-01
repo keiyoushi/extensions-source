@@ -22,6 +22,7 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import uy.kohesive.injekt.injectLazy
 
 class Komiic : HttpSource() {
     // Override variables
@@ -34,6 +35,7 @@ class Komiic : HttpSource() {
 
     // Variables
     private val queryAPIUrl = "$baseUrl/api/query"
+    private val json: Json by injectLazy()
 
     /**
      * 解析漫畫列表
@@ -171,7 +173,7 @@ class Komiic : HttpSource() {
      */
     private fun parseDate(dateStr: String): Long {
         return try {
-            dateFormat.parse(dateStr)?.time ?: 0L
+            DATE_FORMAT.parse(dateStr)?.time ?: 0L
         } catch (e: ParseException) {
             e.printStackTrace()
             0L
@@ -263,20 +265,20 @@ class Komiic : HttpSource() {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private inline fun <reified T> String.parseAs(): T =
-        Json.decodeFromString(this)
+        json.decodeFromString(this)
 
     private inline fun <reified T> Response.parseAs(): T =
         use { body.string() }.parseAs()
 
     private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-        Json.encodeToString(this)
-            .toRequestBody(jsonMediaType)
+        json.encodeToString(this)
+            .toRequestBody(JSON_MEDIA_TYPE)
 
     companion object {
         private const val PAGE_SIZE = 20
         const val PREFIX_ID_SEARCH = "id:"
-        private val jsonMediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
     }

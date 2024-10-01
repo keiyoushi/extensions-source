@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.zh.komiic
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Payload<T>(
+class Payload<T>(
     val operationName: String,
     val variables: T,
     val query: String,
