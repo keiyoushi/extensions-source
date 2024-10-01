@@ -32,8 +32,8 @@ data class SearchResponse(
 
 @Serializable
 data class ComicsAndAuthors(
-    @SerialName("comics") val comics: List<Comic>,
-    @SerialName("authors") val authors: List<Author>,
+    val comics: List<Comic>,
+    val authors: List<Author>,
     @SerialName("__typename") val typeName: String,
 )
 
@@ -48,20 +48,20 @@ data class ComicByIDResponse(
 
 @Serializable
 data class Comic(
-    @SerialName("id") val id: String,
-    @SerialName("title") val title: String,
-    @SerialName("status") val status: String,
-    @SerialName("year") val year: Int,
-    @SerialName("imageUrl") val imageUrl: String,
-    @SerialName("authors") var authors: List<ComicAuthor>,
-    @SerialName("categories") val categories: List<ComicCategory>,
-    @SerialName("dateCreated") val dateCreated: String = "",
-    @SerialName("dateUpdated") val dateUpdated: String,
-    @SerialName("monthViews") val monthViews: Int = 0,
-    @SerialName("views") val views: Int,
-    @SerialName("favoriteCount") val favoriteCount: Int,
-    @SerialName("lastBookUpdate") val lastBookUpdate: String,
-    @SerialName("lastChapterUpdate") val lastChapterUpdate: String,
+    val id: String,
+    val title: String,
+    val status: String,
+    val year: Int,
+    val imageUrl: String,
+    var authors: List<ComicAuthor>,
+    val categories: List<ComicCategory>,
+    val dateCreated: String = "",
+    val dateUpdated: String,
+    val monthViews: Int = 0,
+    val views: Int,
+    val favoriteCount: Int,
+    val lastBookUpdate: String,
+    val lastChapterUpdate: String,
     @SerialName("__typename") val typeName: String,
 ) {
     private val parseStatus = when (status) {
@@ -88,27 +88,27 @@ data class Comic(
 
 @Serializable
 data class ComicCategory(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String,
+    val id: String,
+    val name: String,
     @SerialName("__typename") val typeName: String,
 )
 
 @Serializable
 data class ComicAuthor(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String,
+    val id: String,
+    val name: String,
     @SerialName("__typename") val typeName: String,
 )
 
 @Serializable
 data class Author(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String,
-    @SerialName("chName") val chName: String,
-    @SerialName("enName") val enName: String,
-    @SerialName("wikiLink") val wikiLink: String,
-    @SerialName("comicCount") val comicCount: Int,
-    @SerialName("views") val views: Int,
+    val id: String,
+    val name: String,
+    val chName: String,
+    val enName: String,
+    val wikiLink: String,
+    val comicCount: Int,
+    val views: Int,
     @SerialName("__typename") val typeName: String,
 )
 
@@ -123,46 +123,38 @@ data class ChaptersResponse(
 
 @Serializable
 data class Chapter(
-    @SerialName("id") val id: String,
-    @SerialName("serial") val serial: String,
-    @SerialName("type") val type: String,
-    @SerialName("dateCreated") val dateCreated: String,
-    @SerialName("dateUpdated") val dateUpdated: String,
-    @SerialName("size") val size: Int,
+    val id: String,
+    val serial: String,
+    val type: String,
+    val dateCreated: String,
+    val dateUpdated: String,
+    val size: Int,
     @SerialName("__typename") val typeName: String,
 )
-
-interface ImagesResult {
-    val images: List<Image>
-}
 
 @Serializable
 data class ImagesResponse(
-    @SerialName("imagesByChapterId") override val images: List<Image>,
-) : ImagesResult
+    @SerialName("imagesByChapterId") val images: List<Image>,
+)
 
 @Serializable
 data class Image(
-    @SerialName("id") val id: String,
-    @SerialName("kid") val kid: String,
-    @SerialName("height") val height: Int,
-    @SerialName("width") val width: Int,
+    val id: String,
+    val kid: String,
+    val height: Int,
+    val width: Int,
     @SerialName("__typename") val typeName: String,
 )
 
-interface APILimitResult {
-    val getImageLimit: APILimit
-}
-
 @Serializable
 data class APILimitData(
-    @SerialName("getImageLimit") override val getImageLimit: APILimit,
-) : APILimitResult
+    @SerialName("getImageLimit") val getImageLimit: APILimit,
+)
 
 @Serializable
 data class APILimit(
-    @SerialName("limit") val limit: Int,
-    @SerialName("usage") val usage: Int,
-    @SerialName("resetInSeconds") val resetInSeconds: String,
+    val limit: Int,
+    val usage: Int,
+    val resetInSeconds: String,
     @SerialName("__typename") val typeName: String,
 )
