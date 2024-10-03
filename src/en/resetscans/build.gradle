@@ -2,8 +2,8 @@ ext {
     extName = 'Reset Scans'
     extClass = '.ResetScans'
     themePkg = 'madara'
-    baseUrl = 'https://reset-scans.co'
-    overrideVersionCode = 5
+    baseUrl = 'https://rspro.xyz'
+    overrideVersionCode = 6
     isNsfw = false
 }
 
