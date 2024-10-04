@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Chill'
-    extClass = '.MangaChill'
-    themePkg = 'madara'
-    baseUrl = 'https://toonchill.com'
-    overrideVersionCode = 7
-}
-
-apply from: "$rootDir/common.gradle"
