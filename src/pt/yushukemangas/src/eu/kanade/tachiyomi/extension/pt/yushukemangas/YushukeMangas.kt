@@ -27,7 +27,7 @@ class YushukeMangas : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 
