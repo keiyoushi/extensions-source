@@ -194,7 +194,7 @@ class Komiic : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val res = response.parseAs<Data<ChaptersResponse>>()
         val comics = res.data.chapters
-        val comicUrl = response.request.url.toString().split("#")[1]
+        val comicUrl = response.request.url.fragment
 
         val tChapters = comics.filter { it.type == "chapter" }
         val tBooks = comics.filter { it.type == "book" }
@@ -250,7 +250,7 @@ class Komiic : HttpSource() {
             Page(
                 index,
                 "${chapterUrl.substringBeforeLast("/")}/$index",
-                "https://komiic.com/api/image/${image.kid}",
+                "$baseUrl/api/image/${image.kid}",
             )
         }
     }
