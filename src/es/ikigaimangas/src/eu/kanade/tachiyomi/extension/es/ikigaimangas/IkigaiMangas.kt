@@ -33,18 +33,33 @@ import kotlin.concurrent.thread
 
 class IkigaiMangas : HttpSource(), ConfigurableSource {
 
-    private val defaultBaseUrl: String = "https://lectorikigai.efope.com"
-    private val isCi = System.getenv("CI") == "true"
-    override val baseUrl: String by lazy {
-        when {
-            isCi -> defaultBaseUrl
-            else -> fetchDomain()
+    override val baseUrl = "https://ikigaimangas.com"
+
+    private val defaultBaseUrl: String = "https://lectorikigai.acamu.net"
+
+    private val fetchedDomainUrl: String by lazy {
+        if (!preferences.fetchDomainPref()) preferences.getPrefBaseUrl()
+        try {
+            val initClient = network.cloudflareClient
+            val headers = super.headersBuilder().build()
+            val document = initClient.newCall(GET(baseUrl, headers)).execute().asJsoup()
+            val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Nuevo dominio)")?.attr("on:click")
+                ?: preferences.getPrefBaseUrl()
+            val script = initClient.newCall(GET("$baseUrl/build/$scriptUrl", headers)).execute().body.string()
+            val domain = script.substringAfter("window.open(\"").substringBefore("\"")
+            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
+            val newDomain = "https://$host"
+            preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
+            newDomain
+        } catch (e: Exception) {
+            preferences.getPrefBaseUrl()
         }
     }
 
     private val apiBaseUrl: String = "https://panel.ikigaimangas.com"
 
     override val lang: String = "es"
+
     override val name: String = "Ikigai Mangas"
 
     override val supportsLatest: Boolean = true
@@ -59,7 +74,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
+            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
             .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
             .addNetworkInterceptor(cookieInterceptor)
             .build()
@@ -68,28 +83,13 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    private val lazyHeaders by lazy {
+        headersBuilder()
+            .set("Referer", fetchedDomainUrl)
+            .build()
+    }
 
     private val json: Json by injectLazy()
-
-    private fun fetchDomain(): String {
-        if (!preferences.fetchDomainPref()) return preferences.getPrefBaseUrl()
-        try {
-            val initClient = network.cloudflareClient
-            val headers = super.headersBuilder().build()
-            val homeDomain = "https://ikigaimangas.com"
-            val document = initClient.newCall(GET(homeDomain, headers)).execute().asJsoup()
-            val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Nuevo dominio)")?.attr("on:click")
-                ?: return defaultBaseUrl
-            val script = initClient.newCall(GET("$homeDomain/build/$scriptUrl", headers)).execute().body.string()
-            val domain = script.substringAfter("window.open(\"").substringBefore("\"")
-            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
-            return "https://$host"
-        } catch (e: Exception) {
-            return defaultBaseUrl
-        }
-    }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
@@ -101,7 +101,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .addQueryParameter("series_type", "comic")
             .addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
 
-        return GET(apiUrl.build(), headers)
+        return GET(apiUrl.build(), lazyHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -115,7 +115,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
             .addQueryParameter("page", page.toString())
 
-        return GET(apiUrl.build(), headers)
+        return GET(apiUrl.build(), lazyHeaders)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -151,7 +151,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         apiUrl.addQueryParameter("column", sortByFilter?.selected ?: "name")
         apiUrl.addQueryParameter("direction", if (sortByFilter?.state?.ascending == true) "asc" else "desc")
 
-        return GET(apiUrl.build(), headers)
+        return GET(apiUrl.build(), lazyHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -160,14 +160,14 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return MangasPage(mangaList, result.hasNextPage())
     }
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
+    override fun getMangaUrl(manga: SManga) = preferences.getPrefBaseUrl() + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url
             .substringAfter("/series/comic-")
             .substringBefore("#")
 
-        return GET("$apiBaseUrl/api/swf/series/$slug", headers)
+        return GET("$apiBaseUrl/api/swf/series/$slug", lazyHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -175,11 +175,11 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return result.series.toSMangaDetails()
     }
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore("#")
+    override fun getChapterUrl(chapter: SChapter) = preferences.getPrefBaseUrl() + chapter.url.substringBefore("#")
 
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfter("/series/comic-").substringBefore("#")
-        return GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=1", headers)
+        return GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=1", lazyHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -191,7 +191,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         mangas.addAll(result.data.map { it.toSChapter(dateFormat) })
         var page = 2
         while (result.meta.hasNextPage()) {
-            val newResponse = client.newCall(GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=$page", headers)).execute()
+            val newResponse = client.newCall(GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=$page", lazyHeaders)).execute()
             result = json.decodeFromString<PayloadChaptersDto>(newResponse.body.string())
             mangas.addAll(result.data.map { it.toSChapter(dateFormat) })
             page++
@@ -200,7 +200,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListRequest(chapter: SChapter): Request =
-        GET(baseUrl + chapter.url.substringBefore("#"), headers)
+        GET(fetchedDomainUrl + chapter.url.substringBefore("#"), lazyHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -255,7 +255,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         fetchFiltersAttempts++
         thread {
             try {
-                val response = client.newCall(GET("$apiBaseUrl/api/swf/filter-options", headers)).execute()
+                val response = client.newCall(GET("$apiBaseUrl/api/swf/filter-options", lazyHeaders)).execute()
                 val filters = json.decodeFromString<PayloadFiltersDto>(response.body.string())
 
                 genresList = filters.data.genres.map { it.name.trim() to it.id }
@@ -312,7 +312,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_TITLE = "Editar URL de la fuente"
-        private const val BASE_URL_PREF_SUMMARY = "Para uso temporal, si la extensión se actualiza se perderá el cambio. No se aplica si se busca el dominio automáticamente."
+        private const val BASE_URL_PREF_SUMMARY = "Para uso temporal, si la extensión se actualiza se perderá el cambio."
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val RESTART_APP_MESSAGE = "Reinicie la aplicación para aplicar los cambios"
 
