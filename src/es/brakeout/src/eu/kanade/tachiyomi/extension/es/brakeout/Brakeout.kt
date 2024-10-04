@@ -75,34 +75,23 @@ class Brakeout : ParsedHttpSource() {
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
-        if (query.isEmpty()) return super.fetchSearchManga(page, query, filters)
-        if (mangaList.isEmpty()) {
-            val request = searchMangaRequest(page, query, filters)
-            return client.newCall(request).asObservableSuccess().map { response ->
-                searchMangaParse(response, query)
-            }
+        return if (mangaList.isEmpty()) {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess().map { response -> searchMangaParse(response, query) }
         } else {
-            return Observable.just(parseMangaList(query))
+            Observable.just(parseMangaList(query))
         }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
-            if (query.length > 1) return GET("$baseUrl/comics", headers)
-            throw Exception("La búsqueda debe tener al menos 2 caracteres")
-        }
-        return GET("$baseUrl/comics?page=$page", headers)
+        return GET("$baseUrl/comics", headers)
     }
 
-    override fun searchMangaSelector(): String = "section.flex > div.grid > figure"
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String = "main.container section.flex > div > a:containsOwn(Siguiente)"
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        title = element.selectFirst("figcaption")!!.text()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-    }
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     private fun searchMangaParse(response: Response, query: String): MangasPage {
         val docString = response.body.string()
@@ -112,7 +101,7 @@ class Brakeout : ParsedHttpSource() {
     }
 
     private fun parseMangaList(query: String): MangasPage {
-        val mangas = mangaList.filter { it.name.contains(query, ignoreCase = true) }
+        val mangas = mangaList.filter { it.name.contains(query, ignoreCase = true) || query.isBlank() }
             .map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -124,12 +113,12 @@ class Brakeout : ParsedHttpSource() {
         }
     }
 
-    override fun chapterListSelector(): String = "section#section-list-cap div.grid-capitulos > div > a.group"
+    override fun chapterListSelector(): String = "div#chapters-container a"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        name = element.selectFirst("div#name")!!.text()
-        date_upload = parseRelativeDate(element.selectFirst("time")!!.text())
+        name = element.selectFirst("h1")!!.text()
+        date_upload = parseRelativeDate(element.selectFirst("p")!!.text())
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -167,6 +156,6 @@ class Brakeout : ParsedHttpSource() {
     }
 
     companion object {
-        private val JSON_PROJECT_LIST = """proyectos\s*=\s*(\[[\s\S]+?\])\s*;""".toRegex()
+        private val JSON_PROJECT_LIST = """projects\s*=\s*(\[[\s\S]+?\])\s*;""".toRegex()
     }
 }
