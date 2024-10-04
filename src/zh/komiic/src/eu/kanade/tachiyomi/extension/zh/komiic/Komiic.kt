@@ -1,12 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.komiic
 
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,6 +8,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,7 +19,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class Komiic : HttpSource() {
     // Override variables
@@ -222,12 +221,12 @@ class Komiic : HttpSource() {
      *
      * (Idk how to throw an exception in reading page)
      */
-    //private fun fetchAPILimit(): Boolean {
+    // private fun fetchAPILimit(): Boolean {
     //    val payload = Payload("getImageLimit", "", QUERY_API_LIMIT).toJsonRequestBody()
     //    val response = client.newCall(POST(queryAPIUrl, headers, payload)).execute()
     //    val limit = response.parseAs<APILimitData>().getImageLimit
     //    return limit.limit <= limit.usage
-    //}
+    // }
 
     // Page list
     override fun pageListRequest(chapter: SChapter): Request {
