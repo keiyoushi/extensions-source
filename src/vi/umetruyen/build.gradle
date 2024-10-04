@@ -2,8 +2,8 @@ ext {
     extName = "UmeTruyen"
     extClass = ".UmeTruyen"
     themePkg = "manhwaz"
-    baseUrl = "https://umetruyenz.com"
-    overrideVersionCode = 1
+    baseUrl = "https://umetruyenhay.net"
+    overrideVersionCode = 2
     isNsfw = true
 }
 
