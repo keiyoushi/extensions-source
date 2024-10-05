@@ -2,8 +2,8 @@ ext {
     extName = 'Ikiru'
     extClass = '.Ikiru'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://ikiru.me'
-    overrideVersionCode = 5
+    baseUrl = 'https://ikiru.one'
+    overrideVersionCode = 6
     isNsfw = true
 }
 
