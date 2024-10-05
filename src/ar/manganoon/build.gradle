@@ -2,8 +2,8 @@ ext {
     extName = 'MangaNoon'
     extClass = '.MangaNoon'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://noonscan.site'
-    overrideVersionCode = 6
+    baseUrl = 'https://axztu.com'
+    overrideVersionCode = 7
     isNsfw = false
 }
 
