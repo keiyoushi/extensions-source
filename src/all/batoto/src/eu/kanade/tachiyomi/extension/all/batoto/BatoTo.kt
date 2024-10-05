@@ -987,6 +987,8 @@ open class BatoTo(
             "readtoto.net",
             "readtoto.org",
             "dto.to",
+            "fto.to",
+            "jto.to",
             "hto.to",
             "mto.to",
             "wto.to",
