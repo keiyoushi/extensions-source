@@ -4,16 +4,17 @@ import android.app.Application
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.multisrc.kemono.KemonoCreatorDto.Companion.serviceName
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Call
@@ -21,12 +22,12 @@ import okhttp3.Callback
 import okhttp3.Request
 import okhttp3.Response
 import okio.blackholeSink
-import org.jsoup.select.Evaluator
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
+import java.lang.Thread.sleep
 import java.util.TimeZone
 import kotlin.math.min
 
@@ -63,69 +64,91 @@ open class Kemono(
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return Observable.fromCallable {
-            fetchNewDesignListing(page, "/artists", compareByDescending { it.favorited })
+            searchMangas(page, sortBy = "pop" to "desc")
         }
     }
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
         return Observable.fromCallable {
-            fetchNewDesignListing(page, "/artists/updated", compareByDescending { it.updatedDate })
-        }
-    }
-
-    private fun fetchNewDesignListing(
-        page: Int,
-        path: String,
-        comparator: Comparator<KemonoCreatorDto>,
-    ): MangasPage {
-        val baseUrl = baseUrl
-        return if (page == 1) {
-            val document = client.newCall(GET(baseUrl + path, headers)).execute().asJsoup()
-            val cardList = document.selectFirst(Evaluator.Class("card-list__items"))!!
-            val creators = cardList.children().map {
-                SManga.create().apply {
-                    url = it.attr("href")
-                    title = it.selectFirst(Evaluator.Class("user-card__name"))!!.ownText()
-                    author = it.selectFirst(Evaluator.Class("user-card__service"))!!.ownText()
-                    thumbnail_url = it.selectFirst(Evaluator.Tag("img"))!!.absUrl("src").formatAvatarUrl()
-                    description = PROMPT
-                    initialized = true
-                }
-            }.filterUnsupported()
-            MangasPage(creators, true).also { cacheCreators() }
-        } else {
-            fetchCreatorsPage(page) { it.apply { sortWith(comparator) } }
+            searchMangas(page, sortBy = "lat" to "desc")
         }
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        if (query.isBlank()) throw Exception("Query is empty")
-        fetchCreatorsPage(page) { all ->
-            val result = all.filterTo(ArrayList()) { it.name.contains(query, ignoreCase = true) }
-            if (result.isEmpty()) return@fetchCreatorsPage emptyList()
-            if (result[0].favorited != -1) {
-                result.sortByDescending { it.favorited }
-            } else {
-                result.sortByDescending { it.updatedDate }
-            }
-            result
-        }
+        searchMangas(page, query, filters)
     }
 
-    private fun fetchCreatorsPage(
-        page: Int,
-        block: (ArrayList<KemonoCreatorDto>) -> List<KemonoCreatorDto>,
-    ): MangasPage {
-        val imgCdnUrl = this.imgCdnUrl
+    private fun searchMangas(page: Int = 1, title: String = "", filters: FilterList? = null, sortBy: Pair<String, String> = "" to ""): MangasPage {
+        var sort = sortBy
+        val typeIncluded: MutableList<String> = mutableListOf()
+        val typeExcluded: MutableList<String> = mutableListOf()
+        filters?.forEach { filter ->
+            when (filter) {
+                is SortFilter -> {
+                    sort = filter.getValue() to if (filter.state!!.ascending) "asc" else "desc"
+                }
+                is TypeFilter -> {
+                    filter.state.filter { state -> state.isIncluded() }.forEach { tri ->
+                        typeIncluded.add(tri.value)
+                    }
+
+                    filter.state.filter { state -> state.isExcluded() }.forEach { tri ->
+                        typeExcluded.add(tri.value)
+                    }
+                }
+                else -> {}
+            }
+        }
+
         val response = client.newCall(GET("$baseUrl/$apiPath/creators", headers)).execute()
-        val allCreators = block(response.parseAs())
-        val count = allCreators.size
-        val fromIndex = (page - 1) * NEW_PAGE_SIZE
-        val toIndex = min(count, fromIndex + NEW_PAGE_SIZE)
-        val creators = allCreators.subList(fromIndex, toIndex)
-            .map { it.toSManga(imgCdnUrl) }
-            .filterUnsupported()
-        return MangasPage(creators, toIndex < count)
+        val allCreators = response.parseAs<List<KemonoCreatorDto>>().filterNot { it.service.lowercase() == "discord" }
+
+        val mangas = allCreators.filter {
+            val includeType = typeIncluded.isEmpty() || typeIncluded.contains(it.service.serviceName().lowercase())
+            val excludeType = typeExcluded.isNotEmpty() && typeExcluded.contains(it.service.serviceName().lowercase())
+
+            val regularSearch = it.name.contains(title, true)
+
+            includeType && !excludeType &&
+                regularSearch
+        }
+
+        val sorted = when (sort.first) {
+            "pop" -> {
+                if (sort.second == "desc") {
+                    mangas.sortedByDescending { it.favorited }
+                } else {
+                    mangas.sortedBy { it.favorited }
+                }
+            }
+            "tit" -> {
+                if (sort.second == "desc") {
+                    mangas.sortedByDescending { it.name }
+                } else {
+                    mangas.sortedBy { it.name }
+                }
+            }
+            "new" -> {
+                if (sort.second == "desc") {
+                    mangas.sortedByDescending { it.id }
+                } else {
+                    mangas.sortedBy { it.id }
+                }
+            }
+            else -> {
+                if (sort.second == "desc") {
+                    mangas.sortedByDescending { it.updatedDate }
+                } else {
+                    mangas.sortedBy { it.updatedDate }
+                }
+            }
+        }
+        val maxIndex = mangas.size
+        val fromIndex = (page - 1) * PAGE_CREATORS_LIMIT
+        val toIndex = min(maxIndex, fromIndex + PAGE_CREATORS_LIMIT)
+
+        val final = sorted.subList(fromIndex, toIndex).map { it.toSManga(imgCdnUrl) }
+        return MangasPage(final, toIndex != maxIndex)
     }
 
     private fun cacheCreators() {
@@ -156,17 +179,17 @@ open class Kemono(
             "Pixiv Fanbox", "Fantia" -> TimeZone.getTimeZone("GMT+09:00")
             else -> TimeZone.getTimeZone("GMT")
         }
-        val maxPosts = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
-            .toInt().coerceAtMost(POST_PAGES_MAX) * POST_PAGE_SIZE
+        val prefMaxPost = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
+            .toInt().coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
         var offset = 0
         var hasNextPage = true
         val result = ArrayList<SChapter>()
-        while (offset < maxPosts && hasNextPage) {
-            val request = GET("$baseUrl/$apiPath${manga.url}?limit=$POST_PAGE_SIZE&o=$offset", headers)
+        while (offset < prefMaxPost && hasNextPage) {
+            val request = GET("$baseUrl/$apiPath${manga.url}?o=$offset", headers)
             val page: List<KemonoPostDto> = retry(request).parseAs()
             page.forEach { post -> if (post.images.isNotEmpty()) result.add(post.toSChapter()) }
-            offset += POST_PAGE_SIZE
-            hasNextPage = page.size == POST_PAGE_SIZE
+            offset += PAGE_POST_LIMIT
+            hasNextPage = page.size == PAGE_POST_LIMIT
         }
         result
     }
@@ -178,6 +201,9 @@ open class Kemono(
             if (response.isSuccessful) return response
             response.close()
             code = response.code
+            if (code == 429) {
+                sleep(10000)
+            }
         }
         throw Exception("HTTP error $code")
     }
@@ -217,10 +243,8 @@ open class Kemono(
             key = POST_PAGES_PREF
             title = "Maximum posts to load"
             summary = "Loading more posts costs more time and network traffic.\nCurrently: %s"
-            entryValues = (1..POST_PAGES_MAX).map { it.toString() }.toTypedArray()
-            entries = (1..POST_PAGES_MAX).map {
-                if (it == 1) "1 page ($POST_PAGE_SIZE posts)" else "$it pages (${it * POST_PAGE_SIZE} posts)"
-            }.toTypedArray()
+            entryValues = Array(POST_PAGES_MAX) { (it + 1).toString() }
+            entries = Array(POST_PAGES_MAX) { "${(it + 1)} pages (${(it + 1) * PAGE_POST_LIMIT} posts)" }
             setDefaultValue(POST_PAGES_DEFAULT)
         }.let { screen.addPreference(it) }
 
@@ -232,16 +256,46 @@ open class Kemono(
         }.let(screen::addPreference)
     }
 
+    // Filters
+
+    override fun getFilterList(): FilterList = getFilters()
+    open fun getFilters(): FilterList {
+        return FilterList(
+            SortFilter("Sort by", Filter.Sort.Selection(0, false), getSortsList),
+            TypeFilter("Types", getTypes),
+        )
+    }
+
+    open val getTypes: List<String> = emptyList()
+
+    open val getSortsList: List<Pair<String, String>> = listOf(
+        Pair("Popularity", "pop"),
+        Pair("Date Indexed", "new"),
+        Pair("Date Updated", "lat"),
+        Pair("Alphabetical Order", "tit"),
+        Pair("Service", "serv"),
+    )
+
+    internal open class TypeFilter(name: String, vals: List<String>) :
+        Filter.Group<TriFilter>(
+            name,
+            vals.map { TriFilter(it, it.lowercase()) },
+        )
+
+    internal open class TriFilter(name: String, val value: String) : Filter.TriState(name)
+
+    internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) :
+        Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
+        fun getValue() = vals[state!!.index].second
+    }
     companion object {
-        private const val NEW_PAGE_SIZE = 50
+        private const val PAGE_POST_LIMIT = 50
+        private const val PAGE_CREATORS_LIMIT = 50
         const val PROMPT = "You can change how many posts to load in the extension preferences."
 
-        private const val POST_PAGE_SIZE = 50
         private const val POST_PAGES_PREF = "POST_PAGES"
         private const val POST_PAGES_DEFAULT = "1"
-        private const val POST_PAGES_MAX = 50
-
-        private fun List<SManga>.filterUnsupported() = filterNot { it.author == "Discord" }
+        private const val POST_PAGES_MAX = 200
 
         // private const val BASE_URL_PREF = "BASE_URL"
         private const val USE_LOW_RES_IMG = "USE_LOW_RES_IMG"

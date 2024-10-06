@@ -10,9 +10,9 @@ import java.util.Locale
 
 @Serializable
 class KemonoCreatorDto(
-    private val id: String,
+    val id: String,
     val name: String,
-    private val service: String,
+    val service: String,
     private val updated: JsonPrimitive,
     val favorited: Int = -1,
 ) {
