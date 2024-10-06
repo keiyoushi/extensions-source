@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.firstkissmanhua
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.OkHttpClient
 
 class FirstKissManhua : Madara(
     "First Kiss Manhua",
