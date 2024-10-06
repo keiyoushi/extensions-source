@@ -1,8 +1,10 @@
 ext {
     extName = 'Traducciones Amistosas'
     extClass = '.Nartag'
-    extVersionCode = 3
-    isNsfw = true
+    themePkg = 'madara'
+    baseUrl = 'https://traduccionesamistosas.eyudud.net'
+    overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
