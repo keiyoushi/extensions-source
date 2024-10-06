@@ -7,6 +7,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
 import java.text.SimpleDateFormat
 import java.util.Locale
+@Serializable
+class KemonoFavouritesDto(
+    val id: String,
+    val name: String,
+    val service: String,
+    val faved_seq: Long,
+)
 
 @Serializable
 class KemonoCreatorDto(
@@ -16,6 +23,7 @@ class KemonoCreatorDto(
     private val updated: JsonPrimitive,
     val favorited: Int = -1,
 ) {
+    var fav: Long = 0
     val updatedDate get() = when {
         updated.isString -> dateFormat.parse(updated.content)?.time ?: 0
         else -> (updated.double * 1000).toLong()
