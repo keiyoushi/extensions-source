@@ -9,6 +9,8 @@ class SoulScans : MangaThemesia("Soul Scans", "https://soulscans.my.id", "id") {
 
     override val hasProjectPage = true
 
+    override fun searchMangaSelector() = ".listupd .bs .bsx:not(:has(.novelabel))"
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
             title = seriesDetails.selectFirst(seriesTitleSelector)?.text().orEmpty()
@@ -38,4 +40,6 @@ class SoulScans : MangaThemesia("Soul Scans", "https://soulscans.my.id", "id") {
             seriesDetails.select(seriesThumbnailSelector).firstOrNull()?.let { thumbnail_url = it.imgAttr() }
         }
     }
+
+    override val pageSelector = "div#readerarea img:not([src*='.gif'])"
 }

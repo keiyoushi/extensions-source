@@ -3,7 +3,7 @@ ext {
     extClass = '.SoulScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://soulscans.my.id'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
