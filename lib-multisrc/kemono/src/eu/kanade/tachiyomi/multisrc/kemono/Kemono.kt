@@ -82,6 +82,7 @@ open class Kemono(
         var sort = sortBy
         val typeIncluded: MutableList<String> = mutableListOf()
         val typeExcluded: MutableList<String> = mutableListOf()
+        var fav: Boolean? = null
         filters?.forEach { filter ->
             when (filter) {
                 is SortFilter -> {
@@ -96,20 +97,40 @@ open class Kemono(
                         typeExcluded.add(tri.value)
                     }
                 }
+                is FavouritesFilter -> {
+                    fav = when (filter.state[0].state) {
+                        0 -> null
+                        1 -> true
+                        else -> false
+                    }
+                }
                 else -> {}
             }
         }
 
+        val favores = client.newCall(GET("$baseUrl/$apiPath/account/favorites", headers)).execute()
+
+        var favourites: List<KemonoFavouritesDto> = emptyList()
+        if (fav != null) {
+            if (favores.code == 401) throw Exception("You are not Logged In")
+            favourites = favores.parseAs<List<KemonoFavouritesDto>>().filterNot { it.service.lowercase() == "discord" }
+        }
+
         val response = client.newCall(GET("$baseUrl/$apiPath/creators", headers)).execute()
         val allCreators = response.parseAs<List<KemonoCreatorDto>>().filterNot { it.service.lowercase() == "discord" }
-
         val mangas = allCreators.filter {
             val includeType = typeIncluded.isEmpty() || typeIncluded.contains(it.service.serviceName().lowercase())
             val excludeType = typeExcluded.isNotEmpty() && typeExcluded.contains(it.service.serviceName().lowercase())
 
             val regularSearch = it.name.contains(title, true)
 
-            includeType && !excludeType &&
+            val isFavourited = when (fav) {
+                true -> favourites.any { f -> f.id == it.id.also { _ -> it.fav = f.faved_seq } }
+                false -> favourites.none { f -> f.id == it.id }
+                else -> true
+            }
+
+            includeType && !excludeType && isFavourited &&
                 regularSearch
         }
 
@@ -133,6 +154,14 @@ open class Kemono(
                     mangas.sortedByDescending { it.id }
                 } else {
                     mangas.sortedBy { it.id }
+                }
+            }
+            "fav" -> {
+                if (fav != true) throw Exception("Please check 'Favourites Only' Filter")
+                if (sort.second == "desc") {
+                    mangas.sortedByDescending { it.fav }
+                } else {
+                    mangas.sortedBy { it.fav }
                 }
             }
             else -> {
@@ -196,7 +225,7 @@ open class Kemono(
 
     private fun retry(request: Request): Response {
         var code = 0
-        repeat(3) {
+        repeat(5) {
             val response = client.newCall(request).execute()
             if (response.isSuccessful) return response
             response.close()
@@ -258,13 +287,16 @@ open class Kemono(
 
     // Filters
 
-    override fun getFilterList(): FilterList = getFilters()
-    open fun getFilters(): FilterList {
-        return FilterList(
-            SortFilter("Sort by", Filter.Sort.Selection(0, false), getSortsList),
+    override fun getFilterList(): FilterList =
+        FilterList(
+            SortFilter(
+                "Sort by",
+                Filter.Sort.Selection(0, false),
+                getSortsList,
+            ),
             TypeFilter("Types", getTypes),
+            FavouritesFilter(),
         )
-    }
 
     open val getTypes: List<String> = emptyList()
 
@@ -274,6 +306,7 @@ open class Kemono(
         Pair("Date Updated", "lat"),
         Pair("Alphabetical Order", "tit"),
         Pair("Service", "serv"),
+        Pair("Date Favourited", "fav"),
     )
 
     internal open class TypeFilter(name: String, vals: List<String>) :
@@ -282,6 +315,11 @@ open class Kemono(
             vals.map { TriFilter(it, it.lowercase()) },
         )
 
+    internal class FavouritesFilter() :
+        Filter.Group<TriFilter>(
+            "Favourites",
+            listOf(TriFilter("Favourites Only", "fav")),
+        )
     internal open class TriFilter(name: String, val value: String) : Filter.TriState(name)
 
     internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) :
