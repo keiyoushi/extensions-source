@@ -120,7 +120,7 @@ abstract class HotComics(
     override fun chapterListParse(response: Response): List<SChapter> {
         return response.asJsoup().select("#tab-chapter a").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
+                setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
                 name = element.selectFirst(".cell-num")!!.text()
                 date_upload = parseDate(element.selectFirst(".cell-time")?.text())
             }
