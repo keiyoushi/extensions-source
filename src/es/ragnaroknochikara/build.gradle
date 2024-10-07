@@ -1,0 +1,10 @@
+ext {
+    extName = 'Ragnarok No Chikara'
+    extClass = '.RagnarokNoChikara'
+    themePkg = 'madara'
+    baseUrl = 'https://ragnarokscan.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
