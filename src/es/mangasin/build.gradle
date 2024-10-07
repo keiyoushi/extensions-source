@@ -2,8 +2,8 @@ ext {
     extName = 'Mangas.in'
     extClass = '.MangasIn'
     themePkg = 'mmrcms'
-    baseUrl = 'https://mangas.in'
-    overrideVersionCode = 3
+    baseUrl = 'https://m440.in'
+    overrideVersionCode = 4
     isNsfw = true
 }
 
