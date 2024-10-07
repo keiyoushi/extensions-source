@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mugi Manga'
+    extClass = '.MugiManga'
+    themePkg = 'madara'
+    baseUrl = 'https://mugimanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
