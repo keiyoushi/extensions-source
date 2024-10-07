@@ -52,6 +52,8 @@ open class Kemono(
 
     private val imgCdnUrl = baseUrl.replace("//", "//img.")
 
+    private var mangasCache: List<KemonoCreatorDto> = emptyList()
+
     private fun String.formatAvatarUrl(): String = removePrefix("https://").replaceBefore('/', imgCdnUrl)
 
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
@@ -108,31 +110,35 @@ open class Kemono(
             }
         }
 
-        val favores = client.newCall(GET("$baseUrl/$apiPath/account/favorites", headers)).execute()
+        var mangas = mangasCache
+        if(page == 1){
+            var favourites: List<KemonoFavouritesDto> = emptyList()
+            if (fav != null) {
+                val favores = client.newCall(GET("$baseUrl/$apiPath/account/favorites", headers)).execute()
 
-        var favourites: List<KemonoFavouritesDto> = emptyList()
-        if (fav != null) {
-            if (favores.code == 401) throw Exception("You are not Logged In")
-            favourites = favores.parseAs<List<KemonoFavouritesDto>>().filterNot { it.service.lowercase() == "discord" }
-        }
-
-        val response = client.newCall(GET("$baseUrl/$apiPath/creators", headers)).execute()
-        val allCreators = response.parseAs<List<KemonoCreatorDto>>().filterNot { it.service.lowercase() == "discord" }
-        val mangas = allCreators.filter {
-            val includeType = typeIncluded.isEmpty() || typeIncluded.contains(it.service.serviceName().lowercase())
-            val excludeType = typeExcluded.isNotEmpty() && typeExcluded.contains(it.service.serviceName().lowercase())
-
-            val regularSearch = it.name.contains(title, true)
-
-            val isFavourited = when (fav) {
-                true -> favourites.any { f -> f.id == it.id.also { _ -> it.fav = f.faved_seq } }
-                false -> favourites.none { f -> f.id == it.id }
-                else -> true
+                if (favores.code == 401) throw Exception("You are not Logged In")
+                favourites = favores.parseAs<List<KemonoFavouritesDto>>().filterNot { it.service.lowercase() == "discord" }
             }
 
-            includeType && !excludeType && isFavourited &&
-                regularSearch
+            val response = client.newCall(GET("$baseUrl/$apiPath/creators", headers)).execute()
+            val allCreators = response.parseAs<List<KemonoCreatorDto>>().filterNot { it.service.lowercase() == "discord" }
+            mangas = allCreators.filter {
+                val includeType = typeIncluded.isEmpty() || typeIncluded.contains(it.service.serviceName().lowercase())
+                val excludeType = typeExcluded.isNotEmpty() && typeExcluded.contains(it.service.serviceName().lowercase())
+
+                val regularSearch = it.name.contains(title, true)
+
+                val isFavourited = when (fav) {
+                    true -> favourites.any { f -> f.id == it.id.also { _ -> it.fav = f.faved_seq } }
+                    false -> favourites.none { f -> f.id == it.id }
+                    else -> true
+                }
+
+                includeType && !excludeType && isFavourited &&
+                    regularSearch
+            }.also { mangasCache = mangas }
         }
+
 
         val sorted = when (sort.first) {
             "pop" -> {
@@ -178,19 +184,6 @@ open class Kemono(
 
         val final = sorted.subList(fromIndex, toIndex).map { it.toSManga(imgCdnUrl) }
         return MangasPage(final, toIndex != maxIndex)
-    }
-
-    private fun cacheCreators() {
-        val callback = object : Callback {
-            override fun onResponse(call: Call, response: Response) =
-                response.body.source().run {
-                    readAll(blackholeSink())
-                    close()
-                }
-
-            override fun onFailure(call: Call, e: IOException) = Unit
-        }
-        client.newCall(GET("$baseUrl/$apiPath/creators", headers)).enqueue(callback)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
@@ -333,7 +326,7 @@ open class Kemono(
 
         private const val POST_PAGES_PREF = "POST_PAGES"
         private const val POST_PAGES_DEFAULT = "1"
-        private const val POST_PAGES_MAX = 200
+        private const val POST_PAGES_MAX = 75
 
         // private const val BASE_URL_PREF = "BASE_URL"
         private const val USE_LOW_RES_IMG = "USE_LOW_RES_IMG"
