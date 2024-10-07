@@ -3,7 +3,7 @@ ext {
     extClass = '.Kemono'
     themePkg = 'kemono'
     baseUrl = 'https://kemono.su'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = true
 }
 
