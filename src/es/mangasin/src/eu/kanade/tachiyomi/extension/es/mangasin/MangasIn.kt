@@ -23,7 +23,7 @@ import java.util.Locale
 
 class MangasIn : MMRCMS(
     "Mangas.in",
-    "https://mangas.in",
+    "https://m440.in",
     "es",
     supportsAdvancedSearch = false,
     dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
