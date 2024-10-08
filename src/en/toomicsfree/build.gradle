@@ -1,9 +1,0 @@
-ext {
-    extName = 'ToomicsFree.com'
-    extClass = '.ToomicsFree'
-    themePkg = 'hotcomics'
-    overrideVersionCode = 0
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
