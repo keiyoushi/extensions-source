@@ -2,8 +2,8 @@ ext {
     extName = 'OneManga'
     extClass = '.OneManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://one-manga.com/manga/'
-    overrideVersionCode = 1
+    baseUrl = 'https://one-manga.com'
+    overrideVersionCode = 0
     isNsfw = true
 }
 
