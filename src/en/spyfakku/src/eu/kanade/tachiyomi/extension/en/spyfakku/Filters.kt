@@ -32,4 +32,5 @@ private val getSortsList: List<Pair<String, String>> = listOf(
     Pair("Date Added", "created_at"),
     Pair("Date Released", "released_at"),
     Pair("Pages", "pages"),
+    Pair("Random", "random"),
 )
