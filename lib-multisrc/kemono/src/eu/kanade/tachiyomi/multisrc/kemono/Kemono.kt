@@ -17,16 +17,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.Request
 import okhttp3.Response
-import okio.blackholeSink
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.io.IOException
 import java.lang.Thread.sleep
 import java.util.TimeZone
 import kotlin.math.min
@@ -111,7 +107,7 @@ open class Kemono(
         }
 
         var mangas = mangasCache
-        if(page == 1){
+        if (page == 1) {
             var favourites: List<KemonoFavouritesDto> = emptyList()
             if (fav != null) {
                 val favores = client.newCall(GET("$baseUrl/$apiPath/account/favorites", headers)).execute()
@@ -138,7 +134,6 @@ open class Kemono(
                     regularSearch
             }.also { mangasCache = mangas }
         }
-
 
         val sorted = when (sort.first) {
             "pop" -> {
