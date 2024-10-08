@@ -7,7 +7,7 @@ import okhttp3.Request
 
 class InfernalVoidScans : MangaThemesia(
     "Infernal Void Scans",
-    "https://hivetoon.net",
+    "https://hivetoon.com",
     "en",
 ) {
     override val client = super.client.newBuilder()
