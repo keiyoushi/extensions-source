@@ -15,6 +15,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -24,9 +28,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 
 class Zaimanhua : HttpSource(), ConfigurableSource {
     override val lang = "zh"
@@ -37,11 +45,16 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     private val apiUrl = "https://v4api.zaimanhua.com/app/v1"
     private val accountApiUrl = "https://account-api.zaimanhua.com/v1"
 
+    private val json by injectLazy<Json>()
+
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val client: OkHttpClient =
-        network.client.newBuilder().rateLimit(5).addInterceptor(::authIntercept).build()
+    override val client: OkHttpClient = network.client.newBuilder()
+        .rateLimit(5)
+        .addInterceptor(::authIntercept)
+        .addInterceptor(::imageRetryInterceptor)
+        .build()
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -129,23 +142,47 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // PageList
     // path: "/comic/chapter/mangaId/chapterId"
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$apiUrl/comic/chapter/${chapter.url}", apiHeaders)
+    private fun pageListApiRequest(path: String): Request =
+        GET("$apiUrl/comic/chapter/$path", apiHeaders, USE_CACHE)
 
-    override fun pageListParse(response: Response): List<Page> {
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val response = client.newCall(pageListApiRequest(chapter.url)).execute()
         val result = response.parseAs<ResponseDto<DataWrapperDto<ChapterImagesDto>>>()
         if (result.errmsg.isNotBlank()) {
             throw Exception(result.errmsg)
         } else {
-            return result.data.data!!.images.mapIndexed { index, it ->
-                Page(index, imageUrl = it)
-            }
+            return Observable.just(
+                result.data.data!!.images.mapIndexed { index, it ->
+                    val fragment = json.encodeToString(ImageRetryParamsDto(chapter.url, index))
+                    Page(index, imageUrl = "$it#$fragment")
+                },
+            )
         }
     }
+
+    private fun imageRetryInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val fragment = request.url.fragment
+        if (response.isSuccessful || request.url.host != "images.zaimanhua.com" || fragment == null) return response
+        response.close()
+
+        val params = json.decodeFromString<ImageRetryParamsDto>(fragment)
+        val pageListResponse = client.newCall(pageListApiRequest(params.url)).execute()
+        val result = pageListResponse.parseAs<ResponseDto<DataWrapperDto<ChapterImagesDto>>>()
+        if (result.errmsg.isNotBlank()) {
+            throw IOException(result.errmsg)
+        } else {
+            val imageUrl = result.data.data!!.images[params.index]
+            return chain.proceed(GET(imageUrl, headers))
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Popular
     private fun rankApiUrl(): HttpUrl.Builder =
@@ -187,6 +224,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         return MangasPage(mangas.map { it.toSManga() }, true)
     }
 
+    companion object {
+        val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
+    }
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             EditTextPreference(screen.context).apply {

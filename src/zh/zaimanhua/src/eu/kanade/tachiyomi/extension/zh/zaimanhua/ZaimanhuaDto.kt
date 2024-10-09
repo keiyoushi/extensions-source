@@ -146,3 +146,9 @@ class ResponseDto<T>(
     val errmsg: String = "",
     val data: T,
 )
+
+@Serializable
+data class ImageRetryParamsDto(
+    val url: String,
+    val index: Int,
+)
