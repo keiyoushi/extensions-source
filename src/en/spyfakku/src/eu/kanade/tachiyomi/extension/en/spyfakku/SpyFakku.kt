@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 class SpyFakku : HttpSource() {
 
@@ -47,6 +48,8 @@ class SpyFakku : HttpSource() {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
+
+    private val charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -76,6 +79,7 @@ class SpyFakku : HttpSource() {
                 when (filter) {
                     is SortFilter -> {
                         addQueryParameter("sort", filter.getValue())
+                        if (filter.getValue() == "random") addQueryParameter("seed", generateSeed())
                         addQueryParameter("order", if (filter.state!!.ascending) "asc" else "desc")
                     }
 
@@ -296,6 +300,17 @@ class SpyFakku : HttpSource() {
     // Others
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString(body.string())
+    }
+
+    private fun generateSeed(): String {
+        val length = Random.nextInt(4, 9)
+        val string = StringBuilder(length)
+
+        for (i in 0 until length) {
+            string.append(charset.random())
+        }
+
+        return string.toString()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
