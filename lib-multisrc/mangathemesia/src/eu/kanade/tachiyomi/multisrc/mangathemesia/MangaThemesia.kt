@@ -340,19 +340,25 @@ abstract class MangaThemesia(
         }
     }
 
-    // Pages
-    open val pageSelector = "div#readerarea img"
+// Pages
+open val pageSelector = "div#readerarea img"
 
-    override fun pageListParse(document: Document): List<Page> {
-        countViews(document)
+override fun pageListParse(document: Document): List<Page> {
+    countViews(document)
 
-        val chapterUrl = document.location()
-        val htmlPages = document.select(pageSelector)
-            .filterNot { it.imgAttr().isEmpty() }
-            .mapIndexed { i, img -> Page(i, chapterUrl, img.imgAttr()) }
+    val chapterUrl = document.location()
+    val htmlPages = document.select(pageSelector)
+        .filterNot { it.imgAttr().isEmpty() }
+        .mapIndexed { i, img ->
+            val imageUrl = img.imgAttr()  // Ambil URL gambar asli
+            val resizedImageUrl = "https://resize.sardo.work/?width=300&quality=75&imageUrl=$imageUrl"  // Tambahkan parameter resize
+            Page(i, chapterUrl, resizedImageUrl)  // Gunakan URL yang di-resize
+        }
 
-        // Some sites also loads pages via javascript
-        if (htmlPages.isNotEmpty()) { return htmlPages }
+    // Some sites also loads pages via javascript
+    if (htmlPages.isNotEmpty()) {
+        return htmlPages
+    }
 
         val docString = document.toString()
         val imageListJson = JSON_IMAGE_LIST_REGEX.find(docString)?.destructured?.toList()?.get(0).orEmpty()
