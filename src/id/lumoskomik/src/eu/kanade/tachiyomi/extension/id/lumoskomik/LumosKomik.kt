@@ -6,7 +6,7 @@ import java.util.Locale
 
 class LumosKomik : Madara(
     "LumosKomik",
-    "https://lumoskomik.com",
+    "https://lumos01.com",
     "id",
     dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("en")),
 ) {
