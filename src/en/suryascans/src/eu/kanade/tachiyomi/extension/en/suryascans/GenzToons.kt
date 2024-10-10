@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class GenzToons : MangaThemesia(
     "Genz Toons",
-    "https://genztoons.com",
+    "https://genzupdates.com/",
     "en",
 ) {
     override val id = 2909429739457928148
