@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -24,9 +25,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 
 class Zaimanhua : HttpSource(), ConfigurableSource {
     override val lang = "zh"
@@ -129,21 +132,31 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // PageList
     // path: "/comic/chapter/mangaId/chapterId"
     override fun pageListRequest(chapter: SChapter) =
-        GET("$apiUrl/comic/chapter/${chapter.url}", apiHeaders)
+        GET("$apiUrl/comic/chapter/${chapter.url}", apiHeaders, USE_CACHE)
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ResponseDto<DataWrapperDto<ChapterImagesDto>>>()
         if (result.errmsg.isNotBlank()) {
             throw Exception(result.errmsg)
         } else {
-            return result.data.data!!.images.mapIndexed { index, it ->
-                Page(index, imageUrl = it)
+            return List(result.data.data!!.images.size) { index ->
+                Page(index, response.request.url.toString())
             }
+        }
+    }
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun fetchImageUrl(page: Page): Observable<String> {
+        val response = client.newCall(GET(page.url, apiHeaders, USE_CACHE)).execute()
+        val result = response.parseAs<ResponseDto<DataWrapperDto<ChapterImagesDto>>>()
+        if (result.errmsg.isNotBlank()) {
+            throw Exception(result.errmsg)
+        } else {
+            return Observable.just(result.data.data!!.images[page.index])
         }
     }
 
@@ -187,6 +200,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         return MangasPage(mangas.map { it.toSManga() }, true)
     }
 
+    companion object {
+        val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
+    }
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             EditTextPreference(screen.context).apply {
