@@ -1,15 +1,17 @@
 package eu.kanade.tachiyomi.extension.pt.lscans
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.peachscan.PeachScan
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class LScans : Madara(
+class LScans : PeachScan(
     "L Scans",
     "https://lscans.com",
     "pt-BR",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
+    // Moved from Madara to PeachScan
+    override val versionId = 2
+
+    override val client = super.client.newBuilder()
+        .rateLimit(3)
+        .build()
 }
