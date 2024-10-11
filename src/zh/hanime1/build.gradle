@@ -1,0 +1,8 @@
+ext {
+    extName = 'Hanime1'
+    extClass = '.Hanime1'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
