@@ -1,10 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.arvencomics
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
-class ArvenComics : MangaThemesia(
+class ArvenComics : Keyoapp(
     "Arven Scans",
     "https://arvencomics.com",
     "en",
-    mangaUrlDirectory = "/series",
-)
+) {
+    // migrated from Mangathemesia to Keyoapp
+    override val versionId = 2
+}
