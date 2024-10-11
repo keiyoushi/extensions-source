@@ -1,9 +1,9 @@
 ext {
     extName = 'L Scans'
     extClass = '.LScans'
-    themePkg = 'madara'
+    themePkg = 'peachscan'
     baseUrl = 'https://lscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 28
     isNsfw = false
 }
 
