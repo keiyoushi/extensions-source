@@ -86,12 +86,11 @@ small, just do a normal full clone instead.**
     ```bash
     git sparse-checkout set --cone --sparse-index
     # add project folders
-    git sparse-checkout add .run buildSrc core gradle lib multisrc/src/main/java/generator
+    git sparse-checkout add buildSrc core gradle lib
     # add a single source
     git sparse-checkout add src/<lang>/<source>
     # add a multisrc theme
-    git sparse-checkout add multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
-    git sparse-checkout add multisrc/overrides/<source>
+    git sparse-checkout add lib-multisrc/<source>
     ```
 
     To remove a source, open `.git/info/sparse-checkout` and delete the exact
@@ -112,13 +111,11 @@ small, just do a normal full clone instead.**
     ```bash
     /*
     !/src/*
-    !/multisrc/overrides/*
-    !/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*
+    !/multisrc-lib/*
     # allow a single source
     /src/<lang>/<source>
     # allow a multisrc theme
-    /multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
-    /multisrc/overrides/<source>
+    /lib-multisrc/<source>
     # or type the source name directly
     <source>
     ```
