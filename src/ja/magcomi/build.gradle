@@ -3,7 +3,7 @@ ext {
     extClass = '.MagComi'
     themePkg = 'gigaviewer'
     baseUrl = 'https://magcomi.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

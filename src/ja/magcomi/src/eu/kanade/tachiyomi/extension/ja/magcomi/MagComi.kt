@@ -20,11 +20,11 @@ class MagComi : GigaViewer(
 
     override val publisher: String = "マッグガーデン"
 
-    override fun popularMangaSelector(): String = "ul.magcomi-series-list li.series-item > a"
+    override fun popularMangaSelector(): String = "li[class*='SeriesItem_series_item'] a[class*='data-series-series-item']"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.select("h3.series-title").text()
-        thumbnail_url = element.select("div.series-thumb img").attr("src")
+        title = element.select("h3").text()
+        thumbnail_url = element.select("div[class*='series-thumb'] img").attr("srcset").split(" ")[0]
         setUrlWithoutDomain(element.attr("href"))
     }
 
