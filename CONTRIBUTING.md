@@ -839,6 +839,15 @@ of `mitmweb`.
 APKs can be created in Android Studio via `Build > Build Bundle(s) / APK(s) > Build APK(s)` or 
 `Build > Generate Signed Bundle / APK`.
 
+If for some reason you decide to build the APK from the command line, you can use the following
+command (because you're doing things differently than expected, I assume you have some
+knowledge of gradlew and your OS):
+
+```console
+// Assuming that you have ./signingkey.jks in the root of the project
+$ KEY_STORE_PASSWORD="your_keystore_password" ALIAS="your_certificate_alias" KEY_PASSWORD="your_certificate_password" ./gradlew build
+```
+
 ## Submitting the changes
 
 When you feel confident about your changes, submit a new Pull Request so your code can be reviewed
