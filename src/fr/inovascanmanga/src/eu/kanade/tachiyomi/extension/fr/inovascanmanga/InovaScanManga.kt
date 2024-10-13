@@ -8,5 +8,5 @@ class InovaScanManga : Madara(
     "Inova Scans Manga",
     "https://inovascanmanga.com",
     "fr",
-    SimpleDateFormat("dd MMMMMM yyyy", Locale.FRENCH),
+    SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH),
 )
