@@ -1,0 +1,9 @@
+ext {
+    extName = 'BR Mangás'
+    extClass = '.BRMangasTop'
+    themePkg = 'madara'
+    baseUrl = 'https://brmangas.top'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
