@@ -844,8 +844,8 @@ command (because you're doing things differently than expected, I assume you hav
 knowledge of gradlew and your OS):
 
 ```console
-// Assuming that you have ./signingkey.jks in the root of the project
-$ KEY_STORE_PASSWORD="your_keystore_password" ALIAS="your_certificate_alias" KEY_PASSWORD="your_certificate_password" ./gradlew build
+// For a single apk, use this command
+$ ./gradlew src:<lang>:<source>:assembleDebug
 ```
 
 ## Submitting the changes
