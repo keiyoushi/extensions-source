@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 class KnightNoScanlation : Madara(
     "Knight No Scanlation",
-    "https://lectorkns.com",
+    "https://lectorkns.eyudud.net",
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
@@ -19,6 +19,10 @@ class KnightNoScanlation : Madara(
         .build()
 
     override val mangaSubString = "sr"
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
+    override val useNewChapterEndpoint = true
 
     override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) div.summary-content"
 }
