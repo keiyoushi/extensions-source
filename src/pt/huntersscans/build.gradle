@@ -2,8 +2,8 @@ ext {
     extName = 'Hunters Scans'
     extClass = '.HuntersScans'
     themePkg = 'madara'
-    baseUrl = 'https://hunterscomics.com'
-    overrideVersionCode = 4
+    baseUrl = 'https://htoons.online'
+    overrideVersionCode = 5
     isNsfw = true
 }
 
