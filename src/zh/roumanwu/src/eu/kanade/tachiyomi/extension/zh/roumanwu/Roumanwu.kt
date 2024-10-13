@@ -7,10 +7,12 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
@@ -41,20 +43,36 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
+    private val imageUrlRegex = """(?<=\[1,").*(?="\])""".toRegex()
+
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
     override fun popularMangaNextPageSelector(): String? = null
-    override fun popularMangaSelector(): String = "main > div.px-0 > div > div:not(.p-3):not(:last-child):not(:nth-child(4)) > div.grid > div > a"
+    override fun popularMangaSelector(): String = "div.px-1 > div:matches(正熱門|今日最佳|本週熱門) .grid a[href*=/books/]"
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.select("div.hidden > div.px-2 > div.truncate").text()
+        title = element.select("div.truncate").text()
         url = element.attr("href")
         thumbnail_url = element.select("div.bg-cover").attr("style").substringAfter("background-image:url(\"").substringBefore("\")")
+    }
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val mangas = document.select(popularMangaSelector()).map { element ->
+            popularMangaFromElement(element)
+        }
+        val uniqueMangas = mangas.distinctBy { it.url }
+
+        val hasNextPage = popularMangaNextPageSelector()?.let { selector ->
+            document.select(selector).first()
+        } != null
+
+        return MangasPage(uniqueMangas, hasNextPage)
     }
 
     override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
     override fun latestUpdatesNextPageSelector(): String? = null
-    override fun latestUpdatesSelector(): String = "main > div.px-0 > div > div:nth-child(4) > div.grid > div > a"
+    override fun latestUpdatesSelector(): String = "div.px-1 > div:contains(最近更新) .grid a[href*=/books/]"
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.select("div.hidden > div.px-2 > div.truncate").text()
+        title = element.select("div.truncate").text()
         url = element.attr("href")
         thumbnail_url = element.select("div.bg-cover").attr("style").substringAfter("background-image:url(\"").substringBefore("\")")
     }
@@ -67,23 +85,28 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
             GET("$baseUrl/books?page=${page - 1}$parts", headers)
         }
     override fun searchMangaNextPageSelector(): String? = null
-    override fun searchMangaSelector(): String = "main div.grid > div > a"
+    override fun searchMangaSelector(): String = "a[href*=/books/]"
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.select("div.hidden > div.px-2 > div.truncate").text()
+        title = element.select("div.truncate").text()
         url = element.attr("href")
         thumbnail_url = element.select("div.bg-cover").attr("style").substringAfter("background-image:url(\"").substringBefore("\")")
     }
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select("main > div:first-child > div > div.grid > div:first-child div.text-xl").text()
+        title = document.select("div.basis-3\\/5 > div.text-xl").text()
         thumbnail_url = baseUrl + document.select("main > div:first-child img").attr("src")
-        author = document.select("main > div:first-child > div > div.grid > div:first-child > div:first-child > div:nth-child(2) > div:nth-child(3) span").text()
+        author = document.select("div.basis-3\\/5 > div:nth-child(3) span").text()
         artist = author
-        genre = document.select("main > div:first-child > div > div.grid > div:first-child > div:first-child > div:nth-child(2) > div:nth-child(6) span").text().replace(",", ", ")
-        description = document.select("main > div:first-child > div > div.grid > div:first-child > div:nth-child(2)").text().substring(3)
+        status = when (document.select("div.basis-3\\/5 > div:nth-child(4) span").text()) {
+            "連載中" -> SManga.ONGOING
+            "已完結" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        genre = document.select("div.basis-3\\/5 > div:nth-child(6) span").text().replace(",", ", ")
+        description = document.select("p:contains(簡介:)").text().substring(3)
     }
 
-    override fun chapterListSelector(): String = "main > div:first-child > div > div.grid > div:first-child > div:nth-child(5) > a"
+    override fun chapterListSelector(): String = "a[href~=/books/.*/\\d+]"
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.attr("href")
         name = element.text()
@@ -93,11 +116,9 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val jsonString = document.select("script")
-            .find { it.html().contains("imageUrl") }
-            ?.html()
+        val jsonString = document.selectFirst("script:containsData(imageUrl)")?.data()
             ?.let { content ->
-                """(?<=\[1,").*(?="\])""".toRegex()
+                imageUrlRegex
                     .find(content)
                     ?.value
                     ?.substring(2)
@@ -106,8 +127,8 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
             }
 
         return jsonString?.let { str ->
-            val json = Json.parseToJsonElement(str)
-            val pagesJson = json.jsonArray
+            val jo = json.parseToJsonElement(str)
+            val pagesJson = jo.jsonArray
                 .getOrNull(3)?.jsonObject
                 ?.get("children")?.jsonArray
                 ?.getOrNull(6)?.jsonArray
@@ -181,7 +202,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
         private const val MIRROR_PREF_SUMMARY = "使用鏡像網址。重啟軟體生效。"
 
         // 地址: https://rou.pub/dizhi
-        private val MIRRORS get() = arrayOf("https://rouman5.com", "https://roum16.xyz")
+        private val MIRRORS get() = arrayOf("https://rouman5.com", "https://roum18.xyz")
         private val MIRRORS_DESC get() = arrayOf("主站", "鏡像")
         private const val MIRROR_DEFAULT = 1.toString() // use mirror
 
