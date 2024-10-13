@@ -86,11 +86,9 @@ small, just do a normal full clone instead.**
     ```bash
     git sparse-checkout set --cone --sparse-index
     # add project folders
-    git sparse-checkout add buildSrc core gradle lib
+    git sparse-checkout add buildSrc core gradle lib lib-multisrc
     # add a single source
     git sparse-checkout add src/<lang>/<source>
-    # add a multisrc theme
-    git sparse-checkout add lib-multisrc/<source>
     ```
 
     To remove a source, open `.git/info/sparse-checkout` and delete the exact
