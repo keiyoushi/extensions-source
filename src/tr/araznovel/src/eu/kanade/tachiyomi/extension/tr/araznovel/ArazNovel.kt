@@ -6,7 +6,7 @@ import java.util.Locale
 
 class ArazNovel : Madara(
     "ArazNovel",
-    "https://www.araznovel.com",
+    "https://araznovel.com",
     "tr",
     SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()),
 )

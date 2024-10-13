@@ -2,7 +2,7 @@ ext {
     extName = 'ArazNovel'
     extClass = '.ArazNovel'
     themePkg = 'madara'
-    baseUrl = 'https://www.araznovel.com'
+    baseUrl = 'https://araznovel.com'
     overrideVersionCode = 4
 }
 
