@@ -1,0 +1,10 @@
+ext {
+    extName = 'Inova Scan Manga'
+    extClass = '.InovaScanManga'
+    themePkg = 'madara'
+    baseUrl = 'https://inovascanmanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
