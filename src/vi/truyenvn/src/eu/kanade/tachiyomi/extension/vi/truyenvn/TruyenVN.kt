@@ -6,7 +6,7 @@ import java.util.Locale
 
 class TruyenVN : Madara(
     "TruyenVN",
-    "https://truyenvn.mobi",
+    "https://truyenvn.blog",
     "vi",
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
