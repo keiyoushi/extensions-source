@@ -167,16 +167,7 @@ class ComX : ParsedHttpSource() {
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            return POST(
-                "$baseUrl/index.php?do=search",
-                body = FormBody.Builder()
-                    .add("do", "search")
-                    .add("subaction", "search")
-                    .add("story", query)
-                    .add("search_start", page.toString())
-                    .build(),
-                headers = headers,
-            )
+            return GET("$baseUrl/search/$query/page/$page", headers)
         }
         val mutableGenre = mutableListOf<String>()
         val mutableType = mutableListOf<String>()
