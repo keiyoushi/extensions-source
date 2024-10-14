@@ -13,7 +13,7 @@ import uy.kohesive.injekt.api.get
 class TecnoScans :
     MangaThemesia(
         "Tecno Scans",
-        "https://oliosscans.xyz",
+        "https://tecolyscans.xyz",
         "en",
     ),
     ConfigurableSource {
