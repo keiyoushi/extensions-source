@@ -25,9 +25,9 @@ import java.util.concurrent.TimeUnit
 
 class DiskusScan : MangaThemesia(
     "Diskus Scan",
-    "https://diskusscan.com",
+    "https://diskusscan.online",
     "pt-BR",
-    dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+    dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
 ) {
 
     // Changed their theme from Madara to MangaThemesia.
