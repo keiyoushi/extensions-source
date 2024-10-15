@@ -47,10 +47,14 @@ class ChapterGroupDto(
     fun toSChapterList(mangaId: String): List<SChapter> {
         val groupName = title
         val isDefaultGroup = groupName == "连载"
+        val current = System.currentTimeMillis()
         return data.map {
             it.toSChapterInternal().apply {
                 url = "$mangaId/$url"
                 if (!isDefaultGroup) scanlator = groupName
+                // For some chapters, api will always return current time as upload time
+                // Therefore upload times that differ too little from the current time will be ignored
+                if ((current - date_upload) < 10000) date_upload = 0
             }
         }
     }
@@ -141,4 +145,10 @@ class ResponseDto<T>(
     val errno: Int = 0,
     val errmsg: String = "",
     val data: T,
+)
+
+@Serializable
+data class ImageRetryParamsDto(
+    val url: String,
+    val index: Int,
 )

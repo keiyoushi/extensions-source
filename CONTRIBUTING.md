@@ -86,12 +86,9 @@ small, just do a normal full clone instead.**
     ```bash
     git sparse-checkout set --cone --sparse-index
     # add project folders
-    git sparse-checkout add .run buildSrc core gradle lib multisrc/src/main/java/generator
+    git sparse-checkout add buildSrc core gradle lib lib-multisrc
     # add a single source
     git sparse-checkout add src/<lang>/<source>
-    # add a multisrc theme
-    git sparse-checkout add multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
-    git sparse-checkout add multisrc/overrides/<source>
     ```
 
     To remove a source, open `.git/info/sparse-checkout` and delete the exact
@@ -112,13 +109,11 @@ small, just do a normal full clone instead.**
     ```bash
     /*
     !/src/*
-    !/multisrc/overrides/*
-    !/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*
+    !/multisrc-lib/*
     # allow a single source
     /src/<lang>/<source>
     # allow a multisrc theme
-    /multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<source>
-    /multisrc/overrides/<source>
+    /lib-multisrc/<source>
     # or type the source name directly
     <source>
     ```
@@ -841,6 +836,15 @@ of `mitmweb`.
 
 APKs can be created in Android Studio via `Build > Build Bundle(s) / APK(s) > Build APK(s)` or 
 `Build > Generate Signed Bundle / APK`.
+
+If for some reason you decide to build the APK from the command line, you can use the following
+command (because you're doing things differently than expected, I assume you have some
+knowledge of gradlew and your OS):
+
+```console
+// For a single apk, use this command
+$ ./gradlew src:<lang>:<source>:assembleDebug
+```
 
 ## Submitting the changes
 

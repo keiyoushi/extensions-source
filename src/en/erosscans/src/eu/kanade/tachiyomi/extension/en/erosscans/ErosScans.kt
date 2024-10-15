@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class ErosScans : MangaThemesia(
     "Eros Scans",
-    "https://erosscans.xyz",
+    "https://tercoscans.xyz",
     "en",
 ) {
     override val client = super.client.newBuilder()

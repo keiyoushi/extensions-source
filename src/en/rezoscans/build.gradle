@@ -1,0 +1,10 @@
+ext {
+    extName = 'Rezo Scans'
+    extClass = '.RezoScans'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://rezoscans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
