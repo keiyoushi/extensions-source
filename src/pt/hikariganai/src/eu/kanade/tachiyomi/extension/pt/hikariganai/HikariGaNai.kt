@@ -1,15 +1,17 @@
 package eu.kanade.tachiyomi.extension.pt.hikariganai
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.peachscan.PeachScan
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class HikariGaNai : Madara(
+class HikariGaNai : PeachScan(
     "Hikari Ga Nai",
     "https://hikariganai.xyz",
     "pt-BR",
-    dateFormat = SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
+    // Moved from Madara to PeachScan
+    override val versionId = 2
+
+    override val client = super.client.newBuilder()
+        .rateLimit(2)
+        .build()
 }
