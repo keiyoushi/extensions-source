@@ -24,7 +24,6 @@ import kotlin.math.min
 
 class KoinoboriScan : HttpSource() {
 
-    // Site change theme from Madara to custom
     override val versionId = 3
 
     override val name = "Koinobori Scan"
