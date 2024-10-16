@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhwa Freake'
+    extClass = '.ManhwaFreake'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://manhwafreake.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
