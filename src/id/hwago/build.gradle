@@ -2,8 +2,8 @@ ext {
     extName = 'Hwago'
     extClass = '.Hwago'
     themePkg = 'madara'
-    baseUrl = 'https://hwago.org'
-    overrideVersionCode = 0
+    baseUrl = 'https://hwago.site'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
