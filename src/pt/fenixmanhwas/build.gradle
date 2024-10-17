@@ -1,0 +1,9 @@
+ext {
+    extName = 'Fênix Manhwas'
+    extClass = '.FenixManhwas'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://fenixleitura.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
