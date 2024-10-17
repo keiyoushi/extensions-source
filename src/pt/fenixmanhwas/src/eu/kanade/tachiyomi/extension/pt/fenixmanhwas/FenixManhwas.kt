@@ -70,7 +70,7 @@ class FenixManhwas : ZeistManga(
         val result = json.decodeFromString<ZeistMangaDto>(response.body.string())
         val mangaEntryDto: ZeistMangaEntryDto = result.feed?.entry
             ?.firstOrNull { it.url?.firstOrNull { link -> link.href.contains(chapterRef, true) } != null }
-            ?: throw Exception("Páginas não encontrada")
+            ?: throw Exception("Páginas não encontradas")
 
         return mangaEntryDto.content!!.t.pagesURL().mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
