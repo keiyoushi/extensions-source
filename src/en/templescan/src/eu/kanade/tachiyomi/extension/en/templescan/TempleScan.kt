@@ -24,7 +24,7 @@ class TempleScan : HttpSource() {
 
     override val lang = "en"
 
-    override val baseUrl = "https://templescan.net"
+    override val baseUrl = "https://templetoons.com"
 
     override val supportsLatest = true
 
