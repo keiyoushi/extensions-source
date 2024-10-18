@@ -1,7 +1,9 @@
 ext {
     extName = 'VyvyManga'
     extClass = '.VyvyManga'
-    extVersionCode = 5
+    themePkg = 'madara'
+    baseUrl = 'https://vyvymanga.org'
+    overrideVersionCode = 0
     isNsfw = true
 }
 
