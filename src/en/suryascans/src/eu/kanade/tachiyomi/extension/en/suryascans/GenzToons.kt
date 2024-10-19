@@ -44,12 +44,10 @@ class GenzToons :
         }
     }
 
-    override val cdnUrl = "https://xffbs-cn8.is1.buzz"
-
     override fun pageListParse(document: Document): List<Page> {
         val script = document.select("#pages > script").joinToString("\n") { it.data() }
-        val realCdnUrl = CDN_URL_REGEX.find(script)?.groupValues?.get(1)
-            ?: "$cdnUrl/uploads/"
+        val realCdnUrl = CDN_URL_REGEX.find(script)?.groupValues?.get(1)?.takeIf { it.startsWith("http") }
+            ?: "$baseUrl/uploads/"
         return document.select("#pages > img")
             .mapIndexed { index, img ->
                 Page(index, document.location(), realCdnUrl + img.attr("uid"))
