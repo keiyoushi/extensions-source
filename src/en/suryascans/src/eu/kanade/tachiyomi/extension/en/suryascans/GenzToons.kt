@@ -17,7 +17,7 @@ import uy.kohesive.injekt.api.get
 class GenzToons :
     Keyoapp(
         "Genz Toons",
-        "https://genztoons.com",
+        "https://genzupdates.com",
         "en",
     ),
     ConfigurableSource {
