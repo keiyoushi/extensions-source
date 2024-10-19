@@ -7,7 +7,9 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -44,6 +46,16 @@ class GenzToons :
 
     override val cdnUrl = "https://xffbs-cn8.is1.buzz"
 
+    override fun pageListParse(document: Document): List<Page> {
+        val script = document.select("#pages > script").joinToString("\n") { it.data() }
+        val realCdnUrl = CDN_URL_REGEX.find(script)?.groupValues?.get(1)
+            ?: "$cdnUrl/uploads/"
+        return document.select("#pages > img")
+            .mapIndexed { index, img ->
+                Page(index, document.location(), realCdnUrl + img.attr("uid"))
+            }
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_PAID_CHAPTERS_PREF
@@ -60,5 +72,6 @@ class GenzToons :
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
+        private val CDN_URL_REGEX = """realUrl\s*=\s*`([^`]+)\$""".toRegex()
     }
 }
