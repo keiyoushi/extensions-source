@@ -1,9 +1,9 @@
 ext {
     extName = 'Genz Toons'
     extClass = '.GenzToons'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://genztoons.com'
-    overrideVersionCode = 4
+    themePkg = 'keyoapp'
+    baseUrl = 'https://genzupdates.com'
+    overrideVersionCode = 28
 }
 
 apply from: "$rootDir/common.gradle"
