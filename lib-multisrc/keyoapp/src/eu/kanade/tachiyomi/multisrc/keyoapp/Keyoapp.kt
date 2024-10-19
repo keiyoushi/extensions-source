@@ -249,7 +249,7 @@ abstract class Keyoapp(
             }
     }
 
-    protected val cdnUrl = "https://cdn.igniscans.com"
+    protected open val cdnUrl = "https://cdn.igniscans.com"
 
     private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 

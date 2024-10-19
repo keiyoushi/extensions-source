@@ -42,6 +42,8 @@ class GenzToons :
         }
     }
 
+    override val cdnUrl = "https://xffbs-cn8.is1.buzz"
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_PAID_CHAPTERS_PREF
