@@ -2,8 +2,8 @@ ext {
     extName = 'Türkçe Manga Oku'
     extClass = '.TurkceMangaOku'
     themePkg = 'madara'
-    baseUrl = 'https://turkcemangaoku.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://trmangaoku.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

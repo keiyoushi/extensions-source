@@ -4,6 +4,6 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
 class VarnaScan : MangaThemesia(
     "Varna Scan",
-    "https://varnascan.net",
+    "https://varnascan.xyz",
     "en",
 )

@@ -2,8 +2,8 @@ ext {
     extName = 'MangaTilkisi'
     extClass = '.MangaTilkisi'
     themePkg = 'madara'
-    baseUrl = 'https://www.mangatilkisi.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.manga-tilkisi.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
