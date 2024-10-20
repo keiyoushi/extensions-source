@@ -1,11 +1,9 @@
 package eu.kanade.tachiyomi.extension.id.yuramanga
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.zmanga.ZManga
+import java.text.SimpleDateFormat
 
-class YuraManga : Madara("YuraManga", "https://yuramanga.my.id", "id") {
-    // Moved from Makaru to Madara
-    override val versionId = 2
-
-    // If .list-chapter is empty the link is 404
-    override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector:has(.chapter-item)"
+class YuraManga : ZManga("YuraManga", "https://yuramanga.my.id", "id", SimpleDateFormat("dd/MM/yyyy")) {
+    // Moved from Madara to ZManga
+    override val versionId = 3
 }
