@@ -53,7 +53,7 @@ class TraducoesDoLipe : ZeistManga(
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val project = client.newCall(mangaDetailsRequest(manga)).execute().let {
-            it.asJsoup().select("script").map (Element::html)
+            it.asJsoup().select("script").map(Element::html)
                 .firstOrNull { script -> script.contains("catNameProject") }
                 ?.let { script -> PROJECT_NAME_REGEX.find(script)?.groups?.get("project")?.value }
         }
