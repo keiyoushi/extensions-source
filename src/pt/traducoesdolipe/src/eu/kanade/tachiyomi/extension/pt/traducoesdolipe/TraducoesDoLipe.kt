@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import rx.Observable
 
 class TraducoesDoLipe : ZeistManga(
@@ -52,8 +53,7 @@ class TraducoesDoLipe : ZeistManga(
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val project = client.newCall(mangaDetailsRequest(manga)).execute().let {
-            it.asJsoup().select("script")
-                .map { element -> element.html() }
+            it.asJsoup().select("script").map (Element::html)
                 .firstOrNull { script -> script.contains("catNameProject") }
                 ?.let { script -> PROJECT_NAME_REGEX.find(script)?.groups?.get("project")?.value }
         }
