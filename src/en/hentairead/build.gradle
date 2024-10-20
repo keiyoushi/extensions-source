@@ -3,7 +3,7 @@ ext {
     extClass = '.Hentairead'
     themePkg = 'madara'
     baseUrl = 'https://hentairead.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 
