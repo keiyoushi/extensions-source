@@ -3,7 +3,7 @@ ext {
     extClass = '.GenzToons'
     themePkg = 'keyoapp'
     baseUrl = 'https://genzupdates.com'
-    overrideVersionCode = 28
+    overrideVersionCode = 29
 }
 
 apply from: "$rootDir/common.gradle"
