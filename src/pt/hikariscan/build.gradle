@@ -1,9 +1,9 @@
 ext {
     extName = 'Hikari Scan'
     extClass = '.HikariScan'
-    themePkg = 'mangathemesia'
+    themePkg = 'madara'
     baseUrl = 'https://hikariscan.org'
-    overrideVersionCode = 2
+    overrideVersionCode = 0
     isNsfw = true
 }
 
