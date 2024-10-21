@@ -235,7 +235,7 @@ abstract class Keyoapp(
             .map { it.attr("uid") }
             .filter { it.isNotEmpty() }
             .mapIndexed { index, img ->
-                Page(index, document.location(), "$cdnUrl/uploads/$img")
+                Page(index, document.location(), "$baseUrl/chapter/$img")
             }
             .takeIf { it.isNotEmpty() }
             ?.also { return it }
