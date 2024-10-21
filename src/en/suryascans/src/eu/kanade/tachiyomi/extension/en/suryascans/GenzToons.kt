@@ -13,6 +13,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.util.concurrent.TimeUnit
 
 class GenzToons :
     Keyoapp(
@@ -27,6 +28,9 @@ class GenzToons :
 
     override val client = super.client.newBuilder()
         .rateLimit(3)
+        .connectTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
         .build()
 
     override fun chapterListSelector(): String {
@@ -70,6 +74,6 @@ class GenzToons :
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
-        private val CDN_URL_REGEX = """realUrl\s*=\s*`([^`]+)\$""".toRegex()
+        private val CDN_URL_REGEX = """realUrl\s*=\s*`([^`]+?)\$""".toRegex()
     }
 }
