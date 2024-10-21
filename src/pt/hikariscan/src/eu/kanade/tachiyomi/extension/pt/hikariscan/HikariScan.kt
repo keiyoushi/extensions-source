@@ -12,9 +12,6 @@ class HikariScan : Madara(
     "pt-BR",
     dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
 ) {
-    // Site moved from MangaThemesia to Madara
-    override val versionId = 2
-
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .build()
