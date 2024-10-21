@@ -114,7 +114,7 @@ abstract class ZeistManga(
         val result = json.decodeFromString<ZeistMangaDto>(jsonString)
 
         val mangas = result.feed?.entry.orEmpty()
-            .filter { it.category.orEmpty().any { category -> category.term == "Series" } } // Default category for all series
+            .filter { it.category.orEmpty().any { category -> category.term == mangaCategory } }
             .filterNot { it.category.orEmpty().any { category -> excludedCategories.contains(category.term) } }
             .map { it.toSManga(baseUrl) }
 
