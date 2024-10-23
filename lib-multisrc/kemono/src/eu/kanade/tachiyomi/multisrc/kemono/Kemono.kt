@@ -191,6 +191,8 @@ open class Kemono(
 
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url.replace("$apiPath/", "")}"
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         KemonoPostDto.dateFormat.timeZone = when (manga.author) {
             "Pixiv Fanbox", "Fantia" -> TimeZone.getTimeZone("GMT+09:00")
