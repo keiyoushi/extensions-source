@@ -1,6 +1,12 @@
 package eu.kanade.tachiyomi.multisrc.keyoapp
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,6 +23,8 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -27,7 +35,12 @@ abstract class Keyoapp(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
-) : ParsedHttpSource() {
+) : ParsedHttpSource(), ConfigurableSource {
+
+    protected val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
@@ -38,6 +51,13 @@ abstract class Keyoapp(
     private val json: Json by injectLazy()
 
     private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
+
+    protected val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "pt-BR", "es"),
+        classLoader = this::class.java.classLoader!!,
+    )
 
     // Popular
 
@@ -218,13 +238,21 @@ abstract class Keyoapp(
 
     // Chapter list
 
-    override fun chapterListSelector(): String = "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
+    override fun chapterListSelector(): String {
+        if (!preferences.showPaidChapters) {
+            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[src*=Coin.svg]))"
+        }
+        return "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
+    }
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("href"))
         name = element.selectFirst(".text-sm")!!.text()
         element.selectFirst(".text-xs")?.run {
             date_upload = text().trim().parseDate()
+        }
+        if (element.select("img[src*=Coin.svg]").isNotEmpty()) {
+            name = "🔒 $name"
         }
     }
 
@@ -235,7 +263,7 @@ abstract class Keyoapp(
             .map { it.attr("uid") }
             .filter { it.isNotEmpty() }
             .mapIndexed { index, img ->
-                Page(index, document.location(), "$cdnUrl/uploads/$img")
+                Page(index, document.location(), "$cdnUrl/$img")
             }
             .takeIf { it.isNotEmpty() }
             ?.also { return it }
@@ -249,7 +277,7 @@ abstract class Keyoapp(
             }
     }
 
-    protected val cdnUrl = "https://cdn.igniscans.com"
+    protected open val cdnUrl = "https://2xffbs-cn8.is1.buzz/uploads"
 
     private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 
@@ -314,5 +342,23 @@ abstract class Keyoapp(
             "year" in this -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
         }
         return now.timeInMillis
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_PAID_CHAPTERS_PREF
+            title = intl["pref_show_paid_chapter_title"]
+            summaryOn = intl["pref_show_paid_chapter_summary_on"]
+            summaryOff = intl["pref_show_paid_chapter_summary_off"]
+            setDefaultValue(SHOW_PAID_CHAPTERS_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    protected val SharedPreferences.showPaidChapters: Boolean
+        get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)
+
+    companion object {
+        private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
+        private const val SHOW_PAID_CHAPTERS_DEFAULT = false
     }
 }
