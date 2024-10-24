@@ -2,8 +2,8 @@ ext {
     extName = 'Visor Inari'
     extClass = '.VisorInari'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://visorinari.com'
-    overrideVersionCode = 13
+    baseUrl = 'https://vrinari.org'
+    overrideVersionCode = 14
     isNsfw = true
 }
 
