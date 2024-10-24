@@ -378,10 +378,14 @@ abstract class Comick(
                 .parseAs<Covers>().mdCovers.reversed()
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
-                covers = if (covers.any { it.vol == "1" }) covers.filter { it.vol == "1" } else covers,
+                scorePosition = preferences.scorePosition,
+                covers = covers,
             )
         }
-        return mangaData.toSManga(includeMuTags = preferences.includeMuTags)
+        return mangaData.toSManga(
+            includeMuTags = preferences.includeMuTags,
+            scorePosition = preferences.scorePosition,
+        )
     }
 
     override fun getMangaUrl(manga: SManga): String {
