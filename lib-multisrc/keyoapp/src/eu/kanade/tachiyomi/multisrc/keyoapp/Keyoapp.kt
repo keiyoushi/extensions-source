@@ -55,7 +55,7 @@ abstract class Keyoapp(
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en", "pt-BR", "es"),
+        availableLanguages = setOf("en"),
         classLoader = this::class.java.classLoader!!,
     )
 
