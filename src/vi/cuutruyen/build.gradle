@@ -1,0 +1,8 @@
+ext {
+    extName = 'Cuu Truyện'
+    extClass = '.CuuTruyen'
+    extVersionCode = 13
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
