@@ -9,9 +9,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 
 class FenixManhwas : ZeistManga(
     "Fênix Manhwas",
@@ -32,25 +32,12 @@ class FenixManhwas : ZeistManga(
         setUrlWithoutDomain(document.location())
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = "$baseUrl/feeds/posts/default/-/".toHttpUrl().newBuilder()
-            .addPathSegment(manga.title)
-            .addQueryParameter("alt", "json")
-            .addQueryParameter("start-index", "1")
-            .addQueryParameter("max-results", "99999")
-            .addQueryParameter("orderby", "updated")
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = json.decodeFromString<ZeistMangaDto>(response.body.string())
-        return result.feed?.entry
-            ?.filter { it.category.orEmpty().any { category -> category.term == chapterCategory } }
-            ?.map { it.toSChapter(baseUrl) }
-            ?.sortedBy { it.name }
-            ?.reversed()
-            ?: throw Exception("Failed to parse from chapter API")
+    override fun getChapterFeedUrl(doc: Document): String {
+        val feed = doc.selectFirst(".chapter_get")!!.attr("data-labelchapter")
+        return apiUrl(chapterCategory)
+            .addPathSegments(feed)
+            .addQueryParameter("max-results", maxChapterResults.toString())
+            .build().toString()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
