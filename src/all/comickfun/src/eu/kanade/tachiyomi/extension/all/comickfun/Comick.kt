@@ -372,19 +372,6 @@ abstract class Comick(
     private fun mangaDetailsParse(response: Response, manga: SManga): SManga {
         val mangaData = response.parseAs<Manga>()
         if (!preferences.updateCover && manga.thumbnail_url != mangaData.comic.cover) {
-            if (manga.thumbnail_url.toString().endsWith("#1")) {
-                return mangaData.toSManga(
-                    includeMuTags = preferences.includeMuTags,
-                    scorePosition = preferences.scorePosition,
-                    covers = listOf(
-                        MDcovers(
-                            b2key = manga.thumbnail_url?.substringBeforeLast("#")
-                                ?.substringAfterLast("/"),
-                            vol = "1",
-                        ),
-                    ),
-                )
-            }
             val coversUrl =
                 "$apiUrl/comic/${mangaData.comic.slug ?: mangaData.comic.hid}/covers?tachiyomi=true"
             val covers = client.newCall(GET(coversUrl)).execute()
