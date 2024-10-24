@@ -498,12 +498,12 @@ abstract class Comick(
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
         private const val INCLUDE_MU_TAGS_PREF = "IncludeMangaUpdatesTags"
-        private const val INCLUDE_MU_TAGS_DEFAULT = false
+        const val INCLUDE_MU_TAGS_DEFAULT = false
         private const val MIGRATED_IGNORED_GROUPS = "MigratedIgnoredGroups"
         private const val FIRST_COVER_PREF = "DefaultCover"
         private const val FIRST_COVER_DEFAULT = true
         private const val SCORE_POSITION_PREF = "ScorePosition"
-        private const val SCORE_POSITION_DEFAULT = "top"
+        const val SCORE_POSITION_DEFAULT = "top"
         private const val LIMIT = 20
         private const val CHAPTERS_LIMIT = 99999
     }
