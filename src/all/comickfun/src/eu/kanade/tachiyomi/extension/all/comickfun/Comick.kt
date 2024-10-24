@@ -375,7 +375,9 @@ abstract class Comick(
             val coversUrl =
                 "$apiUrl/comic/${mangaData.comic.slug ?: mangaData.comic.hid}/covers?tachiyomi=true"
             val covers = client.newCall(GET(coversUrl)).execute()
-                .parseAs<Covers>().mdCovers.reversed()
+                .parseAs<Covers>().mdCovers.reversed().toMutableList()
+            if (covers.any { it.vol == "1" }) covers.retainAll { it.vol == "1" }
+            if (covers.any { it.locale == comickLang }) covers.retainAll { it.locale == comickLang }
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
                 scorePosition = preferences.scorePosition,

@@ -150,6 +150,7 @@ class Covers(
 class MDcovers(
     val b2key: String?,
     val vol: String? = null,
+    val locale: String? = "ja",
 )
 
 @Serializable
