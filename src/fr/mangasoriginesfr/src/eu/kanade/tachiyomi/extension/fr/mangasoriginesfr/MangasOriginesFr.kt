@@ -4,7 +4,12 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangasOriginesFr : Madara("Mangas-Origines.fr", "https://mangas-origines.fr", "fr", SimpleDateFormat("dd/mm/yyyy", Locale("fr"))) {
+class MangasOriginesFr : Madara(
+    "Mangas-Origines.fr",
+    "https://mangas-origines.fr",
+    "fr",
+    SimpleDateFormat("dd/MM/yyyy", Locale("fr")),
+) {
     override val mangaSubString = "catalogues"
 
     // Manga Details Selectors
