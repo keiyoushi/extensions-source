@@ -31,7 +31,7 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://xxmanhwas.net"
+    override val baseUrl = "https://xxmanhwa.top"
 
     override val supportsLatest = false
 
@@ -147,13 +147,17 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
                 }
             }
 
+            document.selectFirst("form[method=post] > input[type=hidden]")?.let { csrf ->
+                add(csrf.attr("name"), csrf.attr("value"))
+            }
+
             add("iid", "_0_$iid")
             add("ipoi", "1")
             add("sid", chapterId)
             add("cid", mangaId)
             add("expiry", expiry)
             add("token", token)
-            add("src", src)
+            add("src", "/${src.substringAfterLast("/")}")
 
             val ebeCaptchaKey = html.substringAfter("action_ebe_captcha('").substringBefore("')")
             val ebeCaptchaRequest = POST(
@@ -175,7 +179,7 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
         val basePageUrl = "https://${resp.media}/${resp.src.substringBeforeLast("/")}/"
 
         return document.select("div.cur p[data-src]").mapIndexed { i, it ->
-            Page(i, imageUrl = basePageUrl + it.attr("data-src"))
+            Page(i, imageUrl = basePageUrl + it.attr("data-src").substringAfterLast("/"))
         }
     }
 
