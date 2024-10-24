@@ -15,6 +15,8 @@ class MagusManga : Keyoapp(
 ) {
     override val versionId = 2
 
+    override val cdnUrl = "https://3xfsjdlc.is1.buzz/uploads"
+
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::captchaInterceptor)
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
@@ -38,9 +40,5 @@ class MagusManga : Keyoapp(
         }
 
         return response
-    }
-
-    override fun chapterListSelector(): String {
-        return "${super.chapterListSelector()}:not(:has(img[src*=coin]))"
     }
 }
