@@ -1,0 +1,8 @@
+ext {
+    extName = 'Meitua.top'
+    extClass = '.MeituaTop'
+    extVersionCode = 7
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
