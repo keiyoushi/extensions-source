@@ -83,9 +83,7 @@ class LeerManga : Madara(
     private var genresList: List<Genre> = emptyList()
 
     override fun getFilterList(): FilterList {
-        launchIO { fetchGenres() }
         val filters = mutableListOf<Filter<*>>()
-
         if (genresList.isNotEmpty()) {
             filters += listOf(
                 Filter.Separator(),
@@ -101,7 +99,6 @@ class LeerManga : Madara(
                 Filter.Header(intl["genre_missing_warning"]),
             )
         }
-
         return FilterList(filters)
     }
 
