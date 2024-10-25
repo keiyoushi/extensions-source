@@ -86,7 +86,6 @@ class LeerManga : Madara(
         val filters = mutableListOf<Filter<*>>()
         if (genresList.isNotEmpty()) {
             filters += listOf(
-                Filter.Separator(),
                 Filter.Header(intl["genre_filter_header"]),
                 GenreGroup(
                     displayName = intl["genre_filter_title"],
@@ -94,10 +93,7 @@ class LeerManga : Madara(
                 ),
             )
         } else if (fetchGenres) {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header(intl["genre_missing_warning"]),
-            )
+            filters += Filter.Header(intl["genre_missing_warning"])
         }
         return FilterList(filters)
     }
