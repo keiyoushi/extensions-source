@@ -381,9 +381,11 @@ abstract class Comick(
             val covers = client.newCall(GET(coversUrl)).execute()
                 .parseAs<Covers>().mdCovers.reversed().toMutableList()
             if (covers.any { it.vol == "1" }) covers.retainAll { it.vol == "1" }
-            if (covers.any {
-                    it.locale == comickLang.split('-').first()
-                }) covers.retainAll { it.locale == comickLang.split('-').first() }
+            if (
+                covers.any { it.locale == comickLang.split('-').first() }
+            ) {
+                covers.retainAll { it.locale == comickLang.split('-').first() }
+            }
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
                 scorePosition = preferences.scorePosition,
