@@ -1,0 +1,9 @@
+ext {
+    extName = 'Pluma Comics'
+    extClass = '.PlumaComics'
+    themePkg = 'madara'
+    baseUrl = 'https://plumacomics.cloud'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
