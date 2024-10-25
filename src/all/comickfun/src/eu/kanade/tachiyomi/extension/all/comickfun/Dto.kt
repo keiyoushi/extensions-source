@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
 
+import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.INCLUDE_MU_TAGS_DEFAULT
+import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.SCORE_POSITION_DEFAULT
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -31,8 +33,8 @@ class Manga(
     private val demographic: String? = null,
 ) {
     fun toSManga(
-        includeMuTags: Boolean = false,
-        scorePosition: String = "",
+        includeMuTags: Boolean = INCLUDE_MU_TAGS_DEFAULT,
+        scorePosition: String = SCORE_POSITION_DEFAULT,
         covers: List<MDcovers>? = null,
     ) =
         SManga.create().apply {
@@ -148,6 +150,7 @@ class Covers(
 class MDcovers(
     val b2key: String?,
     val vol: String? = null,
+    val locale: String? = null,
 )
 
 @Serializable
