@@ -6,4 +6,6 @@ class RezoScans : Keyoapp(
     "Rezo Scans",
     "https://rezoscans.com",
     "en",
-)
+) {
+    override val cdnUrl = "https://3xfsjdlc.is1.buzz/uploads"
+}
