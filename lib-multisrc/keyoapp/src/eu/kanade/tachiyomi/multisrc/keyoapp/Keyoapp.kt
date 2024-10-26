@@ -262,6 +262,7 @@ abstract class Keyoapp(
         document.select("#pages > img")
             .map { it.attr("uid") }
             .filter { it.isNotEmpty() }
+            .also { cdnUrl ?: throw Exception(intl["chapter_page_url_not_found"]) }
             .mapIndexed { index, img ->
                 Page(index, document.location(), "$cdnUrl/$img")
             }
@@ -277,16 +278,15 @@ abstract class Keyoapp(
             }
     }
 
-    protected open fun getCdnUrl(document: Document): String {
-        val cdnHost = document.select("script")
+    protected open fun getCdnUrl(document: Document): String? {
+        return document.select("script")
             .firstOrNull { CDN_HOST_REGEX.containsMatchIn(it.html()) }
             ?.let {
-                CDN_HOST_REGEX.find(it.html())
+                val cdnHost = CDN_HOST_REGEX.find(it.html())
                     ?.groups?.get("host")?.value
                     ?.replace(CDN_CLEAN_REGEX, "")
-            } ?: throw Exception(intl["chapter_page_url_not_found"])
-
-        return "https://$cdnHost/uploads"
+                "https://$cdnHost/uploads"
+            }
     }
 
     private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
