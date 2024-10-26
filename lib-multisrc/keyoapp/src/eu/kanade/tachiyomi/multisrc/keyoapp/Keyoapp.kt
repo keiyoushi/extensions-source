@@ -54,7 +54,7 @@ abstract class Keyoapp(
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en"),
+        availableLanguages = setOf("ar", "en", "fr"),
         classLoader = this::class.java.classLoader!!,
     )
 
@@ -284,7 +284,7 @@ abstract class Keyoapp(
                 CDN_HOST_REGEX.find(it.html())
                     ?.groups?.get("host")?.value
                     ?.replace(CDN_CLEAN_REGEX, "")
-            } ?: throw Exception("CDN host not found")
+            } ?: throw Exception(intl["chapter_page_url_not_found"])
 
         return "https://$cdnHost/uploads"
     }
