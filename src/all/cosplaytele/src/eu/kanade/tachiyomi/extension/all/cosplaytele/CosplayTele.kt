@@ -211,7 +211,6 @@ class CosplayTele : ParsedHttpSource() {
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
-
     private fun getDate(str: String): Long {
         try {
             val format = str.split("T")[0]
