@@ -6,6 +6,4 @@ class NecroScans : Keyoapp(
     "Necro Scans",
     "https://necroscans.com",
     "en",
-) {
-    override val cdnUrl = "https://3xfsjdlc.is1.buzz/uploads"
-}
+)

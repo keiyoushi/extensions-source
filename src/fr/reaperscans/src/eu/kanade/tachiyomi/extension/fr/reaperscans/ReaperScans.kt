@@ -10,6 +10,4 @@ class ReaperScans : Keyoapp(
 
     // Migrated from Madara to Keyoapp.
     override val versionId = 4
-
-    override val cdnUrl = "https://3xfsjdlc.is1.buzz/uploads"
 }

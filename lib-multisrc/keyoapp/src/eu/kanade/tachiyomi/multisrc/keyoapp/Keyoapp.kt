@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -259,6 +258,7 @@ abstract class Keyoapp(
     // Image list
 
     override fun pageListParse(document: Document): List<Page> {
+        val cdnUrl = getCdnUrl(document)
         document.select("#pages > img")
             .map { it.attr("uid") }
             .filter { it.isNotEmpty() }
@@ -277,7 +277,17 @@ abstract class Keyoapp(
             }
     }
 
-    protected open val cdnUrl = "https://2xffbs-cn8.is1.buzz/uploads"
+    protected open fun getCdnUrl(document: Document): String {
+        val cdnHost = document.select("script")
+            .firstOrNull { CDN_HOST_REGEX.containsMatchIn(it.html()) }
+            ?.let {
+                CDN_HOST_REGEX.find(it.html())
+                    ?.groups?.get("host")?.value
+                    ?.replace(CDN_CLEAN_REGEX, "")
+            } ?: throw Exception("CDN host not found")
+
+        return "https://$cdnHost/uploads"
+    }
 
     private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 
@@ -297,12 +307,7 @@ abstract class Keyoapp(
 
     protected open fun Element.getImageUrl(selector: String): String? {
         return this.selectFirst(selector)?.let { element ->
-            element.attr("style")
-                .substringAfter(":url(", "")
-                .substringBefore(")", "")
-                .takeIf { it.isNotEmpty() }
-                ?.toHttpUrlOrNull()?.newBuilder()?.setQueryParameter("w", "480")?.build()
-                ?.toString()
+            IMG_REGEX.find(element.attr("style"))?.groups?.get("url")?.value
         }
     }
 
@@ -360,5 +365,8 @@ abstract class Keyoapp(
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
+        val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//(?<host>[^/]+)""".toRegex()
+        val CDN_CLEAN_REGEX = """\$\{[^}]*\}""".toRegex()
+        val IMG_REGEX = """url\(['"]?(?<url>[^(['"\)])]+)""".toRegex()
     }
 }
