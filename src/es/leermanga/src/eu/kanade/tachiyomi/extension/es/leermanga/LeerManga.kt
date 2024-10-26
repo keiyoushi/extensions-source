@@ -67,7 +67,7 @@ class LeerManga : Madara(
             }
         }
 
-        url.addQueryParameter("page", "$page")
+        url.addQueryParameter("page", page.toString())
 
         return GET(url.build(), headers)
     }
