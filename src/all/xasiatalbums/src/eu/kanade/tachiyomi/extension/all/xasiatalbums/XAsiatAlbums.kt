@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -43,10 +44,11 @@ class XAsiatAlbums : ParsedHttpSource() {
 
     // Popular
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        url = element.attr("abs:href")
+        setUrlWithoutDomain(element.attr("abs:href"))
         title = element.attr("title")
         thumbnail_url = element.select(".thumb").attr("data-original")
         status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     override fun popularMangaNextPageSelector(): String = ".load-more"
@@ -90,6 +92,7 @@ class XAsiatAlbums : ParsedHttpSource() {
             description = document.select("meta[og:description]").attr("og:description")
             genre = getTags(document).joinToString(", ")
             status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
@@ -156,6 +159,12 @@ class XAsiatAlbums : ParsedHttpSource() {
 
     private var categories = mutableMapOf(
         Pair("All", "albums"),
+        Pair("Gravure Idols", "albums/categories/gravure-idols"),
+        Pair("JAV & AV Models", "albums/categories/jav"),
+        Pair("South Korea", "albums/categories/korea"),
+        Pair("China & Taiwan", "albums/categories/china-taiwan"),
+        Pair("Amateur", "albums/categories/amateur3"),
+        Pair("Western Girls", "albums/categories/western-girls"),
     )
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
