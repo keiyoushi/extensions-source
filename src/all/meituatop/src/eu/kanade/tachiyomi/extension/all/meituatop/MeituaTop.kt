@@ -23,7 +23,7 @@ class MeituaTop : HttpSource() {
     override val lang = "all"
     override val supportsLatest = false
 
-    override val baseUrl = "https://88188.meitu.lol/"
+    override val baseUrl = "https://88188.meitu.lol"
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/arttype/0b-$page.html", headers)
 
