@@ -26,7 +26,7 @@ class XAsiatAlbums : ParsedHttpSource() {
     override val name = "XAsiat Albums"
     override val supportsLatest = true
 
-    private val mainUrl = "https://www.xasiat.com/"
+    private val mainUrl = "https://www.xasiat.com"
 
     private val json: Json by injectLazy()
 
@@ -40,7 +40,7 @@ class XAsiatAlbums : ParsedHttpSource() {
     override fun latestUpdatesRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf(Pair("sort_by", "post_date")))
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url)
+    override fun mangaDetailsRequest(manga: SManga) = GET("${mainUrl}${manga.url}", headers)
 
     // Popular
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -66,6 +66,7 @@ class XAsiatAlbums : ParsedHttpSource() {
                 others.forEach { addQueryParameter(it.key, it.value) }
                 addQueryParameter("_", System.currentTimeMillis().toString())
             }.build(),
+            headers,
         )
     }
     override fun popularMangaSelector(): String = ".list-albums a"
