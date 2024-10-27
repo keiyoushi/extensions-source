@@ -118,7 +118,7 @@ class XAsiatAlbums : ParsedHttpSource() {
             val lastModified = response.headers["last-modified"]
             listOf(
                 SChapter.create().apply {
-                    url = manga.url
+                    url = "${mainUrl}${manga.url}"
                     name = "Photobook"
                     date_upload = getDate(lastModified.toString())
                 },
