@@ -40,10 +40,7 @@ class TruyenGG() : ParsedHttpSource(), ConfigurableSource {
     override val lang = "vi"
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
-        .followRedirects(true)
         .rateLimit(1)
         .build()
 
