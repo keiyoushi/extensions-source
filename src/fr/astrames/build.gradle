@@ -1,9 +1,0 @@
-ext {
-    extName = 'Astrames'
-    extClass = '.Astrames'
-    themePkg = 'keyoapp'
-    baseUrl = 'https://astrames.fr'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
