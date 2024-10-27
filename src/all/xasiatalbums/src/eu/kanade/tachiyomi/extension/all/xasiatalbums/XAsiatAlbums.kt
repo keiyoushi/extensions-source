@@ -129,12 +129,9 @@ class XAsiatAlbums : ParsedHttpSource() {
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        document.select("a.item").forEachIndexed { i, it ->
-            val itUrl = it.attr("href")
-            pages.add(Page(i, imageUrl = itUrl))
+        return document.select("a.item").mapIndexed { i, it ->
+            Page(i, imageUrl = it.attr("href"))
         }
-        return pages
     }
 
     override fun imageUrlParse(document: Document): String =
