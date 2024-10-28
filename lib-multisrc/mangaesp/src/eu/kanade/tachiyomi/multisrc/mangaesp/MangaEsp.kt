@@ -246,7 +246,7 @@ abstract class MangaEsp(
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         val MANGA_LIST_REGEX = """self\.__next_f\.push\(.*data\\":(\[.*trending.*])\}""".toRegex()
-        private val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*\\"numFollow""".toRegex()
+        val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*\\"numFollow""".toRegex()
         const val MANGAS_PER_PAGE = 15
     }
 }
