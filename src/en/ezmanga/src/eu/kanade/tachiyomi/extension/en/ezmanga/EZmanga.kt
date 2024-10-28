@@ -9,6 +9,4 @@ class EZmanga : Keyoapp(
 ) {
     // Migrated from Madara to Keyoapp
     override val versionId = 2
-
-    override val cdnUrl = "https://3xfsjdlc.is1.buzz/uploads"
 }
