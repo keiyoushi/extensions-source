@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 class SSSScanlator :
     MangaThemesia(
         "SSSScanlator",
-        "https://sssscanlator.com.br",
+        "https://ssstoons.com",
         "pt-BR",
         dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
     ),
