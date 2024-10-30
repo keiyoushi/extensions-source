@@ -153,7 +153,7 @@ abstract class ColaManga(
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.fed-part-eone")!!.text()
-        thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-orignal")
+        thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
         author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
         genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
         description = document
