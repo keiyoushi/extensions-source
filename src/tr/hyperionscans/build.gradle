@@ -1,8 +1,8 @@
 ext {
-    extName = 'Hyperion Scans'
+    extName = 'Seraph Manga'
     extClass = '.HyperionScans'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://www.hyperionscans.site'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://www.seraphmanga.com'
     overrideVersionCode = 0
 }
 
