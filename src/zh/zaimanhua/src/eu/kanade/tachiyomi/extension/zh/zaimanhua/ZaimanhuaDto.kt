@@ -141,6 +141,11 @@ class DataWrapperDto<T>(
 )
 
 @Serializable
+class SimpleResponseDto(
+    val errno: Int = 0,
+)
+
+@Serializable
 class ResponseDto<T>(
     val errno: Int = 0,
     val errmsg: String = "",
