@@ -31,7 +31,7 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://xxmanhwa.top"
+    override val baseUrl = "https://s1.xxmanhwa1.top"
 
     override val supportsLatest = false
 
@@ -191,7 +191,7 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
         SwitchPreferenceCompat(screen.context).apply {
             key = KEY_HIDE_PAID_CHAPTERS
             title = "Ẩn các chương cần tài khoản"
-            summary = "Ẩn các chương truyện cần nạp VIP để đọc.\nhttps://xxmanhwa.net/thong-tin-cap-bac-tai-khoan"
+            summary = "Ẩn các chương truyện cần nạp VIP để đọc.\n$baseUrl/thong-tin-cap-bac-tai-khoan"
             setDefaultValue(false)
         }.let(screen::addPreference)
     }

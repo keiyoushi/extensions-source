@@ -19,7 +19,7 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class Shinigami : Madara("Shinigami", "https://shinigami05.com", "id"), ConfigurableSource {
+class Shinigami : Madara("Shinigami", "https://shinigami06.com", "id"), ConfigurableSource {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
@@ -28,8 +28,6 @@ class Shinigami : Madara("Shinigami", "https://shinigami05.com", "id"), Configur
     override val mangaSubString = "semua-series"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    override val useNewChapterEndpoint = false
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
