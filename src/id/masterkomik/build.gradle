@@ -2,8 +2,8 @@ ext {
     extName = 'Tenshi.id'
     extClass = '.TenshiId'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://tenshi.pw'
-    overrideVersionCode = 5
+    baseUrl = 'https://tenshi01.id'
+    overrideVersionCode = 6
 }
 
 apply from: "$rootDir/common.gradle"

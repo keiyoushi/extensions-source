@@ -11,9 +11,9 @@ import java.util.Locale
 
 class MangaGezgini : Madara(
     "MangaGezgini",
-    "https://mangagezgini.com",
+    "https://mangagezgini.dev",
     "tr",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
+    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val chapterUrlSelector = "> a"
 
