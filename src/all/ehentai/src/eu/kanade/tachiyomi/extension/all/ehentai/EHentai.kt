@@ -131,9 +131,9 @@ abstract class EHentai(
     }
 
     private fun parseChapterPage(response: Element) = with(response) {
-        select(".gdtm a").map {
-            Pair(it.child(0).attr("alt").toInt(), it.attr("href"))
-        }.sortedBy(Pair<Int, String>::first).map { it.second }
+        select("#gdt a").map {
+            it.attr("href")
+        }
     }
 
     private fun chapterPageCall(np: String) = client.newCall(chapterPageRequest(np)).asObservableSuccess()
