@@ -1,18 +1,19 @@
 package eu.kanade.tachiyomi.extension.tr.hyperionscans
 
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class HyperionScans : ZeistManga(
-    "Hyperion Scans",
-    "https://www.hyperionscans.site",
+class HyperionScans : MangaThemesia(
+    "Seraph Manga",
+    "https://www.seraphmanga.com",
     "tr",
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 ) {
+    override val versionId = 2
+
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
-
-    override val popularMangaSelector = "div#PopularPosts3 article"
-    override val popularMangaSelectorTitle = "h3"
-    override val popularMangaSelectorUrl = "a"
 }
