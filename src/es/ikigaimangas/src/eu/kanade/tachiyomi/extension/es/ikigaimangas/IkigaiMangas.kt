@@ -33,7 +33,7 @@ import kotlin.concurrent.thread
 
 class IkigaiMangas : HttpSource(), ConfigurableSource {
 
-    override val baseUrl = "https://ikigaimangas.com"
+    override val baseUrl = "https://lectorikigai.acamu.net"
 
     private val defaultBaseUrl: String = "https://lectorikigai.acamu.net"
 
