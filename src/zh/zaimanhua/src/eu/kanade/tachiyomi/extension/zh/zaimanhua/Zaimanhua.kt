@@ -44,6 +44,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     override val baseUrl = "https://manhua.zaimanhua.com"
     private val apiUrl = "https://v4api.zaimanhua.com/app/v1"
     private val accountApiUrl = "https://account-api.zaimanhua.com/v1"
+    private val checkTokenRegex = Regex("""$apiUrl/comic/(detail|chapter)""")
 
     private val json by injectLazy<Json>()
 
@@ -58,12 +59,18 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (request.url.host != "v4api.zaimanhua.com" || !request.headers["authorization"].isNullOrBlank()) {
+        if (request.url.host != "v4api.zaimanhua.com" ||
+            (!request.headers["authorization"].isNullOrBlank() && !request.url.toString().contains(checkTokenRegex))
+        ) {
             return chain.proceed(request)
         }
 
+        val response = chain.proceed(request)
+        if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).parseAs<SimpleResponseDto>().errno == 0) {
+            return response
+        }
         var token: String = preferences.getString("TOKEN", "")!!
-        if (token.isBlank() || !isValid(token)) {
+        if (!isValid(token)) {
             val username = preferences.getString("USERNAME", "")!!
             val password = preferences.getString("PASSWORD", "")!!
             token = getToken(username, password)
@@ -71,12 +78,15 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 preferences.edit().putString("TOKEN", "").apply()
                 preferences.edit().putString("USERNAME", "").apply()
                 preferences.edit().putString("PASSWORD", "").apply()
-                return chain.proceed(request)
+                return response
             } else {
                 preferences.edit().putString("TOKEN", token).apply()
                 apiHeaders = apiHeaders.newBuilder().setToken(token).build()
             }
+        } else if (!request.headers["authorization"].isNullOrBlank() && request.headers["authorization"] == "Bearer $token") {
+            return response
         }
+
         val authRequest = request.newBuilder().apply {
             header("authorization", "Bearer $token")
         }.build()
@@ -90,6 +100,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     private var apiHeaders = headersBuilder().setToken(preferences.getString("TOKEN", "")!!).build()
 
     private fun isValid(token: String): Boolean {
+        if (token.isBlank()) return false
         val response = client.newCall(
             GET(
                 "$accountApiUrl/userInfo/get",
