@@ -767,10 +767,19 @@ abstract class Madara(
         return when {
             element.hasAttr("data-src") -> element.attr("abs:data-src")
             element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ")
+            element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
             element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
             else -> element.attr("abs:src")
         }
+    }
+
+    /**
+     *  Get the best image quality available from srcset
+     */
+    private fun String.getSrcSetImage(): String? {
+        return this.split(" ")
+            .filter(URL_REGEX::matches)
+            .maxOfOrNull(String::toString)
     }
 
     /**
@@ -1106,6 +1115,7 @@ abstract class Madara(
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
+        val URL_REGEX = """^(https?://[^\s/$.?#].[^\s]*)${'$'}""".toRegex()
     }
 }
 
