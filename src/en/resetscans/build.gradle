@@ -3,7 +3,7 @@ ext {
     extClass = '.ResetScans'
     themePkg = 'fuzzydoodle'
     baseUrl = 'https://reset-scans.xyz'
-    overrideVersionCode = 42
+    overrideVersionCode = 43
     isNsfw = false
 }
 

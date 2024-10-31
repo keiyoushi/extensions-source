@@ -6,7 +6,7 @@ class ResetScans : FuzzyDoodle(
     "https://reset-scans.xyz",
     "en",
 ) {
-    override val supportsLatest = false
+    override val latestFromHomePage = true
 
     // Moved from Madara to FuzzyDoodle
     override val versionId = 2
