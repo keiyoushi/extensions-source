@@ -17,7 +17,7 @@ class SamuraiScan : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
-    override val mangaSubString = "dl"
+    override val mangaSubString = "read"
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
