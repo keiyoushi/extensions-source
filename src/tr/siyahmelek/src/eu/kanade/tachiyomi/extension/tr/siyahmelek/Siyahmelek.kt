@@ -20,7 +20,7 @@ class Siyahmelek : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     // Skip fake image
     // OK: <div class="page-break no-gaps">
