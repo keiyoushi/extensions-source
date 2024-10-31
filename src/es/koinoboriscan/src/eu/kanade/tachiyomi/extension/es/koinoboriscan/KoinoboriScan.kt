@@ -162,7 +162,7 @@ class KoinoboriScan : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("body > div.w-full > div > img").mapIndexed { i, img ->
+        return document.select("div.relative > img[src]").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))
         }
     }
