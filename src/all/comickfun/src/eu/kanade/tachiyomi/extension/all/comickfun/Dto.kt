@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
 
+import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.GROUP_TAGS_DEFAULT
 import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.INCLUDE_MU_TAGS_DEFAULT
 import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.SCORE_POSITION_DEFAULT
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -29,13 +30,14 @@ class Manga(
     val comic: Comic,
     private val artists: List<Name> = emptyList(),
     private val authors: List<Name> = emptyList(),
-    private val genres: List<Name> = emptyList(),
+    private val genres: List<Genre> = emptyList(),
     private val demographic: String? = null,
 ) {
     fun toSManga(
         includeMuTags: Boolean = INCLUDE_MU_TAGS_DEFAULT,
         scorePosition: String = SCORE_POSITION_DEFAULT,
         covers: List<MDcovers>? = null,
+        groupTags: Boolean = GROUP_TAGS_DEFAULT,
     ) =
         SManga.create().apply {
             // appennding # at end as part of migration from slug to hid
@@ -75,19 +77,23 @@ class Manga(
             artist = artists.joinToString { it.name.trim() }
             author = authors.joinToString { it.name.trim() }
             genre = buildList {
-                comic.origination?.let(::add)
-                demographic?.let { add(Name(it)) }
-                addAll(genres)
-                addAll(comic.mdGenres.mapNotNull { it.name })
+                comic.origination?.let { add(Genre("Origination", it.name)) }
+                demographic?.let { add(Genre("Demographic", it)) }
+                addAll(
+                    comic.mdGenres.mapNotNull { it.genre }.sortedBy { it.group }
+                        .sortedBy { it.name },
+                )
+                addAll(genres.sortedBy { it.group }.sortedBy { it.name })
                 if (includeMuTags) {
-                    comic.muGenres.categories.forEach { category ->
-                        category?.category?.title?.let { add(Name(it)) }
-                    }
+                    addAll(
+                        comic.muGenres.categories.mapNotNull { it?.category?.title }.sorted()
+                            .map { Genre("Category", it) },
+                    )
                 }
             }
                 .distinctBy { it.name }
-                .filter { it.name.isNotBlank() }
-                .joinToString { it.name.trim() }
+                .filterNot { it.name.isNullOrBlank() || it.group.isNullOrBlank() }
+                .joinToString { if (groupTags) "${it.group}:${it.name?.trim()}" else "${it.name?.trim()}" }
         }
 }
 
@@ -128,7 +134,13 @@ class Comic(
 
 @Serializable
 class MdGenres(
-    @SerialName("md_genres") val name: Name? = null,
+    @SerialName("md_genres") val genre: Genre? = null,
+)
+
+@Serializable
+class Genre(
+    val group: String? = null,
+    val name: String? = null,
 )
 
 @Serializable

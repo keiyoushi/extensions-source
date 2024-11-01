@@ -98,6 +98,20 @@ abstract class Comick(
         }.also(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = GROUP_TAGS_PREF
+            title = intl["group_tags_title"]
+            summaryOn = intl["group_tags_on"]
+            summaryOff = intl["group_tags_off"]
+            setDefaultValue(GROUP_TAGS_DEFAULT)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(GROUP_TAGS_PREF, newValue as Boolean)
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = FIRST_COVER_PREF
             title = intl["update_cover_title"]
             summaryOff = intl["update_cover_off"]
@@ -148,6 +162,9 @@ abstract class Comick(
 
     private val SharedPreferences.includeMuTags: Boolean
         get() = getBoolean(INCLUDE_MU_TAGS_PREF, INCLUDE_MU_TAGS_DEFAULT)
+
+    private val SharedPreferences.groupTags: Boolean
+        get() = getBoolean(GROUP_TAGS_PREF, GROUP_TAGS_DEFAULT)
 
     private val SharedPreferences.updateCover: Boolean
         get() = getBoolean(FIRST_COVER_PREF, FIRST_COVER_DEFAULT)
@@ -390,11 +407,13 @@ abstract class Comick(
                 includeMuTags = preferences.includeMuTags,
                 scorePosition = preferences.scorePosition,
                 covers = covers,
+                groupTags = preferences.groupTags,
             )
         }
         return mangaData.toSManga(
             includeMuTags = preferences.includeMuTags,
             scorePosition = preferences.scorePosition,
+            groupTags = preferences.groupTags,
         )
     }
 
@@ -513,6 +532,8 @@ abstract class Comick(
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
         private const val INCLUDE_MU_TAGS_PREF = "IncludeMangaUpdatesTags"
         const val INCLUDE_MU_TAGS_DEFAULT = false
+        private const val GROUP_TAGS_PREF = "GroupTags"
+        const val GROUP_TAGS_DEFAULT = false
         private const val MIGRATED_IGNORED_GROUPS = "MigratedIgnoredGroups"
         private const val FIRST_COVER_PREF = "DefaultCover"
         private const val FIRST_COVER_DEFAULT = true
