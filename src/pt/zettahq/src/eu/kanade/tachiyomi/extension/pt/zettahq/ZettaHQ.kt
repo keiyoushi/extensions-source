@@ -69,16 +69,6 @@ class ZettaHQ : ParsedHttpSource() {
             .sortedByDescending { (it as Sort).priority }
             .forEach { filter ->
                 when (filter) {
-                    is CategoryFilter -> {
-                        val selected = filter.selected()
-                        if (selected.isBlank()) return@forEach
-
-                        url.addPathSegment("category")
-                            .addPathSegment(selected)
-
-                        isCategoryEnable = isCategoryEnable.not()
-                    }
-
                     is GenreList -> {
                         val genresSelected = filter.state
                             .filter { it.state }
@@ -108,8 +98,14 @@ class ZettaHQ : ParsedHttpSource() {
                         url.addPathSegment(filter.query)
                             .addPathSegment(selected)
 
-                        if (filter.query.equals("autor", true)) {
-                            isAuthorEnable = isAuthorEnable.not()
+                        when {
+                            filter.query.equals("autor", true) -> {
+                                isAuthorEnable = isAuthorEnable.not()
+                            }
+                            filter.query.equals("category", true) -> {
+                                isCategoryEnable = isCategoryEnable.not()
+                            }
+                            else -> {}
                         }
                     }
                     else -> {}
@@ -177,7 +173,7 @@ class ZettaHQ : ParsedHttpSource() {
         val filters = mutableListOf<Filter<*>>()
         if (genreList.isNotEmpty()) {
             filters += listOf(
-                CategoryFilter(title = "Categorias", vals = categoryList, priority = 3),
+                SelectFilter(title = "Categorias", vals = categoryList, query = "category", priority = 3),
                 Filter.Separator(),
                 SelectFilter(title = "Personagens", vals = characterList, query = "personagem"),
                 Filter.Separator(),
@@ -255,9 +251,6 @@ class ZettaHQ : ParsedHttpSource() {
         Sort, Filter.Select<String>(title, vals.map { it.first }.toTypedArray(), state) {
         fun selected() = vals[state].second
     }
-
-    private class CategoryFilter(title: String, vals: Array<Pair<String, String>>, state: Int = 0, priority: Int = 0) :
-        SelectFilter(title, vals, state, priority = priority)
 
     companion object {
         const val PREFIX_SEARCH = "id:"
