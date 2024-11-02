@@ -161,7 +161,7 @@ class MangaLivre : ParsedHttpSource() {
 
     override fun getFilterList(): FilterList {
         val filters = filterList.takeIf(List<*>::isNotEmpty)
-            ?: listOf(Filter.Header("Pressione 'Reiniciar' para tentar mostrar os filtros"))
+            ?: listOf(Filter.Header("Aperte 'Redefinir' para tentar mostrar os filtros"))
         return FilterList(filters)
     }
 
