@@ -96,7 +96,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val html = response.body.string().replace("\\", "").replace("n  ", "").substringAfter("\"chaptersHtml\":\"").substringBefore("\",")
+        val html = response.body.string().replace("\\", "").replace("n   ", "").substringAfter("\"chaptersHtml\":\"").substringBefore("\",")
         val document = Jsoup.parseBodyFragment(html, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
         return document.select("li, .ul-list-chaper-detail-commic li").filterNot {
@@ -117,7 +117,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
                     if (it.select("li > b").text().isNotBlank()) {
                         name += " " + it.select("li > b").text() + " 🔒"
                     }
-                    date_upload = parseDate(it.select("li > span").firstOrNull()!!.text())
+                    date_upload = parseDate(it.select("li:not(:has(> span.chapter-view)) > span, li > span:last-child").text())
                 }
             }
     }
