@@ -4,7 +4,9 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
+import android.webkit.CookieManager
 import androidx.preference.CheckBoxPreference
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -39,13 +41,22 @@ abstract class EHentai(
     private val ehLang: String,
 ) : ConfigurableSource, HttpSource() {
 
+    override val name = "E-Hentai"
+
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val name = "E-Hentai"
+    private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
+    private val memberId: String = getMemberIdPref()
+    private val passHash: String = getPassHashPref()
 
-    override val baseUrl = "https://e-hentai.org"
+    override val baseUrl: String
+        get() = if (memberId.isNotEmpty() && passHash.isNotEmpty()) {
+            "https://exhentai.org"
+        } else {
+            "https://e-hentai.org"
+        }
 
     override val supportsLatest = true
 
@@ -352,6 +363,12 @@ abstract class EHentai(
         // Bypass "Offensive For Everyone" content warning
         cookies["nw"] = "1"
 
+        cookies["ipb_member_id"] = memberId
+
+        cookies["ipb_pass_hash"] = passHash
+
+        cookies["igneous"] = ""
+
         buildCookies(cookies)
     }
 
@@ -529,6 +546,16 @@ abstract class EHentai(
         private const val ENFORCE_LANGUAGE_PREF_TITLE = "Enforce Language"
         private const val ENFORCE_LANGUAGE_PREF_SUMMARY = "If checked, forces browsing of manga matching a language tag"
         private const val ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE = false
+
+        private const val MEMBER_ID_PREF_KEY = "MEMBER_ID"
+        private const val MEMBER_ID_PREF_TITLE = "ipb_member_id"
+        private const val MEMBER_ID_PREF_SUMMARY = "ipb_member_id value"
+        private const val MEMBER_ID_PREF_DEFAULT_VALUE = ""
+
+        private const val PASS_HASH_PREF_KEY = "PASS_HASH"
+        private const val PASS_HASH_PREF_TITLE = "ipb_pass_hash"
+        private const val PASS_HASH_PREF_SUMMARY = "ipb_pass_hash value"
+        private const val PASS_HASH_PREF_DEFAULT_VALUE = ""
     }
 
     // Preferences
@@ -545,8 +572,56 @@ abstract class EHentai(
                 preferences.edit().putBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", checkValue).commit()
             }
         }
+
+        val memberIdPref = EditTextPreference(screen.context).apply {
+            key = MEMBER_ID_PREF_KEY
+            title = MEMBER_ID_PREF_TITLE
+            summary = MEMBER_ID_PREF_SUMMARY
+
+            setDefaultValue(MEMBER_ID_PREF_DEFAULT_VALUE)
+        }
+
+        val passHashPref = EditTextPreference(screen.context).apply {
+            key = PASS_HASH_PREF_KEY
+            title = PASS_HASH_PREF_TITLE
+            summary = PASS_HASH_PREF_SUMMARY
+
+            setDefaultValue(PASS_HASH_PREF_DEFAULT_VALUE)
+        }
+        screen.addPreference(memberIdPref)
+        screen.addPreference(passHashPref)
         screen.addPreference(enforceLanguagePref)
     }
 
     private fun getEnforceLanguagePref(): Boolean = preferences.getBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE)
+
+    private fun getCookieValue(cookieTitle: String, defaultValue: String, prefKey: String): String {
+        val cookies = webViewCookieManager.getCookie("https://forums.e-hentai.org")
+        var value: String? = null
+
+        if (cookies != null) {
+            val cookieArray = cookies.split("; ")
+            for (cookie in cookieArray) {
+                if (cookie.startsWith("$cookieTitle=")) {
+                    value = cookie.split("=")[1]
+
+                    break
+                }
+            }
+        }
+
+        if (value == null) {
+            value = preferences.getString(prefKey, defaultValue) ?: defaultValue
+        }
+
+        return value
+    }
+
+    private fun getPassHashPref(): String {
+        return getCookieValue(PASS_HASH_PREF_TITLE, PASS_HASH_PREF_DEFAULT_VALUE, PASS_HASH_PREF_KEY)
+    }
+
+    private fun getMemberIdPref(): String {
+        return getCookieValue(MEMBER_ID_PREF_TITLE, MEMBER_ID_PREF_DEFAULT_VALUE, MEMBER_ID_PREF_KEY)
+    }
 }
