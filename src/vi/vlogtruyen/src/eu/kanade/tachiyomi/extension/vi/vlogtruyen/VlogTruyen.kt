@@ -101,7 +101,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
         return document.select("li, .ul-list-chaper-detail-commic li").filterNot {
             if (hidePaidChapters) {
-                it.select("li > b").text().isNotBlank().or(!hidePaidChapters)
+                it.select("li:not(:has(> b))").text().isBlank().or(!hidePaidChapters)
             } else {
                 it.select("li > a").text().isBlank().or(false)
             }
