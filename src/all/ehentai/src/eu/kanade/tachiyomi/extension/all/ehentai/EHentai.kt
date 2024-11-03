@@ -46,8 +46,8 @@ abstract class EHentai(
     }
 
     private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
-    private val memberId: String = getMemberIdPref()
-    private val passHash: String = getPassHashPref()
+    private val memberId: String by lazy { getMemberIdPref() }
+    private val passHash: String by lazy { getPassHashPref() }
 
     override val baseUrl: String
         get() = if (memberId.isNotEmpty() && passHash.isNotEmpty()) {
