@@ -127,14 +127,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     }.getOrNull() ?: 0L
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val url = client.newCall(
-            GET(
-                when {
-                    manga.url.startsWith("http") -> manga.url
-                    else -> "$baseUrl${manga.url}"
-                },
-            ),
-        ).execute().asJsoup()
+        val url = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
         if (checkChapterLists(url).isNotEmpty()) {
             val mangaId = checkChapterLists(url)
             return client.newCall(GET("$baseUrl/thong-tin-ca-nhan?manga_id=$mangaId", headers))
