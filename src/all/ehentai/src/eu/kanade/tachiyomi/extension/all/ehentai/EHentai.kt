@@ -4,17 +4,17 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
+import android.webkit.CookieManager
 import androidx.preference.CheckBoxPreference
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.Filter.CheckBox
-import eu.kanade.tachiyomi.source.model.Filter.Group
 import eu.kanade.tachiyomi.source.model.Filter.Select
 import eu.kanade.tachiyomi.source.model.Filter.Text
-import eu.kanade.tachiyomi.source.model.Filter.TriState
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -39,13 +39,22 @@ abstract class EHentai(
     private val ehLang: String,
 ) : ConfigurableSource, HttpSource() {
 
+    override val name = "E-Hentai"
+
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val name = "E-Hentai"
+    private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
+    private val memberId: String = getMemberIdPref()
+    private val passHash: String = getPassHashPref()
 
-    override val baseUrl = "https://e-hentai.org"
+    override val baseUrl: String
+        get() = if (memberId.isNotEmpty() && passHash.isNotEmpty()) {
+            "https://exhentai.org"
+        } else {
+            "https://e-hentai.org"
+        }
 
     override val supportsLatest = true
 
@@ -161,10 +170,23 @@ abstract class EHentai(
             query.isBlank() -> languageTag(enforceLanguageFilter)
             else -> languageTag(enforceLanguageFilter).let { if (it.isNotEmpty()) "$query,$it" else query }
         }
-        modifiedQuery += filters.filterIsInstance<TagFilter>()
-            .flatMap { it.markedTags() }
-            .joinToString(",")
-            .let { if (it.isNotEmpty()) ",$it" else it }
+        filters.filterIsInstance<TextFilter>().forEach { it ->
+            if (it.state.isNotEmpty()) {
+                val splitted = it.state.split(",").filter(String::isNotBlank)
+                if (splitted.size < 2 && it.type != "tags") {
+                    modifiedQuery += " ${it.type}:\"${it.state.replace(" ", "+")}\""
+                } else {
+                    splitted.forEach { tag ->
+                        val trimmed = tag.trim().lowercase()
+                        if (trimmed.startsWith('-')) {
+                            modifiedQuery += " -${it.type}:\"${trimmed.removePrefix("-").replace(" ", "+")}\""
+                        } else {
+                            modifiedQuery += " ${it.type}:\"${trimmed.replace(" ", "+")}\""
+                        }
+                    }
+                }
+            }
+        }
         uri.appendQueryParameter("f_search", modifiedQuery)
         // when attempting to search with no genres selected, will auto select all genres
         filters.filterIsInstance<GenreGroup>().firstOrNull()?.state?.let {
@@ -352,6 +374,12 @@ abstract class EHentai(
         // Bypass "Offensive For Everyone" content warning
         cookies["nw"] = "1"
 
+        cookies["ipb_member_id"] = memberId
+
+        cookies["ipb_pass_hash"] = passHash
+
+        cookies["igneous"] = ""
+
         buildCookies(cookies)
     }
 
@@ -388,11 +416,16 @@ abstract class EHentai(
         EnforceLanguageFilter(getEnforceLanguagePref()),
         Watched(),
         GenreGroup(),
-        TagFilter("Misc Tags", triStateBoxesFrom(miscTags), "other"),
-        TagFilter("Female Tags", triStateBoxesFrom(femaleTags), "female"),
-        TagFilter("Male Tags", triStateBoxesFrom(maleTags), "male"),
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        Filter.Header("Use 'Female Tags' or 'Male Tags' for specific categories. 'Tags' searches all categories."),
+        TextFilter("Tags", "tag"),
+        TextFilter("Female Tags", "female"),
+        TextFilter("Male Tags", "male"),
         AdvancedGroup(),
     )
+
+    internal open class TextFilter(name: String, val type: String, val specific: String = "") : Filter.Text(name)
 
     class Watched : CheckBox("Watched List"), UriFilter {
         override fun addToUri(builder: Uri.Builder) {
@@ -487,17 +520,6 @@ abstract class EHentai(
 
     private class EnforceLanguageFilter(default: Boolean) : CheckBox("Enforce language", default)
 
-    private val miscTags = "3d, already uploaded, anaglyph, animal on animal, animated, anthology, arisa mizuhara, artbook, ashiya noriko, bailey jay, body swap, caption, chouzuki maryou, christian godard, comic, compilation, dakimakura, fe galvao, ffm threesome, figure, forbidden content, full censorship, full color, game sprite, goudoushi, group, gunyou mikan, harada shigemitsu, hardcore, helly von valentine, higurashi rin, hololive, honey select, how to, incest, incomplete, ishiba yoshikazu, jessica nigri, kalinka fox, kanda midori, kira kira, kitami eri, kuroi hiroki, lenfried, lincy leaw, marie claude bourbonnais, matsunaga ayaka, me me me, missing cover, mmf threesome, mmt threesome, mosaic censorship, mtf threesome, multi-work series, no penetration, non-nude, novel, nudity only, oakazaki joe, out of order, paperchild, pm02 colon 20, poor grammar, radio comix, realporn, redraw, replaced, sakaki kasa, sample, saotome love, scanmark, screenshots, sinful goddesses, sketch lines, stereoscopic, story arc, takeuti ken, tankoubon, themeless, tikuma jukou, time stop, tsubaki zakuro, ttm threesome, twins, uncensored, vandych alex, variant set, watermarked, webtoon, western cg, western imageset, western non-h, yamato nadeshiko club, yui okada, yukkuri, zappa go"
-    private val femaleTags = "ahegao, anal, angel, apron, bandages, bbw, bdsm, beauty mark, big areolae, big ass, big breasts, big clit, big lips, big nipples, bikini, blackmail, bloomers, blowjob, bodysuit, bondage, breast expansion, bukkake, bunny girl, business suit, catgirl, centaur, cheating, chinese dress, christmas, collar, corset, cosplaying, cowgirl, crossdressing, cunnilingus, dark skin, daughter, deepthroat, defloration, demon girl, double penetration, dougi, dragon, drunk, elf, exhibitionism, farting, females only, femdom, filming, fingering, fishnets, footjob, fox girl, furry, futanari, garter belt, ghost, giantess, glasses, gloves, goblin, gothic lolita, growth, guro, gyaru, hair buns, hairy, hairy armpits, handjob, harem, hidden sex, horns, huge breasts, humiliation, impregnation, incest, inverted nipples, kemonomimi, kimono, kissing, lactation, latex, leg lock, leotard, lingerie, lizard girl, maid, masked face, masturbation, midget, miko, milf, mind break, mind control, monster girl, mother, muscle, nakadashi, netorare, nose hook, nun, nurse, oil, paizuri, panda girl, pantyhose, piercing, pixie cut, policewoman, ponytail, pregnant, rape, rimjob, robot, scat, schoolgirl uniform, sex toys, shemale, sister, small breasts, smell, sole dickgirl, sole female, squirting, stockings, sundress, sweating, swimsuit, swinging, tail, tall girl, teacher, tentacles, thigh high boots, tomboy, transformation, twins, twintails, unusual pupils, urination, vore, vtuber, widow, wings, witch, wolf girl, x-ray, yuri, zombie"
-    private val maleTags = "anal, bbm, big ass, big penis, bikini, blood, blowjob, bondage, catboy, cheating, chikan, condom, crab, crossdressing, dark skin, deepthroat, demon, dickgirl on male, dilf, dog boy, double anal, double penetration, dragon, drunk, exhibitionism, facial hair, feminization, footjob, fox boy, furry, glasses, group, guro, hairy, handjob, hidden sex, horns, huge penis, human on furry, kimono, lingerie, lizard guy, machine, maid, males only, masturbation, mmm threesome, monster, muscle, nakadashi, ninja, octopus, oni, pillory, policeman, possession, prostate massage, public use, schoolboy uniform, schoolgirl uniform, sex toys, shotacon, sleeping, snuff, sole male, stockings, sunglasses, swimsuit, tall man, tentacles, tomgirl, unusual pupils, virginity, waiter, x-ray, yaoi, zombie"
-
-    private fun triStateBoxesFrom(tagString: String): List<TagTriState> = tagString.split(", ").map { TagTriState(it) }
-
-    class TagTriState(tag: String) : TriState(tag)
-    class TagFilter(name: String, private val triStateBoxes: List<TagTriState>, private val nameSpace: String) : Group<TagTriState>(name, triStateBoxes) {
-        fun markedTags() = triStateBoxes.filter { it.isIncluded() }.map { "$nameSpace:${it.name}" } + triStateBoxes.filter { it.isExcluded() }.map { "-$nameSpace:${it.name}" }
-    }
-
     // map languages to their internal ids
     private val languageMappings = listOf(
         Pair("japanese", listOf("0", "1024", "2048")),
@@ -529,6 +551,16 @@ abstract class EHentai(
         private const val ENFORCE_LANGUAGE_PREF_TITLE = "Enforce Language"
         private const val ENFORCE_LANGUAGE_PREF_SUMMARY = "If checked, forces browsing of manga matching a language tag"
         private const val ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE = false
+
+        private const val MEMBER_ID_PREF_KEY = "MEMBER_ID"
+        private const val MEMBER_ID_PREF_TITLE = "ipb_member_id"
+        private const val MEMBER_ID_PREF_SUMMARY = "ipb_member_id value"
+        private const val MEMBER_ID_PREF_DEFAULT_VALUE = ""
+
+        private const val PASS_HASH_PREF_KEY = "PASS_HASH"
+        private const val PASS_HASH_PREF_TITLE = "ipb_pass_hash"
+        private const val PASS_HASH_PREF_SUMMARY = "ipb_pass_hash value"
+        private const val PASS_HASH_PREF_DEFAULT_VALUE = ""
     }
 
     // Preferences
@@ -545,8 +577,56 @@ abstract class EHentai(
                 preferences.edit().putBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", checkValue).commit()
             }
         }
+
+        val memberIdPref = EditTextPreference(screen.context).apply {
+            key = MEMBER_ID_PREF_KEY
+            title = MEMBER_ID_PREF_TITLE
+            summary = MEMBER_ID_PREF_SUMMARY
+
+            setDefaultValue(MEMBER_ID_PREF_DEFAULT_VALUE)
+        }
+
+        val passHashPref = EditTextPreference(screen.context).apply {
+            key = PASS_HASH_PREF_KEY
+            title = PASS_HASH_PREF_TITLE
+            summary = PASS_HASH_PREF_SUMMARY
+
+            setDefaultValue(PASS_HASH_PREF_DEFAULT_VALUE)
+        }
+        screen.addPreference(memberIdPref)
+        screen.addPreference(passHashPref)
         screen.addPreference(enforceLanguagePref)
     }
 
     private fun getEnforceLanguagePref(): Boolean = preferences.getBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE)
+
+    private fun getCookieValue(cookieTitle: String, defaultValue: String, prefKey: String): String {
+        val cookies = webViewCookieManager.getCookie("https://forums.e-hentai.org")
+        var value: String? = null
+
+        if (cookies != null) {
+            val cookieArray = cookies.split("; ")
+            for (cookie in cookieArray) {
+                if (cookie.startsWith("$cookieTitle=")) {
+                    value = cookie.split("=")[1]
+
+                    break
+                }
+            }
+        }
+
+        if (value == null) {
+            value = preferences.getString(prefKey, defaultValue) ?: defaultValue
+        }
+
+        return value
+    }
+
+    private fun getPassHashPref(): String {
+        return getCookieValue(PASS_HASH_PREF_TITLE, PASS_HASH_PREF_DEFAULT_VALUE, PASS_HASH_PREF_KEY)
+    }
+
+    private fun getMemberIdPref(): String {
+        return getCookieValue(MEMBER_ID_PREF_TITLE, MEMBER_ID_PREF_DEFAULT_VALUE, MEMBER_ID_PREF_KEY)
+    }
 }
