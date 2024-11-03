@@ -1,0 +1,7 @@
+ext {
+    extName = 'Black Scans'
+    extClass = '.BlackScans'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
