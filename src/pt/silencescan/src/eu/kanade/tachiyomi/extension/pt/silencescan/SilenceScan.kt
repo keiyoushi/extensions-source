@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.silencescan
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -22,11 +21,4 @@ class SilenceScan : MangaThemesia(
         .build()
 
     override val altNamePrefix = "Nome alternativo: "
-
-    override fun String?.parseStatus() = when {
-        this == null -> SManga.UNKNOWN
-        this.contains("Em Andamento") -> SManga.ONGOING
-        this.contains("Completo") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
 }

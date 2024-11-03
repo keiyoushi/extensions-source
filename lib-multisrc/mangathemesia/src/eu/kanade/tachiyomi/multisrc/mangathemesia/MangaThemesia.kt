@@ -292,7 +292,7 @@ abstract class MangaThemesia(
         listOf("canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné")
             .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
 
-        listOf("hiatus", "on hold", "pausado", "en espera", "en pause", "en attente")
+        listOf("hiatus", "on hold", "pausado", "en espera", "en pause", "en attente", "hiato")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
 
         else -> SManga.UNKNOWN

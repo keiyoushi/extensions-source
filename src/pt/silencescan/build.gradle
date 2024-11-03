@@ -3,7 +3,7 @@ ext {
     extClass = '.SilenceScan'
     themePkg = 'mangathemesia'
     baseUrl = 'https://silencescan.com.br'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = true
 }
 
