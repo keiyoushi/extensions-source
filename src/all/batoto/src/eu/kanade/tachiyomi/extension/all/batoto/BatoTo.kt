@@ -393,9 +393,12 @@ open class BatoTo(
     }
 
     private fun checkChapterLists(document: Document): Boolean {
-        val alertWarningElement = document.select(".episode-list > .alert-warning").firstOrNull()
-        if (alertWarningElement != null && alertWarningElement.text().contains("This comic has been marked as deleted and the chapter list is not available.")) {
-            throw IOException("This comic was deleted.")
+        val chapterListElements = document.select(chapterListSelector())
+        if (chapterListElements.isEmpty()) {
+            val alertWarningElement = document.select(".episode-list > .alert-warning").firstOrNull()
+            if (alertWarningElement != null && alertWarningElement.text().contains("This comic has been marked as deleted and the chapter list is not available.")) {
+                throw IOException("This comic was deleted.")
+            }
         }
         return false
     }
