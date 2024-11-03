@@ -1,0 +1,9 @@
+ext {
+    extName = 'Arctic Scan'
+    extClass = '.ArcticScan'
+    themePkg = 'madara'
+    baseUrl = 'https://arcticscan.top'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
