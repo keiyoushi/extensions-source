@@ -127,7 +127,9 @@ abstract class MangaEsp(
             val statusFilter = filterList.firstInstanceOrNull<StatusFilter>()
 
             if (statusFilter != null) {
-                filteredList = filteredList.filter { it.status == statusFilter.toUriPart() }.toMutableList()
+                if (statusFilter.toUriPart() != 0) {
+                    filteredList = filteredList.filter { it.status == statusFilter.toUriPart() }.toMutableList()
+                }
             }
 
             val sortByFilter = filterList.firstInstanceOrNull<SortByFilter>()
@@ -216,6 +218,7 @@ abstract class MangaEsp(
     )
 
     protected open fun getStatusList() = arrayOf(
+        Pair(intl["status_filter_all"], 0),
         Pair(intl["status_filter_ongoing"], 1),
         Pair(intl["status_filter_hiatus"], 2),
         Pair(intl["status_filter_dropped"], 3),
