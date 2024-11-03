@@ -21,6 +21,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -60,7 +61,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         title = element.select("h3.title-commic-tab").text()
-        thumbnail_url = element.select(".image-commic-tab img.lazyload").first()?.attr("data-src")
+        thumbnail_url = element.selectFirst(".image-commic-tab img.lazyload")?.attr("data-src")
     }
 
     override fun latestUpdatesNextPageSelector() = ".pagination > li.active + li"
@@ -82,7 +83,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
         genre = document.select(".categories-list-detail-commic > li > a").joinToString { it.text().trim(',', ' ') }
         description = document.select("div.top-detail-manga > div.top-detail-manga-content > span.desc-commic-detail").text()
         thumbnail_url = document.select("div.image-commic-detail > a > img").attr("data-src")
-        status = parseStatus(document.select("div.top-detail-manga > div.top-detail-manga-avatar > div.manga-status > p").firstOrNull()?.text())
+        status = parseStatus(document.selectFirst("div.top-detail-manga > div.top-detail-manga-avatar > div.manga-status > p")?.text())
         author = document.select(".h5-drawer:contains(Tác Giả) + ul li a").joinToString { it.text() }
     }
 
@@ -96,7 +97,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val html = response.body.string().replace("\\", "").replace("n  ", "").substringAfter("\"chaptersHtml\":\"").substringBefore("\",")
-        val document = response.asJsoup(html)
+        val document = Jsoup.parseBodyFragment(html, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
         return document.select("li, .ul-list-chaper-detail-commic li").filterNot {
             if (hidePaidChapters) {
@@ -107,7 +108,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
         }
             .mapNotNull {
                 SChapter.create().apply {
-                    setUrlWithoutDomain(it.select("a").first()!!.attr("href"))
+                    setUrlWithoutDomain(it.selectFirst("a")!!.attr("href"))
                     name = it.select("h3").first()!!.text().replaceAfter("-", "").replaceAfter(":", "")
                         .replaceAfter("0 ", "").replaceAfter("1 ", "").replaceAfter("2 ", "")
                         .replaceAfter("3 ", "").replaceAfter("4 ", "").replaceAfter("5 ", "")
