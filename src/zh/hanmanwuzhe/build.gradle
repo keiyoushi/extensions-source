@@ -1,7 +1,9 @@
 ext {
     extName = 'hanmanwuzhe'
     extClass = '.hanmanwuzhe'
-    extVersionCode = 1
+    themePkg = 'mccms'
+    baseUrl = 'https://www.hanmanwuzhe.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
