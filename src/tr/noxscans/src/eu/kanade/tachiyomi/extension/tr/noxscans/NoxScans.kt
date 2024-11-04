@@ -34,16 +34,11 @@ class NoxScans : MangaThemesia(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val responseBody = response.body.string()
+        val responseBody = responseresponse.peekBody(Long.MAX_VALUE).string()
         val document = Jsoup.parse(responseBody)
         checkVerification(document, response.request.url.toString())
-
-
-        val newResponse = response.newBuilder()
-            .body(responseBody.toResponseBody(response.body.contentType()))
-            .build()
-
-        return super.chapterListParse(newResponse)
+        
+        return super.chapterListParse(response)
     }
 
     override fun pageListParse(document: Document): List<Page> {
