@@ -1,9 +1,0 @@
-ext {
-    extName = 'ReaderGen'
-    extClass = '.ReaderGen'
-    themePkg = 'madara'
-    baseUrl = 'https://fr.readergen.fr'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

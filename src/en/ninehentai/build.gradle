@@ -1,8 +1,0 @@
-ext {
-    extName = 'NineHentai'
-    extClass = '.NineHentai'
-    extVersionCode = 3
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
