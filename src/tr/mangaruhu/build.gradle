@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaRuhu'
     themePkg = 'madara'
     baseUrl = 'https://mangaruhu.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
 }
 
 apply from: "$rootDir/common.gradle"
