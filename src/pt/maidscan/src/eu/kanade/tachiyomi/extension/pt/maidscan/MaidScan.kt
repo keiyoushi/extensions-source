@@ -8,7 +8,7 @@ import java.util.Locale
 
 class MaidScan : Madara(
     "Maid Scan",
-    "https://maidscans.com",
+    "https://empreguetes.site",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
@@ -17,5 +17,6 @@ class MaidScan : Madara(
         .build()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
+
     override val useNewChapterEndpoint = true
 }
