@@ -38,7 +38,6 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -397,7 +396,7 @@ open class BatoTo(
         if (chapterListElements.isEmpty()) {
             val alertWarningElement = document.select(".episode-list > .alert-warning").firstOrNull()
             if (alertWarningElement != null && alertWarningElement.text().contains("This comic has been marked as deleted and the chapter list is not available.")) {
-                throw IOException("This comic was deleted.")
+                throw Exception("This comic was deleted.")
             }
         }
         return false
