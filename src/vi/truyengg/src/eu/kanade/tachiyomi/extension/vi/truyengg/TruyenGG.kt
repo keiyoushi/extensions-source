@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.vi.truyengg
 import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -13,7 +14,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,42 +25,29 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
-class TruyenGG() : ParsedHttpSource(), ConfigurableSource {
-
-    override val supportsLatest = true
+class TruyenGG : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "TruyenGG"
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override val lang = "vi"
 
     private val defaultBaseUrl = "https://truyengg.com"
 
-    override val lang = "vi"
+    override val supportsLatest = true
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .retryOnConnectionFailure(true)
         .rateLimit(1)
         .build()
 
     override fun headersBuilder(): Headers.Builder =
         super.headersBuilder().add("Referer", "$baseUrl/")
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        name = element.select("a").text()
-        date_upload = parseDate(element.select("span.cl99").text().trim())
-    }
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 
-    private fun parseDate(date: String): Long = runCatching {
-        dateFormat.parse(date)?.time
-    }.getOrNull() ?: 0L
-
-    override fun chapterListSelector() = "ul.list_chap > li.item_chap"
-
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat/trang-$page.html", headers)
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a.book_name")!!.attr("href"))
@@ -68,11 +55,29 @@ class TruyenGG() : ParsedHttpSource(), ConfigurableSource {
         thumbnail_url = element.selectFirst(".image-cover img")!!.attr("data-src")
     }
 
+    override fun latestUpdatesSelector() = ".list_item_home .item_home"
+
     override fun latestUpdatesNextPageSelector() = ".pagination a.active + a"
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat/trang-$page.html", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/top-binh-chon/trang-$page.html", headers)
 
-    override fun latestUpdatesSelector() = ".list_item_home .item_home"
+    override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+
+    override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
+
+    override fun popularMangaSelector() = latestUpdatesSelector()
+
+    override fun chapterListSelector() = "ul.list_chap > li.item_chap"
+
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        name = element.select("a").text()
+        date_upload = parseDate(element.select("span.cl99").text().trim())
+    }
+
+    private fun parseDate(date: String): Long = runCatching {
+        dateFormat.parse(date)?.time
+    }.getOrNull() ?: 0L
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.select("h1[itemprop=name]").text()
@@ -93,22 +98,11 @@ class TruyenGG() : ParsedHttpSource(), ConfigurableSource {
                 Page(idx, imageUrl = it.attr("abs:src"))
             }
 
-    override fun pageListRequest(chapter: SChapter): Request = super.pageListRequest(chapter)
-        .newBuilder()
-        .cacheControl(CacheControl.FORCE_NETWORK)
-        .build()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun popularMangaFromElement(element: Element): SManga = latestUpdatesFromElement(element)
+    override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
-    override fun popularMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/top-binh-chon/trang-$page.html", headers)
-
-    override fun popularMangaSelector(): String = latestUpdatesSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga = latestUpdatesFromElement(element)
-
-    override fun searchMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
+    override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = if (query.isNotBlank()) {
@@ -125,7 +119,7 @@ class TruyenGG() : ParsedHttpSource(), ConfigurableSource {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector(): String = latestUpdatesSelector()
+    override fun searchMangaSelector() = latestUpdatesSelector()
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Không dùng chung với tìm kiếm bằng tên"),
@@ -279,7 +273,7 @@ class TruyenGG() : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+        EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = BASE_URL_PREF_TITLE
             summary = BASE_URL_PREF_SUMMARY
@@ -291,8 +285,7 @@ class TruyenGG() : ParsedHttpSource(), ConfigurableSource {
                 Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
                 true
             }
-        }
-        screen.addPreference(baseUrlPref)
+        }.let(screen::addPreference)
     }
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
