@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -20,25 +19,28 @@ class NoxScans : MangaThemesia(
 ) {
     companion object {
         private val IMAGE_EXTENSIONS = listOf(".webp", ".jpg", ".jpeg", ".png", ".gif")
-        private const val VERIFICATION_ERROR = "Bölümü görüntülemek için WebView'de doğrulama yapmanız gerekiyor"
-        private const val ROBOT_VERIFICATION_ERROR = "Robot doğrulaması gerekiyor. WebView'de doğrulama yapın"
+        private const val VERIFICATION_ERROR =
+            "Bölümü görüntülemek için WebView'de doğrulama yapmanız gerekiyor"
+        private const val ROBOT_VERIFICATION_ERROR =
+            "Robot doğrulaması gerekiyor. WebView'de doğrulama yapın"
     }
 
     private fun checkVerification(document: Document, url: String? = null) {
         when {
-            document.select("form[action*=kontrol]").isNotEmpty() ->
-                throw Exception(VERIFICATION_ERROR)
-            url?.contains("/kontrol/") == true ->
-                throw Exception(ROBOT_VERIFICATION_ERROR)
+            document.select("form[action*=kontrol]").isNotEmpty() -> throw Exception(
+                VERIFICATION_ERROR,
+            )
+
+            url?.contains("/kontrol/") == true -> throw Exception(ROBOT_VERIFICATION_ERROR)
         }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val responseBody = responseresponse.peekBody(Long.MAX_VALUE).string()
-        val document = Jsoup.parse(responseBody)
-        checkVerification(document, response.request.url.toString())
-        
-        return super.chapterListParse(response)
+        return response.use { resp ->
+            val document = Jsoup.parse(resp.peekBody(Long.MAX_VALUE).string())
+            checkVerification(document, resp.request.url.toString())
+            super.chapterListParse(resp)
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -46,7 +48,7 @@ class NoxScans : MangaThemesia(
 
         val scriptContent = document.selectFirst("script:containsData(ts_reader.run)")?.data()
             ?: return super.pageListParse(document)
-            
+
         return try {
             parseReaderScript(scriptContent)
         } catch (e: Exception) {
@@ -58,11 +60,13 @@ class NoxScans : MangaThemesia(
         val jsonStr = scriptContent.substringAfter("ts_reader.run(").substringBefore(");")
         val jsonData = JSONObject(jsonStr)
 
-        val serverArrayKey = findServerArrayKey(jsonData) ?: throw Exception("Server array not found")
+        val serverArrayKey =
+            findServerArrayKey(jsonData) ?: throw Exception("Server array not found")
         val serverArray = jsonData.getJSONArray(serverArrayKey)
         val firstServer = serverArray.getJSONObject(0)
 
-        val imageArrayKey = findImageArrayKey(firstServer) ?: throw Exception("Image array not found")
+        val imageArrayKey =
+            findImageArrayKey(firstServer) ?: throw Exception("Image array not found")
         val imageArray = firstServer.getJSONArray(imageArrayKey)
 
         return List(imageArray.length()) { i ->
@@ -101,19 +105,14 @@ class NoxScans : MangaThemesia(
         }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val responseBody = response.body.string()
-        val document = Jsoup.parse(responseBody)
-        checkVerification(document, response.request.url.toString())
-
-        val newResponse = response.newBuilder()
-            .body(responseBody.toResponseBody(response.body.contentType()))
-            .build()
-
-        return super.mangaDetailsParse(newResponse)
+        return response.use { resp ->
+            val document = Jsoup.parse(resp.body.string())
+            checkVerification(document, resp.request.url.toString())
+            super.mangaDetailsParse(resp)
+        }
     }
 
-    private fun isImageUrl(url: String): Boolean =
-        IMAGE_EXTENSIONS.any { ext ->
-            url.lowercase().endsWith(ext) && url.contains("/wp-content/uploads/")
-        }
+    private fun isImageUrl(url: String): Boolean = IMAGE_EXTENSIONS.any { ext ->
+        url.lowercase().endsWith(ext) && url.contains("/wp-content/uploads/")
+    }
 }
