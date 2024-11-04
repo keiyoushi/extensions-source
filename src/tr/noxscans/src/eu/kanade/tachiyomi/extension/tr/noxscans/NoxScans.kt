@@ -44,13 +44,14 @@ class NoxScans : MangaThemesia(
     override fun pageListParse(document: Document): List<Page> {
         checkVerification(document, document.location())
 
-        return document.select("script:containsData(ts_reader.run)").firstOrNull()?.data()?.let { scriptContent ->
-            try {
-                parseReaderScript(scriptContent)
-            } catch (e: Exception) {
-                super.pageListParse(document)
-            }
-        } ?: super.pageListParse(document)
+        val scriptContent = document.selectFirst("script:containsData(ts_reader.run)")?.data()
+            ?: return super.pageListParse(document)
+            
+        return try {
+            parseReaderScript(scriptContent)
+        } catch (e: Exception) {
+            super.pageListParse(document)
+        }
     }
 
     private fun parseReaderScript(scriptContent: String): List<Page> {
