@@ -5,7 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MerlinScans : MangaThemesia(
-    "MerlinScans",
+    "Merlin Scans",
     "https://merlinscans.com",
     "tr",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
