@@ -8,7 +8,7 @@ class MangaRuhu : Madara(
     "Manga Ruhu",
     "https://mangaruhu.com",
     "tr",
-    SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH),
+    SimpleDateFormat("d MMMM yyyy", Locale("tr")),
 ) {
     override val filterNonMangaItems = false
 }
