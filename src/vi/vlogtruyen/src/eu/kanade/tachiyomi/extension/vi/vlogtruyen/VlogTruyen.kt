@@ -16,6 +16,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -27,6 +29,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -45,6 +48,8 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     private val searchURL by lazy { "$baseUrl/tim-kiem" }
 
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
+
+    private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1)
@@ -96,8 +101,8 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val html = response.body.string().replace("\\", "").replace("n   ", "").substringAfter("\"chaptersHtml\":\"").substringBefore("\",")
-        val document = Jsoup.parseBodyFragment(html, response.request.url.toString())
+        val json = json.decodeFromString<ChapterDTO>(response.body.string().replace("\\n", ""))
+        val document = Jsoup.parseBodyFragment(json.data.chaptersHtml, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
         return document.select("li, .ul-list-chaper-detail-commic li").filterNot {
             if (hidePaidChapters) {
@@ -109,11 +114,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
             .mapNotNull {
                 SChapter.create().apply {
                     setUrlWithoutDomain(it.selectFirst("a")!!.attr("href"))
-                    name = it.select("h3").first()!!.text().replaceAfter("-", "").replaceAfter(":", "")
-                        .replaceAfter("0 ", "").replaceAfter("1 ", "").replaceAfter("2 ", "")
-                        .replaceAfter("3 ", "").replaceAfter("4 ", "").replaceAfter("5 ", "")
-                        .replaceAfter("6 ", "").replaceAfter("7 ", "").replaceAfter("8 ", "")
-                        .replaceAfter("9 ", "").replace("-", "").replace(":", "")
+                    name = it.select("h3").first()!!.text().trim()
                     if (it.select("li > b").text().isNotBlank()) {
                         name += " " + it.select("li > b").text() + " 🔒"
                     }
