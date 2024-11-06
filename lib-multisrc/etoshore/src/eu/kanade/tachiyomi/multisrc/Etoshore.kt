@@ -86,7 +86,7 @@ abstract class Etoshore(
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         title = element.attr("title")
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        thumbnail_url = element.selectFirst("img")?.let(::imageFromElement)
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
