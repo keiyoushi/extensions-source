@@ -123,7 +123,7 @@ abstract class Etoshore(
             else -> element.attr("abs:src")
         }
     }
-    
+
     protected open fun String.getSrcSetImage(): String? {
         return this.split(" ")
             .filter(URL_REGEX::matches)
