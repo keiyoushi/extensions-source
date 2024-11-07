@@ -7,7 +7,7 @@ import java.util.Locale
 
 class FenixProject : Madara(
     "Fenix Project",
-    "https://fenixproject.xyz",
+    "https://fenixproject.site",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
