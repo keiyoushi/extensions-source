@@ -9,13 +9,13 @@ class LimitedTimeProject : Madara(
     "Limited Time Project",
     "https://limitedtimeproject.com",
     "pt-BR",
-    SimpleDateFormat("dd 'de' MMM 'de' yyyy", Locale("pt", "BR")),
+    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 
-    override val mangaSubString = "manhwa"
+    override val mangaSubString = "manhwas"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
