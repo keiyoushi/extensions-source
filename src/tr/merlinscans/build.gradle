@@ -1,9 +1,9 @@
 ext {
     extName = 'Merlin Scans'
     extClass = '.MerlinScans'
-    themePkg = 'madara'
+    themePkg = 'mangathemesia'
     baseUrl = 'https://merlinscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

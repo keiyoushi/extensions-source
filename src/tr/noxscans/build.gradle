@@ -3,7 +3,7 @@ ext {
     extClass = '.NoxScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://noxscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

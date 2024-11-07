@@ -1,10 +1,12 @@
 package eu.kanade.tachiyomi.extension.tr.merlinscans
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MerlinScans : Madara("Merlin Scans", "https://merlinscans.com", "tr", SimpleDateFormat("MMMM dd, yyyy", Locale("tr"))) {
-
-    override val useNewChapterEndpoint = true
-}
+class MerlinScans : MangaThemesia(
+    "Merlin Scans",
+    "https://merlinscans.com",
+    "tr",
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
+)
