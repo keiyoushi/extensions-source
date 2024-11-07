@@ -131,10 +131,10 @@ class WeebCentral : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListSelector() = "a"
+    override fun chapterListSelector() = "a[x-data]"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        name = element.selectFirst("span.flex")!!.text()
+        name = element.selectFirst("span.flex > span")!!.text()
         setUrlWithoutDomain(element.attr("abs:href"))
         element.selectFirst("time[datetime]")?.also {
             date_upload = it.attr("datetime").parseDate()
