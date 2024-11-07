@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.mangalivre
+package eu.kanade.tachiyomi.multisrc.etoshore
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class MangaLivreUrlActivity : Activity() {
+class EtoshoreUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -18,7 +18,7 @@ class MangaLivreUrlActivity : Activity() {
             val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${MangaLivre.PREFIX_SEARCH}$item")
+                putExtra("query", "${Etoshore.PREFIX_SEARCH}$item")
                 putExtra("filter", packageName)
             }
 

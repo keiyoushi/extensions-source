@@ -1,14 +1,14 @@
 package eu.kanade.tachiyomi.extension.pt.crystalcomics
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.etoshore.Etoshore
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class CrystalComics : Madara(
+class CrystalComics : Etoshore(
     "Crystal Comics",
     "https://crystalcomics.com",
     "pt-BR",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
 ) {
-    override val useNewChapterEndpoint = true
+    override val client = super.client.newBuilder()
+        .rateLimit(2)
+        .build()
 }

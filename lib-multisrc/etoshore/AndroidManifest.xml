@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
-            android:name=".pt.mangalivre.MangaLivreUrlActivity"
+            android:name="eu.kanade.tachiyomi.multisrc.etoshore.EtoshoreUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -13,9 +13,9 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="mangalivre.one"
-                    android:pathPattern="/manga/..*"
-                    android:scheme="https" />
+                    android:host="${SOURCEHOST}"
+                    android:pathPattern="/.*/..*"
+                    android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
     </application>
