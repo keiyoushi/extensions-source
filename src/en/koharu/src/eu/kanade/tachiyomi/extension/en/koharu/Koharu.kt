@@ -29,9 +29,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Koharu : HttpSource(), ConfigurableSource {
-    override val name = "Koharu"
+    override val name = "SchaleNetwork"
 
-    override val baseUrl = "https://koharu.to"
+    override val id = 1484902275639232927
+
+    override val baseUrl = "https://schale.network"
 
     private val apiUrl = baseUrl.replace("://", "://api.")
 
