@@ -3,7 +3,7 @@ ext {
     extClass = '.PornhwaScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://pornhwascans.fr'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
