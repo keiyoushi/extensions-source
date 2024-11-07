@@ -12,4 +12,6 @@ class PornhwaScans : MangaThemesia(
 ) {
     // formally Lunar Scans Hentai
     override val id = 5554585746492602896
+
+    override fun chapterListSelector(): String = "div.chapter-list > a.chapter-item"
 }
