@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga Online Blog'
+    extClass = '.MangaOnlineBlog'
+    themePkg = 'madara'
+    baseUrl = 'https://mangaonline.blog'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
