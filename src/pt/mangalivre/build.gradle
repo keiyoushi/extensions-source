@@ -1,7 +1,9 @@
 ext {
     extName = 'Manga Livre'
     extClass = '.MangaLivre'
-    extVersionCode = 2
+    themePkg = 'etoshore'
+    baseUrl = 'https://mangalivre.one'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
