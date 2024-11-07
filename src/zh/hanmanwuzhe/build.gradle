@@ -1,0 +1,10 @@
+ext {
+    extName = 'hanmanwuzhe'
+    extClass = '.hanmanwuzhe'
+    themePkg = 'mccms'
+    baseUrl = 'https://www.hanmanwuzhe.com'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
