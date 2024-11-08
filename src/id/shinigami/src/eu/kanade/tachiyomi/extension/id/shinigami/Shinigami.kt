@@ -19,7 +19,7 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class Shinigami : Madara("Shinigami", "https://shinigami06.com", "id"), ConfigurableSource {
+class Shinigami : Madara("Shinigami", "https://shinigami07.com", "id"), ConfigurableSource {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
