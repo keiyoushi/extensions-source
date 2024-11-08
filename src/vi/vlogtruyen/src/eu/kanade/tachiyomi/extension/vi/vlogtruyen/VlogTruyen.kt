@@ -59,9 +59,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/the-loai/moi-cap-nhap/?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/the-loai/moi-cap-nhap/?page=$page", headers)
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
@@ -73,9 +71,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesSelector() = "div.content-tab ul li.commic-hover"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/the-loai/dang-hot?page=$page")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/the-loai/dang-hot?page=$page", headers)
 
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
