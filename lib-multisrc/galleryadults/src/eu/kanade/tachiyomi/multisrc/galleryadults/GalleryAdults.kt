@@ -647,6 +647,7 @@ abstract class GalleryAdults(
                         "p" -> "png"
                         "b" -> "bmp"
                         "g" -> "gif"
+                        "w" -> "webp"
                         else -> "jpg"
                     }
                     val idx = image.key.toInt()
