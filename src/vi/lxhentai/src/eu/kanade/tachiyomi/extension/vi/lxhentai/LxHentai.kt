@@ -30,7 +30,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "LXHentai"
 
-    private val defaultBaseUrl = "https://lxmanga.online"
+    private val defaultBaseUrl = "https://lxmanga.site"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -129,18 +129,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
             .joinToString { it.text().trim(',', ' ') }
         genre = document.select("div.grow div.mt-2:contains(Thể loại) span a")
             .joinToString { it.text().trim(',', ' ') }
-
-        description = ""
-        document.select("div.grow div.mt-2").forEach {
-            val key = it.select("span.mr-2").text().trim(':', ' ')
-            if (key in arrayOf("Tác giả", "Thể loại", "Tình trạng", "Lần cuối")) {
-                return@forEach
-            }
-            val value = it.select("span:not(.mr-2)").text()
-            description += "$key: $value\n"
-        }
-        description += "\n"
-        description += document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") {
+        description = document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") {
             it.run {
                 select(Evaluator.Tag("br")).prepend("\\n")
                 this.text().replace("\\n", "\n").replace("\n ", "\n")
