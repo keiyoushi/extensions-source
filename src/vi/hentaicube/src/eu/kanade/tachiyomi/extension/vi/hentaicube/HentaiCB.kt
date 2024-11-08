@@ -6,7 +6,7 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HentaiCB : Madara("CBHentai", "https://hentaicb.one", "vi", SimpleDateFormat("dd/MM/yyyy", Locale("vi"))) {
+class HentaiCB : Madara("CBHentai", "https://hentaicb.pro", "vi", SimpleDateFormat("dd/MM/yyyy", Locale("vi"))) {
 
     override val id: Long = 823638192569572166
 
