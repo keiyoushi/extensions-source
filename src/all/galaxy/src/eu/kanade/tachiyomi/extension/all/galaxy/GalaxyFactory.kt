@@ -16,7 +16,7 @@ class GalaxyFactory : SourceFactory {
     }
 
     class GalaxyManga :
-        Galaxy("Galaxy Manga", "https://galaxymanga.net", "ar"),
+        Galaxy("Galaxy Manga", "https://josephbent.com", "ar"),
         ConfigurableSource {
         override val id = 2729515745226258240
 
