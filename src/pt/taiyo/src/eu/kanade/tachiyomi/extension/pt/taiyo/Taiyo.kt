@@ -29,7 +29,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -71,14 +70,13 @@ class Taiyo : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = null
 
     private fun getBearerToken() {
-        val response = client.newCall(GET(baseUrl, headers)).execute()
-
-        val scriptUrl = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
+        val scriptUrl = client.newCall(GET(baseUrl, headers))
+            .execute().asJsoup()
             .selectFirst("script[src*=ee07d8437723d9f5]")
             ?.attr("src") ?: throw Exception("Não foi possivel localizar o token")
 
-        val script = client.newCall(GET("$baseUrl$scriptUrl", headers)).execute()
-            .body.string()
+        val script = client.newCall(GET("$baseUrl$scriptUrl", headers))
+            .execute().body.string()
 
         bearerToken = TOKEN_REGEX.find(script)?.groups?.get("token")?.value
             ?: throw Exception("Não foi possivel extrair o token")
@@ -230,7 +228,7 @@ class Taiyo : ParsedHttpSource() {
                     parsed.chapters.map {
                         SChapter.create().apply {
                             chapter_number = it.number
-                            name = it.title ?: "Capítulo ${it.number}".replace(".0", "")
+                            name = it.title?.takeIf(String::isNotBlank) ?: "Capítulo ${it.number}".replace(".0", "")
                             url = "/chapter/${it.id}/1"
                             date_upload = it.createdAt.orEmpty().toDate()
                         }
