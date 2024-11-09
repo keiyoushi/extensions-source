@@ -208,11 +208,17 @@ abstract class Pururin(
                 genre = e.select("a[href*=/content/]").eachText().joinToString()
                 description = e.select(".box-gallery .table-info tr")
                     .filter { tr ->
-                        tr.select("td").none { it.text().contains("content", ignoreCase = true) || it.text().contains("ratings", ignoreCase = true) }
+                        tr.select("td").let { td ->
+                            td.isNotEmpty() &&
+                                td.none { it.text().contains("content", ignoreCase = true) || it.text().contains("ratings", ignoreCase = true) }
+                        }
                     }
                     .joinToString("\n") { tr ->
-                        tr.select("td")
-                            .joinToString(": ") { it.text() }
+                        tr.select("td").let { td ->
+                            var a = td.select("a").toList()
+                            if (a.isEmpty()) a = td.drop(1)
+                            td.first()!!.text() + ": " + a.joinToString { it.text() }
+                        }
                     }
                 status = SManga.COMPLETED
                 thumbnail_url = e.select("img").attr("abs:src")
