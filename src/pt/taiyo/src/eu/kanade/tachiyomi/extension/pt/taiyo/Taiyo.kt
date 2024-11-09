@@ -218,9 +218,9 @@ class Taiyo : ParsedHttpSource() {
                     .addQueryParameter("input", json.encodeToString(input))
                     .build()
 
-                val res = client.newCall(GET(pageUrl, headers)).execute()
-                val chapters = CHAPTER_REGEX.find(res.body.string())
-                    ?.groups?.get("chapters")?.value
+                val chapters = client.newCall(GET(pageUrl, headers)).execute().let {
+                    CHAPTER_REGEX.find(it.body.string())?.groups?.get("chapters")?.value
+                }
 
                 val parsed = json.decodeFromString<ChapterListDto>(chapters!!)
 
@@ -300,7 +300,7 @@ class Taiyo : ParsedHttpSource() {
         private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ENGLISH)
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
         }
     }
 }
