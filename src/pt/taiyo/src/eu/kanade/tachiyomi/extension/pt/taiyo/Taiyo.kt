@@ -111,7 +111,7 @@ class Taiyo : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val limit = 5
+        val limit = 21
 
         val jsonObj = buildJsonObject {
             put(
