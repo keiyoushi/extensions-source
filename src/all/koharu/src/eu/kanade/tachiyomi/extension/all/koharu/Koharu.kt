@@ -160,7 +160,7 @@ class Koharu(
                         if (filter.state.isNotEmpty()) {
                             val tags = filter.state.split(",").filter(String::isNotBlank).joinToString(",")
                             if (tags.isNotBlank()) {
-                                terms += "${filter.type}!:" + '"' + tags + '"'
+                                terms += "${filter.type}!:" + if(filter.type == "pages") tags else '"' + tags + '"'
                             }
                         }
                     }
