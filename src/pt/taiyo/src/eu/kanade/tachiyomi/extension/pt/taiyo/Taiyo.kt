@@ -57,10 +57,9 @@ class Taiyo : ParsedHttpSource() {
 
     // ============================== Popular ===============================
     var bearerToken = ""
-    var attempt = 0
 
     override fun popularMangaRequest(page: Int): Request {
-        if (bearerToken.isBlank() && attempt < 2) {
+        if (bearerToken.isBlank()) {
             getBearerToken()
         }
         return searchMangaRequest(page, "", FilterList())
@@ -72,7 +71,6 @@ class Taiyo : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = null
 
     private fun getBearerToken() {
-        attempt++
         val response = client.newCall(GET(baseUrl, headers)).execute()
 
         val scriptUrl = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
