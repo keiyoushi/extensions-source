@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 
 class HuntersScans : Madara(
     "Hunters Scan",
-    "https://htoons.online",
+    "https://hunterscomics.com",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
