@@ -144,7 +144,7 @@ class Koharu(
         val url = apiBooksUrl.toHttpUrl().newBuilder().apply {
             val terms: MutableList<String> = mutableListOf()
 
-            terms += "language!:\"$searchLang\""
+            if (lang != "all") terms += "language!:\"$searchLang\""
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> addQueryParameter("sort", filter.getValue())
@@ -160,7 +160,7 @@ class Koharu(
                         if (filter.state.isNotEmpty()) {
                             val tags = filter.state.split(",").filter(String::isNotBlank).joinToString(",")
                             if (tags.isNotBlank()) {
-                                terms += "${filter.type}!:" + if(filter.type == "pages") tags else '"' + tags + '"'
+                                terms += "${filter.type}!:" + if (filter.type == "pages") tags else '"' + tags + '"'
                             }
                         }
                     }
