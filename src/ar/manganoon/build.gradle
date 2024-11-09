@@ -2,8 +2,8 @@ ext {
     extName = 'MangaNoon'
     extClass = '.MangaNoon'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://axztu.com'
-    overrideVersionCode = 7
+    baseUrl = 'https://vrnoin.site'
+    overrideVersionCode = 8
     isNsfw = false
 }
 
