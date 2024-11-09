@@ -77,7 +77,7 @@ class Taiyo : ParsedHttpSource() {
 
         val scriptUrl = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
             .selectFirst("script[src*=ee07d8437723d9f5]")
-            ?.attr("src") ?: throw Exception("Não foi possivel localizar do token")
+            ?.attr("src") ?: throw Exception("Não foi possivel localizar o token")
 
         val script = client.newCall(GET("$baseUrl$scriptUrl", headers)).execute()
             .body.string()
@@ -222,8 +222,7 @@ class Taiyo : ParsedHttpSource() {
                     .addQueryParameter("input", json.encodeToString(input))
                     .build()
 
-                val res = client.newCall(GET(pageUrl, headers))
-                    .execute()
+                val res = client.newCall(GET(pageUrl, headers)).execute()
                 val chapters = CHAPTER_REGEX.find(res.body.string())
                     ?.groups?.get("chapters")?.value
 
