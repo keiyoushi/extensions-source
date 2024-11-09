@@ -1,31 +1,29 @@
 package eu.kanade.tachiyomi.extension.pt.taiyo.dto
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ResponseDto<T>(val result: ResultDto<T>) {
-    val data: T = result.data.json
+data class SearchResultDto(
+    val results: List<SearchWrapper>,
+) {
+    val mangas: List<AdditionalInfoDto> get() = results.firstOrNull()?.hits ?: emptyList()
 }
 
 @Serializable
-data class ResultDto<T>(val data: DataDto<T>)
-
-@Serializable
-data class DataDto<T>(val json: T)
-
-@Serializable
-data class SearchResultDto(
-    val id: String,
-    val title: String,
-    val coverId: String? = null,
+data class SearchWrapper(
+    val hits: List<AdditionalInfoDto>,
 )
 
 @Serializable
 data class AdditionalInfoDto(
+    val id: String,
     val synopsis: String? = null,
     val status: String? = null,
     val genres: List<Genre>? = null,
-    val titles: List<TitleDto>? = null,
+    @SerialName("mainCoverId")
+    val coverId: String,
+    val titles: List<TitleDto>,
 )
 
 enum class Genre(val portugueseName: String) {
@@ -51,7 +49,7 @@ enum class Genre(val portugueseName: String) {
 }
 
 @Serializable
-data class TitleDto(val title: String, val language: String)
+data class TitleDto(val title: String, val language: String, val priority: Int)
 
 @Serializable
 data class ChapterListDto(val chapters: List<ChapterDto>, val totalPages: Int)
