@@ -5,5 +5,5 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 class VortexScans : Iken(
     "Vortex Scans",
     "en",
-    "https://vortextoon.com",
+    "https://vortexscans.org",
 )

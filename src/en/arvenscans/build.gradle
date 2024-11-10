@@ -2,7 +2,7 @@ ext {
     extName = 'Vortex Scans'
     extClass = '.VortexScans'
     themePkg = 'iken'
-    overrideVersionCode = 34
+    overrideVersionCode = 35
     isNsfw = false
 }
 
