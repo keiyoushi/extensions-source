@@ -31,12 +31,13 @@ import java.util.Locale
 class Koharu(
     override val lang: String = "all",
     private val searchLang: String = "",
-    override val id: Long = 2385208600973708857,
 ) : HttpSource(), ConfigurableSource {
 
     override val name = "SchaleNetwork"
 
     override val baseUrl = "https://schale.network"
+
+    override val id = if (lang == "en") 1484902275639232927 else super.id
 
     private val apiUrl = baseUrl.replace("://", "://api.")
 
