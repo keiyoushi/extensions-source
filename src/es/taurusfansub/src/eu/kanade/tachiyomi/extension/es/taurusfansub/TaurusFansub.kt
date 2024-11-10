@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.taurusfansub
 
-import android.util.Log
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
@@ -30,7 +29,6 @@ class TaurusFansub : Madara(
         manga.author = document.select("div.site-content div.summary_content div.tags-content").text()
 
         val stado = document.select("div.site-content div.summary_content div.manga-title div.post-content_item div.summary-content").first()?.text()
-        Log.e("Stado", stado.toString())
         manga.status = when (stado) {
             "En Curso" -> { SManga.ONGOING }
             "Completado" -> { SManga.COMPLETED }
