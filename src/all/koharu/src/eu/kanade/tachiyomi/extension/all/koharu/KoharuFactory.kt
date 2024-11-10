@@ -6,7 +6,8 @@ import eu.kanade.tachiyomi.source.SourceFactory
 class KoharuFactory : SourceFactory {
     override fun createSources(): List<Source> = listOf(
         Koharu(),
-        Koharu("en", "english", 1484902275639232927),
-        Koharu("ja", "japanese", 2439015869566675873),
+        Koharu("en", "english"),
+        Koharu("ja", "japanese"),
+        Koharu("zh", "chinese"),
     )
 }
