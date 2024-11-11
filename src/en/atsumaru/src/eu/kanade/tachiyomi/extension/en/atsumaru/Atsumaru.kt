@@ -30,9 +30,6 @@ class Atsumaru : HttpSource() {
         .rateLimit(2)
         .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
     private fun apiHeadersBuilder() = headersBuilder().apply {
         add("Accept", "*/*")
         add("Host", apiUrl.toHttpUrl().host)
