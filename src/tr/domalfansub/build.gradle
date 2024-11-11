@@ -2,8 +2,8 @@ ext {
     extName = 'Domal Fansub'
     extClass = '.DomalFansub'
     themePkg = 'madara'
-    baseUrl = 'https://domalfansub.com.tr'
-    overrideVersionCode = 0
+    baseUrl = 'https://domalfansb.online'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
