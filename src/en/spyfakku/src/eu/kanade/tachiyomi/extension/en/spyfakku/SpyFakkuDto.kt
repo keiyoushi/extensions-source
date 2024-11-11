@@ -18,9 +18,7 @@ class Hentai(
     val title: String,
     val thumbnail: Int,
     val pages: Int,
-    val artists: List<String>?,
-    val circles: List<String>?,
-    val tags: List<String>?,
+    val tags: List<Name>?,
 )
 
 @Serializable
@@ -28,15 +26,24 @@ class ShortHentai(
     val hash: String,
     val thumbnail: Int,
     val description: String?,
-    val released_at: String,
-    val created_at: String,
-    val publishers: List<String>?,
-    val circles: List<String>?,
-    val magazines: List<String>?,
-    val parodies: List<String>?,
-    val events: List<String>?,
+    val released_at: String? = null,
+    val created_at: String? = null,
+    var releasedAt: String? = null,
+    var createdAt: String? = null,
+    val tags: List<Name>?,
     val size: Long,
     val pages: Int,
+) {
+    init {
+        releasedAt = released_at ?: releasedAt
+        createdAt = created_at ?: createdAt
+    }
+}
+
+@Serializable
+class Name(
+    val namespace: String,
+    val name: String,
 )
 
 @Serializable
@@ -56,11 +63,7 @@ class HentaiIndexes(
     val description: Int,
     val released_at: Int,
     val created_at: Int,
-    val publishers: Int,
-    val circles: Int,
-    val magazines: Int,
-    val parodies: Int,
-    val events: Int,
+    val tags: Int,
     val size: Int,
     val pages: Int,
 )

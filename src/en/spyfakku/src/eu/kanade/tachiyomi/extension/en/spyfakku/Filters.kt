@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 fun getFilters(): FilterList {
     return FilterList(
         SortFilter("Sort by", Selection(0, false), getSortsList),
+        SelectFilter("Per page", getLimits),
         Filter.Separator(),
         Filter.Header("Separate tags with commas (,)"),
         Filter.Header("Prepend with dash (-) to exclude"),
@@ -25,7 +26,16 @@ internal open class SortFilter(name: String, selection: Selection, private val v
     Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
     fun getValue() = vals[state!!.index].second
 }
+internal open class SelectFilter(name: String, val vals: List<String>, state: Int = 2) :
+    Filter.Select<String>(name, vals.map { it }.toTypedArray(), state)
 
+private val getLimits = listOf(
+    "6",
+    "12",
+    "24",
+    "36",
+    "48",
+)
 private val getSortsList: List<Pair<String, String>> = listOf(
     Pair("Title", "title"),
     Pair("Relevance", "relevance"),

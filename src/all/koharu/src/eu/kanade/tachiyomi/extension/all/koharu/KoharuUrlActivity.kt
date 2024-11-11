@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.koharu
+package eu.kanade.tachiyomi.extension.all.koharu
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
