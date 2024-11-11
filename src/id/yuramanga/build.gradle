@@ -2,8 +2,8 @@ ext {
     extName = 'YuraManga'
     extClass = '.YuraManga'
     themePkg = 'zmanga'
-    baseUrl = 'https://yuramanga.my.id'
-    overrideVersionCode = 36
+    baseUrl = 'https://www.yuramanga.my.id'
+    overrideVersionCode = 37
 }
 
 apply from: "$rootDir/common.gradle"
