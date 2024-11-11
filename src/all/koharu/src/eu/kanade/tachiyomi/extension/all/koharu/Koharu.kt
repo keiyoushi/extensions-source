@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.koharu
+package eu.kanade.tachiyomi.extension.all.koharu
 
 import android.app.Application
 import android.content.SharedPreferences
@@ -28,18 +28,20 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Koharu : HttpSource(), ConfigurableSource {
+class Koharu(
+    override val lang: String = "all",
+    private val searchLang: String = "",
+) : HttpSource(), ConfigurableSource {
+
     override val name = "SchaleNetwork"
 
-    override val id = 1484902275639232927
-
     override val baseUrl = "https://schale.network"
+
+    override val id = if (lang == "en") 1484902275639232927 else super.id
 
     private val apiUrl = baseUrl.replace("://", "://api.")
 
     private val apiBooksUrl = "$apiUrl/books"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -112,12 +114,12 @@ class Koharu : HttpSource(), ConfigurableSource {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = GET("$apiBooksUrl?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$apiBooksUrl?page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "", headers)
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$apiBooksUrl?sort=8&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiBooksUrl?sort=8&page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "", headers)
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<Books>()
 
@@ -143,6 +145,7 @@ class Koharu : HttpSource(), ConfigurableSource {
         val url = apiBooksUrl.toHttpUrl().newBuilder().apply {
             val terms: MutableList<String> = mutableListOf()
 
+            if (lang != "all") terms += "language!:\"$searchLang\""
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> addQueryParameter("sort", filter.getValue())
@@ -158,7 +161,7 @@ class Koharu : HttpSource(), ConfigurableSource {
                         if (filter.state.isNotEmpty()) {
                             val tags = filter.state.split(",").filter(String::isNotBlank).joinToString(",")
                             if (tags.isNotBlank()) {
-                                terms += "${filter.type}!:" + '"' + tags + '"'
+                                terms += "${filter.type}!:" + if (filter.type == "pages") tags else '"' + tags + '"'
                             }
                         }
                     }
