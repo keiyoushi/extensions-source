@@ -3,7 +3,7 @@ ext {
     extClass = '.HentaiCB'
     themePkg = 'madara'
     baseUrl = 'https://hentaicb.pro'
-    overrideVersionCode = 8
+    overrideVersionCode = 9
     isNsfw = true
 }
 
