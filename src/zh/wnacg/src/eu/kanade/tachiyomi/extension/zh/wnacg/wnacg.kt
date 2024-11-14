@@ -119,7 +119,7 @@ class wnacg : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val regex = """//\S*(jpg|png)""".toRegex()
+        val regex = """//\S*(jpg|png|webp|gif)""".toRegex()
         val galleryaid =
             response.body.string()
         return regex.findAll(galleryaid).mapIndexedTo(ArrayList()) { index, match ->
