@@ -1,9 +1,9 @@
 ext {
     extName = 'Evil Flowers'
     extClass = '.EvilFlowers'
-    themePkg = 'foolslide'
-    baseUrl = 'https://reader.evilflowers.com'
-    overrideVersionCode = 1
+    themePkg = 'madara'
+    baseUrl = 'https://evilflowers.com'
+    overrideVersionCode = 0
 }
 
 apply from: "$rootDir/common.gradle"

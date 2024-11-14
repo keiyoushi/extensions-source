@@ -1,5 +1,17 @@
 package eu.kanade.tachiyomi.extension.en.evilflowers
 
-import eu.kanade.tachiyomi.multisrc.foolslide.FoolSlide
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 
-class EvilFlowers : FoolSlide("Evil Flowers", "https://reader.evilflowers.com", "en")
+class EvilFlowers : Madara(
+    "Evil Flowers",
+    "https://evilflowers.com",
+    "en",
+) {
+    override val versionId = 2
+
+    override val mangaSubString = "project"
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+
+    override val useNewChapterEndpoint = true
+}
