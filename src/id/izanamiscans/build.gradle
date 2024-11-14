@@ -1,0 +1,9 @@
+ext {
+    extName = 'Izanami Scans'
+    extClass = '.IzanamiScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://izanamiscans.my.id'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
