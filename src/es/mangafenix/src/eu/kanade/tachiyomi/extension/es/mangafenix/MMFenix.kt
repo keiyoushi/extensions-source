@@ -8,12 +8,14 @@ import java.util.Locale
 
 class MMFenix : Madara(
     "MMFenix",
-    "https://mmfenix.com",
+    "https://mmdaos.com",
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
 
     override val id: Long = 19158964284779393
+
+    override val useNewChapterEndpoint = true
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 

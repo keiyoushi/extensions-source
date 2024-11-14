@@ -29,7 +29,7 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Team X"
 
-    private val defaultBaseUrl = "https://teamoney.site"
+    private val defaultBaseUrl = "https://olympustaff.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
