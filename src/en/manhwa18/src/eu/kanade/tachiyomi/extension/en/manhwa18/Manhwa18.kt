@@ -23,7 +23,7 @@ class Manhwa18 : HttpSource() {
     override val name = "Manhwa18"
     override val supportsLatest = true
 
-    override val versionId = 3
+    override val versionId = 2
 
     private val json: Json by injectLazy()
 
@@ -66,16 +66,20 @@ class Manhwa18 : HttpSource() {
 
     // manga details
     override fun mangaDetailsRequest(manga: SManga): Request {
+        // Convert from old theme manga's url
         val slug = manga.url.substringAfterLast('/')
         return GET("$apiUrl/get-detail-product/$slug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val mangaDetail = json.decodeFromString<MangaDetail>(response.body.string())
-        return mangaDetail.manga.toSManga()
+        return mangaDetail.manga.toSManga().apply {
+            initialized = true
+        }
     }
 
     override fun getMangaUrl(manga: SManga): String {
+        // Convert from old theme manga's url
         val slug = manga.url.substringAfterLast('/')
         return "$baseUrl/manga/$slug"
     }
@@ -105,12 +109,20 @@ class Manhwa18 : HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/manga/${chapter.url}"
+        val chapterSlug = chapter.url.substringAfterLast('/')
+        val mangaSlug = chapter.url.substringBeforeLast('/')
+            // Convert from old theme chapter's url
+            .substringAfterLast('/')
+        return "$baseUrl/manga/$mangaSlug/$chapterSlug"
     }
 
     // page list
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiUrl/get-episode/${chapter.url}", headers)
+        val chapterSlug = chapter.url.substringAfterLast('/')
+        val mangaSlug = chapter.url.substringBeforeLast('/')
+            // Convert from old theme chapter's url
+            .substringAfterLast('/')
+        return GET("$apiUrl/get-episode/$mangaSlug/$chapterSlug", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
