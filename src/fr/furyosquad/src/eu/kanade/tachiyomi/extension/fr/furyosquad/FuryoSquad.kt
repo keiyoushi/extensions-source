@@ -192,32 +192,32 @@ class FuryoSquad : ParsedHttpSource() {
         return if (value != null) {
             when (date.split(" ")[4]) {
                 "minute", "minutes" -> Calendar.getInstance().apply {
-                    add(Calendar.MINUTE, value * -1)
+                    add(Calendar.MINUTE, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
                 "heure", "heures" -> Calendar.getInstance().apply {
-                    add(Calendar.HOUR_OF_DAY, value * -1)
+                    add(Calendar.HOUR_OF_DAY, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
                 "jour", "jours" -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, value * -1)
+                    add(Calendar.DATE, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
                 "semaine", "semaines" -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, value * 7 * -1)
+                    add(Calendar.DATE, -value * 7)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
                 "mois" -> Calendar.getInstance().apply {
-                    add(Calendar.MONTH, value * -1)
+                    add(Calendar.MONTH, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
                 "an", "ans", "année", "années" -> Calendar.getInstance().apply {
-                    add(Calendar.YEAR, value * -1)
+                    add(Calendar.YEAR, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis

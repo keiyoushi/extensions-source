@@ -170,25 +170,25 @@ class KomikIndoID : ParsedHttpSource() {
             val value = date.split(' ')[0].toInt()
             when {
                 "detik" in date -> Calendar.getInstance().apply {
-                    add(Calendar.SECOND, value * -1)
+                    add(Calendar.SECOND, -value)
                 }.timeInMillis
                 "menit" in date -> Calendar.getInstance().apply {
-                    add(Calendar.MINUTE, value * -1)
+                    add(Calendar.MINUTE, -value)
                 }.timeInMillis
                 "jam" in date -> Calendar.getInstance().apply {
-                    add(Calendar.HOUR_OF_DAY, value * -1)
+                    add(Calendar.HOUR_OF_DAY, -value)
                 }.timeInMillis
                 "hari" in date -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, value * -1)
+                    add(Calendar.DATE, -value)
                 }.timeInMillis
                 "minggu" in date -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, value * 7 * -1)
+                    add(Calendar.DATE, -value * 7)
                 }.timeInMillis
                 "bulan" in date -> Calendar.getInstance().apply {
-                    add(Calendar.MONTH, value * -1)
+                    add(Calendar.MONTH, -value)
                 }.timeInMillis
                 "tahun" in date -> Calendar.getInstance().apply {
-                    add(Calendar.YEAR, value * -1)
+                    add(Calendar.YEAR, -value)
                 }.timeInMillis
                 else -> {
                     0L
