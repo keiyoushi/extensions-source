@@ -1,0 +1,10 @@
+ext {
+    extName = 'Yaoi Flix'
+    extClass = '.YaoiFlix'
+    themePkg = 'madara'
+    baseUrl = 'https://yaoiflix.gay'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
