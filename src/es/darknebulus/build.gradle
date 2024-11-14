@@ -1,0 +1,10 @@
+ext {
+    extName = 'Dark Nebulus'
+    extClass = '.DarkNebulus'
+    themePkg = 'madara'
+    baseUrl = 'https://www.darknebulus.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
