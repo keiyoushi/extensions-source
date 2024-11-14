@@ -23,4 +23,11 @@ class ImperioDaBritannia : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val mangaDetailsSelectorTag = ""
+
+    override val mangaDetailsSelectorAuthor =
+        ".summary-heading:has(h5:contains(Autor)) + div > ${super.mangaDetailsSelectorAuthor}"
+    override val mangaDetailsSelectorArtist =
+        ".summary-heading:has(h5:contains(Artista)) + div > ${super.mangaDetailsSelectorArtist}"
+    override val mangaDetailsSelectorStatus =
+        ".summary-heading:has(h5:contains(Status)) + ${super.mangaDetailsSelectorStatus}"
 }
