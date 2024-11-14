@@ -24,11 +24,14 @@ class EveriaClubCom() : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val Element.imgSrc: String
-        get() = attr("data-original")
-            .ifEmpty { attr("data-lazy-src") }
-            .ifEmpty { attr("data-src") }
-            .ifEmpty { attr("src") }
+    private val Element.imgSrc: String?
+        get() = when {
+            hasAttr("data-original") -> attr("data-original")
+            hasAttr("data-lazy-src") -> attr("data-lazy-src")
+            hasAttr("data-src") -> attr("data-src")
+            hasAttr("src") -> attr("src")
+            else -> null
+        }
 
     private fun mangaFromElement(it: Element) = SManga.create().apply {
         setUrlWithoutDomain(it.attr("abs:href").removePrefix(baseUrl))
@@ -98,7 +101,7 @@ class EveriaClubCom() : HttpSource() {
         val chapter = SChapter.create().apply {
             url = manga.url
             name = "Gallery"
-            chapter_number = -2f
+            chapter_number = 1f
             date_upload = 0L
         }
         return Observable.just(listOf(chapter))
