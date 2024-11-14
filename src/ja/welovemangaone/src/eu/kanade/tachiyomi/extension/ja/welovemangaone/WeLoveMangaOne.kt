@@ -46,12 +46,12 @@ class WeLoveMangaOne : FMReader("WeLoveMangaOne", "https://welovemanga.one", "ja
         }
 
         when (date.split(' ')[dateWordIndex]) {
-            "mins", "minutes" -> chapterDate.add(Calendar.MINUTE, value * -1)
-            "hours" -> chapterDate.add(Calendar.HOUR_OF_DAY, value * -1)
-            "days" -> chapterDate.add(Calendar.DATE, value * -1)
-            "weeks" -> chapterDate.add(Calendar.DATE, value * 7 * -1)
-            "months" -> chapterDate.add(Calendar.MONTH, value * -1)
-            "years" -> chapterDate.add(Calendar.YEAR, value * -1)
+            "mins", "minutes" -> chapterDate.add(Calendar.MINUTE, -value)
+            "hours" -> chapterDate.add(Calendar.HOUR_OF_DAY, -value)
+            "days" -> chapterDate.add(Calendar.DATE, -value)
+            "weeks" -> chapterDate.add(Calendar.DATE, -value * 7)
+            "months" -> chapterDate.add(Calendar.MONTH, -value)
+            "years" -> chapterDate.add(Calendar.YEAR, -value)
             else -> return 0
         }
 

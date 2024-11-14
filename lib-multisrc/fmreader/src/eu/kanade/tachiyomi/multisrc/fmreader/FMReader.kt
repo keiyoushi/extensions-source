@@ -269,32 +269,32 @@ abstract class FMReader(
         // languages: en, vi, es, tr
         return when (dateWord) {
             "min", "minute", "phút", "minuto", "dakika" -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, value * -1)
+                add(Calendar.MINUTE, -value)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
             "hour", "giờ", "hora", "saat" -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, value * -1)
+                add(Calendar.HOUR_OF_DAY, -value)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
             "day", "ngày", "día", "gün" -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * -1)
+                add(Calendar.DATE, -value)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
             "week", "tuần", "semana", "hafta" -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * 7 * -1)
+                add(Calendar.DATE, -value * 7)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
             "month", "tháng", "mes", "ay" -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, value * -1)
+                add(Calendar.MONTH, -value)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
             "year", "năm", "año", "yıl" -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, value * -1)
+                add(Calendar.YEAR, -value)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis

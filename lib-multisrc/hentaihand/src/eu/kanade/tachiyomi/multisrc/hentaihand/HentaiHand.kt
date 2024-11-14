@@ -232,7 +232,7 @@ abstract class HentaiHand(
                     val date = it.jsonObject["added_at"]!!.jsonPrimitive.content
                     date_upload = if (date.contains("day")) {
                         Calendar.getInstance().apply {
-                            add(Calendar.DATE, date.filter { it.isDigit() }.toInt() * -1)
+                            add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
                         }.timeInMillis
                     } else {
                         DATE_FORMAT.parse(it.jsonObject["added_at"]!!.jsonPrimitive.content)?.time ?: 0
@@ -248,7 +248,7 @@ abstract class HentaiHand(
                     val date = obj.jsonObject["uploaded_at"]!!.jsonPrimitive.content
                     date_upload = if (date.contains("day")) {
                         Calendar.getInstance().apply {
-                            add(Calendar.DATE, date.filter { it.isDigit() }.toInt() * -1)
+                            add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
                         }.timeInMillis
                     } else {
                         DATE_FORMAT.parse(obj.jsonObject["uploaded_at"]!!.jsonPrimitive.content)?.time ?: 0

@@ -221,9 +221,9 @@ abstract class MangaBox(
             val value = date.split(' ')[0].toIntOrNull()
             val cal = Calendar.getInstance()
             when {
-                value != null && "min" in date -> cal.apply { add(Calendar.MINUTE, value * -1) }
-                value != null && "hour" in date -> cal.apply { add(Calendar.HOUR_OF_DAY, value * -1) }
-                value != null && "day" in date -> cal.apply { add(Calendar.DATE, value * -1) }
+                value != null && "min" in date -> cal.apply { add(Calendar.MINUTE, -value) }
+                value != null && "hour" in date -> cal.apply { add(Calendar.HOUR_OF_DAY, -value) }
+                value != null && "day" in date -> cal.apply { add(Calendar.DATE, -value) }
                 else -> null
             }?.timeInMillis
         } else {

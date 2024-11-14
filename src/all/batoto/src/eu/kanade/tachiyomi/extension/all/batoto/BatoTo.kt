@@ -428,46 +428,46 @@ open class BatoTo(
 
         return when {
             "secs" in date -> Calendar.getInstance().apply {
-                add(Calendar.SECOND, value * -1)
+                add(Calendar.SECOND, -value)
             }.timeInMillis
             "mins" in date -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, value * -1)
+                add(Calendar.MINUTE, -value)
             }.timeInMillis
             "hours" in date -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, value * -1)
+                add(Calendar.HOUR_OF_DAY, -value)
             }.timeInMillis
             "days" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * -1)
+                add(Calendar.DATE, -value)
             }.timeInMillis
             "weeks" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * 7 * -1)
+                add(Calendar.DATE, -value * 7)
             }.timeInMillis
             "months" in date -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, value * -1)
+                add(Calendar.MONTH, -value)
             }.timeInMillis
             "years" in date -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, value * -1)
+                add(Calendar.YEAR, -value)
             }.timeInMillis
             "sec" in date -> Calendar.getInstance().apply {
-                add(Calendar.SECOND, value * -1)
+                add(Calendar.SECOND, -value)
             }.timeInMillis
             "min" in date -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, value * -1)
+                add(Calendar.MINUTE, -value)
             }.timeInMillis
             "hour" in date -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, value * -1)
+                add(Calendar.HOUR_OF_DAY, -value)
             }.timeInMillis
             "day" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * -1)
+                add(Calendar.DATE, -value)
             }.timeInMillis
             "week" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * 7 * -1)
+                add(Calendar.DATE, -value * 7)
             }.timeInMillis
             "month" in date -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, value * -1)
+                add(Calendar.MONTH, -value)
             }.timeInMillis
             "year" in date -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, value * -1)
+                add(Calendar.YEAR, -value)
             }.timeInMillis
             else -> {
                 return 0
