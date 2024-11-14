@@ -30,7 +30,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "LXHentai"
 
-    private val defaultBaseUrl = "https://lxmanga.site"
+    private val defaultBaseUrl = "https://lxmanga.store"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -124,10 +124,10 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = "li:contains(Cuối)"
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select("span.text-lg.ml-1.font-semibold").first()!!.text()
-        author = document.select("div.grow div.mt-2:contains(Tác giả) span a")
-            .joinToString { it.text().trim(',', ' ') }
-        genre = document.select("div.grow div.mt-2:contains(Thể loại) span a")
+        title = document.select("div.mb-4 span").first()!!.text()
+        author = document.selectFirst("div.grow div.mt-2 > span:contains(Tác giả:) + span a")?.text()
+        genre = document.selectFirst("div.grow div.mt-2 > span:contains(Thể loại:) + span")!!
+            .select("a")
             .joinToString { it.text().trim(',', ' ') }
         description = document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") {
             it.run {
