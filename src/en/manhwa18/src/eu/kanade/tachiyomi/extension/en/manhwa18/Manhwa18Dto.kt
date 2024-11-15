@@ -45,14 +45,15 @@ data class Manga(
 ) {
     fun toSManga(): SManga {
         return SManga.create().apply {
-            url = slug
+            // compatible with old theme
+            url = "manga/$slug"
             title = name
             description = desc
-            genre = listOf(
+            genre = listOfNotNull(
                 types?.joinToString { it.name },
                 nation?.name,
                 category_id?.let { Categories[it] },
-            ).filterNotNull()
+            )
                 .joinToString()
 
             status = when (is_end) {

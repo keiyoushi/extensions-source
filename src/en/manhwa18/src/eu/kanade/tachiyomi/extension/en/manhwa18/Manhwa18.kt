@@ -66,7 +66,6 @@ class Manhwa18 : HttpSource() {
 
     // manga details
     override fun mangaDetailsRequest(manga: SManga): Request {
-        // Convert from old theme manga's url
         val slug = manga.url.substringAfterLast('/')
         return GET("$apiUrl/get-detail-product/$slug", headers)
     }
@@ -79,9 +78,7 @@ class Manhwa18 : HttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        // Convert from old theme manga's url
-        val slug = manga.url.substringAfterLast('/')
-        return "$baseUrl/manga/$slug"
+        return "$baseUrl/${manga.url}"
     }
 
     // chapter list
@@ -95,7 +92,8 @@ class Manhwa18 : HttpSource() {
 
         return mangaDetail.manga.episodes?.map { chapter ->
             SChapter.create().apply {
-                url = "$mangaSlug/${chapter.slug}"
+                // compatible with old theme
+                setUrlWithoutDomain("manga/$mangaSlug/${chapter.slug}")
                 name = chapter.name
                 date_upload = chapter.created_at?.parseDate() ?: 0L
                 chapter_number = chapter.name.toFloat()
@@ -109,20 +107,13 @@ class Manhwa18 : HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val chapterSlug = chapter.url.substringAfterLast('/')
-        val mangaSlug = chapter.url.substringBeforeLast('/')
-            // Convert from old theme chapter's url
-            .substringAfterLast('/')
-        return "$baseUrl/manga/$mangaSlug/$chapterSlug"
+        return "$baseUrl/${chapter.url}"
     }
 
     // page list
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterSlug = chapter.url.substringAfterLast('/')
-        val mangaSlug = chapter.url.substringBeforeLast('/')
-            // Convert from old theme chapter's url
-            .substringAfterLast('/')
-        return GET("$apiUrl/get-episode/$mangaSlug/$chapterSlug", headers)
+        val slug = chapter.url.substringAfter('/')
+        return GET("$apiUrl/get-episode/$slug", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
