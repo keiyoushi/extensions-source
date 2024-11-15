@@ -64,7 +64,7 @@ class Koharu(
 
     private fun getDomain(): String {
         try {
-            val host = client.newCall(GET(baseUrl)).execute().request.url.host
+            val host = client.newCall(GET(baseUrl, headers)).execute().request.url.host
             return "https://$host"
         } catch (e: Exception) {
             return baseUrl
@@ -87,7 +87,6 @@ class Koharu(
 
     private fun getImagesByMangaEntry(entry: MangaEntry): Pair<ImagesInfo, String> {
         val data = entry.data
-        val quality = 0
         fun getIPK(
             ori: DataKey?,
             alt1: DataKey?,
