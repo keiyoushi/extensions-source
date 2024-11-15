@@ -17,6 +17,7 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.min
 
 class Manhwa18 : HttpSource() {
 
@@ -68,7 +69,7 @@ class Manhwa18 : HttpSource() {
             client.newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map { response ->
-                    searchMangaParse(response)
+                    searchMangaParsePagination(page, response)
                 }
         }
     }
@@ -113,12 +114,23 @@ class Manhwa18 : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        throw UnsupportedOperationException()
+    }
+
+    private fun searchMangaParsePagination(page: Int, response: Response): MangasPage {
+        val fromIndex = (page - 1) * MAX_MANGA_PER_PAGE
+        val toIndex = page * MAX_MANGA_PER_PAGE
         val result = json.decodeFromString<List<Manga>>(response.body.string())
         return MangasPage(
-            result.map { manga ->
-                manga.toSManga()
-            },
-            hasNextPage = false,
+            result
+                .subList(
+                    fromIndex,
+                    min(toIndex, result.size),
+                )
+                .map { manga ->
+                    manga.toSManga()
+                },
+            hasNextPage = toIndex < result.size,
         )
     }
 
@@ -195,6 +207,8 @@ class Manhwa18 : HttpSource() {
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
         }
+
+        private const val MAX_MANGA_PER_PAGE = 15
     }
 
     override fun getFilterList(): FilterList = getFilters()
