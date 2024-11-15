@@ -1,0 +1,8 @@
+ext {
+    extName = 'Pururin'
+    extClass = '.PururinFactory'
+    extVersionCode = 10
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
