@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -34,6 +33,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -47,7 +47,7 @@ abstract class PeachScan(
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("d 'de' MMMM 'de' yyyy 'às' HH:mm", Locale("pt", "BR")).apply {
         timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
     },
-) : ParsedHttpSource() {
+) : ParsedHttpSourceZip() {
 
     override val supportsLatest = true
 
@@ -194,16 +194,20 @@ abstract class PeachScan(
 
     private val dataUriRegex = Regex("""base64,([0-9a-zA-Z/+=\s]+)""")
 
-    private fun zipImageInterceptor(chain: Interceptor.Chain): Response {
+    override fun zipGetByteStream(request: Request, response: Response): InputStream {
+        return response.body.byteStream()
+    }
+
+    override fun zipImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
         val filename = request.url.pathSegments.last()
 
-        if (request.url.fragment != "page" || !filename.contains(".zip")) {
+        if ((request.url.fragment != "page" || !filename.contains(".zip")) && !request.url.pathSegments.contains("cap-download")) {
             return response
         }
 
-        val zis = ZipInputStream(response.body.byteStream())
+        val zis = ZipInputStream(zipGetByteStream(request, response))
 
         val images = generateSequence { zis.nextEntry }
             .mapNotNull {

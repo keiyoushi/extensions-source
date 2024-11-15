@@ -2,6 +2,10 @@ package eu.kanade.tachiyomi.multisrc.peachscan
 
 import android.graphics.Bitmap
 import android.graphics.Rect
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.Interceptor
+import okhttp3.Request
+import okhttp3.Response
 import tachiyomi.decoder.ImageDecoder
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -121,4 +125,9 @@ object PeachScanUtils {
 
         return bitmap
     }
+}
+
+abstract class ParsedHttpSourceZip() : ParsedHttpSource() {
+    abstract fun zipImageInterceptor(chain: Interceptor.Chain): Response
+    abstract fun zipGetByteStream(request: Request, response: Response): InputStream
 }

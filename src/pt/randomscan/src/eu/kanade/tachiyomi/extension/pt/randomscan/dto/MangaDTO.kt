@@ -52,3 +52,30 @@ data class CapituloPagina(
     val obra: Obra,
     val files: Int,
 )
+
+@Serializable
+data class MainPageManga(
+    val id: Int,
+    val title: String,
+    val capa: String,
+    val slug: String,
+)
+
+@Serializable
+data class MainPage(
+    val lancamentos: List<MainPageManga>,
+    val top_10: List<MainPageManga>,
+)
+
+@Serializable
+data class SearchResponseManga(
+    val id: Int,
+    val titulo: String,
+    val capa: String,
+    val slug: String,
+)
+
+@Serializable
+data class SearchResponse(
+    val obras: List<SearchResponseManga>,
+)
