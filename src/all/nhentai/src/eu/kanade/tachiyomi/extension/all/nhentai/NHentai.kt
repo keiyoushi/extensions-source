@@ -6,10 +6,8 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getArtists
 import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getGroups
-import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getNumPages
 import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getTagDescription
 import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getTags
-import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getTime
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
@@ -27,6 +25,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -36,6 +36,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
 open class NHentai(
     override val lang: String,
@@ -49,6 +50,8 @@ open class NHentai(
     override val name = "NHentai"
 
     override val supportsLatest = true
+
+    private val json: Json by injectLazy()
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -207,22 +210,25 @@ open class NHentai(
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val fullTitle = document.select("#info > h1").text().replace("\"", "").trim()
+        val script = document.select("script:containsData(JSON.parse)").first()!!.data()
 
+        val json = Regex("""JSON.parse\("([^*]*)"\)""").find(script)?.groupValues!![1]
+
+        val data = json.parseAs<Hentai>()
         return SManga.create().apply {
-            title = if (displayFullTitle) fullTitle else fullTitle.shortenTitle()
+            title = if (displayFullTitle) data.title.english ?: data.title.japanese ?: data.title.pretty!! else data.title.pretty ?: (data.title.english ?: data.title.japanese)!!.shortenTitle()
             thumbnail_url = document.select("#cover > a > img").attr("data-src")
             status = SManga.COMPLETED
-            artist = getArtists(document)
-            author = getGroups(document)
+            artist = getArtists(data)
+            author = getGroups(data)
             // Some people want these additional details in description
             description = "Full English and Japanese titles:\n"
-                .plus("$fullTitle\n")
-                .plus("${document.select("div#info h2").text()}\n\n")
-                .plus("Pages: ${getNumPages(document)}\n")
-                .plus("Favorited by: ${document.select("div#info i.fa-heart ~ span span").text().removeSurrounding("(", ")")}\n")
-                .plus(getTagDescription(document))
-            genre = getTags(document)
+                .plus("${data.title.english}\n")
+                .plus("${data.title.japanese}\n\n")
+                .plus("Pages: ${data.images.pages.size}\n")
+                .plus("Favorited by: ${data.num_favorites}\n")
+                .plus(getTagDescription(data))
+            genre = getTags(data)
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
@@ -231,11 +237,16 @@ open class NHentai(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
+        val script = document.select("script:containsData(JSON.parse)").first()!!.data()
+
+        val json = Regex("""JSON.parse\("([^*]*)"\)""").find(script)?.groupValues!![1]
+
+        val data = json.parseAs<Hentai>()
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
-                scanlator = getGroups(document)
-                date_upload = getTime(document)
+                scanlator = getGroups(data)
+                date_upload = data.upload_date * 1000
                 setUrlWithoutDomain(response.request.url.encodedPath)
             },
         )
@@ -247,10 +258,23 @@ open class NHentai(
 
     override fun pageListParse(document: Document): List<Page> {
         val script = document.select("script:containsData(media_server)").first()!!.data()
-        val mediaServer = Regex("""media_server\s*:\s*(\d+)""").find(script)?.groupValues!![1]
+        val script2 = document.select("script:containsData(JSON.parse)").first()!!.data()
 
-        return document.select("div.thumbs a > img").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:data-src").replace("t.nh", "i.nh").replace("t\\d+.nh".toRegex(), "i$mediaServer.nh").replace("t.", "."))
+        val mediaServer = Regex("""media_server\s*:\s*(\d+)""").find(script)?.groupValues!![1]
+        val json = Regex("""JSON.parse\("([^*]*)"\)""").find(script2)?.groupValues!![1]
+
+        val data = json.parseAs<Hentai>()
+        return data.images.pages.mapIndexed { i, image ->
+            Page(
+                i,
+                "",
+                "${baseUrl.replace("https://", "https://i$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
+                    when (image.t) {
+                        "w" -> ".webp"
+                        "p" -> ".png"
+                        else -> ".jpg"
+                    },
+            )
         }
     }
 
@@ -303,6 +327,13 @@ open class NHentai(
         ),
     )
 
+    private inline fun <reified T> String.parseAs(): T {
+        return json.decodeFromString(
+            Regex("""\\u([0-9A-Fa-f]{4})""").replace(this) {
+                it.groupValues[1].toInt(16).toChar().toString()
+            },
+        )
+    }
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
