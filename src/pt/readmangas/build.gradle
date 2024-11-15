@@ -1,0 +1,9 @@
+ext {
+    extName = 'Read Mangas'
+    extClass = '.ReadMangas'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://readmangas.org'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
