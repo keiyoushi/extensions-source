@@ -268,7 +268,7 @@ open class NHentai(
             Page(
                 i,
                 "",
-                "${baseUrl.replace("https://", "https://i$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
+                "${baseUrl.replace("://", "://i$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
                     when (image.t) {
                         "w" -> ".webp"
                         "p" -> ".png"
