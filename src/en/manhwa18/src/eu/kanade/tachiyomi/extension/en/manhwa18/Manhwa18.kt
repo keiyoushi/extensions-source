@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.manhwa18
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,8 +10,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -50,6 +53,61 @@ class Manhwa18 : HttpSource() {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // search
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return if (query.isBlank()) {
+            client.newCall(filterMangaRequest(page, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    popularMangaParse(response)
+                }
+        } else {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    searchMangaParse(response)
+                }
+        }
+    }
+
+    private fun filterMangaRequest(page: Int, filters: FilterList): Request {
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("get-data-products-in-filter")
+            addQueryParameter("page", page.toString())
+
+            filters.forEach { filter ->
+                when (filter) {
+                    is CategoryFilter -> {
+                        if (filter.checked.isNotBlank()) {
+                            addQueryParameter("category", filter.checked)
+                        }
+                    }
+                    is GenreFilter -> {
+                        if (filter.checked.isNotBlank()) {
+                            addQueryParameter("type", filter.checked)
+                        }
+                    }
+                    is NationFilter -> {
+                        if (filter.checked.isNotBlank()) {
+                            addQueryParameter("nation", filter.checked)
+                        }
+                    }
+                    is SortFilter -> {
+                        addQueryParameter("arrange", filter.getValue())
+                    }
+                    is StatusFilter -> {
+                        addQueryParameter("is_complete", filter.getValue())
+                    }
+                    else -> {}
+                }
+            }
+        }
+        return GET(url.build(), headers)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return GET("$apiUrl/get-search-suggest/$query", headers)
     }
@@ -138,47 +196,6 @@ class Manhwa18 : HttpSource() {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
         }
     }
-//
-//    override fun getFilterList(): FilterList = FilterList(
-//        Status(
-//            "Status",
-//            "All",
-//            "Ongoing",
-//            "On hold",
-//            "Completed",
-//        ),
-//        Sort(
-//            "Order",
-//            "A-Z",
-//            "Z-A",
-//            "Latest update",
-//            "New manhwa",
-//            "Most view",
-//            "Most like",
-//        ),
-//        GenreList(getGenreList(), "Genre"),
-//    )
-//
-//    // To populate this list:
-//    // console.log([...document.querySelectorAll("div.search-gerne_item")].map(elem => `Genre("${elem.textContent.trim()}", ${elem.querySelector("label").getAttribute("data-genre-id")}),`).join("\n"))
-//    override fun getGenreList() = listOf(
-//        Genre("Adult", 4),
-//        Genre("Doujinshi", 9),
-//        Genre("Harem", 17),
-//        Genre("Manga", 24),
-//        Genre("Manhwa", 26),
-//        Genre("Mature", 28),
-//        Genre("NTR", 33),
-//        Genre("Romance", 36),
-//        Genre("Webtoon", 57),
-//        Genre("Action", 59),
-//        Genre("Comedy", 60),
-//        Genre("BL", 61),
-//        Genre("Horror", 62),
-//        Genre("Raw", 63),
-//        Genre("Uncensore", 64),
-//    )
-//
-//    override fun dateUpdatedParser(date: String): Long =
-//        runCatching { dateFormatter.parse(date.substringAfter(" - "))?.time }.getOrNull() ?: 0L
+
+    override fun getFilterList(): FilterList = getFilters()
 }

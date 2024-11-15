@@ -66,11 +66,6 @@ data class Manga(
     }
 }
 
-val Categories = mapOf(
-    1 to "Raw",
-    2 to "Sub",
-)
-
 @Serializable
 data class ChapterDetail(
     val episode: Episode,
