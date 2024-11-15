@@ -48,7 +48,8 @@ data class Manga(
             // compatible with old theme
             url = "manga/$slug"
             title = name
-            description = desc
+            description = desc?.trim()?.removePrefix("<p>")
+                ?.removeSuffix("</p>")?.trim()
             genre = listOfNotNull(
                 types?.joinToString { it.name },
                 nation?.name,
