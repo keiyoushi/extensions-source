@@ -46,7 +46,7 @@ data class Manga(
     fun toSManga(): SManga {
         return SManga.create().apply {
             // compatible with old theme
-            url = "manga/$slug"
+            url = "/manga/$slug"
             title = name
             description = desc?.trim()?.removePrefix("<p>")
                 ?.removeSuffix("</p>")?.trim()

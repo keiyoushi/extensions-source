@@ -148,7 +148,7 @@ class Manhwa18 : HttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/${manga.url}"
+        return "${baseUrl}${manga.url}"
     }
 
     // chapter list
@@ -163,7 +163,7 @@ class Manhwa18 : HttpSource() {
         return mangaDetail.manga.episodes?.map { chapter ->
             SChapter.create().apply {
                 // compatible with old theme
-                setUrlWithoutDomain("manga/$mangaSlug/${chapter.slug}")
+                setUrlWithoutDomain("/manga/$mangaSlug/${chapter.slug}")
                 name = chapter.name
                 date_upload = chapter.created_at?.parseDate() ?: 0L
                 chapter_number = chapter.name.toFloat()
@@ -177,12 +177,14 @@ class Manhwa18 : HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/${chapter.url}"
+        return "${baseUrl}${chapter.url}"
     }
 
     // page list
     override fun pageListRequest(chapter: SChapter): Request {
-        val slug = chapter.url.substringAfter('/')
+        val slug = chapter.url
+            .removePrefix("/")
+            .substringAfter('/')
         return GET("$apiUrl/get-episode/$slug", headers)
     }
 
