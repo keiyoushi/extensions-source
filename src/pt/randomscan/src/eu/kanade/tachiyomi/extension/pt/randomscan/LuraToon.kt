@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.randomscan
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Capitulo
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.CapituloPagina
@@ -108,7 +107,7 @@ class LuraToon :
         return json.decodeFromString<T>(body.string())
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.parseAs<MainPage>()
@@ -121,7 +120,7 @@ class LuraToon :
             }
         }
 
-        return MangasPage(mangas, false)
+        return MangasPage(mangas, document.lancamentos.isNotEmpty())
     }
 
     fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
