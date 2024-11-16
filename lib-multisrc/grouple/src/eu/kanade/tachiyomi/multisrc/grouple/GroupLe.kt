@@ -268,10 +268,14 @@ abstract class GroupLe(
         chapter.chapter_number = chapterInf.attr("data-num").toFloat() / 10
 
         chapter.date_upload = element.select("td.d-none").last()?.text()?.let {
-            try {
-                SimpleDateFormat("dd.MM.yy", Locale.US).parse(it)?.time ?: 0L
-            } catch (e: ParseException) {
-                SimpleDateFormat("dd/MM/yy", Locale.US).parse(it)?.time ?: 0L
+            if (it.isEmpty()) {
+                0L
+            } else {
+                try {
+                    SimpleDateFormat("dd.MM.yy", Locale.US).parse(it)?.time ?: 0L
+                } catch (e: ParseException) {
+                    SimpleDateFormat("dd/MM/yy", Locale.US).parse(it)?.time ?: 0L
+                }
             }
         } ?: 0
         return chapter
