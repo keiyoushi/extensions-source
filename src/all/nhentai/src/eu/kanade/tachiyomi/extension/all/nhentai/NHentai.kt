@@ -74,6 +74,7 @@ open class NHentai(
     }
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+    private val dataRegex = Regex("""JSON.parse\("([^*]*)"\)""")
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -106,7 +107,7 @@ open class NHentai(
         title = element.select("a > div").text().replace("\"", "").let {
             if (displayFullTitle) it.trim() else it.shortenTitle()
         }
-        thumbnail_url = element.select(".cover img").first()!!.let { img ->
+        thumbnail_url = element.selectFirst(".cover img")!!.let { img ->
             if (img.hasAttr("data-src")) img.attr("abs:data-src") else img.attr("abs:src")
         }
     }
@@ -210,9 +211,9 @@ open class NHentai(
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val script = document.select("script:containsData(JSON.parse)").first()!!.data()
+        val script = document.selectFirst("script:containsData(JSON.parse)")!!.data()
 
-        val json = Regex("""JSON.parse\("([^*]*)"\)""").find(script)?.groupValues!![1]
+        val json = dataRegex.find(script)?.groupValues!![1]
 
         val data = json.parseAs<Hentai>()
         return SManga.create().apply {
@@ -237,9 +238,9 @@ open class NHentai(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val script = document.select("script:containsData(JSON.parse)").first()!!.data()
+        val script = document.selectFirst("script:containsData(JSON.parse)")!!.data()
 
-        val json = Regex("""JSON.parse\("([^*]*)"\)""").find(script)?.groupValues!![1]
+        val json = dataRegex.find(script)?.groupValues!![1]
 
         val data = json.parseAs<Hentai>()
         return listOf(
@@ -257,23 +258,22 @@ open class NHentai(
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.select("script:containsData(media_server)").first()!!.data()
-        val script2 = document.select("script:containsData(JSON.parse)").first()!!.data()
+        val script = document.selectFirst("script:containsData(media_server)")!!.data()
+        val script2 = document.selectFirst("script:containsData(JSON.parse)")!!.data()
 
         val mediaServer = Regex("""media_server\s*:\s*(\d+)""").find(script)?.groupValues!![1]
-        val json = Regex("""JSON.parse\("([^*]*)"\)""").find(script2)?.groupValues!![1]
+        val json = dataRegex.find(script2)?.groupValues!![1]
 
         val data = json.parseAs<Hentai>()
         return data.images.pages.mapIndexed { i, image ->
             Page(
                 i,
-                "",
-                "${baseUrl.replace("://", "://i$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
+                imageUrl = "${baseUrl.replace("https://", "https://i$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
                     when (image.t) {
                         "w" -> ".webp"
                         "p" -> ".png"
                         else -> ".jpg"
-                    },
+                    }
             )
         }
     }
