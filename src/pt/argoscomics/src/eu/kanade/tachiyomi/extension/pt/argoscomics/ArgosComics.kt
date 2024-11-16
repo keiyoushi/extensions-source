@@ -16,7 +16,7 @@ import javax.net.ssl.X509TrustManager
 
 class ArgosComics : Madara(
     "Argos Comics",
-    "https://argoscomic.com",
+    "https://argoscomics.online/",
     "pt-BR",
     SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
 ) {
