@@ -170,14 +170,8 @@ class Manhwa18 : HttpSource() {
                 setUrlWithoutDomain("/manga/$mangaSlug/${chapter.slug}")
                 name = chapter.name
                 date_upload = chapter.created_at?.parseDate() ?: 0L
-                chapter_number = chapter.name.toFloat()
             }
         } ?: emptyList()
-    }
-
-    private fun String.toFloat(): Float {
-        val cleanedString = replace(Regex("[^0-9.]"), "")
-        return cleanedString.toFloatOrNull() ?: 0f
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
