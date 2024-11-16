@@ -67,9 +67,10 @@ class Koharu(
         try {
             val noRedirectClient = client.newBuilder().followRedirects(false).build()
             val host = noRedirectClient.newCall(GET(baseUrl, headers)).execute()
-                .headers["Location"]?.toHttpUrlOrNull()?.host ?: baseUrl.toHttpUrl().host
+                .headers["Location"]?.toHttpUrlOrNull()?.host
+                ?: return baseUrl
             return "https://$host"
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return baseUrl
         }
     }
