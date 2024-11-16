@@ -110,7 +110,11 @@ class Manhwa18 : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$apiUrl/get-search-suggest/$query", headers)
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("get-search-suggest")
+            addPathSegments(query)
+        }
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
