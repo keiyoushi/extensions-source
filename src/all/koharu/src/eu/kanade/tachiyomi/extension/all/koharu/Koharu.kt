@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -64,7 +65,9 @@ class Koharu(
 
     private fun getDomain(): String {
         try {
-            val host = client.newCall(GET(baseUrl, headers)).execute().request.url.host
+            val noRedirectClient = client.newBuilder().followRedirects(false).build()
+            val host = noRedirectClient.newCall(GET(baseUrl, headers)).execute()
+                .headers["Location"]?.toHttpUrlOrNull()?.host ?: baseUrl.toHttpUrl().host
             return "https://$host"
         } catch (e: Exception) {
             return baseUrl
