@@ -53,6 +53,8 @@ class Manhwa18 : HttpSource() {
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
+    private var searchMangaCache: MangasPage? = null
+
     // search
     override fun fetchSearchManga(
         page: Int,
@@ -66,10 +68,27 @@ class Manhwa18 : HttpSource() {
                     popularMangaParse(response)
                 }
         } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParsePagination(page, response)
+            if (page == 1 || searchMangaCache == null) {
+                searchMangaCache = super.fetchSearchManga(page, query, filters)
+                    .toBlocking()
+                    .last()
+            }
+
+            // Handling a large manga list
+            Observable.just(searchMangaCache!!)
+                .map { mangaPage ->
+                    val mangas = mangaPage.mangas
+
+                    val fromIndex = (page - 1) * MAX_MANGA_PER_PAGE
+                    val toIndex = page * MAX_MANGA_PER_PAGE
+
+                    MangasPage(
+                        mangas.subList(
+                            min(fromIndex, mangas.size - 1),
+                            min(toIndex, mangas.size),
+                        ),
+                        hasNextPage = toIndex < mangas.size,
+                    )
                 }
         }
     }
@@ -118,23 +137,13 @@ class Manhwa18 : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
-
-    private fun searchMangaParsePagination(page: Int, response: Response): MangasPage {
-        val fromIndex = (page - 1) * MAX_MANGA_PER_PAGE
-        val toIndex = page * MAX_MANGA_PER_PAGE
         val result = json.decodeFromString<List<Manga>>(response.body.string())
         return MangasPage(
             result
-                .subList(
-                    fromIndex,
-                    min(toIndex, result.size),
-                )
                 .map { manga ->
                     manga.toSManga()
                 },
-            hasNextPage = toIndex < result.size,
+            hasNextPage = false,
         )
     }
 
