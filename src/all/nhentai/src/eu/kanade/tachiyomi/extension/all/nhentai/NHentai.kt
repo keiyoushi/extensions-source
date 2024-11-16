@@ -273,7 +273,7 @@ open class NHentai(
                         "w" -> ".webp"
                         "p" -> ".png"
                         else -> ".jpg"
-                    }
+                    },
             )
         }
     }
