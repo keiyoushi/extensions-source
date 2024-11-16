@@ -42,5 +42,5 @@ class CosmicScansID : MangaThemesia(
     override fun Elements.imgAttr(): String = this.first()?.imgAttr() ?: ""
 
     // pages
-    override val pageSelector = "div#readerarea img:not(noscript img)"
+    override val pageSelector = "div#readerarea img:not(noscript img):not([alt=''])"
 }
