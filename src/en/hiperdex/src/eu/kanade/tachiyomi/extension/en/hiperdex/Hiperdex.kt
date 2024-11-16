@@ -17,7 +17,7 @@ import uy.kohesive.injekt.api.get
 class Hiperdex :
     Madara(
         "Hiperdex",
-        "https://hiperdex.com",
+        "https://hipertoon.com",
         "en",
     ),
     ConfigurableSource {

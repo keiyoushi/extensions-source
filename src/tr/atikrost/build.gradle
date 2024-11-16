@@ -2,8 +2,8 @@ ext {
     extName = 'Atikrost'
     extClass = '.Atikrost'
     themePkg = 'madara'
-    baseUrl = 'https://www.atikrost.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.mangaoku.org'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

@@ -3,7 +3,7 @@ ext {
     extClass = '.Sodsaime'
     themePkg = 'mangathemesia'
     baseUrl = 'https://www.xn--l3c0azab5a2gta.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

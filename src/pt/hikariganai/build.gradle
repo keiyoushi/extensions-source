@@ -1,10 +1,9 @@
 ext {
     extName = 'Hikari Ga Nai'
     extClass = '.HikariGaNai'
-    themePkg = 'madara'
+    themePkg = 'peachscan'
     baseUrl = 'https://hikariganai.xyz'
-    overrideVersionCode = 0
-    isNsfw = false
+    overrideVersionCode = 28
 }
 
 apply from: "$rootDir/common.gradle"

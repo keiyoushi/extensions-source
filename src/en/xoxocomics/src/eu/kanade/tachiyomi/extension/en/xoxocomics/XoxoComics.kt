@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
@@ -22,6 +23,26 @@ class XoxoComics : WPComics(
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
     gmtOffset = null,
 ) {
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            if (!request.url.toString().endsWith("#imagereq")) {
+                return@addNetworkInterceptor chain.proceed(request)
+            }
+
+            val response = chain.proceed(request)
+            if (response.code == 404) { // 404 is returned even when the image is found
+                val newResponse = response.newBuilder()
+                    .code(200)
+                    .body(response.body)
+                    .build()
+                newResponse
+            } else {
+                response
+            }
+        }
+        .build()
+
     override val searchPath = "search-comic"
     override val popularPath = "hot-comic"
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comic-update?page=$page", headers)
@@ -105,5 +126,9 @@ class XoxoComics : WPComics(
                 GenreFilter("Genre", genreList)
             },
         )
+    }
+
+    override fun imageRequest(page: Page): Request {
+        return GET(page.imageUrl!! + "#imagereq", headers)
     }
 }

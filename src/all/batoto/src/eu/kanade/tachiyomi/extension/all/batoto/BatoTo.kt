@@ -53,7 +53,7 @@ open class BatoTo(
     }
 
     override val name: String = "Bato.to"
-    override val baseUrl: String = getMirrorPref()!!
+    override val baseUrl: String by lazy { getMirrorPref()!! }
     override val id: Long = when (lang) {
         "zh-Hans" -> 2818874445640189582
         "zh-Hant" -> 38886079663327225
@@ -88,12 +88,25 @@ open class BatoTo(
                 preferences.edit().putBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", checkValue).commit()
             }
         }
+        val removeOfficialPref = CheckBoxPreference(screen.context).apply {
+            key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
+            title = "Remove version information from entry titles"
+            summary = "This removes version tags like '(Official)' or '(Yaoi)' from entry titles " +
+                "and helps identify duplicate entries in your library. " +
+                "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
+                "You might also want to clear the database in advanced settings."
+            setDefaultValue(false)
+        }
         screen.addPreference(mirrorPref)
         screen.addPreference(altChapterListPref)
+        screen.addPreference(removeOfficialPref)
     }
 
     private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
     private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
+    private fun isRemoveTitleVersion(): Boolean {
+        return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
+    }
 
     override val supportsLatest = true
     private val json: Json by injectLazy()
@@ -309,23 +322,34 @@ open class BatoTo(
         }
         return super.mangaDetailsRequest(manga)
     }
+    private var titleRegex: Regex =
+        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)|-.*-")
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div#mainer div.container-fluid")
         val manga = SManga.create()
         val workStatus = infoElement.select("div.attr-item:contains(original work) span").text()
         val uploadStatus = infoElement.select("div.attr-item:contains(upload status) span").text()
-        manga.title = infoElement.select("h3").text().removeEntities()
+        val originalTitle = infoElement.select("h3").text().removeEntities()
+        val alternativeTitles = document.select("div.pb-2.alias-set.line-b-f").text()
+        val description = infoElement.select("div.limit-html").text() + "\n" +
+            infoElement.select(".episode-list > .alert-warning").text().trim()
+        val cleanedTitle = if (isRemoveTitleVersion()) {
+            originalTitle.replace(titleRegex, "").trim()
+        } else {
+            originalTitle
+        }
+
+        manga.title = cleanedTitle
         manga.author = infoElement.select("div.attr-item:contains(author) span").text()
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
-        manga.description = infoElement.select("div.limit-html").text() + "\n" + infoElement.select(".episode-list > .alert-warning").text().trim()
-        manga.thumbnail_url = document.select("div.attr-cover img")
-            .attr("abs:src")
+        manga.description = description +
+            if (alternativeTitles.isNotBlank()) "\n\nAlternative Titles:\n$alternativeTitles" else ""
+        manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
         return manga
     }
-
     private fun parseStatus(workStatus: String?, uploadStatus: String?) = when {
         workStatus == null -> SManga.UNKNOWN
         workStatus.contains("Ongoing") -> SManga.ONGOING
@@ -404,46 +428,46 @@ open class BatoTo(
 
         return when {
             "secs" in date -> Calendar.getInstance().apply {
-                add(Calendar.SECOND, value * -1)
+                add(Calendar.SECOND, -value)
             }.timeInMillis
             "mins" in date -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, value * -1)
+                add(Calendar.MINUTE, -value)
             }.timeInMillis
             "hours" in date -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, value * -1)
+                add(Calendar.HOUR_OF_DAY, -value)
             }.timeInMillis
             "days" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * -1)
+                add(Calendar.DATE, -value)
             }.timeInMillis
             "weeks" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * 7 * -1)
+                add(Calendar.DATE, -value * 7)
             }.timeInMillis
             "months" in date -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, value * -1)
+                add(Calendar.MONTH, -value)
             }.timeInMillis
             "years" in date -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, value * -1)
+                add(Calendar.YEAR, -value)
             }.timeInMillis
             "sec" in date -> Calendar.getInstance().apply {
-                add(Calendar.SECOND, value * -1)
+                add(Calendar.SECOND, -value)
             }.timeInMillis
             "min" in date -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, value * -1)
+                add(Calendar.MINUTE, -value)
             }.timeInMillis
             "hour" in date -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, value * -1)
+                add(Calendar.HOUR_OF_DAY, -value)
             }.timeInMillis
             "day" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * -1)
+                add(Calendar.DATE, -value)
             }.timeInMillis
             "week" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, value * 7 * -1)
+                add(Calendar.DATE, -value * 7)
             }.timeInMillis
             "month" in date -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, value * -1)
+                add(Calendar.MONTH, -value)
             }.timeInMillis
             "year" in date -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, value * -1)
+                add(Calendar.YEAR, -value)
             }.timeInMillis
             else -> {
                 return 0
@@ -945,6 +969,7 @@ open class BatoTo(
     companion object {
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
+        private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private val MIRROR_PREF_ENTRIES = arrayOf(
             "bato.to",
             "batocomic.com",
@@ -962,6 +987,8 @@ open class BatoTo(
             "readtoto.net",
             "readtoto.org",
             "dto.to",
+            "fto.to",
+            "jto.to",
             "hto.to",
             "mto.to",
             "wto.to",

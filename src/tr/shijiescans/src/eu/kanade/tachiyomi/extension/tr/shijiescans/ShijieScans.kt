@@ -8,5 +8,6 @@ class ShijieScans : MangaThemesia(
     "Shijie Scans",
     "https://shijiescans.com",
     "tr",
-    dateFormat = SimpleDateFormat("MMM d, yyy", Locale("tr")),
+    "/seri",
+    SimpleDateFormat("MMM d, yyy", Locale("tr")),
 )

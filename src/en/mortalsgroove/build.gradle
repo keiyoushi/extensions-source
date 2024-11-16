@@ -1,9 +1,0 @@
-ext {
-    extName = 'Mortals Groove'
-    extClass = '.MortalsGroove'
-    themePkg = 'madara'
-    baseUrl = 'https://mortalsgroove.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Asia Lotus'
+    extClass = '.AsiaLotus'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://asialotuss.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

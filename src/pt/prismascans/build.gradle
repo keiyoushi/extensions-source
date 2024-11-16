@@ -1,9 +1,9 @@
 ext {
-    extName = 'Demon Sect'
-    extClass = '.DemonSect'
+    extName = 'Seita Celestial'
+    extClass = '.SeitaCelestial'
     themePkg = 'mangathemesia'
     baseUrl = 'https://seitacelestial.com'
-    overrideVersionCode = 16
+    overrideVersionCode = 17
 }
 
 apply from: "$rootDir/common.gradle"

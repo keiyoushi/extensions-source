@@ -6,7 +6,7 @@ import okhttp3.OkHttpClient
 
 class ManhwaList : MangaThemesia(
     "Manhwa List",
-    "https://manhwalist.com",
+    "https://manhwalist.in",
     "id",
 ) {
     override val client: OkHttpClient = super.client.newBuilder()

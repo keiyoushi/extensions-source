@@ -1,9 +1,9 @@
 ext {
-    extName = 'MangaHall'
-    extClass = '.MangaHall'
+    extName = 'MangaHolic'
+    extClass = '.MangaHolic'
     themePkg = 'madara'
-    baseUrl = 'https://mangahall.org'
-    overrideVersionCode = 1
+    baseUrl = 'https://mangaholic.org'
+    overrideVersionCode = 4
     isNsfw = true
 }
 

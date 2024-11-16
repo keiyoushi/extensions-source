@@ -1,0 +1,10 @@
+ext {
+    extName = 'Taikutsu'
+    extClass = '.Taikutsu'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://taikutsutl.lector.moe'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

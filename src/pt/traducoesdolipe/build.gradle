@@ -1,0 +1,9 @@
+ext {
+    extName = 'Traduções do Lipe'
+    extClass = '.TraducoesDoLipe'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://traducoesdolipe.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

@@ -2,8 +2,8 @@ ext {
     extName = 'SSSScanlator'
     extClass = '.SSSScanlator'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://sssscanlator.com.br'
-    overrideVersionCode = 3
+    baseUrl = 'https://ssstoons.com'
+    overrideVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"

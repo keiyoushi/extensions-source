@@ -1,7 +1,9 @@
 ext {
     extName = 'Traducciones Amistosas'
     extClass = '.Nartag'
-    extVersionCode = 3
+    themePkg = 'madara'
+    baseUrl = 'https://traduccionesamistosas.eyudud.net'
+    overrideVersionCode = 0
     isNsfw = true
 }
 

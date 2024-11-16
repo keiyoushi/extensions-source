@@ -9,7 +9,7 @@ import java.util.TimeZone
 
 class Manga168 : MangaThemesia(
     "Manga168",
-    "https://manga168.com",
+    "https://manga168.net",
     "th",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
         timeZone = TimeZone.getTimeZone("Asia/Bangkok")

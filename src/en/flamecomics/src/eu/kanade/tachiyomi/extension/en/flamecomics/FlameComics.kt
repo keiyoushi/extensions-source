@@ -17,7 +17,7 @@ import java.io.ByteArrayOutputStream
 
 class FlameComics : MangaThemesia(
     "Flame Comics",
-    "https://flamecomics.me",
+    "https://flamecomics.xyz",
     "en",
     mangaUrlDirectory = "/series",
 ) {
@@ -29,6 +29,8 @@ class FlameComics : MangaThemesia(
         .rateLimit(2, 7)
         .addInterceptor(::composedImageIntercept)
         .build()
+
+    override val pageSelector = "div#readerarea img:not(noscript img)[class*=wp-image]"
 
     // Split Image Fixer Start
     private val composedSelector: String = "#readerarea div.figure_container div.composed_figure"

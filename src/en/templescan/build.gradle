@@ -1,7 +1,7 @@
 ext {
     extName = 'Temple Scan'
     extClass = '.TempleScan'
-    extVersionCode = 44
+    extVersionCode = 45
     isNsfw = true
 }
 

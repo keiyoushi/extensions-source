@@ -1,11 +1,25 @@
 package eu.kanade.tachiyomi.extension.id.yuramanga
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.zmanga.ZManga
+import java.io.IOException
+import java.text.SimpleDateFormat
 
-class YuraManga : Madara("YuraManga", "https://yuramanga.my.id", "id") {
-    // Moved from Makaru to Madara
-    override val versionId = 2
+class YuraManga : ZManga(
+    "YuraManga",
+    "https://www.yuramanga.my.id",
+    "id",
+    SimpleDateFormat("dd/MM/yyyy"),
+) {
+    // Moved from Madara to ZManga
+    override val versionId = 3
 
-    // If .list-chapter is empty the link is 404
-    override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector:has(.chapter-item)"
+    override val client = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (response.request.url.pathSegments.contains("login")) {
+                throw IOException("Please log in to the WebView to continue")
+            }
+            response
+        }
+        .build()
 }

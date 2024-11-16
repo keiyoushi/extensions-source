@@ -4,10 +4,13 @@ import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 import eu.kanade.tachiyomi.multisrc.heancms.SortProperty
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
 
@@ -20,7 +23,7 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
     override val useNewChapterEndpoint = true
     override val useNewQueryEndpoint = true
     override val enableLogin = true
-    override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { this.timeZone = TimeZone.getTimeZone("UTC") }
     override val cdnUrl = "https://media.reaperscans.com/file/4SRBHm"
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -36,6 +39,24 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
             .addQueryParameter("adult", "true")
 
         return GET(url.build(), headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.parseAs<ReaperPagePayloadDto>()
+
+        if (result.isPaywalled() && result.chapter.chapterData == null) {
+            throw Exception(intl["paid_chapter_error"])
+        }
+
+        return if (useNewChapterEndpoint) {
+            result.chapter.chapterData?.images().orEmpty().mapIndexed { i, img ->
+                Page(i, imageUrl = img.toAbsoluteUrl())
+            }
+        } else {
+            result.data.orEmpty().mapIndexed { i, img ->
+                Page(i, imageUrl = img.toAbsoluteUrl())
+            }
+        }
     }
 
     override fun getSortProperties(): List<SortProperty> = listOf(

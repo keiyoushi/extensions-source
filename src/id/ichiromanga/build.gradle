@@ -1,0 +1,9 @@
+ext {
+    extName = 'IchiroManga'
+    extClass = '.IchiroManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://ichiromanga.my.id'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

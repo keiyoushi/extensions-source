@@ -9,7 +9,7 @@ import java.util.Locale
 @SuppressLint("SimpleDateFormat")
 class TruyenTranhDamMy : Madara(
     "Truyện tranh đam mỹ",
-    "https://truyentranhdammyy.top",
+    "https://truyennhameo.com",
     "vi",
     dateFormat = SimpleDateFormat(
         "MMMM d, yyyy",

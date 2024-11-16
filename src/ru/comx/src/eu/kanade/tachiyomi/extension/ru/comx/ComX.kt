@@ -26,6 +26,7 @@ import okhttp3.CookieJar
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -167,16 +168,12 @@ class ComX : ParsedHttpSource() {
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            return POST(
-                "$baseUrl/index.php?do=search",
-                body = FormBody.Builder()
-                    .add("do", "search")
-                    .add("subaction", "search")
-                    .add("story", query)
-                    .add("search_start", page.toString())
-                    .build(),
-                headers = headers,
-            )
+            val url = baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("search")
+                addPathSegment(query)
+                addPathSegments("page/$page")
+            }.build()
+            return GET(url, headers)
         }
         val mutableGenre = mutableListOf<String>()
         val mutableType = mutableListOf<String>()

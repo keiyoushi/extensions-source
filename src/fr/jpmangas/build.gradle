@@ -1,9 +1,0 @@
-ext {
-    extName = 'Jpmangas'
-    extClass = '.Jpmangas'
-    themePkg = 'mmrcms'
-    baseUrl = 'https://jpmangas.xyz'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

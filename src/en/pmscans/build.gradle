@@ -1,9 +1,9 @@
 ext {
-    extName = 'PMScans'
-    extClass = '.PMScans'
-    themePkg = 'madara'
+    extName = 'Rackus'
+    extClass = '.Rackus'
+    themePkg = 'mangathemesia'
     baseUrl = 'https://rackusreads.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 7
 }
 
 apply from: "$rootDir/common.gradle"

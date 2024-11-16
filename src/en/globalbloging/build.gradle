@@ -1,9 +1,0 @@
-ext {
-    extName = 'Global Bloging'
-    extClass = '.GlobalBloging'
-    themePkg = 'madara'
-    baseUrl = 'https://globalbloging.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

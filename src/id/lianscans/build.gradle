@@ -2,8 +2,8 @@ ext {
     extName = 'LianScans'
     extClass = '.LianScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.lianscans.my.id'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.lianscans.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

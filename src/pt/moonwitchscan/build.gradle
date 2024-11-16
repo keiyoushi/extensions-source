@@ -1,0 +1,9 @@
+ext {
+    extName = 'Moon Witch Scan'
+    extClass = '.MoonWitchScan'
+    themePkg = 'madara'
+    baseUrl = 'https://moonwitchscan.com.br'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

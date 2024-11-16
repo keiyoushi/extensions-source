@@ -1,9 +1,0 @@
-ext {
-    extName = 'Shield Manga'
-    extClass = '.ShieldManga'
-    themePkg = 'madara'
-    baseUrl = 'https://shieldmanga.io'
-    overrideVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,6 +1,11 @@
 package eu.kanade.tachiyomi.extension.vi.lxhentai
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,14 +21,18 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LxHentai : ParsedHttpSource() {
+class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "LXHentai"
 
-    override val baseUrl = "https://lxmanga.life"
+    private val defaultBaseUrl = "https://lxmanga.store"
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val lang = "vi"
 
@@ -109,44 +118,27 @@ class LxHentai : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.select("div.p-2.truncate a").first()!!.attr("href"))
         title = element.select("div.p-2.truncate a").first()!!.text()
-        thumbnail_url = element.select("div.cover")
-            .first()!!
-            .attr("style")
-            .substringAfter("url('")
-            .substringBefore("')")
+        thumbnail_url = element.selectFirst("div.cover")?.absUrl("data-bg")
     }
 
     override fun searchMangaNextPageSelector() = "li:contains(Cuối)"
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select("span.text-lg.ml-1.font-semibold").first()!!.text()
-        author = document.select("div.grow div.mt-2:contains(Tác giả) span a")
+        title = document.select("div.mb-4 span").first()!!.text()
+        author = document.selectFirst("div.grow div.mt-2 > span:contains(Tác giả:) + span a")?.text()
+        genre = document.selectFirst("div.grow div.mt-2 > span:contains(Thể loại:) + span")!!
+            .select("a")
             .joinToString { it.text().trim(',', ' ') }
-        genre = document.select("div.grow div.mt-2:contains(Thể loại) span a")
-            .joinToString { it.text().trim(',', ' ') }
-
-        description = ""
-        document.select("div.grow div.mt-2").forEach {
-            val key = it.select("span.mr-2").text().trim(':', ' ')
-            if (key in arrayOf("Tác giả", "Thể loại", "Tình trạng", "Lần cuối")) {
-                return@forEach
-            }
-            val value = it.select("span:not(.mr-2)").text()
-            description += "$key: $value\n"
-        }
-        description += "\n"
-        description += document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") {
+        description = document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") {
             it.run {
                 select(Evaluator.Tag("br")).prepend("\\n")
                 this.text().replace("\\n", "\n").replace("\n ", "\n")
             }
         }.trim()
 
-        thumbnail_url = document.select(".cover")
-            .first()!!
-            .attr("style")
-            .substringAfter("url('")
-            .substringBefore("')")
+        thumbnail_url = document.selectFirst(".cover")?.attr("style")?.let {
+            IMAGE_REGEX.find(it)?.groups?.get("img")?.value
+        }
 
         val statusString = document.select("div.grow div.mt-2:contains(Tình trạng) a").first()!!.text()
         status = when (statusString) {
@@ -158,7 +150,7 @@ class LxHentai : ParsedHttpSource() {
         setUrlWithoutDomain(document.location())
     }
 
-    override fun chapterListSelector(): String = "ul.overflow-y-auto.overflow-x-hidden a"
+    override fun chapterListSelector(): String = "ul.overflow-y-auto.overflow-x-hidden > a"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
@@ -176,8 +168,8 @@ class LxHentai : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> = document
-        .select("div.text-center img.lazy")
-        .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:src")) }
+        .select("div.text-center div.lazy")
+        .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:data-src")) }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -294,9 +286,50 @@ class LxHentai : ParsedHttpSource() {
         Genre("LXHENTAI", 66),
     )
 
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+        screen.addPreference(baseUrlPref)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
 
         val CHAPTER_NUMBER_REGEX = Regex("""[+\-]?([0-9]*[.])?[0-9]+""", RegexOption.IGNORE_CASE)
+        val IMAGE_REGEX = """url\('(?<img>[^']+)""".toRegex()
+
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
     }
 }

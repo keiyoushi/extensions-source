@@ -3,7 +3,7 @@ ext {
     extClass = '.HuntersScans'
     themePkg = 'madara'
     baseUrl = 'https://hunterscomics.com'
-    overrideVersionCode = 4
+    overrideVersionCode = 6
     isNsfw = true
 }
 

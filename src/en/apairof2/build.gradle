@@ -1,9 +1,0 @@
-ext {
-    extName = 'A Pair Of 2+'
-    extClass = '.APairOf2'
-    themePkg = 'po2scans'
-    baseUrl = 'https://po2scans.com'
-    overrideVersionCode = 31
-}
-
-apply from: "$rootDir/common.gradle"

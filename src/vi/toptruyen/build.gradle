@@ -1,0 +1,10 @@
+ext {
+    extName = 'Top Truyen'
+    extClass = '.TopTruyen'
+    themePkg = 'wpcomics'
+    baseUrl = 'https://www.toptruyenww.pro'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

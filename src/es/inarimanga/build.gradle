@@ -1,9 +1,9 @@
 ext {
-    extName = 'InariPikav'
-    extClass = '.InariPikav'
+    extName = 'Visor Inari'
+    extClass = '.VisorInari'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://inaripikav.org'
-    overrideVersionCode = 11
+    baseUrl = 'https://vrinari.org'
+    overrideVersionCode = 14
     isNsfw = true
 }
 

@@ -1,0 +1,10 @@
+ext {
+    extName = 'VyvyManga.org'
+    extClass = '.VyvyMangaOrg'
+    themePkg = 'madara'
+    baseUrl = 'https://vyvymanga.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

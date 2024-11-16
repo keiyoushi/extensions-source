@@ -153,7 +153,7 @@ abstract class ColaManga(
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.fed-part-eone")!!.text()
-        thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-orignal")
+        thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
         author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
         genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
         description = document
@@ -276,7 +276,7 @@ abstract class ColaManga(
         }.also(screen::addPreference)
     }
 
-    private val keyMappingRegex = Regex("""[0-9A-Za-z_]+\s*==\s*['"](?<keyType>\d+)['"]\s*&&\s*\([0-9A-Za-z_]+\s*=\s*['"](?<key>[a-zA-Z0-9]+)['"]\)""")
+    private val keyMappingRegex = Regex("""if\s*\(\s*([a-zA-Z0-9_]+)\s*==\s*(?<keyType>\d+)\s*\)\s*\{\s*return\s*'(?<key>[a-zA-Z0-9_]+)'\s*;""")
 
     private val keyMapping by lazy {
         val obfuscatedReadJs = client.newCall(GET("$baseUrl/js/manga.read.js")).execute().body.string()

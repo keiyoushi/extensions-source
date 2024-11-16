@@ -13,7 +13,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="www.taiyo.moe"
+                    android:host="taiyo.moe"
                     android:pathPattern="/media/..*"
                     android:scheme="https" />
             </intent-filter>

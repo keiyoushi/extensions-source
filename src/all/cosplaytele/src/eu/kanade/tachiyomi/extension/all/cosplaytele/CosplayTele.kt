@@ -66,17 +66,17 @@ class CosplayTele : ParsedHttpSource() {
     }
 
     private val popularPageLimit = 20
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/wp-json/wordpress-popular-posts/v1/popular-posts?offset=${page * popularPageLimit}&limit=$popularPageLimit&range=last7days")
+
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/wp-json/wordpress-popular-posts/v1/popular-posts?offset=${page * popularPageLimit}&limit=$popularPageLimit&range=last7days&embed=true&_embed=wp:featuredmedia&_fields=title,link,_embedded,_links.wp:featuredmedia")
     override fun popularMangaSelector(): String = ""
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val jsonObject = json.decodeFromString<JsonArray>(response.body.string())
-        val mangas = jsonObject.map { item ->
-            val head = item.jsonObject["yoast_head_json"]!!.jsonObject
+        val respObject = json.decodeFromString<JsonArray>(response.body.string())
+        val mangas = respObject.map { item ->
             SManga.create().apply {
-                title = head["og_title"]!!.jsonPrimitive.content
-                thumbnail_url = head["og_image"]!!.jsonArray[0].jsonObject["url"]!!.jsonPrimitive.content
-                setUrlWithoutDomain(head["og_url"]!!.jsonPrimitive.content)
+                title = item.jsonObject!!["title"]!!.jsonObject!!["rendered"]!!.jsonPrimitive.content
+                thumbnail_url = item.jsonObject!!["_embedded"]!!.jsonObject!!["wp:featuredmedia"]!!.jsonArray[0]!!.jsonObject["source_url"]!!.jsonPrimitive.content
+                setUrlWithoutDomain(item.jsonObject!!["link"]!!.jsonPrimitive.content)
             }
         }
         return MangasPage(mangas, mangas.size >= popularPageLimit)

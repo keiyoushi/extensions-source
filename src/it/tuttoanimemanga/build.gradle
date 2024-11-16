@@ -3,7 +3,8 @@ ext {
     extClass = '.TuttoAnimeManga'
     themePkg = 'pizzareader'
     baseUrl = 'https://tuttoanimemanga.net'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

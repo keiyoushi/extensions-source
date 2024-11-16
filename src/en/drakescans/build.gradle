@@ -2,8 +2,9 @@ ext {
     extName = 'Drake Scans'
     extClass = '.DrakeScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://drakecomic.com'
-    overrideVersionCode = 13
+    baseUrl = 'https://drakecomic.org'
+    overrideVersionCode = 14
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

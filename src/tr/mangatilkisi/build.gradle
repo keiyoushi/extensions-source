@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaTilkisi'
+    extClass = '.MangaTilkisi'
+    themePkg = 'madara'
+    baseUrl = 'https://www.manga-tilkisi.com'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

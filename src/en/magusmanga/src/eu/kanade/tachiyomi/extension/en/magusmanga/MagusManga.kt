@@ -1,57 +1,41 @@
 package eu.kanade.tachiyomi.extension.en.magusmanga
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.Cookie
+import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.OkHttpClient
 import okhttp3.Response
+import okio.IOException
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.concurrent.TimeUnit
 
-class MagusManga : MangaThemesiaAlt(
+class MagusManga : Keyoapp(
     "Magus Manga",
-    "https://recipeslik.online",
+    "https://magustoon.com",
     "en",
-    mangaUrlDirectory = "/series",
-    dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("en")),
 ) {
-    override val id = 7792477462646075400
+    override val versionId = 2
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(::wafffCookieInterceptor)
-        .rateLimit(1, 1, TimeUnit.SECONDS)
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::captchaInterceptor)
+        .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .build()
 
-    private fun wafffCookieInterceptor(chain: Interceptor.Chain): Response {
+    private fun captchaInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        val document = Jsoup.parse(
-            response.peekBody(Long.MAX_VALUE).string(),
-            response.request.url.toString(),
-        )
-
-        return if (document.selectFirst("script:containsData(wafff)") != null) {
-            val script = document.selectFirst("script:containsData(wafff)")!!.data()
-
-            val cookie = waffRegex.find(script)?.groups?.get("waff")?.value
-                ?.let { Cookie.parse(request.url, it) }
-
-            client.cookieJar.saveFromResponse(
-                request.url,
-                listOfNotNull(cookie),
+        if (response.code == 401) {
+            val document = Jsoup.parse(
+                response.peekBody(Long.MAX_VALUE).string(),
+                response.request.url.toString(),
             )
 
-            response.close()
-
-            chain.proceed(request)
-        } else {
-            response
+            if (document.selectFirst(".g-recaptcha") != null) {
+                response.close()
+                throw IOException("Solve Captcha in WebView")
+            }
         }
-    }
 
-    private val waffRegex = Regex("""document\.cookie\s*=\s*['"](?<waff>.*)['"]""")
+        return response
+    }
 }

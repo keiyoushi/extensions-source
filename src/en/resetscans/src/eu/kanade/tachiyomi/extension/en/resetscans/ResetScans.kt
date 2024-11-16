@@ -1,15 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.resetscans
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
 
-class ResetScans : Madara(
+class ResetScans : FuzzyDoodle(
     "Reset Scans",
-    "https://reset-scans.co",
+    "https://reset-scans.xyz",
     "en",
-    dateFormat = SimpleDateFormat("MMM dd", Locale("en")),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
-    override val chapterUrlSelector = ".li__text > a"
+    override val latestFromHomePage = true
+
+    // Moved from Madara to FuzzyDoodle
+    override val versionId = 2
 }

@@ -12,7 +12,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:host="yurineko.net"
+                <data android:host="yurineko.moe"
                     android:scheme="https" />
 
                 <data android:pathPattern="/manga/..*" />

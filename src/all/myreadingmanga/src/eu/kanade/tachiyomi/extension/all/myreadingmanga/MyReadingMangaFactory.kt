@@ -23,7 +23,7 @@ private val languageList = listOf(
 //    Source("", "Finnish"),
 //    Source("", "Flemish", "flemish-dutch"),
 //    Source("", "Dutch"),
-    Source("fr", "French"),
+//    Source("fr", "French"),
     Source("de", "German"),
 //    Source("", "Greek"),
 //    Source("", "Hebrew"),

@@ -65,7 +65,8 @@ abstract class GroupLe(
         }
         .build()
 
-    private var uagent: String = preferences.getString(UAGENT_TITLE, UAGENT_DEFAULT)!!
+    private var uagent = preferences.getString(UAGENT_TITLE, UAGENT_DEFAULT)!!
+
     override fun headersBuilder() = Headers.Builder().apply {
         add("User-Agent", uagent)
         add("Referer", baseUrl)
@@ -206,28 +207,44 @@ abstract class GroupLe(
         }
     }
 
+    protected open fun getChapterSearchParams(document: Document): String {
+        return "?mtr=true"
+    }
+
     private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
         val document = response.asJsoup()
-        if ((document.select(".expandable.hide-dn").isNotEmpty() && document.select(".user-avatar").isNullOrEmpty() && document.toString().contains("current_user_country_code = 'RU'")) || (document.select("img.logo").first()?.attr("title")?.contains("Allhentai") == true && document.select(".user-avatar").isNullOrEmpty())) {
+        if ((
+            document.select(".expandable.hide-dn").isNotEmpty() && document.select(".user-avatar")
+                .isEmpty() && document.toString()
+                .contains("current_user_country_code = 'RU'")
+            ) || (
+                document.select("img.logo")
+                    .first()?.attr("title")
+                    ?.contains("Allhentai") == true && document.select(".user-avatar").isEmpty()
+                )
+        ) {
             throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
         }
-        return document.select(chapterListSelector()).map { chapterFromElement(it, manga) }
+
+        val chapterSearchParams = getChapterSearchParams(document)
+
+        return document.select(chapterListSelector()).map { chapterFromElement(it, manga, chapterSearchParams) }
     }
 
     override fun chapterListSelector() =
         "tr.item-row:has(td > a):has(td.date:not(.text-info))"
 
-    private fun chapterFromElement(element: Element, manga: SManga): SChapter {
+    private fun chapterFromElement(element: Element, manga: SManga, chapterSearchParams: String): SChapter {
         val urlElement = element.select("a.chapter-link").first()!!
         val chapterInf = element.select("td.item-title").first()!!
         val urlText = urlElement.text()
 
         val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(urlElement.attr("href") + "?mtr=true") // mtr is 18+ fractional skip
+        chapter.setUrlWithoutDomain(urlElement.attr("href") + chapterSearchParams)
 
         val translatorElement = urlElement.attr("title")
 
-        chapter.scanlator = if (!translatorElement.isNullOrBlank()) {
+        chapter.scanlator = if (translatorElement.isNotBlank()) {
             translatorElement
                 .replace("(Переводчик),", "&")
                 .removeSuffix(" (Переводчик)")
@@ -292,15 +309,15 @@ abstract class GroupLe(
 
         val html = document.html()
 
-        var readerMark = "rm_h.readerDoInit(["
-
-        // allhentai necessary
-        if (!html.contains(readerMark)) {
-            readerMark = "rm_h.readerInit( 0,["
-        }
+        val readerMark = "rm_h.readerDoInit(["
 
         if (!html.contains(readerMark)) {
-            if (document.select(".input-lg").isNotEmpty() || (document.select(".user-avatar").isNullOrEmpty() && document.select("img.logo").first()?.attr("title")?.contains("Allhentai") == true)) {
+            if (document.select(".input-lg").isNotEmpty() || (
+                document.select(".user-avatar")
+                    .isEmpty() && document.select("img.logo").first()?.attr("title")
+                    ?.contains("Allhentai") == true
+                )
+            ) {
                 throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
             }
             if (!response.request.url.toString().contains(baseUrl)) {

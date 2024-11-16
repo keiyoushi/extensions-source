@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
 
 class SayHentai : ManhwaZ(
     "SayHentai",
-    "https://sayhentai.one",
+    "https://sayhentai.art",
     "vi",
     mangaDetailsAuthorHeading = "Tác giả",
     mangaDetailsStatusHeading = "Trạng thái",

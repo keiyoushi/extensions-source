@@ -17,14 +17,14 @@ object ScrambledImageInterceptor : Interceptor {
         val request = chain.request()
         val response = chain.proceed(request)
         val url = request.url.toString()
-        if (!url.endsWith(SCRAMBLED_SUFFIX)) return response
+        if ("sr:1" !in url) return response
         val image = BitmapFactory.decodeStream(response.body.byteStream())
         val width = image.width
         val height = image.height
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
 
-        // https://rouman01.xyz/_next/static/chunks/pages/books/%5Bbookid%5D/%5Bid%5D-6f60a589e82dc8db.js
+        // /_next/static/chunks/pages/books/%5Bbookid%5D/%5Bid%5D-6f60a589e82dc8db.js
         // Scrambled images are reversed by blocks. Remainder is included in the bottom (scrambled) block.
         val blocks = url.removeSuffix(SCRAMBLED_SUFFIX).substringAfterLast('/').removeSuffix(".jpg")
             .let { Base64.decode(it, Base64.DEFAULT) }

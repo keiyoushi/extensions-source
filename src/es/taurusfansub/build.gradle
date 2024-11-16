@@ -3,7 +3,7 @@ ext {
     extClass = '.TaurusFansub'
     themePkg = 'madara'
     baseUrl = 'https://taurusmanga.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"

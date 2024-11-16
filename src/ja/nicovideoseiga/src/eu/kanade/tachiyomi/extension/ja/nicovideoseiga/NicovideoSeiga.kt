@@ -114,8 +114,12 @@ class NicovideoSeiga : HttpSource() {
             .filter { it.ownership.sellStatus != "publication_finished" }
             .map { chapter ->
                 SChapter.create().apply {
-                    val isPaid = chapter.ownership.sellStatus == "selling"
-                    name = (if (isPaid) "\uD83D\uDCB4 " else "") + chapter.meta.title
+                    val prefix = when (chapter.ownership.sellStatus) {
+                        "selling" -> "\uD83D\uDCB4 "
+                        "pre_selling" -> "\u23F3\uD83D\uDCB4 "
+                        else -> ""
+                    }
+                    name = prefix + chapter.meta.title
                     // Timestamp is in seconds, convert to milliseconds
                     date_upload = chapter.meta.createdAt * 1000
                     // While chapters are properly sorted, authors often add promotional material as "chapters" which breaks trackers
@@ -140,20 +144,43 @@ class NicovideoSeiga : HttpSource() {
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return client.newCall(pageListRequest(chapter))
             .asObservable()
-            .map { response ->
-                // Nicomanga historically refuses to serve pages if you don't login.
-                // However, due to the network attack against the site (as of July 2024) login is disabled
-                // Changes may be required as the site recovers
-                if (response.code == 403) {
-                    throw SecurityException("You need to purchase this chapter first")
+            .flatMap { response ->
+                // Nicovideo refuses to serve pages without login only if you are on desktop (Supposedly to provide danmaku)
+                // There's no login requirement on the mobile version of the website
+                when (response.code) {
+                    403 -> {
+                        // Check if the user is logged in
+                        // This is the account page. You get 302 if you are not logged in
+                        client.newBuilder()
+                            .followRedirects(false)
+                            .followSslRedirects(false)
+                            .build()
+                            .newCall(GET("https://www.nicovideo.jp/my"))
+                            .asObservable()
+                            .flatMap { login ->
+                                when (login.code) {
+                                    200 -> {
+                                        // User needs to purchase the chapter on the official mobile app
+                                        // Sidenote: Chapters can't be purchased on the site
+                                        // These paid chapters only show up on the mobile app and are straight up hidden on browsers! Why!?
+                                        // "Please buy from the official app"
+                                        Observable.error(SecurityException("公式アプリで購入してください"))
+                                    }
+
+                                    302 -> {
+                                        // User needs to login via WebView first before accessing the chapter
+                                        // "Please login via WebView first"
+                                        Observable.error(SecurityException("まず、WebViewでログインしてください"))
+                                    }
+
+                                    else -> Observable.error(Exception("HTTP error ${login.code}"))
+                                }
+                            }
+                    }
+
+                    200 -> Observable.just(pageListParse(response))
+                    else -> Observable.error(Exception("HTTP error ${response.code}"))
                 }
-                if (response.code == 401) {
-                    throw SecurityException("Not logged in. Please login via WebView")
-                }
-                if (response.code != 200) {
-                    throw Exception("HTTP error ${response.code}")
-                }
-                pageListParse(response)
             }
     }
 
@@ -193,7 +220,7 @@ class NicovideoSeiga : HttpSource() {
         // drm.cdn.nicomanga.jp -> Paid manga (Encrypted)
         // deliver.cdn.nicomanga.jp -> Free manga (Unencrypted)
         val imageRegex =
-            Regex("https://drm.cdn.nicomanga.jp/image/([a-f0-9]+)_\\d{4}/\\d+p(\\.[a-z]+)?(\\?\\d+)?")
+            Regex("https://drm.cdn.nicomanga.jp/image/([a-f0-9]+)_\\d+/\\d+p(\\.[a-z]+)?(\\?\\d+)?")
         val match = imageRegex.find(chain.request().url.toUrl().toString())
             ?: return chain.proceed(chain.request())
 

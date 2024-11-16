@@ -1,15 +1,17 @@
 package eu.kanade.tachiyomi.extension.pt.lscans
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class LScans : Madara(
+class LScans : MangaThemesia(
     "L Scans",
     "https://lscans.com",
     "pt-BR",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
+    // Moved from PeachScan to Mangathemsia
+    override val versionId = 3
+
+    override val client = super.client.newBuilder()
+        .rateLimit(3)
+        .build()
 }

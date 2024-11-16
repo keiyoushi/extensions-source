@@ -42,6 +42,10 @@ abstract class MangaEsp(
         classLoader = this::class.java.classLoader!!,
     )
 
+    protected open val apiPath = "/api"
+
+    protected open val seriesPath = "/ver"
+
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
@@ -49,7 +53,7 @@ abstract class MangaEsp(
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/api/topSerie", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl$apiPath/topSerie", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val responseData = json.decodeFromString<TopSeriesDto>(response.body.string())
@@ -58,17 +62,17 @@ abstract class MangaEsp(
         val topWeekly = responseData.response.topWeekly.flatten().map { it.data }
         val topMonthly = responseData.response.topMonthly.flatten().map { it.data }
 
-        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }.map { it.toSManga() }
+        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }.map { it.toSManga(seriesPath) }
 
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/api/lastUpdates", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl$apiPath/lastUpdates", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseData = json.decodeFromString<LastUpdatesDto>(response.body.string())
 
-        val mangas = responseData.response.map { it.toSManga() }
+        val mangas = responseData.response.map { it.toSManga(seriesPath) }
 
         return MangasPage(mangas, false)
     }
@@ -123,7 +127,9 @@ abstract class MangaEsp(
             val statusFilter = filterList.firstInstanceOrNull<StatusFilter>()
 
             if (statusFilter != null) {
-                filteredList = filteredList.filter { it.status == statusFilter.toUriPart() }.toMutableList()
+                if (statusFilter.toUriPart() != 0) {
+                    filteredList = filteredList.filter { it.status == statusFilter.toUriPart() }.toMutableList()
+                }
             }
 
             val sortByFilter = filterList.firstInstanceOrNull<SortByFilter>()
@@ -151,7 +157,7 @@ abstract class MangaEsp(
 
         return MangasPage(
             filteredList.subList((page - 1) * MANGAS_PER_PAGE, min(page * MANGAS_PER_PAGE, filteredList.size))
-                .map { it.toSManga() },
+                .map { it.toSManga(seriesPath) },
             hasNextPage,
         )
     }
@@ -171,7 +177,7 @@ abstract class MangaEsp(
             ?: throw Exception(intl["comic_data_error"])
         val unescapedJson = mangaDetailsJson.unescape()
         val series = json.decodeFromString<SeriesDto>(unescapedJson)
-        return series.chapters.map { it.toSChapter(series.slug) }
+        return series.chapters.map { it.toSChapter(seriesPath, series.slug) }
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -212,6 +218,7 @@ abstract class MangaEsp(
     )
 
     protected open fun getStatusList() = arrayOf(
+        Pair(intl["status_filter_all"], 0),
         Pair(intl["status_filter_ongoing"], 1),
         Pair(intl["status_filter_hiatus"], 2),
         Pair(intl["status_filter_dropped"], 3),
@@ -242,7 +249,7 @@ abstract class MangaEsp(
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         val MANGA_LIST_REGEX = """self\.__next_f\.push\(.*data\\":(\[.*trending.*])\}""".toRegex()
-        private val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*\\"numFollow""".toRegex()
+        val MANGA_DETAILS_REGEX = """self\.__next_f\.push\(.*data\\":(\{.*lastChapters.*\}).*\\"numFollow""".toRegex()
         const val MANGAS_PER_PAGE = 15
     }
 }
