@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -62,9 +63,25 @@ class Koharu(
 
     private fun remadd() = preferences.getBoolean(PREF_REM_ADD, false)
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
+    private fun getDomain(): String {
+        try {
+            val noRedirectClient = client.newBuilder().followRedirects(false).build()
+            val host = noRedirectClient.newCall(GET(baseUrl, headers)).execute()
+                .headers["Location"]?.toHttpUrlOrNull()?.host
+                ?: return baseUrl
+            return "https://$host"
+        } catch (_: Exception) {
+            return baseUrl
+        }
+    }
+
+    private val lazyHeaders by lazy {
+        val domain = getDomain()
+        headersBuilder()
+            .set("Referer", "$domain/")
+            .set("Origin", domain)
+            .build()
+    }
 
     private fun getManga(book: Entry) = SManga.create().apply {
         setUrlWithoutDomain("${book.id}/${book.public_key}")
@@ -74,7 +91,6 @@ class Koharu(
 
     private fun getImagesByMangaEntry(entry: MangaEntry): Pair<ImagesInfo, String> {
         val data = entry.data
-        val quality = 0
         fun getIPK(
             ori: DataKey?,
             alt1: DataKey?,
@@ -107,19 +123,19 @@ class Koharu(
             else -> "0"
         }
 
-        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.public_key}/$id/$public_key?v=${entry.updated_at ?: entry.created_at}&w=$realQuality", headers)).execute()
+        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.public_key}/$id/$public_key?v=${entry.updated_at ?: entry.created_at}&w=$realQuality", lazyHeaders)).execute()
         val images = imagesResponse.parseAs<ImagesInfo>() to realQuality
         return images
     }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = GET("$apiBooksUrl?page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$apiBooksUrl?page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "", lazyHeaders)
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$apiBooksUrl?sort=8&page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiBooksUrl?sort=8&page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "", lazyHeaders)
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<Books>()
 
@@ -134,7 +150,7 @@ class Koharu(
         return when {
             query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
                 val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
-                val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", headers)).execute()
+                val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
                 Observable.just(searchMangaParse2(response))
             }
             else -> super.fetchSearchManga(page, query, filters)
@@ -173,7 +189,7 @@ class Koharu(
             addQueryParameter("page", page.toString())
         }.build()
 
-        return GET(url, headers)
+        return GET(url, lazyHeaders)
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
@@ -195,7 +211,7 @@ class Koharu(
     // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiBooksUrl/detail/${manga.url}", headers)
+        return GET("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -296,7 +312,7 @@ class Koharu(
     // Chapter
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET("$apiBooksUrl/detail/${manga.url}", headers)
+        return GET("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -315,7 +331,7 @@ class Koharu(
     // Page List
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiBooksUrl/detail/${chapter.url}", headers)
+        return GET("$apiBooksUrl/detail/${chapter.url}", lazyHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -325,6 +341,10 @@ class Koharu(
         return imagesInfo.first.entries.mapIndexed { index, image ->
             Page(index, imageUrl = "${imagesInfo.first.base}/${image.path}?w=${imagesInfo.second}")
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        return GET(page.imageUrl!!, lazyHeaders)
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
