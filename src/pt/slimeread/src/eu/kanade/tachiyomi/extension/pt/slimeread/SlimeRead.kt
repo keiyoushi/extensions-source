@@ -110,12 +110,12 @@ class SlimeRead : HttpSource() {
         // Handling a large manga list
         return Observable.just(popularMangeCache!!)
             .map { mangaPage ->
-                val (mangas) = mangaPage
+                val mangas = mangaPage.mangas
                 val pageSize = 15
 
                 currentSlice = (page - 1) * pageSize
 
-                val startIndex = min(mangas.size, currentSlice)
+                val startIndex = min(mangas.size - 1, currentSlice)
                 val endIndex = min(mangas.size, currentSlice + pageSize)
 
                 val slice = mangas.subList(startIndex, endIndex)
