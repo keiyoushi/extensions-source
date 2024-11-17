@@ -1,9 +1,9 @@
 ext {
     extName = 'Animated Glitched Comics'
     extClass = '.AnimatedGlitchedComics'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://agscomics.com'
-    overrideVersionCode = 0
+    themePkg = 'keyoapp'
+    baseUrl = 'https://agrcomics.com'
+    overrideVersionCode = 22
 }
 
 apply from: "$rootDir/common.gradle"
