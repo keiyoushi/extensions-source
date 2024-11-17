@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
@@ -34,7 +35,7 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.getValue
 
-class LuraToon : LuraToonHttpSource(), ConfigurableSource {
+class LuraToon : HttpSource(), ConfigurableSource {
     override val baseUrl = "https://luratoons.com"
     override val name = "Lura Toon"
     override val lang = "pt-BR"
@@ -111,7 +112,7 @@ class LuraToon : LuraToonHttpSource(), ConfigurableSource {
             }
     }
 
-    override fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
+    fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
         val comics = response.parseAs<Manga>()
 
         return comics.caps.sortedBy {
@@ -183,6 +184,10 @@ class LuraToon : LuraToonHttpSource(), ConfigurableSource {
     }
 
     override fun imageUrlParse(response: Response): String {
+        TODO("Not yet implemented")
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
         TODO("Not yet implemented")
     }
 }

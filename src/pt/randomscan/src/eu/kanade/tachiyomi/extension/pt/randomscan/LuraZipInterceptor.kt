@@ -2,9 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.randomscan
 
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.zipinterceptor.ZipInterceptor
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
 import okhttp3.Request
 import okhttp3.Response
 import java.io.ByteArrayInputStream
@@ -27,10 +24,3 @@ class LuraZipInterceptor : ZipInterceptor() {
     }
 }
 
-abstract class LuraToonHttpSource : HttpSource() {
-    abstract fun chapterListParse(manga: SManga, response: Response): List<SChapter>
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException("Not used")
-    }
-}
