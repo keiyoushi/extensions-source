@@ -25,11 +25,12 @@ class SirenKomik : MangaThemesia(
     override val seriesAuthorSelector = ".keterangan-komik:contains(author) span"
     override val seriesArtistSelector = ".keterangan-komik:contains(artist) span"
 
+    override fun chapterListSelector() = ".list-chapter a"
+
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val urlElements = element.select("a")
-        setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".nomer-chapter").text().ifBlank { urlElements.first()!!.text() }
+        name = element.selectFirst(".nomer-chapter")!!.text()
         date_upload = element.selectFirst(".tgl-chapter")?.text().parseChapterDate()
+        setUrlWithoutDomain(element.absUrl("href"))
     }
 
     override fun pageListParse(document: Document): List<Page> {
