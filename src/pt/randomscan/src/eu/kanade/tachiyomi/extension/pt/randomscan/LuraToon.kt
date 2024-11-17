@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
-import eu.kanade.tachiyomi.multisrc.peachscan.PeachScan
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -24,33 +23,22 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.Interceptor
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.io.ByteArrayInputStream
-import java.io.InputStream
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import javax.crypto.Cipher
-import javax.crypto.SecretKey
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import kotlin.getValue
 
-class LuraToon :
-    PeachScan(
-        "Lura Toon",
-        "https://luratoons.com",
-        "pt-BR",
-    ),
-    ConfigurableSource {
+class LuraToon : LuraToonHttpSource(), ConfigurableSource {
+    override val baseUrl = "https://luratoons.com"
+    override val name = "Lura Toon"
+    override val lang = "pt-BR"
+    override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
@@ -58,7 +46,10 @@ class LuraToon :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient
+        .newBuilder()
+        .addInterceptor(::loggedVerifyInterceptor)
+        .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
         .rateLimit(3)
         .setRandomUserAgent(
             preferences.getPrefUAType(),
@@ -66,22 +57,21 @@ class LuraToon :
         )
         .build()
 
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/obra${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/api/autocomplete/$query", headers)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
-    }
-
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/obra${manga.url}", headers)
-    }
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
     }
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val data = response.parseAs<Manga>()
         title = data.titulo
         author = data.autor
+        artist = data.artista
         genre = data.generos.joinToString(", ") { it.name }
         status = when (data.status) {
             "Em Lançamento" -> SManga.ONGOING
@@ -95,19 +85,9 @@ class LuraToon :
         description = "Tipo: $category\n\n$synopsis"
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
-            .asObservable()
-            .map { response ->
-                chapterListParse(manga, response)
-            }
-    }
-
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromString<T>(body.string())
     }
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.parseAs<MainPage>()
@@ -123,7 +103,15 @@ class LuraToon :
         return MangasPage(mangas, document.lancamentos.isNotEmpty())
     }
 
-    fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return client.newCall(chapterListRequest(manga))
+            .asObservable()
+            .map { response ->
+                chapterListParse(manga, response)
+            }
+    }
+
+    override fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
         val comics = response.parseAs<Manga>()
 
         return comics.caps.sortedBy {
@@ -131,20 +119,14 @@ class LuraToon :
         }.map { chapterFromElement(manga, it) }
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply {
-        timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
-    }
-
-    fun chapterFromElement(manga: SManga, capitulo: Capitulo): SChapter {
-        return SChapter.create().apply {
-            val capSlug = capitulo.slug.trimStart('/')
-            val mangaUrl = manga.url.trimEnd('/').trimStart('/')
-            setUrlWithoutDomain("/api/obra/$mangaUrl/$capSlug")
-            name = capitulo.slug
-            date_upload = runCatching {
-                dateFormat.parse(capitulo.data)!!.time
-            }.getOrDefault(0L)
-        }
+    private fun chapterFromElement(manga: SManga, capitulo: Capitulo) = SChapter.create().apply {
+        val capSlug = capitulo.slug.trimStart('/')
+        val mangaUrl = manga.url.trimEnd('/').trimStart('/')
+        setUrlWithoutDomain("/api/obra/$mangaUrl/$capSlug")
+        name = capitulo.num.toString().removeSuffix(".0")
+        date_upload = runCatching {
+            dateFormat.parse(capitulo.data)!!.time
+        }.getOrDefault(0L)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -159,15 +141,6 @@ class LuraToon :
         return files
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("api/autocomplete/")
-            addPathSegments(query)
-        }.build()
-
-        return GET(url, headers)
-    }
-
     override fun searchMangaParse(response: Response): MangasPage {
         val mangas = response.parseAs<SearchResponse>().obras.map {
             SManga.create().apply {
@@ -180,28 +153,36 @@ class LuraToon :
         return MangasPage(mangas, false)
     }
 
-    private fun decryptFile(encryptedData: ByteArray, keyData: ByteArray): ByteArray {
-        val keyHash = MessageDigest.getInstance("SHA-256").digest(keyData)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.parseAs<MainPage>()
 
-        val key: SecretKey = SecretKeySpec(keyHash, "AES")
+        val mangas = document.top_10.map {
+            SManga.create().apply {
+                title = it.title
+                thumbnail_url = "$baseUrl${it.capa}"
+                setUrlWithoutDomain("/${it.slug}/")
+            }
+        }
 
-        val counter = encryptedData.copyOfRange(0, 8)
-        val iv = IvParameterSpec(counter)
-
-        val cipher = Cipher.getInstance("AES/CTR/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key, iv)
-
-        val decryptedData = cipher.doFinal(encryptedData.copyOfRange(8, encryptedData.size))
-
-        return decryptedData
+        return MangasPage(mangas, false)
     }
 
-    override fun zipGetByteStream(request: Request, response: Response): InputStream {
-        val keyData = listOf("obra_id", "slug", "cap_id", "cap_slug").joinToString("") {
-            request.url.queryParameterValues(it).first().toString()
-        }.toByteArray(StandardCharsets.UTF_8)
-        val encryptedData = response.body.bytes()
-        val decryptedData = decryptFile(encryptedData, keyData)
-        return ByteArrayInputStream(decryptedData)
+    private fun loggedVerifyInterceptor(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        if (response.request.url.pathSegments.contains("login")) {
+            throw Exception("Faça o login na WebView para acessar o contéudo")
+        }
+        if (response.code == 429) {
+            throw Exception("A LuraToon lhe bloqueou por acessar rápido demais, aguarde por volta de 1 minuto e tente novamente")
+        }
+        return response
+    }
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply {
+        timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
+    }
+
+    override fun imageUrlParse(response: Response): String {
+        TODO("Not yet implemented")
     }
 }
