@@ -1,141 +1,150 @@
 package eu.kanade.tachiyomi.extension.en.webcomics
 
+import android.app.Application
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
-class Webcomics : ParsedHttpSource() {
+class Webcomics : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Webcomics"
 
-    override val baseUrl = "https://www.webcomicsapp.com"
+    override val baseUrl = "https://webcomicsapp.com"
+
+    private val apiUrl = "https://popeye.${baseUrl.substringAfterLast("/")}/api"
 
     override val lang = "en"
 
     override val supportsLatest = true
 
-    override fun popularMangaSelector() = "section.mangas div div.col-md-3"
+    private val json: Json by injectLazy()
 
-    override fun latestUpdatesSelector() = "section.mangas div div.col-md-3"
+    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "https://www.webcomicsapp.com")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/popular.html", headers)
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
+        .build()
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest.html", headers)
+    // ========================== Popular =====================================
 
-    private fun mangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        element.select("a").first()!!.let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.select("h5").text()
-        }
-        return manga
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/genres/All/All/Popularity/$page", headers)
+
+    override fun popularMangaSelector() = ".book-list .list-item a"
+
+    override fun popularMangaNextPageSelector() = ".page-list li:not([style*=none]) a.next"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h2")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(element.absUrl("href"))
     }
 
-    override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
+    // ========================== Latest =====================================
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/genres/All/All/Latest_Updated/$page", headers)
 
-    override fun latestUpdatesFromElement(element: Element) = mangaFromElement(element)
+    override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun popularMangaNextPageSelector() = null
+    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector() = null
+    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("section.book-info-left > .wrap")
-
-        val manga = SManga.create()
-        manga.genre = infoElement.select(".labels > label").joinToString(", ") { it.text() }
-        manga.description = infoElement.select("p.p-description").text()
-        manga.thumbnail_url = infoElement.select("img").first()?.attr("src")
-        infoElement.select("p.p-schedule:first-of-type").text().let {
-            if (it.contains("IDK")) manga.status = SManga.COMPLETED else manga.status = SManga.ONGOING
-        }
-        return manga
-    }
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        val infoElement = element.select(".col-md-5")
-        val manga = SManga.create()
-        infoElement.let {
-            manga.title = it.select(".wiki-book-title").text().trim()
-            manga.setUrlWithoutDomain(it.select("a").first()!!.attr("href"))
-        }
-        return manga
-    }
-
-    override fun searchMangaSelector() = ".wiki-book-list > .row"
+    // ========================== Search =====================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/wiki.html?search=$query&page=$page".toHttpUrl().newBuilder()
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        if (query.isNotBlank()) {
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            return GET(url.addPathSegment(query.toPathSegment()).build(), headers)
+        }
+
+        filters.forEach { filter ->
             when (filter) {
                 is GenreFilter -> {
-                    val genre = getGenreList()[filter.state]
-                    url?.addQueryParameter("category", genre)
+                    val genre = filter.selected()
+                    val url = "$baseUrl/genres/$genre/All/Popular/$page"
+                    return GET(url, headers)
                 }
                 else -> {}
             }
         }
-        return GET(url.build(), headers)
+        return popularMangaRequest(page)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        var nextPage = true
-        val mangas = document.select(searchMangaSelector()).toList().filter {
-            val shouldFilter = it.select(".col-md-2 > a").first()!!.text() == "READ"
-            if (nextPage) {
-                nextPage = shouldFilter
-            }
-            shouldFilter
-        }.map { element ->
-            searchMangaFromElement(element)
+    override fun searchMangaSelector() = popularMangaSelector()
+
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+
+    // ========================== Details ====================================
+
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val infoElement = document.selectFirst(".card-info")!!
+        title = infoElement.selectFirst("h5")!!.text()
+        description = infoElement.selectFirst(".book-detail > p")?.text()
+        genre = infoElement.select(".label-tag").joinToString { it.text() }
+        thumbnail_url = infoElement.selectFirst("img")?.absUrl("src")
+        document.selectFirst(".chapter-updateDetail")?.text()?.let {
+            status = if (it.contains("IDK")) SManga.COMPLETED else SManga.ONGOING
         }
-
-        return MangasPage(mangas, if (nextPage) hasNextPage(document) else false)
     }
 
-    private fun hasNextPage(document: Document): Boolean {
-        return !document.select(".pagination .page-item.active + .page-item").isEmpty()
+    // ========================== Chapter ====================================
+
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaId = manga.url.substringAfterLast("/")
+        return GET("$apiUrl/chapter/list?manga_id=$mangaId", headers)
     }
-
-    override fun chapterListSelector() = "section.book-info-left > .wrap > ul > li"
-
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        val dto = response.parseAs<ChapterWrapper>()
+        val manga = dto.manga
 
-        /* Source only allows 20 chapters to be readable on their website, trying to read past
-           that results in a page list empty error; so might as well not grab them. */
-        return if (document.select("${chapterListSelector()}:nth-child(21)").isEmpty()) {
-            document.select(chapterListSelector()).asReversed().map { chapterFromElement(it) }
-        } else {
-            val chapters = mutableListOf<SChapter>()
-            for (i in 1..20)
-                document.select("${chapterListSelector()}:nth-child($i)").map { chapters.add(chapterFromElement(it)) }
-            // Add a chapter notifying the user of the situation
-            val lockedNotification = SChapter.create()
-            lockedNotification.name = "[Attention] Additional chapters are restricted by the source to their own app"
-            lockedNotification.url = "wiki.html"
-            chapters.add(lockedNotification)
-            chapters.reversed()
-        }
+        return dto.chapters.map { chapter ->
+            SChapter.create().apply {
+                name = if (chapter.is_pay) "🔒 ${chapter.name}" else chapter.name
+                date_upload = chapter.update_time
+                chapter_number = chapter.index.toFloat()
+
+                val chapterUrl = "$baseUrl/view".toHttpUrl().newBuilder()
+                    .addPathSegment(manga.name.replace(WHITE_SPACE_REGEX, "-"))
+                    .addPathSegment(chapter.index.toString())
+                    .addPathSegment("${manga.manga_id}-${chapter.name.toPathSegment()}")
+                    .build()
+
+                setUrlWithoutDomain(chapterUrl.toString())
+            }
+        }.sortedBy(SChapter::chapter_number).reversed()
     }
 
     override fun chapterFromElement(element: Element): SChapter {
@@ -147,41 +156,80 @@ class Webcomics : ParsedHttpSource() {
         return chapter
     }
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + "/" + manga.url, headers)
+    // ========================== Pages ====================================
 
-    override fun pageListRequest(chapter: SChapter) = GET(baseUrl + "/" + chapter.url, headers)
+    override fun pageListParse(document: Document): List<Page> {
+        val script = document.select("script")
+            .firstOrNull { PAGE_REGEX.containsMatchIn(it.data()) }
+            ?: throw Exception("You may need to log in")
 
-    override fun pageListParse(document: Document) = document
-        .select("section.book-reader .img-list > li > img")
-        .mapIndexed {
-                i, element ->
-            Page(i, "", element.attr("data-original"))
-        }
+        return PAGE_REGEX.findAll(script.data()).mapIndexed { index, match ->
+            Page(index, imageUrl = match.groups["img"]!!.value.unicode())
+        }.toList()
+    }
 
     override fun imageUrlParse(document: Document) = ""
 
-    private class GenreFilter(genres: Array<String>) : Filter.Select<String>("Genre", genres)
+    // ========================== Filters ==================================
+
+    private class GenreFilter(val genres: Array<String>) : Filter.Select<String>("Genre", genres) {
+        fun selected() = genres[state]
+    }
 
     override fun getFilterList() = FilterList(
         GenreFilter(getGenreList()),
     )
 
-    // [...$('.row.wiki-book-nav .col-md-8 ul a')].map(el => `"${el.textContent.trim()}"`).join(',\n')
-    // https://www.webcomicsapp.com/wiki.html
     private fun getGenreList() = arrayOf(
         "All",
-        "Fantasy",
-        "Comedy",
-        "Drama",
-        "Modern",
-        "Action",
-        "Monster",
         "Romance",
-        "Boys'Love",
-        "Harem",
-        "Thriller",
-        "Historical",
-        "Sci-fi",
-        "Slice of Life",
+        "Fantasy",
+        "Action",
+        "Drama",
+        "BL",
+        "GL",
+        "Comedy",
+        "Horror",
+        "Mistery",
     )
+
+    // =============================== Utlis ====================================
+    private inline fun <reified T> Response.parseAs(): T {
+        return json.decodeFromString(body.string())
+    }
+
+    private fun String.toPathSegment(): String {
+        return this
+            .replace(PUNCTUATION_REGEX, "")
+            .replace(WHITE_SPACE_REGEX, "-")
+    }
+
+    fun String.unicode(): String {
+        return UNICODE_REGEX.replace(this) { match ->
+            val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
+            val value = hex.toInt(16)
+            value.toChar().toString()
+        }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
+
+        // Force UA for desktop, as mobile versions return an empty page
+        preferences.getString(PREF_KEY_RANDOM_UA, "off")?.let {
+            if (it != "off") {
+                return@let
+            }
+            preferences.edit()
+                .putString(PREF_KEY_RANDOM_UA, "desktop")
+                .apply()
+        }
+    }
+
+    companion object {
+        val PAGE_REGEX = """src:(\s+)?"(?<img>[^"]+)""".toRegex()
+        val WHITE_SPACE_REGEX = """[\s]+""".toRegex()
+        val PUNCTUATION_REGEX = "[\\p{Punct}]".toRegex()
+        val UNICODE_REGEX = "\\\\u([0-9A-Fa-f]{4})|\\\\U([0-9A-Fa-f]{8})".toRegex()
+    }
 }
