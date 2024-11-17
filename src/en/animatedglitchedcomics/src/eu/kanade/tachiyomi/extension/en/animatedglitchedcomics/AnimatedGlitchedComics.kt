@@ -6,4 +6,6 @@ class AnimatedGlitchedComics : Keyoapp(
     "Animated Glitched Comics",
     "https://agrcomics.com",
     "en",
-)
+) {
+    override val versionId = 2
+}
