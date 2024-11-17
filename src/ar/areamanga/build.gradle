@@ -2,8 +2,8 @@ ext {
     extName = 'Area Manga'
     extClass = '.AreaManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://ar.areamanga.xyz'
-    overrideVersionCode = 2
+    baseUrl = 'https://ar.kenmanga.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

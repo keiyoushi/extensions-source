@@ -6,7 +6,7 @@ import java.util.Locale
 
 class AreaManga : MangaThemesia(
     "أريا مانجا",
-    "https://ar.areamanga.xyz",
+    "https://ar.kenmanga.com",
     "ar",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
 )
