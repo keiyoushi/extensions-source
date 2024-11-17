@@ -23,4 +23,3 @@ class LuraZipInterceptor : ZipInterceptor() {
         return ByteArrayInputStream(decryptedData)
     }
 }
-
