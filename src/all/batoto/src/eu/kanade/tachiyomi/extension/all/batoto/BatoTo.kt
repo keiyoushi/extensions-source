@@ -323,7 +323,7 @@ open class BatoTo(
         return super.mangaDetailsRequest(manga)
     }
     private var titleRegex: Regex =
-        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|/.+?|⌜.+?⌝)\\s*")
+        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|《[^》]*》|/.+?|⌜.+?⌝)\\s*")
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div#mainer div.container-fluid")
@@ -392,14 +392,7 @@ open class BatoTo(
     }
 
     private fun checkChapterLists(document: Document): Boolean {
-        val chapterListElements = document.select(chapterListSelector())
-        if (chapterListElements.isEmpty()) {
-            val alertWarningElement = document.select(".episode-list > .alert-warning").firstOrNull()
-            if (alertWarningElement != null && alertWarningElement.text().contains("This comic has been marked as deleted and the chapter list is not available.")) {
-                throw Exception("This comic was deleted.")
-            }
-        }
-        return false
+        return document.select(".episode-list > .alert-warning").text().contains("This comic has been marked as deleted and the chapter list is not available.")
     }
 
     override fun chapterListRequest(manga: SManga): Request {
