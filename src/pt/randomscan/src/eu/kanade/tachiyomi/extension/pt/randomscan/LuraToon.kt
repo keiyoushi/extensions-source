@@ -115,8 +115,8 @@ class LuraToon : HttpSource(), ConfigurableSource {
     fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
         val comics = response.parseAs<Manga>()
 
-        return comics.caps.sortedBy {
-            -it.num
+        return comics.caps.sortedByDescending {
+            it.num
         }.map { chapterFromElement(manga, it) }
     }
 
