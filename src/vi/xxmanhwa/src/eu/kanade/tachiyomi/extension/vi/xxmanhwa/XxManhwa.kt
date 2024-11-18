@@ -31,7 +31,7 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://s1.xxmanhwa1.top"
+    override val baseUrl = "https://google.xxmanhwa2.top"
 
     override val supportsLatest = false
 
