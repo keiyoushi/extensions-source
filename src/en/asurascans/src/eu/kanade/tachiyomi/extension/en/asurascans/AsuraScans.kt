@@ -265,9 +265,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div > img[alt*=chapter]").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
-        }
+        val scripts = document.select("script:containsData(pages)").joinToString { it.data() }
+        val data = PAGES_REGEX.find(scripts)?.groupValues?.get(1) ?: throw Exception("Failed to find chapter pages")
+        val pageList = json.decodeFromString<List<PageDto>>(data.unescape()).sortedBy { it.order }
+        return pageList.mapIndexed { i, page -> Page(i, imageUrl = page.url) }
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -311,7 +312,13 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return this.replace(slug, absSlug)
     }
 
+    private fun String.unescape(): String {
+        return UNESCAPE_REGEX.replace(this, "$1")
+    }
+
     companion object {
+        private val UNESCAPE_REGEX = """\\(.)""".toRegex()
+        private val PAGES_REGEX = """\\"pages\\":(\[.*?])""".toRegex()
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
