@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.bilibili
+package eu.kanade.tachiyomi.extension.zh.bilibilimanga
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -74,7 +74,14 @@ data class BilibiliImageDto(
 data class BilibiliPageDto(
     val token: String,
     val url: String,
-)
+    @SerialName("complete_url")
+    val completeUrl: String,
+    @SerialName("hit_encrpyt")
+    val hitEncrypt: Boolean,
+) {
+    val imageUrl: String
+        get() = completeUrl.ifEmpty { "$url?token=$token" }
+}
 
 @Serializable
 data class BilibiliAccessTokenCookie(

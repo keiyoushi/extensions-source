@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.bilibili
+package eu.kanade.tachiyomi.extension.zh.bilibilimanga
 
 import java.text.DateFormatSymbols
 import java.text.NumberFormat
