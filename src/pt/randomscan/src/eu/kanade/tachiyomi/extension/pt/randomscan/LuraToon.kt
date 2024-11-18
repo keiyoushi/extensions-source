@@ -58,7 +58,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
         )
         .build()
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/obra${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
     override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
@@ -113,6 +113,10 @@ class LuraToon : HttpSource(), ConfigurableSource {
     }
 
     fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
+        if (response.code == 404) {
+            throw Exception("Capitulos não encontrados, tente migrar o manga, alguns nomes da LuraToon mudaram")
+        }
+
         val comics = response.parseAs<Manga>()
 
         return comics.caps.sortedByDescending {
@@ -133,9 +137,6 @@ class LuraToon : HttpSource(), ConfigurableSource {
     override fun pageListParse(response: Response): List<Page> {
         val capitulo = response.parseAs<CapituloPagina>()
         val pathSegments = response.request.url.pathSegments
-        if (pathSegments.contains("login") || pathSegments.isEmpty()) {
-            throw Exception("Faça o login na WebView para acessar o contéudo")
-        }
         return (0 until capitulo.files).map { i ->
             Page(i, baseUrl, "$baseUrl/api/cap-download/${capitulo.obra.id}/${capitulo.id}/$i?obra_id=${capitulo.obra.id}&cap_id=${capitulo.id}&slug=${pathSegments[2]}&cap_slug=${pathSegments[3]}")
         }
@@ -169,7 +170,8 @@ class LuraToon : HttpSource(), ConfigurableSource {
 
     private fun loggedVerifyInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
-        if (response.request.url.pathSegments.contains("login")) {
+        val pathSegments = response.request.url.pathSegments
+        if (response.request.url.pathSegments.contains("login") || pathSegments.isEmpty()) {
             throw Exception("Faça o login na WebView para acessar o contéudo")
         }
         if (response.code == 429) {
@@ -182,11 +184,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
         timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
     }
 
-    override fun imageUrlParse(response: Response): String {
-        TODO("Not yet implemented")
-    }
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        TODO("Not yet implemented")
-    }
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 }
