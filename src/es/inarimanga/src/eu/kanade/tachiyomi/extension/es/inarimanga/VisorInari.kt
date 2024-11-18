@@ -8,7 +8,7 @@ import java.util.Locale
 
 class VisorInari : MangaThemesia(
     "Visor Inari",
-    "https://visorinari.com",
+    "https://vrinari.org",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
