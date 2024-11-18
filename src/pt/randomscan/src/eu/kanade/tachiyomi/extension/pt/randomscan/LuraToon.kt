@@ -115,8 +115,8 @@ class LuraToon : HttpSource(), ConfigurableSource {
     fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
         val comics = response.parseAs<Manga>()
 
-        return comics.caps.sortedBy {
-            -it.num
+        return comics.caps.sortedByDescending {
+            it.num
         }.map { chapterFromElement(manga, it) }
     }
 
@@ -136,10 +136,9 @@ class LuraToon : HttpSource(), ConfigurableSource {
         if (pathSegments.contains("login") || pathSegments.isEmpty()) {
             throw Exception("Faça o login na WebView para acessar o contéudo")
         }
-        val files = (0 until capitulo.files).map { i ->
+        return (0 until capitulo.files).map { i ->
             Page(i, baseUrl, "$baseUrl/api/cap-download/${capitulo.obra.id}/${capitulo.id}/$i?obra_id=${capitulo.obra.id}&cap_id=${capitulo.id}&slug=${pathSegments[2]}&cap_slug=${pathSegments[3]}")
         }
-        return files
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
