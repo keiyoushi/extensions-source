@@ -131,28 +131,4 @@ object CryptoAES {
             Arrays.fill(generatedData, 0.toByte())
         }
     }
-
-    /**
-     * Decrypt a file using AES CTR mode
-     *
-     * @param encryptedData the encrypted data
-     * @param keyBytes the key to decrypt the data
-     * @return the decrypted data
-     */
-
-    fun decryptFile(encryptedData: ByteArray, keyBytes: ByteArray, hashCipher: String = HASH_CIPHER): ByteArray {
-        val keyHash = MessageDigest.getInstance("SHA-256").digest(keyBytes)
-
-        val key: SecretKey = SecretKeySpec(keyHash, "AES")
-
-        val counter = encryptedData.copyOfRange(0, 8)
-        val iv = IvParameterSpec(counter)
-
-        val cipher = Cipher.getInstance(hashCipher)
-        cipher.init(Cipher.DECRYPT_MODE, key, iv)
-
-        val decryptedData = cipher.doFinal(encryptedData.copyOfRange(8, encryptedData.size))
-
-        return decryptedData
-    }
 }
