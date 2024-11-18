@@ -44,11 +44,12 @@ class NoxScans : MangaThemesia(
 
         return document.selectFirst(formSelector)?.let { robotForm ->
             val formUrl = robotForm.absUrl("action").takeIf(String::isNotBlank) ?: document.location()
-            val input = robotForm.selectFirst("input")!!.attr("value")
-            val name = robotForm.selectFirst("input")!!.attr("name")
+            val input = robotForm.selectFirst("input")!!.let {
+                it.attr("name") to it.attr("value")
+            }
 
             val formBody = FormBody.Builder()
-                .add(name, input)
+                .add(input.first, input.second)
                 .build()
 
             bypassRobotVerification(client.newCall(POST(formUrl, headers, formBody)).execute().asJsoup())
