@@ -1,7 +1,8 @@
-package eu.kanade.tachiyomi.multisrc.bilibili
+package eu.kanade.tachiyomi.extension.zh.bilibilimanga
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Base64
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
@@ -27,12 +28,18 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Locale
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 abstract class Bilibili(
     override val name: String,
@@ -44,8 +51,10 @@ abstract class Bilibili(
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::expiredImageTokenIntercept)
+        .addInterceptor(::decryptImageIntercept)
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .rateLimitHost(CDN_URL.toHttpUrl(), 2)
+        .rateLimitHost(MODIFIED_CDN_URL.toHttpUrl(), 2)
         .rateLimitHost(COVER_CDN_URL.toHttpUrl(), 2)
         .build()
 
@@ -239,7 +248,11 @@ abstract class Bilibili(
         return result.data!!.episodeList.map { ep -> chapterFromObject(ep, result.data.id) }
     }
 
-    protected open fun chapterFromObject(episode: BilibiliEpisodeDto, comicId: Int, isUnlocked: Boolean = false): SChapter = SChapter.create().apply {
+    protected open fun chapterFromObject(
+        episode: BilibiliEpisodeDto,
+        comicId: Int,
+        isUnlocked: Boolean = false,
+    ): SChapter = SChapter.create().apply {
         name = buildString {
             if (episode.isPaid && !isUnlocked) {
                 append("$EMOJI_LOCKED ")
@@ -297,9 +310,9 @@ abstract class Bilibili(
         val imageTokenRequest = imageTokenRequest(imageUrls)
         val imageTokenResponse = client.newCall(imageTokenRequest).execute()
         val imageTokenResult = imageTokenResponse.parseAs<List<BilibiliPageDto>>()
-
-        return imageTokenResult.data!!
-            .mapIndexed { i, page -> Page(i, "", "${page.url}?token=${page.token}") }
+        return imageTokenResult.data!!.zip(imageUrls).mapIndexed { i, pair ->
+            Page(i, pair.second, pair.first.imageUrl)
+        }
     }
 
     protected open fun imageTokenRequest(urls: List<String>): Request {
@@ -370,24 +383,62 @@ abstract class Bilibili(
         return FilterList(filters)
     }
 
-    private fun expiredImageTokenIntercept(chain: Interceptor.Chain): Response {
-        val response = chain.proceed(chain.request())
+    override fun imageRequest(page: Page): Request {
+        return super.imageRequest(page).newBuilder().tag(TAG_IMAGE_REQUEST)
+            .tag(TagImagePath::class.java, TagImagePath(page.url)).build()
+    }
 
+    private fun decryptImageIntercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        if (response.isSuccessful && request.tag() == TAG_IMAGE_REQUEST) {
+            if (response.body.contentType()?.type == "image") {
+                return response
+            }
+            val cpx = request.url.queryParameter("cpx")
+            val iv = Base64.decode(cpx, Base64.DEFAULT).copyOfRange(60, 76)
+            val allBytes = response.body.bytes()
+            val size =
+                ByteBuffer.wrap(allBytes.copyOfRange(1, 5)).order(ByteOrder.BIG_ENDIAN).getInt()
+            val data = allBytes.copyOfRange(5, 5 + size)
+            val key = allBytes.copyOfRange(5 + size, allBytes.size)
+            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            val ivSpec = IvParameterSpec(iv)
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), ivSpec)
+            val encryptedSize = 20 * 1024 + 16
+            val decryptedSegment = cipher.doFinal(data, 0, encryptedSize.coerceAtMost(data.size))
+            val decryptedData = if (encryptedSize < data.size) {
+                // append remaining data
+                decryptedSegment + data.copyOfRange(encryptedSize, data.size)
+            } else {
+                decryptedSegment
+            }
+            val imageExtension = request.url.encodedPath.substringAfterLast(".", "jpg")
+            return response.newBuilder()
+                .body(decryptedData.toResponseBody("image/$imageExtension".toMediaType())).build()
+        }
+        return response
+    }
+
+    private fun expiredImageTokenIntercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
         // Get a new image token if the current one expired.
-        if (response.code == 403 && chain.request().url.toString().contains(CDN_URL)) {
+        if (response.code == 400 && request.tag() == TAG_IMAGE_REQUEST) {
+            val imagePath = request.tag(TagImagePath::class)
+            if (imagePath?.path.isNullOrEmpty()) {
+                return response
+            }
             response.close()
-            val imagePath = chain.request().url.toString()
-                .substringAfter(CDN_URL)
-                .substringBefore("?token=")
-            val imageTokenRequest = imageTokenRequest(listOf(imagePath))
+            val imageTokenRequest = imageTokenRequest(listOf(imagePath!!.path))
             val imageTokenResponse = chain.proceed(imageTokenRequest)
             val imageTokenResult = imageTokenResponse.parseAs<List<BilibiliPageDto>>()
             imageTokenResponse.close()
 
             val newPage = imageTokenResult.data!!.first()
-            val newPageUrl = "${newPage.url}?token=${newPage.token}"
+            val newPageUrl = newPage.imageUrl
 
-            val newRequest = imageRequest(Page(0, "", newPageUrl))
+            val newRequest = imageRequest(Page(0, imagePath.path, newPageUrl))
 
             return chain.proceed(newRequest)
         }
@@ -396,7 +447,12 @@ abstract class Bilibili(
     }
 
     private val SharedPreferences.chapterImageQuality
-        get() = when (getString("${IMAGE_QUALITY_PREF_KEY}_$lang", IMAGE_QUALITY_PREF_DEFAULT_VALUE)!!) {
+        get() = when (
+            getString(
+                "${IMAGE_QUALITY_PREF_KEY}_$lang",
+                IMAGE_QUALITY_PREF_DEFAULT_VALUE,
+            )!!
+        ) {
             "hd" -> "1600w"
             "sd" -> "1000w"
             "low" -> "800w_50q"
@@ -427,13 +483,17 @@ abstract class Bilibili(
             .getOrNull() ?: 0L
     }
 
+    private class TagImagePath(val path: String)
+
     companion object {
         const val CDN_URL = "https://manga.hdslb.com"
+        const val MODIFIED_CDN_URL = "https://mangaup.hdslb.com"
         const val COVER_CDN_URL = "https://i0.hdslb.com"
 
         const val API_COMIC_V1_COMIC_ENDPOINT = "twirp/comic.v1.Comic"
 
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
+        private const val TAG_IMAGE_REQUEST = "tag_image_request"
 
         val JSON_MEDIA_TYPE = "application/json;charset=UTF-8".toMediaType()
 
