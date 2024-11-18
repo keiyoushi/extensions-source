@@ -2,8 +2,8 @@ ext {
     extName = 'Nox Scans'
     extClass = '.NoxScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://noxscans.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://www.noxscans.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 
