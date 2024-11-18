@@ -76,8 +76,6 @@ data class BilibiliPageDto(
     val url: String,
     @SerialName("complete_url")
     val completeUrl: String,
-    @SerialName("hit_encrpyt")
-    val hitEncrypt: Boolean,
 ) {
     val imageUrl: String
         get() = completeUrl.ifEmpty { "$url?token=$token" }
