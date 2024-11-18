@@ -75,6 +75,7 @@ open class NHentai(
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     private val dataRegex = Regex("""JSON.parse\("([^*]*)"\)""")
+    private val hentaiSelector = "script:containsData(JSON.parse):not(:containsData(media_server))"
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -211,7 +212,7 @@ open class NHentai(
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val script = document.selectFirst("script:containsData(JSON.parse)")!!.data()
+        val script = document.selectFirst(hentaiSelector)!!.data()
 
         val json = dataRegex.find(script)?.groupValues!![1]
 
@@ -221,11 +222,12 @@ open class NHentai(
             thumbnail_url = document.select("#cover > a > img").attr("data-src")
             status = SManga.COMPLETED
             artist = getArtists(data)
-            author = getGroups(data)
+            author = getGroups(data) ?: getArtists(data)
             // Some people want these additional details in description
             description = "Full English and Japanese titles:\n"
-                .plus("${data.title.english}\n")
-                .plus("${data.title.japanese}\n\n")
+                .plus("${data.title.english ?: data.title.japanese ?: data.title.pretty ?: ""}\n")
+                .plus(data.title.japanese ?: "")
+                .plus("\n\n")
                 .plus("Pages: ${data.images.pages.size}\n")
                 .plus("Favorited by: ${data.num_favorites}\n")
                 .plus(getTagDescription(data))
@@ -238,7 +240,7 @@ open class NHentai(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(JSON.parse)")!!.data()
+        val script = document.selectFirst(hentaiSelector)!!.data()
 
         val json = dataRegex.find(script)?.groupValues!![1]
 
@@ -259,7 +261,7 @@ open class NHentai(
 
     override fun pageListParse(document: Document): List<Page> {
         val script = document.selectFirst("script:containsData(media_server)")!!.data()
-        val script2 = document.selectFirst("script:containsData(JSON.parse)")!!.data()
+        val script2 = document.selectFirst(hentaiSelector)!!.data()
 
         val mediaServer = Regex("""media_server\s*:\s*(\d+)""").find(script)?.groupValues!![1]
         val json = dataRegex.find(script2)?.groupValues!![1]
@@ -328,10 +330,11 @@ open class NHentai(
     )
 
     private inline fun <reified T> String.parseAs(): T {
+        val data = Regex("""\\u([0-9A-Fa-f]{4})""").replace(this) {
+            it.groupValues[1].toInt(16).toChar().toString()
+        }
         return json.decodeFromString(
-            Regex("""\\u([0-9A-Fa-f]{4})""").replace(this) {
-                it.groupValues[1].toInt(16).toChar().toString()
-            },
+            data,
         )
     }
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
