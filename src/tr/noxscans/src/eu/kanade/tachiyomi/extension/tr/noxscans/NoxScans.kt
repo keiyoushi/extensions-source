@@ -1,59 +1,82 @@
 package eu.kanade.tachiyomi.extension.tr.noxscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.FormBody
 import okhttp3.Response
 import org.json.JSONObject
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class NoxScans : MangaThemesia(
     "NoxScans",
-    "https://noxscans.com",
+    "https://www.noxscans.com",
     "tr",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 ) {
     companion object {
         private val IMAGE_EXTENSIONS = listOf(".webp", ".jpg", ".jpeg", ".png", ".gif")
-        private const val VERIFICATION_ERROR =
-            "Bölümü görüntülemek için WebView'de doğrulama yapmanız gerekiyor"
         private const val ROBOT_VERIFICATION_ERROR =
             "Robot doğrulaması gerekiyor. WebView'de doğrulama yapın"
     }
 
-    private fun checkVerification(document: Document, url: String? = null) {
-        when {
-            document.select("form[action*=kontrol]").isNotEmpty() -> throw Exception(
-                VERIFICATION_ERROR,
-            )
+    private var attempts = 0
+    private val formSelector = "form[action*=kontrol], form:has(legend)"
 
-            url?.contains("/kontrol/") == true -> throw Exception(ROBOT_VERIFICATION_ERROR)
+    private fun checkVerification(document: Document): Document {
+        attempts = 0
+        return document.selectFirst(formSelector)?.let {
+            bypassRobotVerification(document)
+        } ?: document
+    }
+
+    private fun bypassRobotVerification(document: Document): Document {
+        if (attempts == 3) {
+            throw Exception(ROBOT_VERIFICATION_ERROR)
         }
+
+        attempts++
+
+        return document.selectFirst(formSelector)?.let { robotForm ->
+            val formUrl = robotForm.absUrl("action").takeIf(String::isNotBlank) ?: document.location()
+            val input = robotForm.selectFirst("input")!!.let {
+                it.attr("name") to it.attr("value")
+            }
+
+            val formBody = FormBody.Builder()
+                .add(input.first, input.second)
+                .build()
+
+            bypassRobotVerification(client.newCall(POST(formUrl, headers, formBody)).execute().asJsoup())
+        } ?: document
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        return response.use { resp ->
-            val document = Jsoup.parse(resp.peekBody(Long.MAX_VALUE).string())
-            checkVerification(document, resp.request.url.toString())
-            super.chapterListParse(resp)
-        }
+        return checkVerification(response.asJsoup())
+            .select(chapterListSelector())
+            .map(::chapterFromElement)
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        checkVerification(document, document.location())
+        val doc = checkVerification(document)
 
-        val scriptContent = document.selectFirst("script:containsData(ts_reader.run)")?.data()
-            ?: return super.pageListParse(document)
+        val scriptContent = doc.selectFirst("script:containsData(ts_reader.run)")?.data()
+            ?: return super.pageListParse(doc)
 
         return try {
             parseReaderScript(scriptContent)
         } catch (e: Exception) {
-            super.pageListParse(document)
+            super.pageListParse(doc)
         }
+    }
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        return super.mangaDetailsParse(checkVerification(document))
     }
 
     private fun parseReaderScript(scriptContent: String): List<Page> {
@@ -103,14 +126,6 @@ class NoxScans : MangaThemesia(
                 false
             }
         }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.use { resp ->
-            val document = Jsoup.parse(resp.body.string())
-            checkVerification(document, resp.request.url.toString())
-            super.mangaDetailsParse(resp)
-        }
-    }
 
     private fun isImageUrl(url: String): Boolean = IMAGE_EXTENSIONS.any { ext ->
         url.lowercase().endsWith(ext) && url.contains("/wp-content/uploads/")
