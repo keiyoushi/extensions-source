@@ -77,11 +77,7 @@ class FoamGirl() : ParsedHttpSource() {
         return getPageListByDocument(document)
     }
 
-    private fun getPagesListByNumber(
-        imageCount: Int,
-        imageUrl: HttpUrl,
-        baseIndex: String,
-    ): MutableList<Page> {
+    private fun getPagesListByNumber(imageCount: Int, imageUrl: HttpUrl, baseIndex: String): MutableList<Page> {
         val imagePrefix = baseIndex.toLong() / 10
         val pages = mutableListOf<Page>()
         for (i in 0 until imageCount) {
