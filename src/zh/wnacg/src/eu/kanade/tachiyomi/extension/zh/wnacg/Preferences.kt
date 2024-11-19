@@ -71,7 +71,7 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
 
         val failedResponse = try {
             val response = chain.proceed(request)
-            if (response.isSuccessful && response.peekBody(Long.MAX_VALUE).string().contains("紳士漫畫")) return response
+            if (response.isSuccessful && response.header("Server") != "Parking/1.0") return response
             response.close()
             Result.success(response)
         } catch (e: Throwable) {
