@@ -11,12 +11,14 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TruyenVN : Madara(
-    "TruyenVN",
-    "https://truyenvn.vin",
-    "vi",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-), ConfigurableSource {
+class TruyenVN :
+    Madara(
+        "TruyenVN",
+        "https://truyenvn.vin",
+        "vi",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ),
+    ConfigurableSource {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
