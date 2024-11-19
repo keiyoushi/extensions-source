@@ -151,22 +151,30 @@ class Happymh : HttpSource(), ConfigurableSource {
         return json.decodeFromString<ChapterListDto>(script).chapterList.map {
             SChapter.create().apply {
                 val chapterId = it.id
-                url = "/v2.0/apis/manga/read?code=$comicId&cid=$chapterId&v=v2.13"
+                url = "/reads/$comicId/$chapterId"
                 name = it.chapterName
             }
         }
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url
+    }
+
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = baseUrl + chapter.url
-        val comicId = chapter.url.substringAfter("code=").substringBefore("&")
-        val chapterId = chapter.url.substringAfter("cid=").substringBefore("&")
+        if (chapter.url.startsWith("/v2.0/apis/manga/read")) {
+            // Old format is detected
+            throw Exception("请刷新章节列表")
+        }
+        val comicId = chapter.url.substringAfter("/reads/").substringBefore("/")
+        val chapterId = chapter.url.substringAfterLast("/")
+        val url = "$baseUrl/v2.0/apis/manga/read?code=$comicId&cid=$chapterId&v=v3.1302723"
         // Some chapters return 403 without this header
         val header = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
-            .set("Referer", "$baseUrl/reads/$comicId/$chapterId")
+            .set("Referer", baseUrl + chapter.url)
             .build()
         return GET(url, header)
     }
