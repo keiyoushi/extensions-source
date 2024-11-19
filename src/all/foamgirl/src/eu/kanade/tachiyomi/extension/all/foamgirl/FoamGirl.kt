@@ -106,12 +106,7 @@ class FoamGirl() : ParsedHttpSource() {
         val nextPageUrl = document.selectFirst(".page-numbers[title=Next]")?.absUrl("href")
             ?: return pages
 
-        val hasNextPage = nextPageUrl
-            .substringAfterLast("/")
-            .substringBeforeLast(".")
-            .split("_").size > 1
-
-        if (hasNextPage.not()) {
+        if (HAS_NEXT_PAGE_REGEX.containsMatchIn(nextPageUrl).not()) {
             return pages
         }
 
@@ -160,6 +155,7 @@ class FoamGirl() : ParsedHttpSource() {
 
     companion object {
         val NUMB_REGEX = """\d+""".toRegex()
+        val HAS_NEXT_PAGE_REGEX = """(\d+_\d+)""".toRegex()
         private val DATE_FORMAT by lazy {
             SimpleDateFormat("yyyy.M.d", Locale.ENGLISH)
         }
