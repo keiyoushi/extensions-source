@@ -21,12 +21,10 @@ import java.io.InputStream
 import java.lang.reflect.Method
 import java.util.zip.ZipInputStream
 
-open class ZipInterceptor {
+object ImageDecoderWrapper {
     private var decodeMethod: Method
     private var newInstanceMethod: Method
     private var classSignature = ClassSignature.Newest
-
-    private val dataUriRegex = Regex("""base64,([0-9a-zA-Z/+=\s]+)""")
 
     private enum class ClassSignature {
         Old, New, Newest
@@ -40,7 +38,6 @@ open class ZipInterceptor {
         val inputStreamClass = InputStream::class.java
 
         try {
-            // Mihon Preview r6595+
             classSignature = ClassSignature.Newest
 
             // decode(region, sampleSize)
@@ -59,7 +56,6 @@ open class ZipInterceptor {
             )
         } catch (_: NoSuchMethodException) {
             try {
-                // Mihon Stable & forks
                 classSignature = ClassSignature.New
 
                 // decode(region, rgb565, sampleSize, applyColorManagement, displayProfile)
@@ -79,7 +75,6 @@ open class ZipInterceptor {
                     booleanClass,
                 )
             } catch (_: NoSuchMethodException) {
-                // Tachiyomi J2k
                 classSignature = ClassSignature.Old
 
                 // decode(region, rgb565, sampleSize)
@@ -126,7 +121,10 @@ open class ZipInterceptor {
 
         return bitmap
     }
+}
 
+open class ZipInterceptor {
+    private val dataUriRegex = Regex("""base64,([0-9a-zA-Z/+=\s]+)""")
 
     open fun zipGetByteStream(request: Request, response: Response): InputStream {
         return response.body.byteStream()
@@ -165,7 +163,7 @@ open class ZipInterceptor {
                     Base64.decode(b64, Base64.DEFAULT)
                 }
 
-                entryIndex to decodeImage(imageData, isLowRamDevice, filename, entryName)
+                entryIndex to ImageDecoderWrapper.decodeImage(imageData, isLowRamDevice, filename, entryName)
             }
             .sortedBy { it.first }
             .toList()
