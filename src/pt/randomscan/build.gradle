@@ -1,13 +1,13 @@
 ext {
     extName = 'Lura Toon'
     extClass = '.LuraToon'
-    themePkg = 'peachscan'
     baseUrl = 'https://luratoons.com'
-    overrideVersionCode = 45
+    extVersionCode = 55
 }
 
 apply from: "$rootDir/common.gradle"
 
 dependencies {
     implementation project(':lib:randomua')
+    implementation project(':lib:zipinterceptor')
 }
