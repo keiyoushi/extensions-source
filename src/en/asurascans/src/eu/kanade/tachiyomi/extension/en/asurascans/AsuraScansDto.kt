@@ -14,3 +14,9 @@ class FilterItemDto(
     val id: Int,
     val name: String,
 )
+
+@Serializable
+class PageDto(
+    val order: Int,
+    val url: String,
+)
