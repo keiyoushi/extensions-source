@@ -12,7 +12,7 @@ import uy.kohesive.injekt.api.get
 import java.io.IOException
 import kotlin.random.Random
 
-private const val DEFAULT_LIST = "https://www.hm08.lol,https://www.hm09.lol,https://www.hm10.lol,https://www.hm06.lol,https://www.hm07.lol,https://www.hm05.lol,https://www.hm04.lol,https://www.hm01.lol,https://www.hm02.lol,https://www.hm03.lol,https://www.hm1.lol,https://www.hm2.lol,https://www.hm3.lol"
+private const val DEFAULT_LIST = "https://www.wn01.uk,https://www.wn05.cc,https://www.wn04.cc,https://www.wn03.cc"
 
 fun getPreferencesInternal(
     context: Context,
@@ -71,7 +71,7 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
 
         val failedResponse = try {
             val response = chain.proceed(request)
-            if (response.isSuccessful) return response
+            if (response.isSuccessful && response.header("Server") != "Parking/1.0") return response
             response.close()
             Result.success(response)
         } catch (e: Throwable) {
