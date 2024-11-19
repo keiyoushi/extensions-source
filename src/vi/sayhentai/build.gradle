@@ -3,7 +3,7 @@ ext {
     extClass = ".SayHentai"
     themePkg = "manhwaz"
     baseUrl = "https://sayhentai.art"
-    overrideVersionCode = 8
+    overrideVersionCode = 9
     isNsfw = true
 }
 
