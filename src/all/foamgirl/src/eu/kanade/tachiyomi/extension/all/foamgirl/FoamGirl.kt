@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -65,10 +67,23 @@ class FoamGirl() : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
         val imageCount = document.select(".post_title_topimg").text().substringAfter("(").substringBefore("P").toInt()
         val imageUrl = document.select(".imageclick-imgbox").attr("href").toHttpUrl()
-        val imagePrefix = imageUrl.pathSegments.last().substringBefore(".").toLong() / 10
+        val baseIndex = imageUrl.pathSegments.last().substringBefore(".")
+
+        if (baseIndex.isNumber()) {
+            return getPagesListByNumber(imageCount, imageUrl, baseIndex)
+        }
+        return getPageListByDocument(document)
+    }
+
+    private fun getPagesListByNumber(
+        imageCount: Int,
+        imageUrl: HttpUrl,
+        baseIndex: String,
+    ): MutableList<Page> {
+        val imagePrefix = baseIndex.toLong() / 10
+        val pages = mutableListOf<Page>()
         for (i in 0 until imageCount) {
             pages.add(
                 Page(
@@ -81,6 +96,28 @@ class FoamGirl() : ParsedHttpSource() {
             )
         }
         return pages
+    }
+
+    private fun getPageListByDocument(document: Document): List<Page> {
+        val pages = document.select("#image_div img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.absUrl("src"))
+        }.toList()
+
+        val nextPageUrl = document.selectFirst(".page-numbers[title=Next]")?.absUrl("href")
+            ?: return pages
+
+        val hasNextPage = nextPageUrl
+            .substringAfterLast("/")
+            .substringBeforeLast(".")
+            .split("_").size > 1
+
+        if (hasNextPage.not()) {
+            return pages
+        }
+
+        return client.newCall(GET(nextPageUrl, headers)).execute().asJsoup().let {
+            pages + getPageListByDocument(it)
+        }
     }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
@@ -119,7 +156,10 @@ class FoamGirl() : ParsedHttpSource() {
         }
     }
 
+    private fun String.isNumber() = NUMB_REGEX.matches(this)
+
     companion object {
+        val NUMB_REGEX = """\d+""".toRegex()
         private val DATE_FORMAT by lazy {
             SimpleDateFormat("yyyy.M.d", Locale.ENGLISH)
         }
