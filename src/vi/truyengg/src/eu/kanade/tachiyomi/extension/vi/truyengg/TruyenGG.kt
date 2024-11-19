@@ -81,7 +81,7 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.select("h1[itemprop=name]").text()
-        author = document.select("p:contains(Tác Giả) + p").joinToString { it.text() }
+        author = document.selectFirst("p:contains(Tác Giả) + p")?.text()
         genre = document.select("a.clblue").joinToString { it.text() }
         description = document.select("div.story-detail-info").text().trim()
         thumbnail_url = document.selectFirst(".thumbblock img")!!.attr("abs:src")
