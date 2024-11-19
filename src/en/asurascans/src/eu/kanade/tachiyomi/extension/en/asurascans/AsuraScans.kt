@@ -267,9 +267,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val scripts = document.select("script:containsData(pages)").joinToString { it.data() }
-        val data = PAGES_REGEX.find(scripts)?.groupValues?.get(1) ?: throw Exception("Failed to find chapter pages")
-        val pageList = json.decodeFromString<List<PageDto>>(data.unescape()).sortedBy { it.order }
+        val scriptData = document.select("script:containsData(self.__next_f.push)")
+            .joinToString("") { it.data().substringAfter("\"").substringBeforeLast("\"") }
+        val pagesData = PAGES_REGEX.find(scriptData)?.groupValues?.get(1) ?: throw Exception("Failed to find chapter pages")
+        val pageList = json.decodeFromString<List<PageDto>>(pagesData.unescape()).sortedBy { it.order }
         return pageList.mapIndexed { i, page -> Page(i, imageUrl = page.url) }
     }
 
