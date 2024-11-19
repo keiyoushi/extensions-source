@@ -128,7 +128,7 @@ abstract class Iken(
         assert(!data.post.isNovel) { "Novels are unsupported" }
 
         return data.post.chapters
-            .filter { it.isPublic() }
+            .filter { it.isPublic() && it.isAccessible() }
             .map { it.toSChapter(data.post.slug) }
     }
 

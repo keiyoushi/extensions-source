@@ -96,9 +96,12 @@ class Chapter(
     private val createdBy: Name,
     private val createdAt: String,
     private val chapterStatus: String,
+    private val isAccessible: Boolean,
     private val mangaPost: ChapterPostDetails,
 ) {
     fun isPublic() = chapterStatus == "PUBLIC"
+
+    fun isAccessible() = isAccessible
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
         val seriesSlug = mangaSlug ?: mangaPost.slug
