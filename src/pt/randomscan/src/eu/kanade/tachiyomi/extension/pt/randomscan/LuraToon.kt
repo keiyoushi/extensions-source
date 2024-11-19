@@ -40,6 +40,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
     override val name = "Lura Toon"
     override val lang = "pt-BR"
     override val supportsLatest = true
+    override val versionId = 2
 
     private val json: Json by injectLazy()
 
