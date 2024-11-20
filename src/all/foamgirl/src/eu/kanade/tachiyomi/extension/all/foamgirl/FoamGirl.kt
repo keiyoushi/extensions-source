@@ -99,12 +99,10 @@ class FoamGirl() : ParsedHttpSource() {
             Page(index, imageUrl = element.absUrl("src"))
         }.toList()
 
-        val nextPageUrl = document.selectFirst(".page-numbers[title=Next]")?.absUrl("href")
+        val nextPageUrl = document.selectFirst(".page-numbers[title=Next]")
+            ?.absUrl("href")
+            ?.takeIf { HAS_NEXT_PAGE_REGEX in it }
             ?: return pages
-
-        if (HAS_NEXT_PAGE_REGEX.containsMatchIn(nextPageUrl).not()) {
-            return pages
-        }
 
         return client.newCall(GET(nextPageUrl, headers)).execute().asJsoup().let {
             pages + getPageListByDocument(it)
