@@ -78,21 +78,17 @@ class FoamGirl() : ParsedHttpSource() {
         }
     }
 
-    private fun getPagesListByNumber(imageCount: Int, imageUrl: HttpUrl, baseIndex: String): MutableList<Page> {
+    private fun getPagesListByNumber(imageCount: Int, imageUrl: HttpUrl, baseIndex: String): List<Page> {
         val imagePrefix = baseIndex.toLong() / 10
-        val pages = mutableListOf<Page>()
-        for (i in 0 until imageCount) {
-            pages.add(
-                Page(
-                    i,
-                    imageUrl = imageUrl.newBuilder().apply {
-                        removePathSegment(imageUrl.pathSize - 1)
-                        addPathSegment("${imagePrefix}${i + 2}.jpg")
-                    }.build().toString(),
-                ),
+        return (0 until imageCount).map { index ->
+            Page(
+                index,
+                imageUrl = imageUrl.newBuilder().apply {
+                    removePathSegment(imageUrl.pathSize - 1)
+                    addPathSegment("${imagePrefix}${index + 2}.jpg")
+                }.build().toString(),
             )
         }
-        return pages
     }
 
     private fun getPageListByDocument(document: Document): List<Page> {
@@ -149,7 +145,6 @@ class FoamGirl() : ParsedHttpSource() {
     private fun String.isNumber() = isNotEmpty() && all { it.isDigit() }
 
     companion object {
-        val NUMB_REGEX = """\d+""".toRegex()
         val HAS_NEXT_PAGE_REGEX = """(\d+_\d+)""".toRegex()
         private val DATE_FORMAT by lazy {
             SimpleDateFormat("yyyy.M.d", Locale.ENGLISH)
