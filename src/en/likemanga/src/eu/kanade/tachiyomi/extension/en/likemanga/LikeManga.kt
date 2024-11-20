@@ -30,7 +30,7 @@ import java.util.Locale
 class LikeManga : ParsedHttpSource() {
     override val name = "LikeManga"
 
-    override val baseUrl = "https://likemanga.io"
+    override val baseUrl = "https://likemanga.ink"
 
     override val lang = "en"
 
