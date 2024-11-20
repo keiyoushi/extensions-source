@@ -28,8 +28,8 @@ class MugiwarasOficial : Madara(
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Estado) + .summary-content"
 
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
-        val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
-        object : X509TrustManager {
+        @SuppressLint("CustomX509TrustManager")
+        val naiveTrustManager = object : X509TrustManager {
             override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
             override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
             override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
