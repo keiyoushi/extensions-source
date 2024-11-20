@@ -71,10 +71,11 @@ class FoamGirl() : ParsedHttpSource() {
         val imageUrl = document.select(".imageclick-imgbox").attr("href").toHttpUrl()
         val baseIndex = imageUrl.pathSegments.last().substringBefore(".")
 
-        if (baseIndex.isNumber()) {
-            return getPagesListByNumber(imageCount, imageUrl, baseIndex)
+        return if (baseIndex.isNumber()) {
+            getPagesListByNumber(imageCount, imageUrl, baseIndex)
+        } else {
+            getPageListByDocument(document)
         }
-        return getPageListByDocument(document)
     }
 
     private fun getPagesListByNumber(imageCount: Int, imageUrl: HttpUrl, baseIndex: String): MutableList<Page> {
