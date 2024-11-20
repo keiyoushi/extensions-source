@@ -147,7 +147,7 @@ class FoamGirl() : ParsedHttpSource() {
         }
     }
 
-    private fun String.isNumber() = NUMB_REGEX.matches(this)
+    private fun String.isNumber() = isNotEmpty() && all { it.isDigit() }
 
     companion object {
         val NUMB_REGEX = """\d+""".toRegex()
