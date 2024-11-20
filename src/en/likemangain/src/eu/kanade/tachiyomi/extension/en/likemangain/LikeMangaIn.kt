@@ -8,7 +8,7 @@ class LikeMangaIn : Madara(
     "LikeMangaIn",
     "https://likemanga.in",
     "en",
-    dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale.getDefault()),
+    dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale.US),
 ) {
     override val useNewChapterEndpoint = true
 }
