@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -237,17 +236,10 @@ class Snowmtl : ParsedHttpSource() {
             return chain.proceed(request)
         }
 
-        val cpTag = "Snow:CP"
-
-        Log.i(cpTag, "==================== Start ========================")
-        Log.i(cpTag, "Image: $url")
-
         val response = chain.proceed(request)
 
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
             .copy(Bitmap.Config.ARGB_8888, true)
-
-        Log.i(cpTag, "Bitmap created")
 
         val canvas = Canvas(bitmap)
         val defaultTextSize = 22.sp
@@ -263,10 +255,6 @@ class Snowmtl : ParsedHttpSource() {
         val marginTop = 30
         val marginLeft = 30
 
-        Log.i(cpTag, " ----- Caption -------- ")
-
-        Log.i(cpTag, "captions: ${captions[url]}")
-
         captions[url]?.subs
             ?.filter { it.text.isNotBlank() }
             ?.forEach {
@@ -276,32 +264,14 @@ class Snowmtl : ParsedHttpSource() {
                 val centerY = it.centerY - (lines.size * paint.getCharWidth())
                 val centerX = it.centerX - (middleStringSize / 2 * paint.getCharWidth())
 
-                Log.i(cpTag, "* lines: ${lines.size}")
-                Log.i(cpTag, "* middle: $middleStringSize")
-                Log.i(cpTag, "* centerX: $centerX")
-                Log.i(cpTag, "* centerY: $centerY")
-
-                Log.i(cpTag, " - Apply caption (${canvas.width}x${canvas.height})")
-
                 lines.forEachIndexed { index, line ->
                     val y = (paint.textSize * index + centerY + marginTop).absoluteValue
                     val x = (centerX + marginLeft).absoluteValue
-
-                    Log.i(cpTag, "  -> ($x, $y): $line")
-
-                    try {
-                        canvas.drawText(line, 0, line.length, x, y, paint)
-                    } catch (e: Exception) {
-                        Log.i(cpTag, e.cause.toString())
-                    }
+                    canvas.drawText(line, 0, line.length, x, y, paint)
                 }
             }
 
-        Log.i(cpTag, "BuildArray")
-
         val output = ByteArrayOutputStream()
-
-        Log.i(cpTag, "Compress Image")
 
         val format = when (url.substringAfterLast(".").lowercase()) {
             "png" -> Bitmap.CompressFormat.PNG
@@ -312,8 +282,6 @@ class Snowmtl : ParsedHttpSource() {
         bitmap.compress(format, 100, output)
 
         val responseBody = output.toByteArray().toResponseBody(MEDIA_TYPE)
-
-        Log.i(cpTag, "Build response")
 
         return response.newBuilder()
             .body(responseBody)
