@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.likemangain
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
