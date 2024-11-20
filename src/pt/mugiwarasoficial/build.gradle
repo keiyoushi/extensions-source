@@ -3,7 +3,7 @@ ext {
     extClass = '.MugiwarasOficial'
     themePkg = 'madara'
     baseUrl = 'https://mugiwarasoficial.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
