@@ -3,7 +3,7 @@ ext {
     extClass = '.TruyenVN'
     themePkg = 'madara'
     baseUrl = 'https://truyenvn.vin'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 
