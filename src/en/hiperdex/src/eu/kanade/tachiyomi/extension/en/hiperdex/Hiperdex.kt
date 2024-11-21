@@ -22,6 +22,8 @@ class Hiperdex :
     ),
     ConfigurableSource {
 
+    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
+
     private val preferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
