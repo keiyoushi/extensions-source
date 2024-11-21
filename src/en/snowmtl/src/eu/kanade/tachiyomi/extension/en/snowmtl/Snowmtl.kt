@@ -137,7 +137,7 @@ class Snowmtl : ParsedHttpSource() {
         document.selectFirst("p:has(span:contains(Status))")?.ownText()?.let {
             status = when (it.lowercase()) {
                 "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
+                "complete" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
         }
