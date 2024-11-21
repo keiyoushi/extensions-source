@@ -3,13 +3,13 @@ package eu.kanade.tachiyomi.extension.en.kunmangato
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class KunMangaToChapterResourcesDto(
+class KunMangaToChapterResourcesDto(
     val status: Int,
     val data: KunMangaToDataDto,
 )
 
 @Serializable
-data class KunMangaToDataDto(
+class KunMangaToDataDto(
     val resources: List<KunMangaToResourceDto>,
 )
 
