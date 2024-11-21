@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -242,9 +243,10 @@ class Snowmtl : ParsedHttpSource() {
             .copy(Bitmap.Config.ARGB_8888, true)
 
         val canvas = Canvas(bitmap)
-        val defaultTextSize = 22.sp
+        val defaultTextSize = 22.sp // random
 
         val paint = Paint().apply {
+            textAlign = Paint.Align.LEFT
             color = Color.BLACK
             style = Paint.Style.FILL_AND_STROKE
             textSize = defaultTextSize
@@ -252,21 +254,66 @@ class Snowmtl : ParsedHttpSource() {
             typeface = Typeface.SANS_SERIF
         }
 
-        val marginTop = 30
-        val marginLeft = 30
+        val marginTop = 30 // random
+        val marginLeft = 30 // random
+        val spaceBetween = 2 // random
+        val defaultFontScale = 1f
 
         captions[url]?.subs
             ?.filter { it.text.isNotBlank() }
             ?.forEach {
-                val lines = it.breakLines(paint)
-                val middleStringSize = lines.toList().sortedBy(String::length)[lines.size / 2].length
+                var lines = it.breakLines(paint)
+                /*
+                    Reduces the font according to the size of the line in the dialog box. (space between applied)
+                        Ex. 1:
+                            - Box: 10 lines
+                            - Text: 9 lines
+                            - Scale: 1
+                        Ex. 2:
+                            - Box: 10 lines
+                            - Text: 15
+                            - Scale: 0.6 (10/ (15 + 1)) // 1 extra line(random)
 
-                val centerY = it.centerY - (lines.size * paint.getCharWidth())
-                val centerX = it.centerX - (middleStringSize / 2 * paint.getCharWidth())
+                        Ex. 3:
+                            - Box: 10 lines
+                            - Text: 2 line
+                            - Scale: 1
+                 */
+                val dialogBoxLines = it.height / paint.getCharHeight()
+                val fontScale = when {
+                    lines.size >= dialogBoxLines -> dialogBoxLines / (lines.size + 1)
+                    else -> defaultFontScale
+                }
+
+                // Use font scale in large dialogs
+                if (fontScale != defaultFontScale) {
+                    paint.apply {
+                        this.textSize = defaultTextSize * fontScale
+                    }
+                    // reprocessing break lines
+                    lines = it.breakLines(paint)
+                }
+
+                // Centers the text if it is smaller than half of the dialog box.
+                val isHalfTheBox = lines.size / dialogBoxLines < 0.5
+                val initialY = when {
+                    isHalfTheBox -> it.centerY - lines.size * paint.getCharHeight() / 2
+                    else -> it.y1.toFloat()
+                }
 
                 lines.forEachIndexed { index, line ->
-                    val y = (paint.textSize * index + centerY + marginTop).absoluteValue
-                    val x = (centerX + marginLeft).absoluteValue
+                    // Centers the text on the X axis and positions it inside the dialog box
+                    val x = (it.centerX - (line.length * paint.getCharWidth() / 2)).absoluteValue + marginLeft
+
+                    // Positions the text inside the dialog box on the Y axis
+                    val y = (initialY + paint.getCharHeight() * index * spaceBetween).absoluteValue + marginTop
+
+                    // Invert color in black dialog box
+                    val pixelColor = bitmap.getPixel(it.centerX.toInt(), it.centerY.toInt())
+                    val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
+
+                    paint.color = inverseColor
+
                     canvas.drawText(line, 0, line.length, x, y, paint)
                 }
             }
@@ -313,6 +360,10 @@ class Snowmtl : ParsedHttpSource() {
         }
 
         private fun breakTextIntoLines(text: String, maxLineLength: Float): List<String> {
+            if (text.length <= maxLineLength) {
+                return listOf(text)
+            }
+
             val words = text.split(" ")
             val lines = mutableListOf<String>()
             var currentLine = StringBuilder()
@@ -324,7 +375,7 @@ class Snowmtl : ParsedHttpSource() {
                     }
                     currentLine.append(word)
                 } else {
-                    lines.add(currentLine.toString())
+                    lines.add(currentLine.toString().trim())
                     currentLine = StringBuilder(word)
                 }
             }
@@ -418,4 +469,11 @@ fun Paint.getCharWidth(): Float {
     val fontWidth = FloatArray(1)
     getTextWidths(text.first().toString(), fontWidth)
     return fontWidth.first()
+}
+
+fun Paint.getCharHeight(): Float {
+    val text = "A"
+    val bounds = Rect()
+    getTextBounds(text, 0, text.length, bounds)
+    return bounds.height().toFloat()
 }
