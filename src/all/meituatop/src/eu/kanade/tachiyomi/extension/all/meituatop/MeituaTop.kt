@@ -76,11 +76,15 @@ class MeituaTop : HttpSource() {
         val chapter = SChapter.create().apply {
             url = manga.url
             name = "Gallery"
-            date_upload = dateFormat.parse(manga.description!!)!!.time
+            date_upload = parseDate(manga.description!!)
             chapter_number = -2f
         }
         return Observable.just(listOf(chapter))
     }
+
+    private fun parseDate(date: String): Long = runCatching {
+        dateFormat.parse(date)?.time
+    }.getOrNull() ?: 0L
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
