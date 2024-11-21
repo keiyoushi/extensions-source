@@ -301,18 +301,19 @@ class Snowmtl : ParsedHttpSource() {
                     else -> it.y1.toFloat()
                 }
 
+                // Invert color in black dialog box
+                paint.apply {
+                    val pixelColor = bitmap.getPixel(it.centerX.toInt(), it.centerY.toInt())
+                    val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
+                    color = inverseColor
+                }
+
                 lines.forEachIndexed { index, line ->
                     // Centers the text on the X axis and positions it inside the dialog box
                     val x = (it.centerX - (line.length * paint.getCharWidth() / 2)).absoluteValue + marginLeft
 
                     // Positions the text inside the dialog box on the Y axis
                     val y = (initialY + paint.getCharHeight() * index * spaceBetween).absoluteValue + marginTop
-
-                    // Invert color in black dialog box
-                    val pixelColor = bitmap.getPixel(it.centerX.toInt(), it.centerY.toInt())
-                    val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
-
-                    paint.color = inverseColor
 
                     canvas.drawText(line, 0, line.length, x, y, paint)
                 }
