@@ -156,7 +156,7 @@ class MangaDemon : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.imgholder").mapIndexed { i, element ->
+        return document.select("div > img.imgholder").mapIndexed { i, element ->
             Page(i, "", element.attr("abs:src"))
         }
     }
