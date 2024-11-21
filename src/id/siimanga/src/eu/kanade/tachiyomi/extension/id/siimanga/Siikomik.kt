@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class Siikomik : MangaThemesia(
     "Siikomik",
-    "https://siikomik.com",
+    "https://siikomik.lat",
     "id",
 ) {
     override val versionId = 2
