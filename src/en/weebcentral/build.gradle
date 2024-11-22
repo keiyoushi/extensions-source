@@ -1,7 +1,7 @@
 ext {
     extName = 'Weeb Central'
     extClass = '.WeebCentral'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = true
 }
 
