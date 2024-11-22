@@ -37,7 +37,7 @@ private object TranslationsListSerializer :
     override fun transformDeserialize(element: JsonElement): JsonElement {
         return JsonArray(
             element.jsonArray.map { array ->
-                val (coordinates, text) = getA(array)
+                val (coordinates, text) = getCoordinatesAndCaption(array)
 
                 buildJsonObject {
                     put("x1", coordinates[0])
@@ -50,7 +50,7 @@ private object TranslationsListSerializer :
         )
     }
 
-    private fun getA(element: JsonElement): Pair<JsonArray, JsonElement> {
+    private fun getCoordinatesAndCaption(element: JsonElement): Pair<JsonArray, JsonElement> {
         return try {
             val arr = element.jsonArray
             arr[0].jsonArray to arr[1]
