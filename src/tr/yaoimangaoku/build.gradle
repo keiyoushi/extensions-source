@@ -2,7 +2,7 @@ ext {
     extName = 'Yaoi Manga Oku'
     extClass = '.YaoiMangaOku'
     themePkg = 'madara'
-    baseUrl = 'https://yaoimangaoku.com'
+    baseUrl = 'https://yaoimangaoku.net'
     overrideVersionCode = 1
     isNsfw = true
 }
