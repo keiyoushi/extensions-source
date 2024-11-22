@@ -22,7 +22,7 @@ import java.io.IOException
 import kotlin.math.min
 
 // The Interceptor joins the captions and pages of the manga.
-@RequiresApi(Build.VERSION_CODES.Q)
+@RequiresApi(Build.VERSION_CODES.M)
 class ComposedImageInterceptor(
     private val baseUrl: String,
 ) : Interceptor {
