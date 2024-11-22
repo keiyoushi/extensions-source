@@ -20,50 +20,16 @@ class PageDto(
 
 @Serializable
 class Translation(
-    val x1: Int,
-    val y1: Int,
-    val x2: Int,
-    val y2: Int,
+    val x1: Float,
+    val y1: Float,
+    val x2: Float,
+    val y2: Float,
     val text: String,
 ) {
     val width get() = x2 - x1
     val height get() = y2 - y1
     val centerY get() = (y2 + y1) / 2f
     val centerX get() = (x2 + x1) / 2f
-
-    fun breakLines(charWidth: Float): List<String> {
-        val diameter = width / charWidth
-        val radius = diameter / 2
-        return breakTextIntoLines(text, diameter + radius)
-    }
-
-    private fun breakTextIntoLines(text: String, maxLineLength: Float): List<String> {
-        if (text.length <= maxLineLength) {
-            return listOf(text)
-        }
-
-        val words = text.split(" ")
-        val lines = mutableListOf<String>()
-        var currentLine = StringBuilder()
-
-        for (word in words) {
-            if (currentLine.length + word.length <= maxLineLength) {
-                if (currentLine.isNotEmpty()) {
-                    currentLine.append(" ")
-                }
-                currentLine.append(word)
-            } else {
-                lines.add(currentLine.toString().trim())
-                currentLine = StringBuilder(word)
-            }
-        }
-
-        if (currentLine.isNotEmpty()) {
-            lines.add(currentLine.toString())
-        }
-
-        return lines
-    }
 }
 
 private object TranslationsListSerializer :

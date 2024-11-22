@@ -5,8 +5,11 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Rect
-import android.graphics.Typeface
+import android.os.Build
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import androidx.annotation.RequiresApi
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
@@ -16,9 +19,10 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import kotlin.math.absoluteValue
+import kotlin.math.min
 
 // The Interceptor joins the captions and pages of the manga.
+@RequiresApi(Build.VERSION_CODES.Q)
 class ComposedImageInterceptor(
     private val baseUrl: String,
 ) : Interceptor {
@@ -53,83 +57,45 @@ class ComposedImageInterceptor(
         val canvas = Canvas(bitmap)
         val defaultTextSize = 22.sp // arbitrary
 
-        val paint = Paint().apply {
-            textAlign = Paint.Align.LEFT
+        val textPaint = TextPaint().apply {
             color = Color.BLACK
             style = Paint.Style.FILL_AND_STROKE
             textSize = defaultTextSize
             isAntiAlias = true
-            typeface = Typeface.SANS_SERIF
         }
 
-        val textMarginTop = 20 // arbitrary
-        val textMarginLeft = 40 // arbitrary
-        val spaceBetween = 2 // arbitrary
-        val defaultFontScale = 1f
+        val spacingMultiplier = 1f
+        val spacingAddition = 0f
 
         translation
             .filter { it.text.isNotBlank() }
-            .forEach {
-                var charWidth = paint.getCharWidth()
-                var charHeight = paint.getCharHeight()
+            .forEach { caption ->
+                val layout = StaticLayout.Builder.obtain(caption.text, 0, caption.text.length, textPaint, caption.width.toInt()).apply {
+                    setAlignment(Layout.Alignment.ALIGN_CENTER)
+                    setLineSpacing(spacingAddition, spacingMultiplier)
+                    setIncludePad(false)
+                }.build()
 
-                var lines = it.breakLines(charWidth)
-                /*
-                    Reduces the font according to the size of the line in the dialog box. (space between applied)
-                        Ex. 1:
-                            - Box: 10 lines
-                            - Text: 9 lines
-                            - Scale: 1
-                        Ex. 2:
-                            - Box: 10 lines
-                            - Text: 15
-                            - Scale: 0.6 (10/ (15 + 1)) // 1 extra line(arbitrary)
+                val fontHeight = textPaint.fontMetrics.let { it.bottom - it.top }
+                val dialogBoxLineCount = caption.height / fontHeight
 
-                        Ex. 3:
-                            - Box: 10 lines
-                            - Text: 2 line
-                            - Scale: 1
-                 */
-                val dialogBoxLines = it.height / charHeight
-                val fontScale = when {
-                    lines.size >= dialogBoxLines -> dialogBoxLines / (lines.size + 1)
-                    else -> defaultFontScale
-                }
-
-                // Use font scale in large dialogs
-                if (fontScale != defaultFontScale) {
-                    paint.apply {
-                        this.textSize = defaultTextSize * fontScale
-                    }
-                    // reprocessing break lines
-                    charWidth = paint.getCharWidth()
-                    charHeight = paint.getCharHeight()
-                    lines = it.breakLines(charWidth)
-                }
-
-                // Centers the text if it is smaller than half of the dialog box.
-                val isHalfTheBox = lines.size / dialogBoxLines < 0.5
-                val initialY = when {
-                    isHalfTheBox -> it.centerY - lines.size * charHeight / 2
-                    else -> it.y1.toFloat()
-                }
-
-                // Invert color in black dialog box
-                paint.apply {
-                    val pixelColor = bitmap.getPixel(it.centerX.toInt(), it.centerY.toInt())
+                // Invert color in black dialog box and font scale. Change StaticLayout by reference
+                textPaint.apply {
+                    val pixelColor = bitmap.getPixel(caption.centerX.toInt(), caption.centerY.toInt())
                     val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
                     color = inverseColor
+                    textSize = min(defaultTextSize * (dialogBoxLineCount / layout.lineCount), defaultTextSize)
                 }
 
-                lines.forEachIndexed { index, line ->
-                    // Centers the text on the X axis and positions it inside the dialog box
-                    val x = (it.centerX - (line.length * charWidth / 2)).absoluteValue + textMarginLeft
-
-                    // Positions the text inside the dialog box on the Y axis
-                    val y = (initialY + charHeight * index * spaceBetween).absoluteValue + textMarginTop
-
-                    canvas.drawText(line, 0, line.length, x, y, paint)
+                // Centers text in y for captions smaller than the dialog box
+                val y = when {
+                    layout.lineCount < dialogBoxLineCount -> {
+                        caption.centerY - layout.lineCount / 2f * fontHeight
+                    }
+                    else -> caption.y1
                 }
+
+                canvas.draw(layout, caption.x1, y)
             }
 
         val output = ByteArrayOutputStream()
@@ -153,33 +119,17 @@ class ComposedImageInterceptor(
         return json.decodeFromString(this)
     }
 
-    val Int.sp: Float get() = this * scaledDensity
+    private fun Canvas.draw(layout: StaticLayout, x: Float, y: Float) {
+        save()
+        translate(x, y)
+        layout.draw(this)
+        restore()
+    }
+
+    private val Int.sp: Float get() = this * SCALED_DENSITY
 
     companion object {
-        const val scaledDensity = 1.5f // arbitrary
+        const val SCALED_DENSITY = 1.5f // arbitrary
         val mediaType = "image/png".toMediaType()
     }
-}
-
-/**
- * Gets the pixel width of the font character, used to calculate the
- * scale needed to apply to the font given the size of the dialog box
- */
-fun Paint.getCharWidth(): Float {
-    val text = "A" // Just any character to get the size of the character box
-    val fontWidth = FloatArray(1)
-    getTextWidths(text.first().toString(), fontWidth)
-    return fontWidth.first()
-}
-
-/**
- * Gets the pixel height of the font character, used to calculate
- * line breaks in the text, given the maximum amount supported
- * in the dialog box.
- */
-fun Paint.getCharHeight(): Float {
-    val text = "A" // Just any character to get the size of the character box
-    val bounds = Rect()
-    getTextBounds(text, 0, text.length, bounds)
-    return bounds.height().toFloat()
 }
