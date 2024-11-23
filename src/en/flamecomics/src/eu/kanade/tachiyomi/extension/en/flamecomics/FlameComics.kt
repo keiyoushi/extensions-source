@@ -4,62 +4,131 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
+import java.net.URLDecoder
 
-class FlameComics : MangaThemesia(
-    "Flame Comics",
-    "https://flamecomics.xyz",
-    "en",
-    mangaUrlDirectory = "/series",
-) {
-
-    // Flame Scans -> Flame Comics
-    override val id = 6350607071566689772
+class FlameComics : ParsedHttpSource() {
 
     override val client = super.client.newBuilder()
         .rateLimit(2, 7)
         .addInterceptor(::composedImageIntercept)
         .build()
 
-    override val pageSelector = "div#readerarea img:not(noscript img)[class*=wp-image]"
+    // Flame Scans -> Flame Comics
+    override val id = 6350607071566689772
 
-    // Split Image Fixer Start
-    private val composedSelector: String = "#readerarea div.figure_container div.composed_figure"
+    override val name = "Flame Comics"
 
-    override fun pageListParse(document: Document): List<Page> {
-        val hasSplitImages = document
-            .select(composedSelector)
-            .firstOrNull() != null
+    private val host = "flamecomics.xyz"
+    override val baseUrl = "https://$host"
+    private val cdn = "https:cdn.$host"
 
-        if (!hasSplitImages) {
-            return super.pageListParse(document)
+    override val lang = "en"
+
+    override val supportsLatest = true
+
+    private val json: Json by injectLazy()
+
+    fun getRealUrl(string: String?): String {
+        if (string == null) return ""
+        var url = URLDecoder.decode(string.substringAfter("url="), "utf8")
+        url = url.substringBefore("?")
+        url = url.substringBefore("&")
+        return url
+    }
+
+    override fun chapterFromElement(element: Element): SChapter =
+        throw UnsupportedOperationException()
+
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = ""
+
+    override fun searchMangaNextPageSelector(): String? = null
+    override fun popularMangaNextPageSelector(): String? = null
+    override fun latestUpdatesNextPageSelector(): String? = null
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        GET("$baseUrl/browse?search=$query")
+
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+
+    override fun searchMangaSelector(): String = "img"
+    override fun popularMangaSelector(): String = "div[class^=SeriesCard_imageContainer] img"
+    override fun latestUpdatesSelector(): String =
+        "div[class^=SeriesCard_chapterImageContainer] img"
+
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.attr("abs:alt").substringAfter("$baseUrl/").replaceFirst("/", "")
+        val url = element.attr("abs:src")
+        thumbnail_url = getRealUrl(url).substringBefore("&")
+        setUrlWithoutDomain(getRealUrl(url).substringBefore("/thumb"))
+    }
+
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        popularMangaFromElement(element)
+
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = getRealUrl(document.selectFirst("img")?.attr("abs:src"))
+
+        val descElement = document.selectFirst("h3:contains(Description)")
+
+        description =
+            descElement?.parent()?.selectFirst("p")?.text()
+
+        status = if (document.selectFirst("span:contains(Ongoing)") != null) {
+            SManga.ONGOING
+        } else if (document.selectFirst("span:contains(Dropped)") != null) {
+            SManga.CANCELLED
+        } else {
+            SManga.UNKNOWN
         }
 
-        return document.select("#readerarea p:has(img), $composedSelector").toList()
-            .filter {
-                it.select("img").all { imgEl ->
-                    imgEl.attr("abs:src").isNullOrEmpty().not()
-                }
-            }
-            .mapIndexed { i, el ->
-                if (el.tagName() == "p") {
-                    Page(i, "", el.select("img").attr("abs:src"))
-                } else {
-                    val imageUrls = el.select("img")
-                        .joinToString("|") { it.attr("abs:src") }
+        author = document.selectFirst("p:contains(Author)")?.nextElementSibling()?.text()
+    }
 
-                    Page(i, document.location(), imageUrls + COMPOSED_SUFFIX)
-                }
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val doc = response.asJsoup()
+        val jsonData = doc.getElementById("__NEXT_DATA__")?.data() ?: return listOf<SChapter>()
+        val pageData = json.decodeFromString<PageData>(jsonData)
+        return pageData.props.pageProps.chapters.mapIndexed { idx, chapter ->
+            SChapter.create().apply {
+                setUrlWithoutDomain("/series/${pageData.props.pageProps.series.series_id}/${chapter.token}")
+                date_upload = chapter.release_date * 1000
+                var n = "Chapter ${chapter.chapter.toInt()} - "
+                if (chapter.title != null) n += chapter.title
+                name = n
             }
+        }
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        return document.select("img").mapIndexed { idx, img ->
+            var url = img.attr("abs:src")
+            url = URLDecoder.decode(url.substringAfter("url="), "utf8")
+            Page(idx, imageUrl = url.substringBefore("?"))
+        }
     }
 
     private fun composedImageIntercept(chain: Interceptor.Chain): Response {
