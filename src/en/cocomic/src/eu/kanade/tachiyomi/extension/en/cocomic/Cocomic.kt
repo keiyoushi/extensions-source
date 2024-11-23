@@ -12,4 +12,6 @@ class Cocomic : Madara("Cocomic", "https://cocomic.co", "en") {
         .build()
 
     override val useNewChapterEndpoint = true
+
+    override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium)"
 }
