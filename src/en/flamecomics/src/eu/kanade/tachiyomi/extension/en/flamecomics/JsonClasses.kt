@@ -19,8 +19,24 @@ class PageProps(
 )
 
 @Serializable
+class SearchPageData(
+    val props: SProps,
+)
+
+@Serializable
+class SProps(
+    val pageProps: SPageProps,
+)
+
+@Serializable
+class SPageProps(
+    val series: List<Series>,
+)
+
+@Serializable
 class Series(
     val title: String,
+    val cover: String,
     val author: String,
     val status: String,
     val series_id: Int,
