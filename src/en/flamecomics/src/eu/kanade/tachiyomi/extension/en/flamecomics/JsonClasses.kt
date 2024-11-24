@@ -54,12 +54,6 @@ class Chapter(
     val title: String?,
     val release_date: Long,
     val token: String,
-    val images: List<Page>,
-)
-
-@Serializable
-class Page(
-    val name: String,
 )
 
 public val json: Json by injectLazy()
