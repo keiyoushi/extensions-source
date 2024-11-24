@@ -269,14 +269,14 @@ class ComposedImageInterceptor(
      *
      */
     private fun colorDistance(colorA: Int, colorB: Int): Double {
-        val (r1, g1, b1) = hexToRgb(colorA)
-        val (r2, g2, b2) = hexToRgb(colorB)
-        return sqrt((r2 - r1).toDouble().pow(2) + (g2 - g1).toDouble().pow(2) + (b2 - b1).toDouble().pow(2))
-    }
+        val a = Color.valueOf(colorA)
+        val b = Color.valueOf(colorB)
 
-    private fun hexToRgb(hex: Int): Triple<Float, Float, Float> {
-        val color = Color.valueOf(hex)
-        return Triple(color.red(), color.green(), color.blue())
+        return sqrt(
+            (b.red() - a.red()).toDouble().pow(2) +
+                (b.green() - a.green()).toDouble().pow(2) +
+                (b.blue() - a.blue()).toDouble().pow(2),
+        )
     }
 
     companion object {
