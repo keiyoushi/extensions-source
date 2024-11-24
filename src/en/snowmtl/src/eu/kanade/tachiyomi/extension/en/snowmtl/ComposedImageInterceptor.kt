@@ -41,6 +41,7 @@ class ComposedImageInterceptor(
     private val fontFamily: MutableMap<String, Pair<String, Typeface?>> = mutableMapOf(
         "sub" to Pair<String, Typeface?>("$baseUrl/images/sub.ttf", null),
         "sfx" to Pair<String, Typeface?>("$baseUrl/images/sfx.ttf", null),
+        "normal" to Pair<String, Typeface?>("$baseUrl/images/normal.ttf", null),
     )
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -117,7 +118,7 @@ class ComposedImageInterceptor(
 
         return when (type) {
             "inside", "outside" -> fontFamily["sfx"]?.second
-            else -> fontFamily["sub"]?.second
+            else -> fontFamily["normal"]?.second
         }
     }
 
