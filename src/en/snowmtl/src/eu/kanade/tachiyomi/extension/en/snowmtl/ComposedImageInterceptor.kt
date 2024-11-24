@@ -28,15 +28,18 @@ import java.io.IOException
 import java.io.InputStream
 
 // The Interceptor joins the captions and pages of the manga.
-@RequiresApi(Build.VERSION_CODES.M)
+@RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
     private val baseUrl: String,
     private val client: OkHttpClient,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
-    private val fontFamilyUrl = "$baseUrl/images/sub.ttf"
-    private var fontFamily: Typeface? = null
+
+    private val fontFamily: MutableMap<String, Pair<String, Typeface?>> = mutableMapOf(
+        "sub" to Pair<String, Typeface?>("$baseUrl/images/sub.ttf", null),
+        "sfx" to Pair<String, Typeface?>("$baseUrl/images/sfx.ttf", null),
+    )
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -60,10 +63,7 @@ class ComposedImageInterceptor(
             return response
         }
 
-        if (fontFamily == null) {
-            fontFamily = loadRemoteFont(fontFamilyUrl, chain)
-                ?: loadFont("coming_soon_regular.ttf")
-        }
+        loadAllFont(chain)
 
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
             .copy(Bitmap.Config.ARGB_8888, true)
@@ -73,10 +73,10 @@ class ComposedImageInterceptor(
         translation
             .filter { it.text.isNotBlank() }
             .forEach { caption ->
-                val textPaint = createTextPaint(fontFamily)
+                val textPaint = createTextPaint(selectFontFamily(caption.type))
                 val dialogBox = createDialogBox(caption, textPaint, bitmap)
                 val y = getYAxis(textPaint, caption, dialogBox)
-                canvas.draw(dialogBox, caption.x1, y)
+                canvas.draw(dialogBox, caption, caption.x1, y)
             }
 
         val output = ByteArrayOutputStream()
@@ -100,12 +100,32 @@ class ComposedImageInterceptor(
         val defaultTextSize = 50.sp // arbitrary
         return TextPaint().apply {
             color = Color.BLACK
-            style = Paint.Style.FILL_AND_STROKE
             textSize = defaultTextSize
             font?.let {
                 typeface = it
             }
             isAntiAlias = true
+        }
+    }
+
+    private fun selectFontFamily(type: String): Typeface? {
+        if (type in fontFamily) {
+            return fontFamily[type]?.second
+        }
+
+        return when (type) {
+            "inside", "outside" -> fontFamily["sfx"]?.second
+            else -> fontFamily["sub"]?.second
+        }
+    }
+
+    private fun loadAllFont(chain: Interceptor.Chain) {
+        fontFamily.keys.forEach { key ->
+            val font = fontFamily[key] ?: return@forEach
+            if (font.second != null) {
+                return@forEach
+            }
+            fontFamily[key] = key to (loadRemoteFont(font.first, chain) ?: loadFont("coming_soon_regular.ttf"))
         }
     }
 
@@ -183,7 +203,14 @@ class ComposedImageInterceptor(
             dialogBox = createBoxLayout(caption, textPaint)
         }
 
-        textPaint.adjustTextColor(caption, bitmap)
+        // Use source setup
+        if (caption.isNewApi) {
+            textPaint.color = caption.foregroundColor
+            textPaint.bgColor = caption.backgroundColor
+            textPaint.style = if (caption.isBold) Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
+        } else {
+            textPaint.adjustTextColor(caption, bitmap)
+        }
 
         return dialogBox
     }
@@ -208,9 +235,10 @@ class ComposedImageInterceptor(
         return json.decodeFromString(this)
     }
 
-    private fun Canvas.draw(layout: StaticLayout, x: Float, y: Float) {
+    private fun Canvas.draw(layout: StaticLayout, caption: Translation, x: Float, y: Float) {
         save()
         translate(x, y)
+        rotate(caption.angle)
         layout.draw(this)
         restore()
     }

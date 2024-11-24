@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.snowmtl
 
+import android.graphics.Color
+import android.os.Build
+import androidx.annotation.RequiresApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -9,6 +12,7 @@ import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 class PageDto(
@@ -19,17 +23,36 @@ class PageDto(
 )
 
 @Serializable
+@RequiresApi(Build.VERSION_CODES.O)
 class Translation(
     val x1: Float,
     val y1: Float,
     val x2: Float,
     val y2: Float,
     val text: String,
+    val angle: Float = 0f,
+    val isBold: Boolean = false,
+    val isNewApi: Boolean = false,
+    val type: String = "sub",
+    private val fbColor: List<Int> = emptyList(),
+    private val bgColor: List<Int> = emptyList(),
 ) {
     val width get() = x2 - x1
     val height get() = y2 - y1
     val centerY get() = (y2 + y1) / 2f
     val centerX get() = (x2 + x1) / 2f
+
+    val foregroundColor: Int get() {
+        val color = fbColor.takeIf { it.isNotEmpty() }
+            ?: return Color.BLACK
+        return Color.rgb(color[0], color[1], color[2])
+    }
+
+    val backgroundColor: Int get() {
+        val color = bgColor.takeIf { it.isNotEmpty() }
+            ?: return Color.WHITE
+        return Color.rgb(color[0], color[1], color[2])
+    }
 }
 
 private object TranslationsListSerializer :
@@ -45,9 +68,41 @@ private object TranslationsListSerializer :
                     put("x2", coordinates[2])
                     put("y2", coordinates[3])
                     put("text", text)
+
+                    getFontSettings(array)?.let {
+                        it.fbColor?.let { el -> put("fbColor", el) }
+                        it.bgColor?.let { el -> put("bgColor", el) }
+                        it.angle?.let { el -> put("angle", el) }
+                        it.is_bold?.let { el -> put("isBold", el) }
+                        it.type?.let { el -> put("type", el) }
+                        put("isNewApi", true)
+                    }
                 }
             },
         )
+    }
+
+    data class Transfer(
+        val fbColor: JsonElement?,
+        val bgColor: JsonElement?,
+        val angle: JsonElement?,
+        val type: JsonElement?,
+        val is_bold: JsonElement?,
+    )
+
+    private fun getFontSettings(element: JsonElement): Transfer? {
+        return try {
+            val obj = element.jsonObject
+            Transfer(
+                obj["fg_color"],
+                obj["bg_color"],
+                obj["angle"],
+                obj["type"],
+                obj["is_bold"],
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun getCoordinatesAndCaption(element: JsonElement): Pair<JsonArray, JsonElement> {
