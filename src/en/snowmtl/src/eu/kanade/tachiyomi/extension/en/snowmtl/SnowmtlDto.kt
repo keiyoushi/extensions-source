@@ -69,40 +69,17 @@ private object TranslationsListSerializer :
                     put("y2", coordinates[3])
                     put("text", text)
 
-                    getFontSettings(array)?.let {
-                        it.fbColor?.let { el -> put("fbColor", el) }
-                        it.bgColor?.let { el -> put("bgColor", el) }
-                        it.angle?.let { el -> put("angle", el) }
-                        it.is_bold?.let { el -> put("isBold", el) }
-                        it.type?.let { el -> put("type", el) }
-                        put("isNewApi", true)
-                    }
+                    try {
+                        val obj = element.jsonObject
+                        obj["fg_color"]?.let { put("fbColor", it) }
+                        obj["bg_color"]?.let { put("bgColor", it) }
+                        obj["angle"]?.let { put("angle", it) }
+                        obj["type"]?.let { put("type", it) }
+                        obj["is_bold"]?.let { put("isBold", it) }
+                    } catch (_: Exception) { }
                 }
             },
         )
-    }
-
-    data class Transfer(
-        val fbColor: JsonElement?,
-        val bgColor: JsonElement?,
-        val angle: JsonElement?,
-        val type: JsonElement?,
-        val is_bold: JsonElement?,
-    )
-
-    private fun getFontSettings(element: JsonElement): Transfer? {
-        return try {
-            val obj = element.jsonObject
-            Transfer(
-                obj["fg_color"],
-                obj["bg_color"],
-                obj["angle"],
-                obj["type"],
-                obj["is_bold"],
-            )
-        } catch (e: Exception) {
-            null
-        }
     }
 
     private fun getCoordinatesAndCaption(element: JsonElement): Pair<JsonArray, JsonElement> {
