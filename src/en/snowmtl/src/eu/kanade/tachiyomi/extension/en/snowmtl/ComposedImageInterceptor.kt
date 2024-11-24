@@ -274,11 +274,9 @@ class ComposedImageInterceptor(
         return sqrt((r2 - r1).toDouble().pow(2) + (g2 - g1).toDouble().pow(2) + (b2 - b1).toDouble().pow(2))
     }
 
-    private fun hexToRgb(hex: Int): Triple<Int, Int, Int> {
-        val red = (hex shr 16) and 0xFF
-        val green = (hex shr 8) and 0xFF
-        val blue = hex and 0xFF
-        return Triple(red, green, blue)
+    private fun hexToRgb(hex: Int): Triple<Float, Float, Float> {
+        val color = Color.valueOf(hex)
+        return Triple(color.red(), color.green(), color.blue())
     }
 
     companion object {
