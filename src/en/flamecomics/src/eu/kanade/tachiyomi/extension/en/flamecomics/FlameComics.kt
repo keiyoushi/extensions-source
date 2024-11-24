@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -27,28 +26,22 @@ import java.io.ByteArrayOutputStream
 import java.net.URLDecoder
 
 class FlameComics : ParsedHttpSource() {
+    
+    override val name = "Flame Comics"
+    private val host = "flamecomics.xyz"
+    override val baseUrl = "https://$host"
+    override val lang = "en"
+    override val supportsLatest = true
+    override val versionId: Int = 2
+
+    private val cdn = "https:cdn.$host"
 
     override val client = super.client.newBuilder()
         .rateLimit(2, 7)
         .addInterceptor(::composedImageIntercept)
         .build()
 
-    override val versionId: Int = 2
-
-    // Flame Scans -> Flame Comics
-    // override val id = 6350607071566689772
-
-    override val name = "Flame Comics"
-
     private val removeSpecialCharsregex = Regex("[^A-Za-z0-9 ]")
-
-    private val host = "flamecomics.xyz"
-    override val baseUrl = "https://$host"
-    private val cdn = "https:cdn.$host"
-
-    override val lang = "en"
-
-    override val supportsLatest = true
 
     private fun getRealUrl(string: String?): String {
         if (string == null) return ""
@@ -65,7 +58,9 @@ class FlameComics : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = ""
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val query = removeSpecialCharsregex.replace(response.request.url.queryParameter("search").toString().lowercase(), "")
+        val query = removeSpecialCharsregex.replace(
+            response.request.url.queryParameter("search").toString().lowercase(), "",
+        )
 
         var page = 1
         if (response.request.url.queryParameter("page") != null) {
@@ -73,7 +68,8 @@ class FlameComics : ParsedHttpSource() {
         }
 
         val doc = response.asJsoup()
-        val searchedSeriesData = getJsonData<SearchPageData>(doc)?.props?.pageProps?.series ?: return MangasPage(listOf(), false)
+        val searchedSeriesData = getJsonData<SearchPageData>(doc)?.props?.pageProps?.series
+            ?: return MangasPage(listOf(), false)
 
         val manga = searchedSeriesData.filter { series ->
             val titles = json.decodeFromString<List<String>>(series.altTitles) + series.title
@@ -85,15 +81,13 @@ class FlameComics : ParsedHttpSource() {
                 thumbnail_url = "$cdn/series/${seriesData.series_id}/${seriesData.cover}"
             }
         }
-        Log.i("flamecomics", "" + manga.size)
         page--
 
         var lastPage = page * 20 + 20
         if (lastPage > manga.size) {
             lastPage = manga.size
         }
-        if (lastPage < 0)lastPage = 0
-        Log.i("flamecomics", "$page $lastPage")
+        if (lastPage < 0) lastPage = 0
         return MangasPage(manga.subList(page * 20, lastPage), lastPage < manga.size)
     }
 
@@ -103,6 +97,7 @@ class FlameComics : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET("$baseUrl/browse?search=$query&page=$page")
+
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
