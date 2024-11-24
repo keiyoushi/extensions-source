@@ -26,7 +26,6 @@ import java.io.ByteArrayOutputStream
 import java.net.URLDecoder
 
 class FlameComics : ParsedHttpSource() {
-    
     override val name = "Flame Comics"
     private val host = "flamecomics.xyz"
     override val baseUrl = "https://$host"
@@ -58,9 +57,7 @@ class FlameComics : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = ""
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val query = removeSpecialCharsregex.replace(
-            response.request.url.queryParameter("search").toString().lowercase(), "",
-        )
+        val query = removeSpecialCharsregex.replace(response.request.url.queryParameter("search").toString().lowercase(), "")
 
         var page = 1
         if (response.request.url.queryParameter("page") != null) {
