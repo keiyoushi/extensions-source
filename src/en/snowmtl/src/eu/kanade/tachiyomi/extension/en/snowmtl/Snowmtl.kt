@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.snowmtl
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -22,6 +24,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+@RequiresApi(Build.VERSION_CODES.M)
 class Snowmtl : ParsedHttpSource() {
 
     override val name = "Snow Machine Translations"
@@ -36,7 +39,7 @@ class Snowmtl : ParsedHttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
-        .addInterceptor(ComposedImageInterceptor(baseUrl))
+        .addInterceptor(ComposedImageInterceptor(baseUrl, super.client))
         .build()
 
     // ============================== Popular ===============================

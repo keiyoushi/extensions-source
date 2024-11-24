@@ -5,29 +5,38 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.text.LineBreaker
 import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.annotation.RequiresApi
+import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 
 // The Interceptor joins the captions and pages of the manga.
 @RequiresApi(Build.VERSION_CODES.M)
 class ComposedImageInterceptor(
     private val baseUrl: String,
+    private val client: OkHttpClient,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
+    private val fontFamilyUrl = "$baseUrl/images/sub.ttf"
+    private var fontFamily: Typeface? = null
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -51,6 +60,11 @@ class ComposedImageInterceptor(
             return response
         }
 
+        if (fontFamily == null) {
+            fontFamily = loadRemoteFont(fontFamilyUrl, chain)
+                ?: loadFont("coming_soon_regular.ttf")
+        }
+
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
             .copy(Bitmap.Config.ARGB_8888, true)
 
@@ -59,7 +73,7 @@ class ComposedImageInterceptor(
         translation
             .filter { it.text.isNotBlank() }
             .forEach { caption ->
-                val textPaint = createTextPaint()
+                val textPaint = createTextPaint(fontFamily)
                 val dialogBox = createDialogBox(caption, textPaint, bitmap)
                 val y = getYAxis(textPaint, caption, dialogBox)
                 canvas.draw(dialogBox, caption.x1, y)
@@ -82,15 +96,60 @@ class ComposedImageInterceptor(
             .build()
     }
 
-    private fun createTextPaint(): TextPaint {
-        val defaultTextSize = 22.sp // arbitrary
-
+    private fun createTextPaint(font: Typeface?): TextPaint {
+        val defaultTextSize = 50.sp // arbitrary
         return TextPaint().apply {
             color = Color.BLACK
             style = Paint.Style.FILL_AND_STROKE
             textSize = defaultTextSize
+            font?.let {
+                typeface = it
+            }
             isAntiAlias = true
         }
+    }
+
+    /**
+     * Loads font from the `assets/fonts` directory within the APK
+     *
+     * @param fontName The name of the font to load.
+     * @return A `Typeface` instance of the loaded font or `null` if an error occurs.
+     *
+     * Example usage:
+     * <pre>{@code
+     *   val typeface: TypeFace? = loadFont("filename.ttf")
+     * }</pre>
+     */
+    private fun loadFont(fontName: String): Typeface? {
+        return try {
+            val classLoader = this::class.java.classLoader!!
+            val inputStream = classLoader.getResourceAsStream("assets/fonts/$fontName")
+            streamToFont(fontName, inputStream)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Loads a remote font and converts it into a usable font object.
+     *
+     * This function makes an HTTP request to download a font from a specified remote URL.
+     * It then converts the response into a usable font object.
+     */
+    private fun loadRemoteFont(fontUrl: String, chain: Interceptor.Chain): Typeface? {
+        return try {
+            val response = client.newCall(GET(fontFamilyUrl, chain.request().headers)).execute()
+            val fontName = response.request.url.pathSegments.last()
+            streamToFont(fontName, response.body.byteStream())
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun streamToFont(fontName: String, inputStream: InputStream): Typeface? {
+        val fontFile = File.createTempFile(fontName, fontName.substringAfter("."))
+        inputStream.copyTo(FileOutputStream(fontFile))
+        return Typeface.createFromFile(fontFile)
     }
 
     /**
