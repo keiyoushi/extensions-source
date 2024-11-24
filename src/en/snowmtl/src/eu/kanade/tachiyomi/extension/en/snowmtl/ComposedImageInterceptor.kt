@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.text.LineBreaker
 import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
@@ -19,7 +20,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import kotlin.math.min
 
 // The Interceptor joins the captions and pages of the manga.
 @RequiresApi(Build.VERSION_CODES.M)
@@ -55,47 +55,14 @@ class ComposedImageInterceptor(
             .copy(Bitmap.Config.ARGB_8888, true)
 
         val canvas = Canvas(bitmap)
-        val defaultTextSize = 22.sp // arbitrary
-
-        val textPaint = TextPaint().apply {
-            color = Color.BLACK
-            style = Paint.Style.FILL_AND_STROKE
-            textSize = defaultTextSize
-            isAntiAlias = true
-        }
-
-        val spacingMultiplier = 1f
-        val spacingAddition = 0f
 
         translation
             .filter { it.text.isNotBlank() }
             .forEach { caption ->
-                val layout = StaticLayout.Builder.obtain(caption.text, 0, caption.text.length, textPaint, caption.width.toInt()).apply {
-                    setAlignment(Layout.Alignment.ALIGN_CENTER)
-                    setLineSpacing(spacingAddition, spacingMultiplier)
-                    setIncludePad(false)
-                }.build()
-
-                val fontHeight = textPaint.fontMetrics.let { it.bottom - it.top }
-                val dialogBoxLineCount = caption.height / fontHeight
-
-                // Invert color in black dialog box and font scale. Change StaticLayout by reference
-                textPaint.apply {
-                    val pixelColor = bitmap.getPixel(caption.centerX.toInt(), caption.centerY.toInt())
-                    val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
-                    color = inverseColor
-                    textSize = min(defaultTextSize * (dialogBoxLineCount / layout.lineCount), defaultTextSize)
-                }
-
-                // Centers text in y for captions smaller than the dialog box
-                val y = when {
-                    layout.lineCount < dialogBoxLineCount -> {
-                        caption.centerY - layout.lineCount / 2f * fontHeight
-                    }
-                    else -> caption.y1
-                }
-
-                canvas.draw(layout, caption.x1, y)
+                val textPaint = createTextPaint()
+                val dialogBox = createDialogBox(caption, textPaint, bitmap)
+                val y = getAxiosY(textPaint, caption, dialogBox)
+                canvas.draw(dialogBox, caption.x1, y)
             }
 
         val output = ByteArrayOutputStream()
@@ -113,6 +80,70 @@ class ComposedImageInterceptor(
         return response.newBuilder()
             .body(responseBody)
             .build()
+    }
+
+    private fun createTextPaint(): TextPaint {
+        val defaultTextSize = 22.sp // arbitrary
+
+        return TextPaint().apply {
+            color = Color.BLACK
+            style = Paint.Style.FILL_AND_STROKE
+            textSize = defaultTextSize
+            isAntiAlias = true
+        }
+    }
+
+    /**
+     * Adjust the text to the center of the dialog box when feasible.
+     */
+    private fun getAxiosY(textPaint: TextPaint, caption: Translation, dialogBox: StaticLayout): Float {
+        val fontHeight = textPaint.fontMetrics.let { it.bottom - it.top }
+
+        val dialogBoxLineCount = caption.height / fontHeight
+
+        /**
+         * Centers text in y for captions smaller than the dialog box
+         */
+        val y = when {
+            dialogBox.lineCount < dialogBoxLineCount -> {
+                caption.centerY - dialogBox.lineCount / 2f * fontHeight
+            }
+
+            else -> caption.y1
+        }
+        return y
+    }
+
+    private fun createDialogBox(caption: Translation, textPaint: TextPaint, bitmap: Bitmap): StaticLayout {
+        var dialogBox = createBoxLayout(caption, textPaint)
+
+        /**
+         * The best way I've found to adjust the text in the dialog box (Especially in long dialogues)
+         */
+        while (dialogBox.height > caption.height) {
+            textPaint.textSize -= 0.5f
+            dialogBox = createBoxLayout(caption, textPaint)
+        }
+
+        textPaint.adjustTextColor(caption, bitmap)
+
+        return dialogBox
+    }
+
+    private fun createBoxLayout(caption: Translation, textPaint: TextPaint) =
+        StaticLayout.Builder.obtain(caption.text, 0, caption.text.length, textPaint, caption.width.toInt()).apply {
+            setAlignment(Layout.Alignment.ALIGN_CENTER)
+            setIncludePad(false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
+            }
+        }.build()
+
+    // Invert color in black dialog box.
+    private fun TextPaint.adjustTextColor(caption: Translation, bitmap: Bitmap) {
+        val pixelColor = bitmap.getPixel(caption.centerX.toInt(), caption.centerY.toInt())
+        val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
+        color = inverseColor
     }
 
     private inline fun <reified T> String.parseAs(): T {
