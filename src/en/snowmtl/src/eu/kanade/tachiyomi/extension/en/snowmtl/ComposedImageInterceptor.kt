@@ -122,9 +122,9 @@ class ComposedImageInterceptor(
      */
     private fun loadFont(fontName: String): Typeface? {
         return try {
-            val classLoader = this::class.java.classLoader!!
-            val inputStream = classLoader.getResourceAsStream("assets/fonts/$fontName")
-            streamToFont(fontName, inputStream)
+            this::class.java.classLoader!!
+                .getResourceAsStream("assets/fonts/$fontName")
+                .toTypeface(fontName)
         } catch (e: Exception) {
             null
         }
@@ -138,17 +138,20 @@ class ComposedImageInterceptor(
      */
     private fun loadRemoteFont(fontUrl: String, chain: Interceptor.Chain): Typeface? {
         return try {
-            val response = client.newCall(GET(fontFamilyUrl, chain.request().headers)).execute()
-            val fontName = response.request.url.pathSegments.last()
-            streamToFont(fontName, response.body.byteStream())
+            val request = GET(fontUrl, chain.request().headers)
+            val response = client
+                .newCall(request).execute()
+                .takeIf(Response::isSuccessful) ?: return null
+            val fontName = request.url.pathSegments.last()
+            response.body.byteStream().toTypeface(fontName)
         } catch (e: Exception) {
             null
         }
     }
 
-    private fun streamToFont(fontName: String, inputStream: InputStream): Typeface? {
+    private fun InputStream.toTypeface(fontName: String): Typeface? {
         val fontFile = File.createTempFile(fontName, fontName.substringAfter("."))
-        inputStream.copyTo(FileOutputStream(fontFile))
+        this.copyTo(FileOutputStream(fontFile))
         return Typeface.createFromFile(fontFile)
     }
 
