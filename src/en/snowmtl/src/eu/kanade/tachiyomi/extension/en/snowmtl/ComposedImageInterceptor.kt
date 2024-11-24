@@ -61,7 +61,7 @@ class ComposedImageInterceptor(
             .forEach { caption ->
                 val textPaint = createTextPaint()
                 val dialogBox = createDialogBox(caption, textPaint, bitmap)
-                val y = getAxiosY(textPaint, caption, dialogBox)
+                val y = getYAxis(textPaint, caption, dialogBox)
                 canvas.draw(dialogBox, caption.x1, y)
             }
 
@@ -96,7 +96,7 @@ class ComposedImageInterceptor(
     /**
      * Adjust the text to the center of the dialog box when feasible.
      */
-    private fun getAxiosY(textPaint: TextPaint, caption: Translation, dialogBox: StaticLayout): Float {
+    private fun getYAxis(textPaint: TextPaint, caption: Translation, dialogBox: StaticLayout): Float {
         val fontHeight = textPaint.fontMetrics.let { it.bottom - it.top }
 
         val dialogBoxLineCount = caption.height / fontHeight
