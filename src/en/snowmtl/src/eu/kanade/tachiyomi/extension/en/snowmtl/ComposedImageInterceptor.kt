@@ -26,6 +26,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 // The Interceptor joins the captions and pages of the manga.
 @RequiresApi(Build.VERSION_CODES.O)
@@ -208,9 +210,13 @@ class ComposedImageInterceptor(
             textPaint.color = caption.foregroundColor
             textPaint.bgColor = caption.backgroundColor
             textPaint.style = if (caption.isBold) Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
-        } else {
-            textPaint.adjustTextColor(caption, bitmap)
         }
+
+        /**
+         * Forces font color correction if the background color of the dialog box and the font color are too similar.
+         * It's a source configuration problem.
+         */
+        textPaint.adjustTextColor(caption, bitmap)
 
         return dialogBox
     }
@@ -228,6 +234,11 @@ class ComposedImageInterceptor(
     private fun TextPaint.adjustTextColor(caption: Translation, bitmap: Bitmap) {
         val pixelColor = bitmap.getPixel(caption.centerX.toInt(), caption.centerY.toInt())
         val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
+
+        val minDistance = 80f // arbitrary
+        if (colorDistance(pixelColor, caption.foregroundColor) > minDistance) {
+            return
+        }
         color = inverseColor
     }
 
@@ -244,6 +255,30 @@ class ComposedImageInterceptor(
     }
 
     private val Int.sp: Float get() = this * SCALED_DENSITY
+
+    // ============================= Utils ======================================
+
+    /**
+     * Calculates the Euclidean distance between two colors in RGB space.
+     *
+     * This function takes two integer values representing hexadecimal colors,
+     * converts them to their RGB components, and calculates the Euclidean distance
+     * between the two colors. The distance provides a measure of how similar or
+     * different the two colors are.
+     *
+     */
+    private fun colorDistance(colorA: Int, colorB: Int): Double {
+        val (r1, g1, b1) = hexToRgb(colorA)
+        val (r2, g2, b2) = hexToRgb(colorB)
+        return sqrt((r2 - r1).toDouble().pow(2) + (g2 - g1).toDouble().pow(2) + (b2 - b1).toDouble().pow(2))
+    }
+
+    private fun hexToRgb(hex: Int): Triple<Int, Int, Int> {
+        val red = (hex shr 16) and 0xFF
+        val green = (hex shr 8) and 0xFF
+        val blue = hex and 0xFF
+        return Triple(red, green, blue)
+    }
 
     companion object {
         const val SCALED_DENSITY = 1.5f // arbitrary

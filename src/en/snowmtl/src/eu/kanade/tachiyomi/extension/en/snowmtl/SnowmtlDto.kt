@@ -59,8 +59,8 @@ private object TranslationsListSerializer :
     JsonTransformingSerializer<List<Translation>>(ListSerializer(Translation.serializer())) {
     override fun transformDeserialize(element: JsonElement): JsonElement {
         return JsonArray(
-            element.jsonArray.map { array ->
-                val (coordinates, text) = getCoordinatesAndCaption(array)
+            element.jsonArray.map { jsonElement ->
+                val (coordinates, text) = getCoordinatesAndCaption(jsonElement)
 
                 buildJsonObject {
                     put("x1", coordinates[0])
@@ -70,12 +70,13 @@ private object TranslationsListSerializer :
                     put("text", text)
 
                     try {
-                        val obj = element.jsonObject
+                        val obj = jsonElement.jsonObject
                         obj["fg_color"]?.let { put("fbColor", it) }
                         obj["bg_color"]?.let { put("bgColor", it) }
                         obj["angle"]?.let { put("angle", it) }
                         obj["type"]?.let { put("type", it) }
                         obj["is_bold"]?.let { put("isBold", it) }
+                        put("isNewApi", true)
                     } catch (_: Exception) { }
                 }
             },
