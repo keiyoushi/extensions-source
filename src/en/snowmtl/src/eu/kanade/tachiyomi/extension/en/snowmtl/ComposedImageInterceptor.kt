@@ -104,14 +104,10 @@ class ComposedImageInterceptor(
         /**
          * Centers text in y for captions smaller than the dialog box
          */
-        val y = when {
-            dialogBox.lineCount < dialogBoxLineCount -> {
-                caption.centerY - dialogBox.lineCount / 2f * fontHeight
-            }
-
+        return when {
+            dialogBox.lineCount < dialogBoxLineCount -> caption.centerY - dialogBox.lineCount / 2f * fontHeight
             else -> caption.y1
         }
-        return y
     }
 
     private fun createDialogBox(caption: Translation, textPaint: TextPaint, bitmap: Bitmap): StaticLayout {
