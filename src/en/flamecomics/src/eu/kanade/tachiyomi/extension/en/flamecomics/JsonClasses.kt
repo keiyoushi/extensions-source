@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.flamecomics
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import org.jsoup.nodes.Document
+import uy.kohesive.injekt.injectLazy
 
 @Serializable
 class PageData(
@@ -36,6 +40,8 @@ class SPageProps(
 @Serializable
 class Series(
     val title: String,
+    val altTitles: String,
+    val description: String,
     val cover: String,
     val author: String,
     val status: String,
@@ -48,4 +54,17 @@ class Chapter(
     val title: String?,
     val release_date: Long,
     val token: String,
+    val images: List<Page>,
 )
+
+@Serializable
+class Page(
+    val name: String,
+)
+
+public val json: Json by injectLazy()
+
+public inline fun <reified T> getJsonData(document: Document?): T? {
+    val jsonData = document?.getElementById("__NEXT_DATA__")?.data() ?: return null
+    return json.decodeFromString<T>(jsonData)
+}

@@ -15,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -24,7 +23,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.net.URLDecoder
 
@@ -35,8 +33,10 @@ class FlameComics : ParsedHttpSource() {
         .addInterceptor(::composedImageIntercept)
         .build()
 
+    override val versionId: Int = 2
+
     // Flame Scans -> Flame Comics
-    override val id = 6350607071566689772
+    // override val id = 6350607071566689772
 
     override val name = "Flame Comics"
 
@@ -49,8 +49,6 @@ class FlameComics : ParsedHttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     private fun getRealUrl(string: String?): String {
         if (string == null) return ""
@@ -67,23 +65,24 @@ class FlameComics : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = ""
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val query = response.request.url.queryParameter("search")
+        val query = removeSpecialCharsregex.replace(response.request.url.queryParameter("search").toString().lowercase(), "")
 
         var page = 1
         if (response.request.url.queryParameter("page") != null) {
-            page = Integer.parseInt(response.request.url.queryParameter("page"))
+            page = Integer.parseInt(response.request.url.queryParameter("page") + "")
         }
 
         val doc = response.asJsoup()
-        val jsonData = doc.getElementById("__NEXT_DATA__")?.data() ?: return MangasPage(listOf(), false)
-        val searchData = json.decodeFromString<SearchPageData>(jsonData)
+        val searchedSeriesData = getJsonData<SearchPageData>(doc)?.props?.pageProps?.series ?: return MangasPage(listOf(), false)
 
-        val manga = searchData.props.pageProps.series.filter { it -> removeSpecialCharsregex.replace(query.toString().lowercase(), "")  in  removeSpecialCharsregex.replace(it.title.lowercase(), "")
-        }.map { it ->
+        val manga = searchedSeriesData.filter { series ->
+            val titles = json.decodeFromString<List<String>>(series.altTitles) + series.title
+            titles.any { title -> query in removeSpecialCharsregex.replace(title.lowercase(), "") }
+        }.map { seriesData ->
             SManga.create().apply {
-                title = it.title
-                setUrlWithoutDomain("$baseUrl/series/${it.series_id}")
-                thumbnail_url = "$cdn/series/${it.series_id}/${it.cover}"
+                title = seriesData.title
+                setUrlWithoutDomain("$baseUrl/series/${seriesData.series_id}")
+                thumbnail_url = "$cdn/series/${seriesData.series_id}/${seriesData.cover}"
             }
         }
         Log.i("flamecomics", "" + manga.size)
@@ -125,29 +124,30 @@ class FlameComics : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        thumbnail_url = getRealUrl(document.selectFirst("img")?.attr("abs:src"))
+        val seriesData = getJsonData<PageData>(document)?.props?.pageProps?.series
 
-        val descElement = document.selectFirst("h3:contains(Description)")
+        title = seriesData?.title + ""
 
-        description =
-            descElement?.parent()?.selectFirst("p")?.text()
+        thumbnail_url = "$cdn/series/${seriesData?.series_id}/${seriesData?.cover}"
 
-        status = if (document.selectFirst("span:contains(Ongoing)") != null) {
-            SManga.ONGOING
-        } else if (document.selectFirst("span:contains(Dropped)") != null) {
-            SManga.CANCELLED
-        } else {
-            SManga.UNKNOWN
+        description = seriesData?.description
+
+        when (seriesData?.status) {
+            "Ongoing" -> status = SManga.ONGOING
+            "Dropped" -> status = SManga.CANCELLED
+            "Hiatus" -> status = SManga.ON_HIATUS
+            "Completed" -> status = SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
 
-        author = document.selectFirst("p:contains(Author)")?.nextElementSibling()?.text()
+        author = seriesData?.author
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = response.asJsoup()
         val jsonData = doc.getElementById("__NEXT_DATA__")?.data() ?: return listOf<SChapter>()
         val pageData = json.decodeFromString<PageData>(jsonData)
-        return pageData.props.pageProps.chapters.mapIndexed { idx, chapter ->
+        return pageData.props.pageProps.chapters.map { chapter ->
             SChapter.create().apply {
                 setUrlWithoutDomain("/series/${pageData.props.pageProps.series.series_id}/${chapter.token}")
                 date_upload = chapter.release_date * 1000
@@ -159,7 +159,7 @@ class FlameComics : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("img").mapIndexed { idx, img ->
+        return document.select("div[class$=mantine-Stack-root] img").mapIndexed { idx, img ->
             var url = img.attr("abs:src")
             url = URLDecoder.decode(url.substringAfter("url="), "utf8")
             Page(idx, imageUrl = url.substringBefore("?"))
