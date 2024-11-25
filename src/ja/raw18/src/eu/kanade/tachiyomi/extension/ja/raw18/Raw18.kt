@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ja.raw18
 
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -11,67 +10,118 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
-class Raw18 : WPComics(
-    "Raw18",
-    "https://raw18.net/",
-    "ja",
-    dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()),
-    gmtOffset = null,
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
-
-    override fun popularMangaSelector() = "div.items div.item"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.select("h3 a").let {
-            title = it.text()
-            setUrlWithoutDomain(it.attr("abs:href"))
-        }
-        thumbnail_url = imageOrNull(element.selectFirst("img")!!)
-    }
-
+class Raw18 : WPComics("Raw18", "https://raw18.net", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), null) {
+    override val searchPath = "search/manga"
+    override val genresUrlDelimiter = "="
+    override fun popularMangaSelector() = "div.items article.item"
+    override fun popularMangaNextPageSelector() = "li:nth-last-child(2) a.page-link"
     override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
+    override fun mangaDetailsParse(document: Document): SManga {
+        return SManga.create().apply {
+            document.select("article#item-detail").let { info ->
+                author = info.select("li.author p.col-xs-8").text()
+                status = when {
+                    info.select("li.status p.col-xs-8").text().contains("Ongoing", true) -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
+                genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
+                description = info.select("div.detail-content").text()
+                thumbnail_url = imageOrNull(info[0].selectFirst("div.col-image img")!!)
+            }
+        }
+    }
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
-
-        filters.forEach { filter ->
+        val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
+        val url = "$baseUrl/search/manga".toHttpUrl().newBuilder()
+        filterList.forEach { filter ->
             when (filter) {
                 is GenreFilter -> filter.toUriPart()?.let { url.addQueryParameter("genre", it) }
                 is StatusFilter -> filter.toUriPart()?.let { url.addQueryParameter("status", it) }
                 else -> {}
             }
         }
-
-        when {
-            query.isNotBlank() -> url.addQueryParameter(queryParam, query)
-            else -> url.addQueryParameter("page", page.toString())
+        url.apply {
+            addQueryParameter(queryParam, query)
+            addQueryParameter("page", page.toString())
         }
-
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
-
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.title-detail")!!.text()
-        description = document.selectFirst("p#description")?.text()
-        status = document.selectFirst("li.status:last-child")?.text().toStatus()
-        genre = document.select("li.kind p a")?.joinToString { it.text() }
-        thumbnail_url = imageOrNull(document.selectFirst("div.col-image img")!!)
-    }
-
-    override fun chapterListSelector() = "div.list-chapter li.row:not(.heading):not([style])"
-
     override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
-            date_upload = element.select(".chapters + div").text().toDate()
+        val minuteWords = listOf("minute", "分")
+        val hourWords = listOf("hour", "時間")
+        val dayWords = listOf("day", "日")
+        val weekWords = listOf("week", "週間")
+        val monthWords = listOf("month", "月")
+        val chapterDate = element.select("div.col-xs-4").text()
+        return SChapter.create().apply {
+            element.select("a").let {
+                name = it.text()
+                setUrlWithoutDomain(it.attr("href"))
+            }
+            try {
+                val regex = Regex("([0-9]+)(.+)")
+                val (firstMatch, secondMatch) = regex.matchEntire(chapterDate.substringBefore("前"))!!.destructured
+                val trimmedDate = listOf(firstMatch, secondMatch)
+                val calendar = Calendar.getInstance()
+                when {
+                    monthWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
+                    weekWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.WEEK_OF_MONTH, -trimmedDate[0].toInt()) }
+                    dayWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
+                    hourWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
+                    minuteWords.any {
+                        trimmedDate[1].contains(
+                            it,
+                            ignoreCase = true,
+                        )
+                    } -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
+                }
+                date_upload = calendar.timeInMillis
+            } catch (_: Exception) {
+                date_upload = 0L
+            }
         }
     }
-
-    override val genresSelector = ".categories-detail ul.nav li:not(.active) a"
+    override fun getStatusList(): List<Pair<String?, String>> {
+        return listOf(
+            Pair(null, "全て"),
+            Pair("ongoing", "Ongoing"),
+        )
+    }
+    override fun parseGenres(document: Document): List<Pair<String?, String>> {
+        val items = document.select(genresSelector)
+        return buildList(items.size + 1) {
+            add(Pair(null, "全てのジャンル"))
+            items.mapTo(this) {
+                Pair(
+                    it.attr("href")
+                        .removeSuffix("/")
+                        .substringAfterLast(genresUrlDelimiter),
+                    it.text(),
+                )
+            }
+        }
+    }
 }
