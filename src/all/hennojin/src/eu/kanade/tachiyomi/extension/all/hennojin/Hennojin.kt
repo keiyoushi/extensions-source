@@ -1,30 +1,31 @@
 package eu.kanade.tachiyomi.extension.all.hennojin
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Evaluator
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Hennojin(override val lang: String, suffix: String) : ParsedHttpSource() {
-    override val baseUrl = "https://hennojin.com/home/$suffix"
+class Hennojin(override val lang: String) : ParsedHttpSource() {
+    override val baseUrl = "https://hennojin.com"
 
     override val name = "Hennojin"
 
     // Popular is latest
     override val supportsLatest = false
 
-    private val httpUrl by lazy { baseUrl.toHttpUrl() }
+    private val httpUrl by lazy { "$baseUrl/home".toHttpUrl() }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -41,7 +42,14 @@ class Hennojin(override val lang: String, suffix: String) : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = ".paginate .next"
 
     override fun popularMangaRequest(page: Int) =
-        httpUrl.request { addEncodedPathSegments("page/$page") }
+        httpUrl.request {
+            if (lang == "ja") {
+                addEncodedPathSegments("page/$page/")
+                addQueryParameter("archive", "raw")
+            } else {
+                addEncodedPathSegments("page/$page")
+            }
+        }
 
     override fun popularMangaFromElement(element: Element) =
         SManga.create().apply {
@@ -66,46 +74,47 @@ class Hennojin(override val lang: String, suffix: String) : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) =
         popularMangaFromElement(element)
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("https://hennojin.com" + manga.url, headers)
-
     override fun mangaDetailsParse(document: Document) =
         SManga.create().apply {
-            description = document.selectFirst(
+            description = document.select(
                 ".manga-subtitle + p + p",
-            )?.html()?.replace("<br> ", "\n")
+            ).joinToString("\n") {
+                it.run {
+                    select(Evaluator.Tag("br")).prepend("\\n")
+                    this.text().replace("\\n", "\n").replace("\n ", "\n")
+                }
+            }.trim()
             genre = document.select(
                 ".tags-list a[href*=/parody/]," +
                     ".tags-list a[href*=/tags/]," +
                     ".tags-list a[href*=/character/]",
-            )?.joinToString { it.text() }
-            artist = document.select(
+            ).joinToString { it.text() }
+            artist = document.selectFirst(
                 ".tags-list a[href*=/artist/]",
-            )?.joinToString { it.text() }
-            author = document.select(
+            )?.text()
+            author = document.selectFirst(
                 ".tags-list a[href*=/group/]",
-            )?.joinToString { it.text() } ?: artist
+            )?.text() ?: artist
             status = SManga.COMPLETED
         }
 
-    override fun fetchChapterList(manga: SManga) =
-        Request.Builder().url(manga.thumbnail_url!!)
-            .head().build().run(client::newCall)
-            .asObservableSuccess().map { res ->
-                SChapter.create().apply {
-                    name = "Chapter"
-                    url = manga.reader
-                    date_upload = res.date
-                    chapter_number = -1f
-                }.let(::listOf)
-            }!!
-
-    override fun pageListRequest(chapter: SChapter) =
-        GET("https://hennojin.com" + chapter.url, headers)
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup(response.body.string())
+        val date = Request.Builder().url(document.selectFirst(".manga-thumbnail > img")!!.attr("src"))
+            .head().build().run(client::newCall).execute().date
+        return document.select("a:contains(Read Online)").map {
+            SChapter.create().apply {
+                url = it.attr("href").replace("&view=page", "&view=multi")
+                name = "Chapter"
+                date_upload = date
+                chapter_number = -1f
+            }
+        }
+    }
 
     override fun pageListParse(document: Document) =
         document.select(".slideshow-container > img")
-            .mapIndexed { idx, img -> Page(idx, "", img.absUrl("src")) }
+            .mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
 
     private inline fun HttpUrl.request(
         block: HttpUrl.Builder.() -> HttpUrl.Builder,
@@ -113,9 +122,6 @@ class Hennojin(override val lang: String, suffix: String) : ParsedHttpSource() {
 
     private inline val Response.date: Long
         get() = headers["Last-Modified"]?.run(httpDate::parse)?.time ?: 0L
-
-    private inline val SManga.reader: String
-        get() = "/home/manga-reader/?manga=$title&view=multi"
 
     override fun chapterListSelector() =
         throw UnsupportedOperationException()
