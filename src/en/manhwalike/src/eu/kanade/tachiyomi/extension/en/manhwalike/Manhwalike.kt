@@ -88,19 +88,22 @@ class Manhwalike : ParsedHttpSource() {
 
     override fun searchMangaSelector() = "ul.normal li"
 
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaNextPageSelector() = "ul.pagination li:last-child a"
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = when {
-            document.select(".normal").isEmpty() -> document.select("ul li").map { element ->
+            document.select(searchMangaSelector()).isEmpty() -> document.select("ul li").map { element ->
                 searchMangaFromElement(element)
             }
             else -> document.select(searchMangaSelector()).map { element ->
                 searchMangaFromElement(element)
             }
         }
-        return MangasPage(mangas, false)
+        val hasNextPage = searchMangaNextPageSelector().let { selector ->
+            document.select(selector).first()
+        } != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun searchMangaFromElement(element: Element): SManga {
@@ -154,7 +157,6 @@ class Manhwalike : ParsedHttpSource() {
     private class GenreFilter : UriPartFilter(
         "Genre",
         arrayOf(
-            Pair("All", ""),
             Pair("Action", "manga-genre-action"),
             Pair("Adaptation", "manga-genre-adaptation"),
             Pair("Adult", "manga-genre-adult"),
