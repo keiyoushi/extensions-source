@@ -6,7 +6,7 @@ import java.util.Locale
 
 class YaoiMangaOku : Madara(
     "Yaoi Manga Oku",
-    "https://yaoimangaoku.com",
+    "https://yaoimangaoku.net",
     "tr",
     dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
 ) {
