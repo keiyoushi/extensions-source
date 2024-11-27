@@ -1,0 +1,10 @@
+ext {
+    extName = 'Raw18'
+    extClass = '.Raw18'
+    themePkg = 'wpcomics'
+    baseUrl = 'https://raw18.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
