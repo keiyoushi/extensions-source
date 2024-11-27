@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -106,7 +107,17 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
             .head().build().run(client::newCall).execute().date
         return document.select("a:contains(Read Online)").map {
             SChapter.create().apply {
-                url = it.attr("href").replace("&view=page", "&view=multi")
+                setUrlWithoutDomain(
+                    it
+                        ?.absUrl("href")
+                        ?.toHttpUrlOrNull()
+                        ?.newBuilder()
+                        ?.removeAllQueryParameters("view")
+                        ?.addQueryParameter("view", "multi")
+                        ?.build()
+                        ?.toString()
+                        ?: it.absUrl("href"),
+                )
                 name = "Chapter"
                 date_upload = date
                 chapter_number = -1f
