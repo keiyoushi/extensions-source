@@ -51,7 +51,7 @@ class TruyenQQ : ParsedHttpSource() {
         val anchor = element.selectFirst(".book_info .qtip a")!!
         setUrlWithoutDomain(anchor.attr("href"))
         title = anchor.text()
-        thumbnail_url = element.selectFirst(".book_avatar img")?.attr("abs:src")
+        thumbnail_url = element.selectFirst(".book_avatar img")!!.attr("abs:src")
     }
 
     // Selector của nút trang kế tiếp
