@@ -25,6 +25,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class TruyenGG : ParsedHttpSource(), ConfigurableSource {
 
@@ -39,7 +40,7 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
+        .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder(): Headers.Builder =

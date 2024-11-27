@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.truyenqq
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -31,10 +32,7 @@ class TruyenQQ : ParsedHttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .followRedirects(true)
+        .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder(): Headers.Builder =
@@ -53,7 +51,7 @@ class TruyenQQ : ParsedHttpSource() {
         val anchor = element.selectFirst(".book_info .qtip a")!!
         setUrlWithoutDomain(anchor.attr("href"))
         title = anchor.text()
-        thumbnail_url = element.select(".book_avatar img").attr("abs:src")
+        thumbnail_url = element.selectFirst(".book_avatar img")?.attr("abs:src")
     }
 
     // Selector của nút trang kế tiếp
@@ -101,7 +99,7 @@ class TruyenQQ : ParsedHttpSource() {
         author = info.select(".org").joinToString { it.text() }
         genre = document.select(".list01 li").joinToString { it.text() }
         description = document.select(".story-detail-info").textWithLinebreaks()
-        thumbnail_url = document.select("img[itemprop=image]").attr("abs:src")
+        thumbnail_url = document.selectFirst("img[itemprop=image]")?.attr("abs:src")
         status = when (info.select(".status > p:last-child").text()) {
             "Đang Cập Nhật" -> SManga.ONGOING
             "Hoàn Thành" -> SManga.COMPLETED
@@ -119,7 +117,7 @@ class TruyenQQ : ParsedHttpSource() {
     override fun chapterListSelector(): String = "div.works-chapter-list div.works-chapter-item"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         name = element.select("a").text().trim()
         date_upload = parseDate(element.select(".time-chap").text())
     }
