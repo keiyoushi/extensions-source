@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -43,11 +44,12 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) =
         httpUrl.request {
-            if (lang == "ja") {
-                addEncodedPathSegments("page/$page/")
-                addQueryParameter("archive", "raw")
-            } else {
-                addEncodedPathSegments("page/$page")
+            when (lang) {
+                "ja" -> {
+                    addEncodedPathSegments("page/$page/")
+                    addQueryParameter("archive", "raw")
+                }
+                else -> addEncodedPathSegments("page/$page")
             }
         }
 
@@ -78,11 +80,11 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
         SManga.create().apply {
             description = document.select(
                 ".manga-subtitle + p + p",
-            ).joinToString("\n") {
-                it.run {
-                    select(Evaluator.Tag("br")).prepend("\\n")
-                    this.text().replace("\\n", "\n").replace("\n ", "\n")
-                }
+            ).joinToString("\n") { it
+                .apply { select(Evaluator.Tag("br")).prepend("\\n") }
+                .text()
+                .replace("\\n", "\n")
+                .replace("\n ", "\n")
             }.trim()
             genre = document.select(
                 ".tags-list a[href*=/parody/]," +
@@ -104,7 +106,16 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
             .head().build().run(client::newCall).execute().date
         return document.select("a:contains(Read Online)").map {
             SChapter.create().apply {
-                url = it.attr("href").replace("&view=page", "&view=multi")
+                url = setUrlWithoutDomain(it
+                    ?.absUrl("href")
+                    ?.toHttpUrlOrNull()
+                    ?.newBuilder()
+                    ?.removeAllQueryParameters("view")
+                    ?.addQueryParameter("view", "multi")
+                    ?.build()
+                    ?.toString()
+                    ?: it.absUrl("href")
+                ).toString()
                 name = "Chapter"
                 date_upload = date
                 chapter_number = -1f
