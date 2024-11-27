@@ -162,7 +162,7 @@ class NineAnime : ParsedHttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val id: String = chapter.url
             .substring(chapter.url.lastIndexOf("/", chapter.url.length - 2))
-            .trim { it <= '/' }
+            .trim('/')
 
         val pageListHeaders = headersBuilder().add("Referer", "https://www.technologpython.com/")
 
