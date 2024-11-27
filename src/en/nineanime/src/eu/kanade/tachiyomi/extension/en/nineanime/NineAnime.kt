@@ -33,7 +33,7 @@ class NineAnime : ParsedHttpSource() {
         .build()
 
     companion object {
-        private const val PAGES_URL = "https://www.glanceoflife.com"
+        private const val PAGES_URL = "https://www.gardenhomefuture.com"
     }
 
     // not necessary for normal usage but added in an attempt to fix usage with VPN (see #3476)
@@ -160,10 +160,13 @@ class NineAnime : ParsedHttpSource() {
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val id: String = chapter.url.substring(chapter.url.lastIndexOf("/", chapter.url.length - 2))
+        val id: String = chapter.url
+            .substring(chapter.url.lastIndexOf("/", chapter.url.length - 2))
+            .trim('/')
 
-        val pageListHeaders = headersBuilder().add("Referer", "$baseUrl/manga/").build()
-        return GET("$PAGES_URL/c/nineanime$id", pageListHeaders)
+        val pageListHeaders = headersBuilder().add("Referer", "https://www.technologpython.com/")
+
+        return GET("$PAGES_URL/go/jump/?type=nineanime&cid=$id", pageListHeaders.build())
     }
 
     override fun pageListParse(document: Document): List<Page> {
