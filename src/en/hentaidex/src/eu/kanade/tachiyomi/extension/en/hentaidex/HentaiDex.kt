@@ -63,11 +63,14 @@ class HentaiDex : MangaThemesia(
 
                 is GenreListFilter -> {
                     filter.state
-                        .filter { it.state != Filter.TriState.STATE_IGNORE }
+                        .filterNot { it.state == Filter.TriState.STATE_IGNORE }
                         .forEach {
-                            val value =
-                                if (it.state == Filter.TriState.STATE_EXCLUDE) "-${it.value}" else it.value
-                            url.addQueryParameter("genre[]", value)
+                            val genre = when (it.state) {
+                                Filter.TriState.STATE_EXCLUDE -> "-${it.value}"
+                                else -> it.value
+                            }
+
+                            url.addQueryParameter("genre[]", genre)
                         }
                 }
                 // if site has project page, default value "hasProjectPage" = false
