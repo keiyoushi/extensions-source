@@ -68,6 +68,6 @@ class VMP : VerComics("VMP", "https://vermangasporno.com", "es") {
             Pair("Sin Censura", "sin-censura"),
             Pair("Squirting", "squirting"),
             Pair("Student", "student"),
-            Pair("Unusual Pupils", "unusual-pupils")
+            Pair("Unusual Pupils", "unusual-pupils"),
         )
 }
