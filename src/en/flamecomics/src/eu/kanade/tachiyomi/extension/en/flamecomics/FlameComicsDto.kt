@@ -4,66 +4,87 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.Json
-import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
+
+@Serializable
+class NewBuildID(
+    val buildId: String,
+)
 
 @Serializable
 class MangaPageData(
-    val props: Props,
-)
-
-@Serializable
-class Props(
     val pageProps: PageProps,
-)
-
-@Serializable
-class PageProps(
-    val chapters: List<Chapter>,
-    val series: Series,
-)
+) {
+    @Serializable
+    class PageProps(
+        val chapters: List<Chapter>,
+        val series: Series,
+    )
+}
 
 @Serializable
 class SearchPageData(
-    val props: SProps,
-)
+    val pageProps: PageProps,
+) {
+    @Serializable
+    class PageProps(
+        val series: List<Series>,
+    )
+}
 
 @Serializable
-class SProps(
-    val pageProps: SPageProps,
-)
+class LatestPageData(
+    val pageProps: PageProps,
+) {
+    @Serializable
+    class PageProps(
+        val latestEntries: LatestEntries,
+    ) {
+        @Serializable
+        class LatestEntries(
+            val blocks: List<Block>,
+        ) {
+            @Serializable
+            class Block(
+                val series: List<Series>,
+            )
+        }
+    }
+}
 
 @Serializable
-class SPageProps(
-    val series: List<Series>,
-)
+class ChapterPageData(
+    val pageProps: PageProps,
+) {
+    @Serializable
+    class PageProps(
+        val chapter: Chapter,
+    )
+}
 
 @Serializable
 class Series(
     val title: String,
-    val altTitles: String,
+    val altTitles: String?,
     val description: String,
     val cover: String,
-    val author: String,
+    val author: String?,
     val status: String,
     val series_id: Int,
-    val last_edit: String,
     val views: Int?,
 
-)
+    )
 
 @Serializable
 class Chapter(
     val chapter: Double,
     val title: String?,
     val release_date: Long,
+    val series_id: Int,
     val token: String,
-    @Serializable(with = keystoListSerializer::class)
+    @Serializable(with = KeysToListSerializer::class)
     val images: List<Page>,
 )
 
@@ -72,7 +93,7 @@ class Page(
     val name: String,
 )
 
-class keystoListSerializer : KSerializer<List<Page>> {
+class KeysToListSerializer : KSerializer<List<Page>> {
     private val listSer = MapSerializer(String.serializer(), Page.serializer())
     override val descriptor: SerialDescriptor = listSer.descriptor
     override fun deserialize(decoder: Decoder): List<Page> {
@@ -80,11 +101,4 @@ class keystoListSerializer : KSerializer<List<Page>> {
     }
 
     override fun serialize(encoder: Encoder, value: List<Page>) {}
-}
-
-val json: Json by injectLazy()
-
-inline fun <reified T> getJsonData(document: Document?): T? {
-    val jsonData = document?.getElementById("__NEXT_DATA__")?.data() ?: return null
-    return json.decodeFromString<T>(jsonData)
 }
