@@ -109,10 +109,10 @@ class FlameComics : HttpSource() {
                     setUrlWithoutDomain(
                         dataApiReqBuilder().apply {
                             val seriesID =
-                                seriesData.series_id // manga.url.toHttpUrl().pathSegments.last()
+                                seriesData.series_id
                             addPathSegment("series")
                             addPathSegment("$seriesID.json")
-                            addQueryParameter("id", seriesData.series_id.toString()) // seriesID)
+                            addQueryParameter("id", seriesData.series_id.toString())
                         }.build().toString(),
                     )
                     thumbnail_url = imageApiUrlBuilder(
