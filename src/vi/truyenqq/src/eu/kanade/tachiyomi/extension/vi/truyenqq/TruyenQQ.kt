@@ -51,7 +51,7 @@ class TruyenQQ : ParsedHttpSource() {
         val anchor = element.selectFirst(".book_info .qtip a")!!
         setUrlWithoutDomain(anchor.attr("href"))
         title = anchor.text()
-        thumbnail_url = element.selectFirst(".book_avatar img")!!.attr("abs:src")
+        thumbnail_url = element.selectFirst(".book_avatar img")?.attr("abs:src")
     }
 
     // Selector của nút trang kế tiếp
@@ -99,7 +99,7 @@ class TruyenQQ : ParsedHttpSource() {
         author = info.select(".org").joinToString { it.text() }
         genre = document.select(".list01 li").joinToString { it.text() }
         description = document.select(".story-detail-info").textWithLinebreaks()
-        thumbnail_url = document.selectFirst("img[itemprop=image]")!!.attr("abs:src")
+        thumbnail_url = document.selectFirst("img[itemprop=image]")?.attr("abs:src")
         status = when (info.select(".status > p:last-child").text()) {
             "Đang Cập Nhật" -> SManga.ONGOING
             "Hoàn Thành" -> SManga.COMPLETED
