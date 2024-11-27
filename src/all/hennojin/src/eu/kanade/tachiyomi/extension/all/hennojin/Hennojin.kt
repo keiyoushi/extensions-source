@@ -80,11 +80,12 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
         SManga.create().apply {
             description = document.select(
                 ".manga-subtitle + p + p",
-            ).joinToString("\n") { it
-                .apply { select(Evaluator.Tag("br")).prepend("\\n") }
-                .text()
-                .replace("\\n", "\n")
-                .replace("\n ", "\n")
+            ).joinToString("\n") {
+                it
+                    .apply { select(Evaluator.Tag("br")).prepend("\\n") }
+                    .text()
+                    .replace("\\n", "\n")
+                    .replace("\n ", "\n")
             }.trim()
             genre = document.select(
                 ".tags-list a[href*=/parody/]," +
@@ -106,15 +107,16 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
             .head().build().run(client::newCall).execute().date
         return document.select("a:contains(Read Online)").map {
             SChapter.create().apply {
-                url = setUrlWithoutDomain(it
-                    ?.absUrl("href")
-                    ?.toHttpUrlOrNull()
-                    ?.newBuilder()
-                    ?.removeAllQueryParameters("view")
-                    ?.addQueryParameter("view", "multi")
-                    ?.build()
-                    ?.toString()
-                    ?: it.absUrl("href")
+                url = setUrlWithoutDomain(
+                    it
+                        ?.absUrl("href")
+                        ?.toHttpUrlOrNull()
+                        ?.newBuilder()
+                        ?.removeAllQueryParameters("view")
+                        ?.addQueryParameter("view", "multi")
+                        ?.build()
+                        ?.toString()
+                        ?: it.absUrl("href"),
                 ).toString()
                 name = "Chapter"
                 date_upload = date
