@@ -74,8 +74,7 @@ class Series(
     val status: String,
     val series_id: Int,
     val views: Int?,
-
-    )
+)
 
 @Serializable
 class Chapter(

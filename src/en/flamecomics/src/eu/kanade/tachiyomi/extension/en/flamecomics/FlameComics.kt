@@ -167,7 +167,6 @@ class FlameComics : HttpSource() {
                 )
             }
         }
-
         var lastPage = page * 20
         if (lastPage > manga.size) {
             lastPage = manga.size
@@ -179,13 +178,12 @@ class FlameComics : HttpSource() {
     override fun getMangaUrl(manga: SManga): String =
         baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("series")
-            addPathSegment(manga.url.toHttpUrl().queryParameter("id").toString())
+            addPathSegment("$baseUrl/${manga.url}".toHttpUrl().queryParameter("id").toString())
         }.build().toString()
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val seriesData =
             json.decodeFromString<MangaPageData>(response.body.string()).pageProps.series
-
         title = seriesData.title
         thumbnail_url = imageApiUrlBuilder(
             cdn.toHttpUrl().newBuilder().apply {
@@ -217,8 +215,7 @@ class FlameComics : HttpSource() {
                         addQueryParameter("id", mangaPageData.pageProps.series.series_id.toString())
                         addQueryParameter("token", chapter.token)
                     }.build().toString(),
-
-                    )
+                )
                 chapter_number = chapter.chapter.toFloat()
                 date_upload = chapter.release_date * 1000
                 name = buildString {
@@ -233,8 +230,8 @@ class FlameComics : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegment("series")
-        addPathSegment(chapter.url.toHttpUrl().queryParameter("id").toString())
-        addPathSegment(chapter.url.toHttpUrl().queryParameter("token").toString())
+        addPathSegment("$baseUrl/${chapter.url}".toHttpUrl().queryParameter("id").toString())
+        addPathSegment("$baseUrl/${chapter.url}".toHttpUrl().queryParameter("token").toString())
     }.build().toString()
 
     override fun pageListParse(response: Response): List<Page> {
@@ -257,8 +254,7 @@ class FlameComics : HttpSource() {
                         addQueryParameter("q", "100")
                     }.build().toString(),
                 ),
-
-                )
+            )
         }
     }
 
