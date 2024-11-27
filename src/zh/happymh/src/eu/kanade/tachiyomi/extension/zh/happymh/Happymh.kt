@@ -170,7 +170,7 @@ class Happymh : HttpSource(), ConfigurableSource {
         }
         val comicId = chapter.url.substringAfter("/reads/").substringBefore("/")
         val chapterId = chapter.url.substringAfterLast("/")
-        val url = "$baseUrl/v2.0/apis/manga/read?code=$comicId&cid=$chapterId&v=v3.1302723"
+        val url = "$baseUrl/v2.0/apis/manga/reading?code=$comicId&cid=$chapterId&v=v3.1613134"
         // Some chapters return 403 without this header
         val header = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
