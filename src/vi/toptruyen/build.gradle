@@ -3,7 +3,7 @@ ext {
     extClass = '.TopTruyen'
     themePkg = 'wpcomics'
     baseUrl = 'https://www.toptruyento.pro'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
