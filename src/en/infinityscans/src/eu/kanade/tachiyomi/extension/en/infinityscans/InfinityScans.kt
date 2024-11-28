@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.infinityscans
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,15 +14,12 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
-import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 class InfinityScans : HttpSource() {
@@ -29,7 +27,7 @@ class InfinityScans : HttpSource() {
     override val name = "InfinityScans"
 
     override val baseUrl = "https://infinityscans.net"
-    private val cdnHost = "cdn.infinityscans.xyz"
+    private val cdnHost = "cdn.infinityscans.net"
 
     override val lang = "en"
 
@@ -49,76 +47,112 @@ class InfinityScans : HttpSource() {
         add("Sec-Fetch-Dest", "empty")
         add("Sec-Fetch-Mode", "cors")
         add("Sec-Fetch-Site", "same-origin")
-        add("X-Requested-With", "XMLHttpRequest")
+        add("X-requested-with", "XMLHttpRequest")
     }.build()
 
     private val json: Json by injectLazy()
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(SortFilter("popularity")))
+    override fun popularMangaRequest(page: Int): Request = fetchJson("api/ranking")
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val data = response.parseAs<ResponseDto<RankingResultDto>>().result
+        val entries = data.weekly
+            .map { it.toSManga(cdnHost) }
+
+        return MangasPage(entries, false)
+    }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(SortFilter("latest")))
+    override fun latestUpdatesRequest(page: Int): Request = fetchJson("api/comics")
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val data = response.parseAs<ResponseDto<SearchResultDto>>().result
+        runCatching { updateFilters(data) }
+
+        val entries = data.titles.sortedByDescending { it.updated }
+            .map { it.toSManga(cdnHost) }
+
+        return MangasPage(entries, false)
+    }
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("ajax/comics")
-            .addQueryParameter("page", page.toString())
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return client.newCall(fetchJson("api/comics"))
+            .asObservableSuccess()
+            .map { response ->
+                val data = response.parseAs<ResponseDto<SearchResultDto>>().result
+                runCatching { updateFilters(data) }
+                var titles = data.titles
 
-        filters.forEach { filter ->
-            when (filter) {
-                is SortFilter -> {
-                    url.addQueryParameter("sort", filter.selected)
+                if (query.isNotBlank()) {
+                    titles = titles.filter { it.title.contains(query, ignoreCase = true) }
                 }
-                is GenreFilter -> {
-                    filter.checked?.also {
-                        url.addQueryParameter("genre", it.joinToString("|"))
+
+                filters.forEach { filter ->
+                    when (filter) {
+                        is SortFilter -> {
+                            when (filter.selected) {
+                                "title" -> {
+                                    titles = titles.sortedBy { it.title }
+                                }
+                                "popularity" -> {
+                                    titles = titles.sortedByDescending { it.all_views }
+                                }
+                                "latest" -> {
+                                    titles = titles.sortedByDescending { it.updated }
+                                }
+                            }
+                        }
+
+                        is GenreFilter -> {
+                            filter.checked?.also {
+                                titles = titles.filter { it.genres?.split(",")?.any { genre -> genre in filter.checked!! } ?: true }
+                            }
+                        }
+
+                        is AuthorFilter -> {
+                            filter.checked?.also {
+                                titles = titles.filter { it.authors?.split(",")?.any { author -> author in filter.checked!! } ?: true }
+                            }
+                        }
+
+                        is StatusFilter -> {
+                            filter.checked?.also {
+                                titles = titles.filter { filter.checked!!.any { status -> status == it.status } }
+                            }
+                        }
+
+                        else -> { /* Do Nothing */
+                        }
                     }
                 }
-                is AuthorFilter -> {
-                    filter.checked?.also {
-                        url.addQueryParameter("author", it.joinToString("|"))
-                    }
-                }
-                is StatusFilter -> {
-                    filter.checked?.also {
-                        url.addQueryParameter("status", it.joinToString("|"))
-                    }
-                }
-                else -> { /* Do Nothing */ }
+
+                val entries = titles.map { it.toSManga(cdnHost) }
+
+                MangasPage(entries, false)
             }
-        }
+    }
 
-        if (query.isNotBlank()) url.addQueryParameter("title", query)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    private fun fetchJson(api: String): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments(api)
 
         val searchHeaders = apiHeaders.newBuilder().apply {
             set("Referer", url.build().newBuilder().removePathSegment(0).build().toString())
         }.build()
 
         return GET(url.build(), searchHeaders)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val page = response.request.url.queryParameter("page")!!.toInt()
-        val data = response.parseAs<ResponseDto<SearchResultDto>>().result
-        runCatching { updateFilters(data) }
-
-        val entries = data.comics
-            .map { it.toSManga(cdnHost) }
-
-        return MangasPage(entries, page < data.pages)
     }
 
     // Filters
@@ -165,20 +199,20 @@ class InfinityScans : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.use { it.asJsoup() }
 
-        val desc = document.select("div.s1:has(>h2:contains(Summary)) p")
+        val desc = document.select("div:has(>h4:contains(Summary)) p")
             .text()
             .split("</br>")
             .joinToString("\n", transform = String::trim)
             .trim()
 
         return SManga.create().apply {
-            document.selectFirst("div.info")!!.also { details ->
+            document.selectFirst("div:has(>span:contains(Rank:))")!!.parent()!!.also { details ->
                 description = desc
                 author = details.getLinks("Authors")
                 genre = details.getLinks("Genres")
                 status = details.getInfo("Status").parseStatus()
 
-                details.getInfo("Alternative Title")?.let {
+                details.getInfo("Alternative Titles")?.let {
                     description = "$desc\n\nAlternative Title: $it"
                 }
             }
@@ -196,10 +230,10 @@ class InfinityScans : HttpSource() {
     }
 
     private fun Element.getInfo(name: String): String? =
-        selectFirst("div:has(>b:matches($name:))")?.ownText()
+        selectFirst("div:has(>span:matches($name:))")?.ownText()
 
     private fun Element.getLinks(name: String): String? =
-        select("div:has(>b:matches($name:)) a")
+        select("div:has(>span:matches($name:)) a")
             .joinToString(", ", transform = Element::text).trim()
             .takeIf { it.isNotBlank() }
 
@@ -210,23 +244,17 @@ class InfinityScans : HttpSource() {
         val slug = url.pathSegments.take(3).joinToString("/", prefix = "/")
 
         // Create POST request
-        val id = url.pathSegments[1]
-        val form = FormBody.Builder().apply {
-            add("comic_id", id)
-        }.build()
-
         val chapterHeaders = apiHeaders.newBuilder().apply {
-            add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-            add("Host", baseUrl.toHttpUrl().host)
+            add("content-length", "0")
             add("Origin", baseUrl)
             set("Referer", url.toString())
         }.build()
 
         val chapterListData = client.newCall(
-            POST("$baseUrl/ajax/chapters", chapterHeaders, form),
-        ).execute().parseAs<ResponseDto<ChapterDataDto>>()
+            POST(url.toString(), chapterHeaders),
+        ).execute().parseAs<ResponseDto<List<ChapterEntryDto>>>()
 
-        return chapterListData.result.chapters.map {
+        return chapterListData.result.map {
             it.toSChapter(slug)
         }
     }
@@ -235,38 +263,19 @@ class InfinityScans : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val url = response.request.url
-        val boundary = buildString {
-            append((1..9).random())
-            repeat(28) {
-                append((0..9).random())
-            }
-        }
 
         // Create POST request
-
-        val form = MultipartBody.Builder("-----------------------------$boundary").apply {
-            setType(MultipartBody.FORM)
-            addPart(
-                Headers.headersOf("Content-Disposition", "form-data; name=\"comic_id\""),
-                url.pathSegments[1].toRequestBody(null),
-            )
-            addPart(
-                Headers.headersOf("Content-Disposition", "form-data; name=\"chapter_id\""),
-                url.pathSegments[4].toRequestBody(null),
-            )
-        }.build()
-
         val pageListHeaders = apiHeaders.newBuilder().apply {
-            add("Host", url.host)
+            add("content-length", "0")
             add("Origin", baseUrl)
             set("Referer", url.toString())
         }.build()
 
         val pageListData = client.newCall(
-            POST("$baseUrl/ajax/images", pageListHeaders, form),
-        ).execute().parseAs<ResponseDto<PageDataDto>>()
+            POST(url.toString(), pageListHeaders),
+        ).execute().parseAs<ResponseDto<List<PageEntryDto>>>()
 
-        return pageListData.result.images.mapIndexed { index, p ->
+        return pageListData.result.mapIndexed { index, p ->
             Page(index, url.toString(), p.link)
         }
     }
@@ -277,7 +286,7 @@ class InfinityScans : HttpSource() {
 
     override fun imageRequest(page: Page): Request {
         val pageHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
+            add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
         }.build()
 

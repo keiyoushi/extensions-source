@@ -23,14 +23,14 @@ class WebviewInterceptor(private val baseUrl: String) : Interceptor {
         val request = chain.request()
         val origRes = chain.proceed(request)
 
-        if (origRes.code != 401) return origRes
+        if (origRes.code != 400) return origRes
         origRes.close()
 
         resolveInWebview()
 
         // If webview failed
         val response = chain.proceed(request)
-        if (response.code == 401) {
+        if (response.code == 400) {
             response.close()
             throw IOException("Solve Captcha in WebView")
         }
@@ -55,7 +55,7 @@ class WebviewInterceptor(private val baseUrl: String) : Interceptor {
 
             webview.webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                    if (request?.url.toString().contains("$baseUrl/ajax/turnstile")) {
+                    if (request?.url.toString().contains("$baseUrl/api/verification")) {
                         hasSetCookies = true
                     } else if (request?.url.toString().contains(baseUrl) && hasSetCookies) {
                         latch.countDown()
