@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.es.vcpvmp
 
+import eu.kanade.tachiyomi.multisrc.vercomics.VerComics
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
-import eu.kanade.tachiyomi.source.model.Filter
 
 class VCPVMPFactory : SourceFactory {
     override fun createSources(): List<Source> = listOf(
@@ -11,68 +11,63 @@ class VCPVMPFactory : SourceFactory {
     )
 }
 
-class VCP : VCPVMP("VCP", "https://vercomicsporno.com") {
+class VCP : VerComics("VCP", "https://vercomicsporno.com", "es") {
 
     override val urlSuffix = "comics-porno"
     override val genreSuffix = "etiquetas"
     override var genres =
         arrayOf(
             Pair("Ver todos", ""),
-            Pair("Anales", "anales"),
-            Pair("Anime", "anime"),
-            Pair("Aprobado por c1b3r3y3", "aprobado-por-c1b3r3y3"),
-            Pair("Comics Incesto", "incesto-xxx"),
+            Pair("Anal", "anal"),
+            Pair("Big Ass", "big-ass"),
+            Pair("Big Breasts", "big-breasts"),
+            Pair("Big Cock", "big-cock"),
+            Pair("Big Penis", "big-penis"),
+            Pair("Big Tits", "big-tits"),
+            Pair("Blowjob", "blowjob"),
             Pair("Culonas", "culonas"),
-            Pair("Furry", "furry-3"),
-            Pair("Futanari", "futanari-2"),
-            Pair("Lesbianas", "lesbianas"),
-            Pair("Madre Hijo", "madre-hijo"),
+            Pair("Cum", "cum"),
+            Pair("Dark Skin", "dark-skin"),
+            Pair("Furry", "furry"),
+            Pair("Hot Girls", "hot-girls"),
+            Pair("Incest", "incest"),
             Pair("Mamadas", "mamadas"),
-            Pair("Manga Hentai", "manga-hentai-3"),
-            Pair("Masturbaciones", "madre-hijo"),
-            Pair("Milfs", "milfs-xxx"),
-            Pair("Orgias", "orgias"),
-            Pair("Parodias Porno", "parodias-porno-xxx"),
-            Pair("Rubias", "rubias"),
+            Pair("Milf", "milf"),
+            Pair("Muscle", "muscle"),
+            Pair("Nakadashi", "nakadashi"),
+            Pair("Sole Female", "sole-female"),
+            Pair("Sole Male", "sole-male"),
             Pair("Tetonas", "tetonas"),
-            Pair("Trios", "trios"),
-            Pair("Videojuegos", "videojuegos-2"),
-            Pair("Yuri", "yuri-xxx"),
         )
 }
 
-class VMP : VCPVMP("VMP", "https://vermangasporno.com") {
+class VMP : VerComics("VMP", "https://vermangasporno.com", "es") {
 
     override val urlSuffix = "xxx"
-    override val genreSuffix = "genero"
+    override val genreSuffix = "tag"
 
     override var genres =
         arrayOf(
             Pair("Ver todos", ""),
             Pair("Ahegao", "ahegao"),
+            Pair("Anal", "anal"),
             Pair("Big Ass", "big-ass"),
             Pair("Big Breasts", "big-breasts"),
-            Pair("Blowjob", "blowjob"),
-            Pair("Cheating", "cheating"),
+            Pair("Big Penis", "big-penis"),
+            Pair("BlowJob", "blowjob"),
             Pair("Creampie", "creampie"),
             Pair("Cum", "cum"),
-            Pair("Group", "group"),
             Pair("Hairy", "hairy"),
-            Pair("Kissing", "kissing"),
+            Pair("Incest", "incest"),
+            Pair("Manga Hentai", "manga-hentai"),
             Pair("Milf", "milf"),
             Pair("Mosaic Censorship", "mosaic-censorship"),
             Pair("Nakadashi", "nakadashi"),
+            Pair("Paizuri", "paizuri"),
             Pair("Schoolgirl Uniform", "schoolgirl-uniform"),
             Pair("Sin Censura", "sin-censura"),
-            Pair("Sole Female", "sole-female"),
-            Pair("Sole Male", "sole-male"),
             Pair("Squirting", "squirting"),
-            Pair("Stockings", "stockings"),
+            Pair("Student", "student"),
             Pair("Unusual Pupils", "unusual-pupils"),
         )
-}
-
-open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-    Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-    fun toUriPart() = vals[state].second
 }
