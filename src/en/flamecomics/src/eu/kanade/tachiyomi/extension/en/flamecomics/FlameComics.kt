@@ -229,8 +229,7 @@ class FlameComics : HttpSource() {
             }
         }
     }
-
-
+    
     override fun pageListRequest(chapter: SChapter): Request = GET(
         dataApiReqBuilder().apply {
             val seriesID = ("$baseUrl/${chapter.url}").toHttpUrl().pathSegments[2]
