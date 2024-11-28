@@ -149,12 +149,9 @@ class FlameComics : HttpSource() {
             SManga.create().apply {
                 title = seriesData.title
                 setUrlWithoutDomain(
-                    dataApiReqBuilder().apply {
-                        val seriesID =
-                            seriesData.series_id // manga.url.toHttpUrl().pathSegments.last()
+                    baseUrl.toHttpUrl().newBuilder().apply {
                         addPathSegment("series")
-                        addPathSegment("$seriesID.json")
-                        addQueryParameter("id", seriesData.series_id.toString()) // seriesID)
+                        addPathSegment(seriesData.series_id.toString())
                     }.build().toString(),
                 )
                 thumbnail_url = imageApiUrlBuilder(
@@ -175,11 +172,20 @@ class FlameComics : HttpSource() {
         return MangasPage(manga.subList((page - 1) * 20, lastPage), lastPage < manga.size)
     }
 
-    override fun getMangaUrl(manga: SManga): String =
-        baseUrl.toHttpUrl().newBuilder().apply {
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(
+        dataApiReqBuilder().apply {
+            val seriesID =
+                ("$baseUrl/${manga.url}").toHttpUrl().pathSegments.last()
             addPathSegment("series")
-            addPathSegment("$baseUrl/${manga.url}".toHttpUrl().queryParameter("id").toString())
-        }.build().toString()
+            addPathSegment("$seriesID.json")
+            addQueryParameter("id", seriesID)
+        }.build(),
+        headers,
+    )
+
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val seriesData =
@@ -208,12 +214,10 @@ class FlameComics : HttpSource() {
         return mangaPageData.pageProps.chapters.map { chapter ->
             SChapter.create().apply {
                 setUrlWithoutDomain(
-                    dataApiReqBuilder().apply {
+                    baseUrl.toHttpUrl().newBuilder().apply {
                         addPathSegment("series")
-                        addPathSegment(mangaPageData.pageProps.series.series_id.toString())
-                        addPathSegment("${chapter.token}.json")
-                        addQueryParameter("id", mangaPageData.pageProps.series.series_id.toString())
-                        addQueryParameter("token", chapter.token)
+                        addPathSegment(chapter.series_id.toString())
+                        addPathSegment(chapter.token)
                     }.build().toString(),
                 )
                 chapter_number = chapter.chapter.toFloat()
@@ -226,13 +230,21 @@ class FlameComics : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = ""
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().newBuilder().apply {
-        addPathSegment("series")
-        addPathSegment("$baseUrl/${chapter.url}".toHttpUrl().queryParameter("id").toString())
-        addPathSegment("$baseUrl/${chapter.url}".toHttpUrl().queryParameter("token").toString())
-    }.build().toString()
+    override fun pageListRequest(chapter: SChapter): Request = GET(
+        dataApiReqBuilder().apply {
+            val seriesID = ("$baseUrl/${chapter.url}").toHttpUrl().pathSegments[2]
+            val token = ("$baseUrl/${chapter.url}").toHttpUrl().pathSegments[3]
+            addPathSegment("series")
+            addPathSegment(seriesID)
+            addPathSegment("$token.json")
+            addQueryParameter("id", seriesID)
+            addQueryParameter("token", token)
+        }.build(),
+        headers,
+    )
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter =
@@ -257,6 +269,8 @@ class FlameComics : HttpSource() {
             )
         }
     }
+
+    override fun imageUrlParse(response: Response): String = ""
 
     private fun fetchBuildId(document: Document? = null): String {
         val realDocument = document
