@@ -274,6 +274,7 @@ open class NHentai(
                     when (image.t) {
                         "w" -> ".webp"
                         "p" -> ".png"
+                        "g" -> ".gif"
                         else -> ".jpg"
                     },
             )
