@@ -24,13 +24,14 @@ abstract class VerComics(
 
     protected open val urlSuffix = ""
     protected open val genreSuffix = ""
+    protected open val useSuffixOnSearch = true
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/$urlSuffix/page/$page", headers)
 
-    override fun popularMangaSelector() = "div.blog-list-items > div.entry"
+    override fun popularMangaSelector() = "header:has(h1) ~ * .entry"
 
     override fun popularMangaNextPageSelector() = "div.wp-pagenavi > span.current + a"
 
@@ -46,7 +47,10 @@ abstract class VerComics(
         var url = baseUrl.toHttpUrl().newBuilder()
 
         if (query.isNotBlank()) {
-            url = "$baseUrl/$urlSuffix".toHttpUrl().newBuilder()
+            url = baseUrl.toHttpUrl().newBuilder()
+            if (useSuffixOnSearch) {
+                url.addPathSegments(urlSuffix)
+            }
             url.addPathSegments("page")
             url.addPathSegments(page.toString())
             url.addQueryParameter("s", query)
