@@ -59,7 +59,7 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
                 title = it!!.text()
                 setUrlWithoutDomain(it.attr("href"))
             }
-            thumbnail_url = element.selectFirst("img")!!.attr("src")
+            thumbnail_url = element.selectFirst("img")?.attr("src")
         }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -103,8 +103,18 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup(response.body.string())
-        val date = Request.Builder().url(document.selectFirst(".manga-thumbnail > img")!!.attr("src"))
-            .head().build().run(client::newCall).execute().date
+        val date = document
+            .selectFirst(".manga-thumbnail > img")
+            ?.attr("src")
+            ?.let { url ->
+                Request.Builder()
+                    .url(url)
+                    .head()
+                    .build()
+                    .run(client::newCall)
+                    .execute()
+                    .date
+            }
         return document.select("a:contains(Read Online)").map {
             SChapter.create().apply {
                 setUrlWithoutDomain(
@@ -119,7 +129,7 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
                         ?: it.absUrl("href"),
                 )
                 name = "Chapter"
-                date_upload = date
+                date?.run { date_upload = this }
                 chapter_number = -1f
             }
         }
