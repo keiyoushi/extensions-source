@@ -1,8 +1,8 @@
 ext {
-    extName = 'VCPVMP'
-    extClass = '.VCPVMPFactory'
+    extName = 'ChoChoX'
+    extClass = '.Chochox'
     themePkg = 'vercomics'
-    overrideVersionCode = 9
+    overrideVersionCode = 0
     isNsfw = true
 }
 
