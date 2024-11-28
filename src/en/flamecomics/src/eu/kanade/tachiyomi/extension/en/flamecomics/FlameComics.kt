@@ -175,7 +175,7 @@ class FlameComics : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request = GET(
         dataApiReqBuilder().apply {
             val seriesID =
-                ("$baseUrl/${manga.url}").toHttpUrl().pathSegments.last()
+                ("$baseUrl${manga.url}").toHttpUrl().pathSegments.last()
             addPathSegment("series")
             addPathSegment("$seriesID.json")
             addQueryParameter("id", seriesID)
@@ -185,7 +185,7 @@ class FlameComics : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val seriesData =
@@ -232,8 +232,8 @@ class FlameComics : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request = GET(
         dataApiReqBuilder().apply {
-            val seriesID = ("$baseUrl/${chapter.url}").toHttpUrl().pathSegments[2]
-            val token = ("$baseUrl/${chapter.url}").toHttpUrl().pathSegments[3]
+            val seriesID = ("$baseUrl${chapter.url}").toHttpUrl().pathSegments[1]
+            val token = ("$baseUrl${chapter.url}").toHttpUrl().pathSegments[2]
             addPathSegment("series")
             addPathSegment(seriesID)
             addPathSegment("$token.json")
@@ -243,7 +243,7 @@ class FlameComics : HttpSource() {
         headers,
     )
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter =
