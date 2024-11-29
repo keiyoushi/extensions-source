@@ -25,6 +25,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
+import java.text.DecimalFormat
 
 class FlameComics : HttpSource() {
     override val name = "Flame Comics"
@@ -43,6 +44,7 @@ class FlameComics : HttpSource() {
         .build()
 
     private val removeSpecialCharsregex = Regex("[^A-Za-z0-9 ]")
+    private val chapterNumberFormat = DecimalFormat("#.####")
 
     private fun dataApiReqBuilder() = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegment("_next")
@@ -223,7 +225,7 @@ class FlameComics : HttpSource() {
                 chapter_number = chapter.chapter.toFloat()
                 date_upload = chapter.release_date * 1000
                 name = buildString {
-                    append("Chapter ${chapter.chapter.toInt()} ")
+                    append("Chapter ${chapterNumberFormat.format(chapter.chapter)} ")
                     append(chapter.title ?: "")
                 }
             }
