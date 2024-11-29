@@ -73,8 +73,9 @@ class Series(
     val altTitles: String?,
     val description: String,
     val cover: String,
+    val type: String,
     @Serializable(with = TagsListSerializer::class)
-    val tags: List<String>,
+    val tags: List<String>?,
     val author: String?,
     val status: String,
     val series_id: Int,
