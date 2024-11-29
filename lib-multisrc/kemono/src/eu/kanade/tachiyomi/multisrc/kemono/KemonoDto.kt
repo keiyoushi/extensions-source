@@ -56,7 +56,6 @@ class KemonoPostDtoWrapped(
     val post: KemonoPostDto,
 )
 
-
 @Serializable
 class KemonoPostDto(
     private val id: String,
