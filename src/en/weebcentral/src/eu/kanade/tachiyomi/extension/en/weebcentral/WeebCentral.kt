@@ -164,6 +164,10 @@ class WeebCentral : ParsedHttpSource() {
         return GET(newUrl, headers)
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url
+    }
+
     override fun pageListParse(document: Document): List<Page> {
         return document.select("section[x-data~=scroll] > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.attr("abs:src"))
