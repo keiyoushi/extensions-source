@@ -199,6 +199,7 @@ class FlameComics : HttpSource() {
             }.build().toString() + "&w=640&q=75",
         )
         description = seriesData.description
+        genre = seriesData.tags.joinToString()
         author = seriesData.author
         status = when (seriesData.status.lowercase()) {
             "ongoing" -> SManga.ONGOING
