@@ -396,23 +396,16 @@ abstract class Comick(
             val coversUrl =
                 "$apiUrl/comic/${mangaData.comic.slug ?: mangaData.comic.hid}/covers?tachiyomi=true"
             val covers = client.newCall(GET(coversUrl)).execute()
-                .parseAs<Covers>().mdCovers.reversed().toMutableList()
-            if (covers.any { it.vol == "1" }) covers.retainAll { it.vol == "1" }
-            if (
-                covers.any { comickLang.startsWith(it.locale.orEmpty()) }
-            ) {
-                covers.retainAll { comickLang.startsWith(it.locale.orEmpty()) }
-            } else if (
-                covers.any { mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty()) }
-            ) {
-                covers.retainAll {
-                    mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty())
-                }
-            }
+                .parseAs<Covers>().mdCovers.reversed()
+            val firstVol = covers.filter { it.vol == "1" }.ifEmpty { covers }
+            val originalCovers = firstVol
+                .filter { mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty()) }
+            val localCovers = firstVol
+                .filter { comickLang.startsWith(it.locale.orEmpty()) }
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
                 scorePosition = preferences.scorePosition,
-                covers = covers,
+                covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
             )
         }
