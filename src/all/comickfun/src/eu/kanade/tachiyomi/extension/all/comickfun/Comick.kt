@@ -402,9 +402,9 @@ abstract class Comick(
                 covers.any { comickLang.startsWith(it.locale.orEmpty()) }
             ) {
                 covers.retainAll { comickLang.startsWith(it.locale.orEmpty()) }
-            } else if (covers.any {
-                    mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty())
-                }) {
+            } else if (
+                covers.any { mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty()) }
+            ) {
                 covers.retainAll {
                     mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty())
                 }
@@ -473,9 +473,10 @@ abstract class Comick(
             .map { it.toSChapter(mangaUrl) }
     }
 
-    private val publishedDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val publishedDateFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
     override fun getChapterUrl(chapter: SChapter): String {
         return "$baseUrl${chapter.url}"
