@@ -396,17 +396,16 @@ abstract class Comick(
             val coversUrl =
                 "$apiUrl/comic/${mangaData.comic.slug ?: mangaData.comic.hid}/covers?tachiyomi=true"
             val covers = client.newCall(GET(coversUrl)).execute()
-                .parseAs<Covers>().mdCovers.reversed().toMutableList()
-            if (covers.any { it.vol == "1" }) covers.retainAll { it.vol == "1" }
-            if (
-                covers.any { it.locale == comickLang.split('-').first() }
-            ) {
-                covers.retainAll { it.locale == comickLang.split('-').first() }
-            }
+                .parseAs<Covers>().mdCovers.reversed()
+            val firstVol = covers.filter { it.vol == "1" }.ifEmpty { covers }
+            val originalCovers = firstVol
+                .filter { mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty()) }
+            val localCovers = firstVol
+                .filter { comickLang.startsWith(it.locale.orEmpty()) }
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
                 scorePosition = preferences.scorePosition,
-                covers = covers,
+                covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
             )
         }
@@ -467,9 +466,10 @@ abstract class Comick(
             .map { it.toSChapter(mangaUrl) }
     }
 
-    private val publishedDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val publishedDateFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
     override fun getChapterUrl(chapter: SChapter): String {
         return "$baseUrl${chapter.url}"

@@ -112,6 +112,7 @@ class Comic(
     @SerialName("md_comic_md_genres") val mdGenres: List<MdGenres>,
     @SerialName("mu_comics") val muGenres: MuComicCategories = MuComicCategories(emptyList()),
     @SerialName("bayesian_rating") val score: String? = null,
+    @SerialName("iso639_1") val isoLang: String? = null,
 ) {
     val origination = when (country) {
         "jp" -> Name("Manga")
