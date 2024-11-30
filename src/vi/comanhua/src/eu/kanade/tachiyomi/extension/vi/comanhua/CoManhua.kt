@@ -68,14 +68,13 @@ class CoManhua : WPComics(
                     statusFilter = filter.toUriPart() ?: "Tất cả"
                 }
                 is GenreFilter -> {
-                    genreFilter = filter.toUriPart() ?: ""
+                    genreFilter = filter.toUriPart()
                 }
                 else -> {}
             }
         }
 
         url.addQueryParameter("status", statusFilter)
-
         if (genreFilter.isNotEmpty()) {
             url.addQueryParameter("tags", genreFilter)
         }
@@ -112,6 +111,15 @@ class CoManhua : WPComics(
 
     override val pageListSelector = "div.chapter-img.shine > img.img-chap-item"
 
+    private class GenreFilter(genres: List<Pair<String?, String>>) : Filter.Group<GenreFilter.CheckBox>(
+        "Thể loại",
+        genres.map { CheckBox(it.second, false, it.first ?: "") },
+    ) {
+        class CheckBox(name: String, state: Boolean, val value: String) : Filter.CheckBox(name, state)
+
+        fun toUriPart(): String = state.filter { it.state }.joinToString(",") { it.value }
+    }
+
     override fun getStatusList(): List<Pair<String?, String>> =
         listOf(
             Pair("Tất cả", "Tất cả"),
@@ -127,7 +135,8 @@ class CoManhua : WPComics(
         val items = document.select(genresSelector)
         return items.map {
             val genreName = it.text().trim()
-            Pair(genreName, genreName)
+            val genreValue = it.select("input").attr("value")
+            Pair(genreValue, genreName)
         }
     }
 
@@ -138,7 +147,7 @@ class CoManhua : WPComics(
             if (genreList.isEmpty()) {
                 Filter.Header("Tap to load genres")
             } else {
-                GenreFilter("Thể loại", genreList)
+                GenreFilter(genreList)
             },
         )
     }
