@@ -80,6 +80,7 @@ class CoManhua : WPComics(
 
         return GET(url.toString(), headers)
     }
+
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
@@ -92,7 +93,6 @@ class CoManhua : WPComics(
         thumbnail_url = imageOrNull(document.selectFirst("div.manga-img img")!!)
     }
 
-    override fun chapterListSelector() = "div.manga-chapters ul.clearfix li"
     override fun chapterListSelector() = "div.manga-chapters ul.clearfix li:not(.thead)"
 
     override fun chapterFromElement(element: Element): SChapter {
