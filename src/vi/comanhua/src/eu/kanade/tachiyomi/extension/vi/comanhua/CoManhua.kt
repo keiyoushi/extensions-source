@@ -18,7 +18,10 @@ class CoManhua : WPComics(
     dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()),
     gmtOffset = null,
 ) {
-    override val client = super.client.newBuilder()
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .rateLimit(3)
         .build()
 
