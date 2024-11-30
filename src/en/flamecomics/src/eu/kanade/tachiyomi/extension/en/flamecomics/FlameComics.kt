@@ -107,12 +107,9 @@ class FlameComics : HttpSource() {
                 SManga.create().apply {
                     title = seriesData.title
                     setUrlWithoutDomain(
-                        dataApiReqBuilder().apply {
-                            val seriesID =
-                                seriesData.series_id
+                        baseUrl.toHttpUrl().newBuilder().apply {
                             addPathSegment("series")
-                            addPathSegment("$seriesID.json")
-                            addQueryParameter("id", seriesData.series_id.toString())
+                            addPathSegment(seriesData.series_id.toString())
                         }.build().toString(),
                     )
                     thumbnail_url = imageApiUrlBuilder(
@@ -164,12 +161,11 @@ class FlameComics : HttpSource() {
                 )
             }
         }
-        var lastPage = page * 20
-        if (lastPage > manga.size) {
-            lastPage = manga.size
-        }
-        if (lastPage < 0) lastPage = 0
-        return MangasPage(manga.subList((page - 1) * 20, lastPage), lastPage < manga.size)
+
+        val itemsPerPage = 20
+        val startIndex = (page - 1) * itemsPerPage
+        val endIndex = minOf(page * itemsPerPage, manga.size)
+        return MangasPage(manga.subList(startIndex, endIndex), endIndex < manga.size)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(
