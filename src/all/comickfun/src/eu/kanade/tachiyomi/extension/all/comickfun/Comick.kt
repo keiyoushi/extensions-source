@@ -399,9 +399,15 @@ abstract class Comick(
                 .parseAs<Covers>().mdCovers.reversed().toMutableList()
             if (covers.any { it.vol == "1" }) covers.retainAll { it.vol == "1" }
             if (
-                covers.any { it.locale == comickLang.split('-').first() }
+                covers.any { comickLang.startsWith(it.locale.orEmpty()) }
             ) {
-                covers.retainAll { it.locale == comickLang.split('-').first() }
+                covers.retainAll { comickLang.startsWith(it.locale.orEmpty()) }
+            } else if (covers.any {
+                    mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty())
+                }) {
+                covers.retainAll {
+                    mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty())
+                }
             }
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
