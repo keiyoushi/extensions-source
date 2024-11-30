@@ -47,6 +47,39 @@ class CoManhua : WPComics(
 
     override val queryParam = "name"
 
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/tim-truyen".toHttpUrl().newBuilder()
+
+        url.addQueryParameter("chapter", "")
+        url.addQueryParameter("year", "")
+        url.addQueryParameter("name", query)
+
+        var statusFilter = "Tất cả"
+        var genreFilter = ""
+
+        filters.forEach { filter ->
+            when (filter) {
+                is StatusFilter -> {
+                    statusFilter = filter.toUriPart() ?: "Tất cả"
+                }
+                is GenreFilter -> {
+                    genreFilter = filter.toUriPart() ?: ""
+                }
+                else -> {}
+            }
+        }
+
+        url.addQueryParameter("status", statusFilter)
+
+        if (genreFilter.isNotEmpty()) {
+            url.addQueryParameter("tags", genreFilter)
+        }
+
+        val offset = (page - 1) * 40
+        url.addQueryParameter("offset", offset.toString())
+
+        return GET(url.toString(), headers)
+    }
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
@@ -60,6 +93,7 @@ class CoManhua : WPComics(
     }
 
     override fun chapterListSelector() = "div.manga-chapters ul.clearfix li"
+    override fun chapterListSelector() = "div.manga-chapters ul.clearfix li:not(.thead)"
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
@@ -73,19 +107,34 @@ class CoManhua : WPComics(
 
     override val pageListSelector = "div.chapter-img.shine > img.img-chap-item"
 
-    val genrePath: String = "the-loai"
-    override val genresSelector = "div.content-nav div.item-nav a"
-    override fun genresRequest() = GET("$baseUrl/$genrePath", headers)
+    override fun getStatusList(): List<Pair<String?, String>> =
+        listOf(
+            Pair("Tất cả", "Tất cả"),
+            Pair("continue", "Đang tiến hành"),
+            Pair("completed", "Đã hoàn thành"),
+        )
+
+    override val genresSelector = "div.filter-content div.filter-tags div.tags-checkbox div.tags label"
+
+    override fun genresRequest() = GET("$baseUrl/$searchPath", headers)
+
     override fun parseGenres(document: Document): List<Pair<String?, String>> {
         val items = document.select(genresSelector)
-        return buildList(items.size + 1) {
-            add(Pair(null, intl["STATUS_ALL"]))
-            items.mapTo(this) {
-                Pair(
-                    it.attr("href"), // use full href as it is
-                    it.text(),
-                )
-            }
+        return items.map {
+            val genreName = it.text().trim()
+            Pair(genreName, genreName)
         }
+    }
+
+    override fun getFilterList(): FilterList {
+        launchIO { fetchGenres() }
+        return FilterList(
+            StatusFilter("Trạng thái", getStatusList()),
+            if (genreList.isEmpty()) {
+                Filter.Header("Tap to load genres")
+            } else {
+                GenreFilter("Thể loại", genreList)
+            },
+        )
     }
 }
