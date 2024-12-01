@@ -185,17 +185,19 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         }
     }
 
+    private val chapterExtraDataRegex = Regex("= (\\{[^;]+)")
+    private val pagesDataRegex = Regex(".(ey\\S+).\\s")
+
     // From ManhwaHentai - modified
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
         val pageBaseUrl = document.selectFirst("[id=single-chapter-js-extra]")?.data()
-            ?.substringAfter("chapterExtraData = ")
-            ?.substringBefore(";")?.let { json.decodeFromString<ImageBaseUrlDto>(it).baseUrl }
+            ?.let { chapterExtraDataRegex.find(it)?.groups }?.get(1)?.value
+            ?.let { json.decodeFromString<ImageBaseUrlDto>(it).baseUrl }
 
         val pages = document.selectFirst("[id=single-chapter-js-before]")?.data()
-            ?.substringAfter("= '")
-            ?.substringBefore("'")
+            ?.let { pagesDataRegex.find(it)?.groups }?.get(1)?.value
             ?.let { json.decodeFromString<PagesDto>(String(Base64.decode(it, Base64.DEFAULT))) }
             ?: throw Exception("Failed to find page list. Non-English entries are not supported.")
 
