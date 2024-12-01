@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.nhentai
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getArtists
@@ -74,7 +75,7 @@ open class NHentai(
     }
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
-    private val dataRegex = Regex("""JSON\.parse\(\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*\)""")
+    private val dataRegex = Regex("""JSON\.parse\(\s*"(.*)"\s*\)""")
     private val hentaiSelector = "script:containsData(JSON.parse):not(:containsData(media_server))"
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
@@ -241,8 +242,10 @@ open class NHentai(
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val script = document.selectFirst(hentaiSelector)!!.data()
+        Log.e("chapterListParse.script", "script: ${script.isEmpty()}")
 
         val json = dataRegex.find(script)?.groupValues!![1]
+        Log.e("chapterListParse.json", "json: ${json.isEmpty()}")
 
         val data = json.parseAs<Hentai>()
         return listOf(
