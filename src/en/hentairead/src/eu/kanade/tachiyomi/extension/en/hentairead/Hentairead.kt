@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.hentairead
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -189,14 +189,18 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
-        val pages = document.selectFirst("[id=single-chapter-js-extra]")?.data()
-            ?.substringAfter(":[")
-            ?.substringBefore("],")
-            ?.let { json.decodeFromString<List<PageDto>>("[$it]") }
+        val pageBaseUrl = document.selectFirst("[id=single-chapter-js-extra]")?.data()
+            ?.substringAfter("chapterExtraData = ")
+            ?.substringBefore(";")?.let { json.decodeFromString<ImageBaseUrlDto>(it).baseUrl }
+
+        val pages = document.selectFirst("[id=single-chapter-js-before]")?.data()
+            ?.substringAfter("= '")
+            ?.substringBefore("'")
+            ?.let { json.decodeFromString<PagesDto>(String(Base64.decode(it, Base64.DEFAULT))) }
             ?: throw Exception("Failed to find page list. Non-English entries are not supported.")
 
-        return pages.mapIndexed { idx, page ->
-            Page(idx, document.location(), page.src)
+        return pages.data.chapter.images.mapIndexed { idx, page ->
+            Page(idx, document.location(), "$pageBaseUrl/${page.src}")
         }
     }
 
@@ -238,8 +242,3 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         return json.decodeFromString(body.string())
     }
 }
-
-@Serializable
-class PageDto(
-    val src: String,
-)
