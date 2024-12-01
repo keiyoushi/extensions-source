@@ -16,7 +16,6 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
 
 class CoManhua : WPComics(
     "CoManhua",
@@ -37,9 +36,7 @@ class CoManhua : WPComics(
         }
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
         .build()
 
@@ -56,9 +53,9 @@ class CoManhua : WPComics(
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         element.select("div.manga-title a").let {
             title = it.text()
-            setUrlWithoutDomain(it.attr("href"))
+            setUrlWithoutDomain(it.attr("abs:href"))
         }
-        thumbnail_url = imageOrNull(element.select("div.manga-image img").first()!!)
+        thumbnail_url = imageOrNull(element.selectFirst("div.manga-image img")!!)
     }
 
     override fun popularMangaNextPageSelector() = "div.list-pagination a:last-child:not(.active)"
@@ -105,24 +102,24 @@ class CoManhua : WPComics(
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.manga-title")!!.text()
         description = document.selectFirst("div.manga-des")?.text()
-        status = document.selectFirst("ul.manga-desc > li:nth-child(2) div.md-content")?.text().toStatus()
-        genre = document.select("div.tags.mt-15 span a")?.joinToString { it.text() }
-        thumbnail_url = imageOrNull(document.selectFirst("div.manga-img img")!!)
+        status = document.selectFirst(".md-title:has(.fa-rss) ~ .md-content")?.text().toStatus()
+        genre = document.select("div.tags span a")?.joinToString { it.text() }
+        thumbnail_url = document.selectFirst("div.manga-img img")?.let { imageOrNull(it) }
     }
 
-    override fun chapterListSelector() = "div.manga-chapters ul.clearfix li:not(.thead)"
+    override fun chapterListSelector() = ".manga .manga-chapters ul li:has(.chapter-name)"
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             element.select("div.chapter-name a").let {
                 name = it.text()
-                setUrlWithoutDomain(it.attr("href"))
+                setUrlWithoutDomain(it.attr("abs:href"))
             }
-            date_upload = parseChapterDate(element.select("div.col-30.alr").text())
+            date_upload = parseChapterDate(element.select(":nth-child(3):last-child").text())
         }
     }
 
-    override val pageListSelector = "div.chapter-img.shine > img.img-chap-item"
+    override val pageListSelector = ".chapters img.img-chap-item"
 
     private class GenreFilter(genres: List<Pair<String?, String>>) : Filter.Group<GenreFilter.CheckBox>(
         "Thể loại",
@@ -147,7 +144,7 @@ class CoManhua : WPComics(
     override fun parseGenres(document: Document): List<Pair<String?, String>> {
         val items = document.select(genresSelector)
         return items.map {
-            val genreName = it.text().trim()
+            val genreName = it.text()
             val genreValue = it.select("input").attr("value")
             Pair(genreValue, genreName)
         }
