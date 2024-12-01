@@ -6,7 +6,9 @@ import java.util.Locale
 
 class Yaoibar : Madara(
     "Yaoibar",
-    "https://yaoibar.gay/",
+    "https://yaoibar.gay",
     "tr",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
-)
+) {
+    override val useNewChapterEndpoint: Boolean = true
+}
