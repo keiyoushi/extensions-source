@@ -6,7 +6,7 @@ import java.util.Locale
 
 class InfinyxScan : Madara(
     "InfinyxScan",
-    "https://infinyxscan.cloud/",
+    "https://infinyxscan.cloud",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
