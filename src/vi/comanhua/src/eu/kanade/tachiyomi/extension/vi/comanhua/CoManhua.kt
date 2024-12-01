@@ -12,17 +12,30 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 class CoManhua : WPComics(
     "CoManhua",
     "https://comanhuaz.com",
     "vi",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()),
     gmtOffset = null,
 ) {
+
+    private val coManhuaDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    }
+
+    private fun parseChapterDate(dateString: String): Long {
+        return try {
+            coManhuaDateFormat.parse(dateString)?.time ?: 0L
+        } catch (e: ParseException) {
+            0L
+        }
+    }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -105,7 +118,7 @@ class CoManhua : WPComics(
                 name = it.text()
                 setUrlWithoutDomain(it.attr("href"))
             }
-            date_upload = element.select("div.col-30.alr").text().toDate()
+            date_upload = parseChapterDate(element.select("div.col-30.alr").text())
         }
     }
 
@@ -143,9 +156,9 @@ class CoManhua : WPComics(
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
         return FilterList(
-            StatusFilter("Trạng thái", getStatusList()),
+            StatusFilter(intl["STATUS"], getStatusList()),
             if (genreList.isEmpty()) {
-                Filter.Header("Tap to load genres")
+                Filter.Header(intl["GENRES_RESET"])
             } else {
                 GenreFilter(genreList)
             },
