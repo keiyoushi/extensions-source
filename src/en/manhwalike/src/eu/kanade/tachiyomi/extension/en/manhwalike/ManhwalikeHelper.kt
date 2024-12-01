@@ -1,13 +1,17 @@
 package eu.kanade.tachiyomi.extension.en.manhwalike
+
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.RequestBody
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 object ManhwalikeHelper {
+    private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("America/New_York") }
+
     fun Headers.Builder.buildApiHeaders(requestBody: RequestBody) = this
         .add("Content-Length", requestBody.contentLength().toString())
         .add("Content-Type", requestBody.contentType().toString())
@@ -31,9 +35,15 @@ object ManhwalikeHelper {
     }
 
     fun String?.toDate(): Long {
-        val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
-        val date = this?.let { dateFormat.parse(it) }
-        val calendar = Calendar.getInstance().apply { time = date }
-        return calendar.timeInMillis
+        return try {
+            dateFormat.parse(this).time
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    fun Element.toOriginal(): String = when {
+        hasAttr("data-original") -> absUrl("data-original")
+        else -> absUrl("src")
     }
 }

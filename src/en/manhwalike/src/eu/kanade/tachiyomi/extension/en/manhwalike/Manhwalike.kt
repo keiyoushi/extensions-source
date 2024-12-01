@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.manhwalike
 import eu.kanade.tachiyomi.extension.en.manhwalike.ManhwalikeHelper.buildApiHeaders
 import eu.kanade.tachiyomi.extension.en.manhwalike.ManhwalikeHelper.toDate
 import eu.kanade.tachiyomi.extension.en.manhwalike.ManhwalikeHelper.toFormRequestBody
+import eu.kanade.tachiyomi.extension.en.manhwalike.ManhwalikeHelper.toOriginal
 import eu.kanade.tachiyomi.extension.en.manhwalike.ManhwalikeHelper.toStatus
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -50,10 +51,7 @@ class Manhwalike : ParsedHttpSource() {
         return SManga.create().apply {
             title = element.selectFirst("h3.title a")!!.text()
             setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            thumbnail_url = when {
-                element.selectFirst("img")!!.hasAttr("data-original") -> element.selectFirst("img")!!.attr("data-original")
-                else -> element.selectFirst("img")!!.attr("src")
-            }
+            thumbnail_url = element.selectFirst("img")?.toOriginal()
         }
     }
 
@@ -68,14 +66,13 @@ class Manhwalike : ParsedHttpSource() {
 
     // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = filters.let { if (it.isEmpty()) getFilterList() else it }
         return if (query.isNotEmpty()) {
             val requestBody = query.toFormRequestBody()
             val requestHeaders = headersBuilder().buildApiHeaders(requestBody)
             POST("$baseUrl/search/html/1", requestHeaders, requestBody)
         } else {
             val url = baseUrl.toHttpUrl().newBuilder()
-            filterList.forEach { filter ->
+            filters.forEach { filter ->
                 when (filter) {
                     is GenreFilter -> filter.toUriPart().let { url.addPathSegment(it) }
                     else -> {}
@@ -109,10 +106,7 @@ class Manhwalike : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             title = element.selectFirst("img")!!.attr("alt")
-            thumbnail_url = when {
-                element.selectFirst("img")!!.hasAttr("data-original") -> element.selectFirst("img")!!.attr("data-original")
-                else -> element.selectFirst("img")!!.attr("src")
-            }
+            thumbnail_url = element.selectFirst("img")?.toOriginal()
             setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         }
     }
@@ -121,10 +115,10 @@ class Manhwalike : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             author = document.selectFirst("div.author a")!!.text()
-            status = document.selectFirst("small:contains(Status) + strong")!!.text().trim().toStatus()
+            status = document.selectFirst("small:contains(Status) + strong")?.text()?.trim().toStatus()
             genre = document.select("div.categories a").joinToString { it.text() }
-            description = document.select("div.summary-block p.about").text()
-            thumbnail_url = document.select("div.fixed-img img").attr("src")
+            description = document.selectFirst("div.summary-block p.about")?.text()
+            thumbnail_url = document.selectFirst("div.fixed-img img")?.absUrl("src")
         }
     }
 
@@ -132,9 +126,9 @@ class Manhwalike : ParsedHttpSource() {
     override fun chapterListSelector() = "ul.chapter-list li"
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            name = element.select("a").text()
-            date_upload = element.select(".time").text().toDate()
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+            name = element.selectFirst("a")!!.text()
+            date_upload = element.selectFirst(".time")!!.text().toDate()
         }
     }
 
@@ -154,7 +148,7 @@ class Manhwalike : ParsedHttpSource() {
         GenreFilter(),
     )
 
-    private class GenreFilter : UriPartFilter(
+    private class GenreFilter : UriPartFilter(    // the list can be updated via copy($$("#glo_gnb .sub-menu a").map(el => `Pair("${el.innerText.trim()}", "${el.pathname.substr(1)}"),`).join("\n"))
         "Genre",
         arrayOf(
             Pair("Action", "manga-genre-action"),
