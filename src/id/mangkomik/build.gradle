@@ -3,7 +3,7 @@ ext {
     extClass = '.SirenKomik'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sirenkomik.my.id'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
 }
 
 apply from: "$rootDir/common.gradle"
