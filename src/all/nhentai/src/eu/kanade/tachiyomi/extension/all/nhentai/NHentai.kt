@@ -242,10 +242,8 @@ open class NHentai(
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val script = document.selectFirst(hentaiSelector)!!.data()
-        Log.e("chapterListParse.script", "script: ${script.isEmpty()}")
 
         val json = dataRegex.find(script)?.groupValues!![1]
-        Log.e("chapterListParse.json", "json: ${json.isEmpty()}")
 
         val data = json.parseAs<Hentai>()
         return listOf(
