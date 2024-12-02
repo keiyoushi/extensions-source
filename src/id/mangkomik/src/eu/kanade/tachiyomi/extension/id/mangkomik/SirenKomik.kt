@@ -27,6 +27,8 @@ class SirenKomik : MangaThemesia(
 
     override fun chapterListSelector() = ".list-chapter a"
 
+    override val pageSelector: String = "Deactivate html search"
+
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst(".nomer-chapter")!!.text()
         date_upload = element.selectFirst(".tgl-chapter")?.text().parseChapterDate()
