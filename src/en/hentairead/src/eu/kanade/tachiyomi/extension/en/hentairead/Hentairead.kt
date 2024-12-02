@@ -185,8 +185,11 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         }
     }
 
-    private val chapterExtraDataRegex = Regex("= (\\{[^;]+)")
-    private val pagesDataRegex = Regex(".(ey\\S+).\\s")
+    // chapterExtraData = ({...});
+    private val chapterExtraDataRegex = Regex("""= (\{[^;]+)""")
+
+    // window.mMjM5MjM2 = '(eyJkYX...);
+    private val pagesDataRegex = Regex(""".(ey\S+).\s""")
 
     // From ManhwaHentai - modified
     override fun pageListParse(document: Document): List<Page> {
