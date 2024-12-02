@@ -51,7 +51,7 @@ class CoManhua : WPComics(
     override fun popularMangaSelector() = "div.pda.manga-list div.manga-item"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.select("div.manga-title a").let {
+        element.selectFirst("div.manga-title a")?.let {
             title = it.text()
             setUrlWithoutDomain(it.attr("abs:href"))
         }
