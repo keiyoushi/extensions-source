@@ -55,7 +55,7 @@ class CoManhua : WPComics(
             title = it.text()
             setUrlWithoutDomain(it.attr("abs:href"))
         }
-        thumbnail_url = imageOrNull(element.selectFirst("div.manga-image img")!!)
+        element.selectFirst("div.manga-image img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
     }
 
     override fun popularMangaNextPageSelector() = "div.list-pagination a:last-child:not(.active)"
@@ -104,18 +104,18 @@ class CoManhua : WPComics(
         description = document.selectFirst("div.manga-des")?.text()
         status = document.selectFirst(".md-title:has(.fa-rss) ~ .md-content")?.text().toStatus()
         genre = document.select("div.tags span a")?.joinToString { it.text() }
-        thumbnail_url = document.selectFirst("div.manga-img img")?.let { imageOrNull(it) }
+        document.selectFirst("div.manga-img img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
     }
 
     override fun chapterListSelector() = ".manga .manga-chapters ul li:has(.chapter-name)"
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            element.select("div.chapter-name a").let {
+            element.selectFirst("div.chapter-name a")?.let {
                 name = it.text()
                 setUrlWithoutDomain(it.attr("abs:href"))
             }
-            date_upload = parseChapterDate(element.select(":nth-child(3):last-child").text())
+            date_upload = element.selectFirst("> :nth-child(3):last-child")?.text()?.let { parseChapterDate(it) } ?: 0L
         }
     }
 
@@ -145,7 +145,7 @@ class CoManhua : WPComics(
         val items = document.select(genresSelector)
         return items.map {
             val genreName = it.text()
-            val genreValue = it.select("input").attr("value")
+            val genreValue = it.selectFirst("input")?.attr("value")
             Pair(genreValue, genreName)
         }
     }
