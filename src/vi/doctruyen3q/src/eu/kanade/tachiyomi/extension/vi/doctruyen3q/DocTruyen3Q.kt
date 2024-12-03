@@ -39,7 +39,7 @@ class DocTruyen3Q : WPComics(
             title = it.text()
             setUrlWithoutDomain(it.attr("abs:href"))
         }
-        thumbnail_url = imageOrNull(element.selectFirst("img")!!)
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
