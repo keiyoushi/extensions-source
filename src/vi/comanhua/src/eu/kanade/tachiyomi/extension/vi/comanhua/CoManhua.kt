@@ -60,10 +60,11 @@ class CoManhua : WPComics(
 
     override fun popularMangaNextPageSelector() = "div.list-pagination a:last-child:not(.active)"
 
+    override val searchPath = "tim-truyen"
     override val queryParam = "name"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/tim-truyen".toHttpUrl().newBuilder()
+        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
 
         url.addQueryParameter("chapter", "")
         url.addQueryParameter("year", "")
