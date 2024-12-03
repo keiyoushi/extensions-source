@@ -36,7 +36,7 @@ import java.util.TimeZone
 import kotlin.getValue
 
 class LuraToon : HttpSource(), ConfigurableSource {
-    override val baseUrl = "https://luratoons.com"
+    override val baseUrl = "https://luratoons.net"
     override val name = "Lura Toon"
     override val lang = "pt-BR"
     override val supportsLatest = true

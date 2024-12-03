@@ -1,8 +1,8 @@
 ext {
     extName = 'Lura Toon'
     extClass = '.LuraToon'
-    baseUrl = 'https://luratoons.com'
-    extVersionCode = 55
+    baseUrl = 'https://luratoons.net'
+    extVersionCode = 56
 }
 
 apply from: "$rootDir/common.gradle"
