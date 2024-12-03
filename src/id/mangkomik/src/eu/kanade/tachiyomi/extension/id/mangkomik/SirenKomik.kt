@@ -27,6 +27,9 @@ class SirenKomik : MangaThemesia(
 
     override fun chapterListSelector() = ".list-chapter a"
 
+    // Overridden since MangeThemesia doesn't search for jsonData in script tags, because it finds the bait images with the default selector
+    override val pageSelector: String = ":not(*)"
+
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst(".nomer-chapter")!!.text()
         date_upload = element.selectFirst(".tgl-chapter")?.text().parseChapterDate()
