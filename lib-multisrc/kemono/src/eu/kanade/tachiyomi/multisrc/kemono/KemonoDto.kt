@@ -70,7 +70,7 @@ class KemonoPostDto(
 ) {
     val images: List<String>
         get() = buildList(attachments.size + 1) {
-            if (file.path != null) add(KemonoAttachmentDto(file.name!!, file.path))
+            if (file.path != null) add(KemonoAttachmentDto(file.name, file.path))
             addAll(attachments)
         }.filter {
             when (it.path.substringAfterLast('.').lowercase()) {
@@ -106,8 +106,8 @@ class KemonoFileDto(val name: String? = null, val path: String? = null)
 
 // name might have ".jpe" extension for JPEG, path might have ".m4v" extension for MP4
 @Serializable
-class KemonoAttachmentDto(val name: String, val path: String) {
-    override fun toString() = "$path?f=$name"
+class KemonoAttachmentDto(var name: String? = null, val path: String) {
+    override fun toString() = path + if (name != null) "?f=$name" else ""
 }
 
 private fun getApiDateFormat() =
