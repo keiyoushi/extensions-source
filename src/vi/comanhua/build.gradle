@@ -1,0 +1,10 @@
+ext {
+    extName = 'CoManhua'
+    extClass = '.CoManhua'
+    themePkg = 'wpcomics'
+    baseUrl = 'https://comanhuaz.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
