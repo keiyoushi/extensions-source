@@ -49,8 +49,8 @@ class Manhwalike : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.selectFirst("h3.title a")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+            title = element.selectFirst("h3.title a")?.text().toString()
+            element.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
             thumbnail_url = element.selectFirst("img")?.toOriginal()
         }
     }
@@ -98,24 +98,24 @@ class Manhwalike : ParsedHttpSource() {
             }
         }
         val hasNextPage = searchMangaNextPageSelector().let { selector ->
-            document.select(selector).first()
+            document.selectFirst(selector)
         } != null
         return MangasPage(mangas, hasNextPage)
     }
 
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.selectFirst("img")!!.attr("alt")
+            title = element.selectFirst("img")?.attr("alt").toString()
             thumbnail_url = element.selectFirst("img")?.toOriginal()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+            element.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
         }
     }
 
     // details
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            author = document.selectFirst("div.author a")!!.text()
-            status = document.selectFirst("small:contains(Status) + strong")?.text()?.trim().toStatus()
+            author = document.selectFirst("div.author a")?.text()
+            status = document.selectFirst("small:contains(Status) + strong")?.text().toStatus()
             genre = document.select("div.categories a").joinToString { it.text() }
             description = document.selectFirst("div.summary-block p.about")?.text()
             thumbnail_url = document.selectFirst("div.fixed-img img")?.absUrl("src")
@@ -126,16 +126,16 @@ class Manhwalike : ParsedHttpSource() {
     override fun chapterListSelector() = "ul.chapter-list li"
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            name = element.selectFirst("a")!!.text()
-            date_upload = element.selectFirst(".time")!!.text().toDate()
+            element.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
+            name = element.selectFirst("a")?.text().toString()
+            date_upload = element.selectFirst(".time")?.text().toDate()
         }
     }
 
     // pages
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(".chapter-content .page-chapter img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.attr("src"))
+        return document.select(".chapter-content .page-chapter img").mapIndexed { i, img ->
+            Page(i, imageUrl = img.absUrl("src"))
         }
     }
 
@@ -148,7 +148,8 @@ class Manhwalike : ParsedHttpSource() {
         GenreFilter(),
     )
 
-    private class GenreFilter : UriPartFilter(    // the list can be updated via copy($$("#glo_gnb .sub-menu a").map(el => `Pair("${el.innerText.trim()}", "${el.pathname.substr(1)}"),`).join("\n"))
+    // the list can be updated via copy($$("#glo_gnb .sub-menu a").map(el => `Pair("${el.innerText.trim()}", "${el.pathname.substr(1)}"),`).join("\n"))
+    private class GenreFilter : UriPartFilter(
         "Genre",
         arrayOf(
             Pair("Action", "manga-genre-action"),
