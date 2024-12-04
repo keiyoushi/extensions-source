@@ -49,8 +49,8 @@ class Manhwalike : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.selectFirst("h3.title a")?.text().toString()
-            element.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
+            element.selectFirst("h3.title a")?.text()?.also { title = it }
+            element.selectFirst("a")?.absUrl("href")?.also { setUrlWithoutDomain(it) }
             thumbnail_url = element.selectFirst("img")?.toOriginal()
         }
     }
@@ -74,7 +74,7 @@ class Manhwalike : ParsedHttpSource() {
             val url = baseUrl.toHttpUrl().newBuilder()
             filters.forEach { filter ->
                 when (filter) {
-                    is GenreFilter -> filter.toUriPart().let { url.addPathSegment(it) }
+                    is GenreFilter -> filter.toUriPart().also { url.addPathSegment(it) }
                     else -> {}
                 }
             }
@@ -105,9 +105,9 @@ class Manhwalike : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.selectFirst("img")?.attr("alt").toString()
-            thumbnail_url = element.selectFirst("img")?.toOriginal()
-            element.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
+            element.selectFirst("img")?.attr("alt")?.also { title = it }
+            element.selectFirst("img")?.toOriginal()?.also { thumbnail_url = it }
+            element.selectFirst("a")?.absUrl("href")?.also { setUrlWithoutDomain(it) }
         }
     }
 
@@ -126,9 +126,9 @@ class Manhwalike : ParsedHttpSource() {
     override fun chapterListSelector() = "ul.chapter-list li"
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            element.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
-            name = element.selectFirst("a")?.text().toString()
-            date_upload = element.selectFirst(".time")?.text().toDate()
+            element.selectFirst("a")?.absUrl("href")?.also { setUrlWithoutDomain(it) }
+            element.selectFirst("a")?.text()?.also { name = it }
+            element.selectFirst(".time")?.text().toDate().also { date_upload = it }
         }
     }
 
