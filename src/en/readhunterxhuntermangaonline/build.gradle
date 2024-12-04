@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Hunter x Hunter Manga Online'
-    extClass = '.ReadHunterxHunterMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww2.readhxh.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

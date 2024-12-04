@@ -1,8 +1,0 @@
-ext {
-    extName = 'Luscious'
-    extClass = '.LusciousFactory'
-    extVersionCode = 19
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

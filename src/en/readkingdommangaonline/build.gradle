@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Kingdom Manga Online'
-    extClass = '.ReadKingdomMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww2.readkingdom.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'ManhuaFast.net (unoriginal)'
-    extClass = '.ManhuaFastNet'
-    themePkg = 'madara'
-    baseUrl = 'https://manhuafast.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

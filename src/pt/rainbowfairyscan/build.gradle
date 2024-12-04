@@ -1,9 +1,0 @@
-ext {
-    extName = 'Rainbow Fairy Scan'
-    extClass = '.RainbowFairyScan'
-    themePkg = 'madara'
-    baseUrl = 'https://rainbowfairyscan.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

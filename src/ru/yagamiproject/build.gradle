@@ -1,7 +1,0 @@
-ext {
-    extName = 'YagamiProject'
-    extClass = '.YagamiProject'
-    extVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"

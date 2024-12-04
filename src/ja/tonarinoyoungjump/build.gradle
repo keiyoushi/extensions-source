@@ -1,9 +1,0 @@
-ext {
-    extName = 'Tonari no Young Jump'
-    extClass = '.TonariNoYoungJump'
-    themePkg = 'gigaviewer'
-    baseUrl = 'https://tonarinoyj.jp'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

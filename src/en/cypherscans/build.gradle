@@ -1,9 +1,0 @@
-ext {
-    extName = 'Cypher Scans'
-    extClass = '.CypherScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://cypherscans.xyz'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

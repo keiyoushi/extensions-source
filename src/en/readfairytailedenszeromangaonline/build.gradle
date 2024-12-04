@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Fairy Tail & Edens Zero Manga Online'
-    extClass = '.ReadFairyTailEdensZeroMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww4.readfairytail.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

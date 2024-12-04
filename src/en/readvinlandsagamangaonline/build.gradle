@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Vinland Saga Manga Online'
-    extClass = '.ReadVinlandSagaMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww1.readvinlandsaga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

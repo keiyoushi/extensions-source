@@ -1,8 +1,8 @@
 ext {
-    extName = 'Sussy Scan'
+    extName = 'SussyToons'
     extClass = '.SussyScan'
     themePkg = 'madara'
-    baseUrl = 'https://oldi.sussytoons.com'
+    baseUrl = 'https://new.sussytoons.site'
     overrideVersionCode = 4
 }
 

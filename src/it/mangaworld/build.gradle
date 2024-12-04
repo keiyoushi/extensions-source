@@ -1,9 +1,0 @@
-ext {
-    extName = 'Mangaworld'
-    extClass = '.Mangaworld'
-    themePkg = 'mangaworld'
-    baseUrl = 'https://www.mangaworld.ac'
-    overrideVersionCode = 6
-}
-
-apply from: "$rootDir/common.gradle"

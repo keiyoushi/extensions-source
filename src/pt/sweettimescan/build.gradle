@@ -1,9 +1,0 @@
-ext {
-    extName = 'Sweet Time Scan'
-    extClass = '.SweetTimeScan'
-    themePkg = 'madara'
-    baseUrl = 'https://sweetscan.net'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

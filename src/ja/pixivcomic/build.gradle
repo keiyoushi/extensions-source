@@ -1,7 +1,0 @@
-ext {
-    extName = 'Pixiv Comic'
-    extClass = '.PixivComic'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manhwatop'
-    extClass = '.Manhwatop'
-    themePkg = 'madara'
-    baseUrl = 'https://manhwatop.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

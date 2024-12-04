@@ -1,9 +1,0 @@
-ext {
-    extName = 'ReadFreeComics'
-    extClass = '.ReadFreeComics'
-    themePkg = 'madara'
-    baseUrl = 'https://readfreecomics.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

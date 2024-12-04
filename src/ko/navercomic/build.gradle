@@ -1,7 +1,0 @@
-ext {
-    extName = 'Naver Comic'
-    extClass = '.NaverComicFactory'
-    extVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"

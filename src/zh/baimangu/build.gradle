@@ -1,7 +1,0 @@
-ext {
-    extName = 'Baimangu (Darpou)'
-    extClass = '.Baimangu'
-    extVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

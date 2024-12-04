@@ -1,9 +1,0 @@
-ext {
-    extName = 'Evil Flowers'
-    extClass = '.EvilFlowers'
-    themePkg = 'madara'
-    baseUrl = 'https://evilflowers.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

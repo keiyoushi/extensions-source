@@ -1,9 +1,0 @@
-ext {
-    extName = 'Grabber Zone'
-    extClass = '.GrabberZone'
-    themePkg = 'madara'
-    baseUrl = 'https://grabber.zone'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

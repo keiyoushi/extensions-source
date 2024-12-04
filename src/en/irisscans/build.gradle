@@ -1,9 +1,0 @@
-ext {
-    extName = 'Iris Scans'
-    extClass = '.IrisScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://irisscans.xyz'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

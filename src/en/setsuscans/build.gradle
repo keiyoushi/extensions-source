@@ -1,9 +1,0 @@
-ext {
-    extName = 'Setsu Scans'
-    extClass = '.SetsuScans'
-    themePkg = 'madara'
-    baseUrl = 'https://setsuscans.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

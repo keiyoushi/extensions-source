@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaClash'
-    extClass = '.MangaClash'
-    themePkg = 'madara'
-    baseUrl = 'https://toonclash.com'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

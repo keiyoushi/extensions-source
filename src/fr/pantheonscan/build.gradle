@@ -1,9 +1,0 @@
-ext {
-    extName = 'Pantheon Scan'
-    extClass = '.PantheonScan'
-    themePkg = 'madara'
-    baseUrl = 'https://pantheon-scan.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

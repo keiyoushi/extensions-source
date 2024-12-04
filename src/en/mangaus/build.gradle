@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaUS'
-    extClass = '.MangaUS'
-    themePkg = 'madara'
-    baseUrl = 'https://mangaus.xyz'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

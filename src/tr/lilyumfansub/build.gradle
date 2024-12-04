@@ -1,9 +1,0 @@
-ext {
-    extName = 'LilyumFansub'
-    extClass = '.LilyumFansub'
-    themePkg = 'madara'
-    baseUrl = 'https://lilyumfansub.com.tr'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Utsukushii'
-    extClass = '.Utsukushii'
-    themePkg = 'mmrcms'
-    baseUrl = 'https://utsukushii-bg.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

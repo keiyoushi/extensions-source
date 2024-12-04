@@ -1,9 +1,0 @@
-ext {
-    extName = 'DragonTea'
-    extClass = '.DragonTea'
-    themePkg = 'madara'
-    baseUrl = 'https://dragontea.ink'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Jujutsu Kaisen Manga Online'
-    extClass = '.ReadJujutsuKaisenMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww1.readjujutsukaisen.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

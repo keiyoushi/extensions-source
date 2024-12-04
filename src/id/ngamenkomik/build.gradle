@@ -1,9 +1,0 @@
-ext {
-    extName = 'NgamenKomik'
-    extClass = '.NgamenKomik'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://ngamenkomik05.blogspot.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

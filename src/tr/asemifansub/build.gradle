@@ -1,9 +1,0 @@
-ext {
-    extName = 'Asemi Fansub'
-    extClass = '.AsemiFansub'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://asemifansub.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

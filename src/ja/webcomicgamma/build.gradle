@@ -1,9 +1,0 @@
-ext {
-    extName = 'Web Comic Gamma'
-    extClass = '.WebComicGamma'
-    themePkg = 'comicgamma'
-    baseUrl = 'https://webcomicgamma.takeshobo.co.jp'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

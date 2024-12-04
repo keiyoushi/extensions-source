@@ -1,8 +1,0 @@
-ext {
-    extName = 'TuMangaOnline / LectorManga'
-    extClass = '.LectorTmoFactory'
-    extVersionCode = 4
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

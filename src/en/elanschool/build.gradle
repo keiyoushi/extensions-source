@@ -1,7 +1,0 @@
-ext {
-    extName = 'Elan School'
-    extClass = '.ElanSchool'
-    extVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

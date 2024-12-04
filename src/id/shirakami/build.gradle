@@ -1,9 +1,0 @@
-ext {
-    extName = 'Shirakami'
-    extClass = '.Shirakami'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://shirakami.xyz'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

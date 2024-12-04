@@ -1,9 +1,0 @@
-ext {
-    extName = 'Scan VF'
-    extClass = '.ScanVF'
-    themePkg = 'mmrcms'
-    baseUrl = 'https://www.scan-vf.net'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

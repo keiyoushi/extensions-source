@@ -1,9 +1,0 @@
-ext {
-    extName = 'HNI-Scantrad'
-    extClass = '.HNIScantrad'
-    themePkg = 'pizzareader'
-    baseUrl = 'https://hni-scantrad.net'
-    overrideVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"

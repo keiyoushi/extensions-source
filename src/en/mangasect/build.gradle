@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Sect'
-    extClass = '.MangaSect'
-    themePkg = 'liliana'
-    baseUrl = 'https://mangasect.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

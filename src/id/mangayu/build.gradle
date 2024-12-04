@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaYu'
-    extClass = '.MangaYu'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://mangayu.id'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

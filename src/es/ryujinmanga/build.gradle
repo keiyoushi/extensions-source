@@ -1,9 +1,0 @@
-ext {
-    extName = 'RyujinManga'
-    extClass = '.RyujinManga'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://ryujinmanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

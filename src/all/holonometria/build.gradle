@@ -1,7 +1,0 @@
-ext {
-    extName = 'HOLONOMETRIA'
-    extClass = '.HolonometriaFactory'
-    extVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

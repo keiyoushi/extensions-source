@@ -1,8 +1,0 @@
-ext {
-    extName = 'FoolSlide Customizable'
-    extClass = '.FoolSlideCustomizableFactory'
-    themePkg = 'foolslide'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

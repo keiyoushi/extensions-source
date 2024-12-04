@@ -1,7 +1,0 @@
-ext {
-    extName = 'Dragon Ball Multiverse'
-    extClass = '.DbMFactory'
-    extVersionCode = 6
-}
-
-apply from: "$rootDir/common.gradle"

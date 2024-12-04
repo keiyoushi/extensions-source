@@ -1,9 +1,0 @@
-ext {
-    extName = 'Tarot Scans'
-    extClass = '.TarotScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://www.tarotscans.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

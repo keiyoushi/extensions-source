@@ -1,9 +1,0 @@
-ext {
-    extName = 'KomikGes'
-    extClass = '.KomikGes'
-    themePkg = 'makaru'
-    baseUrl = 'https://www.komikges.my.id'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

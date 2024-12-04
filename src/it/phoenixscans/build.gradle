@@ -1,9 +1,0 @@
-ext {
-    extName = 'Phoenix Scans'
-    extClass = '.PhoenixScans'
-    themePkg = 'pizzareader'
-    baseUrl = 'https://www.phoenixscans.com'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'COLAMANGA'
-    extClass = '.Onemanhua'
-    themePkg = 'colamanga'
-    baseUrl = 'https://www.colamanga.com'
-    overrideVersionCode = 15
-}
-
-apply from: "$rootDir/common.gradle"

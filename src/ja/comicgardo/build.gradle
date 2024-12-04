@@ -1,9 +1,0 @@
-ext {
-    extName = 'Comic Gardo'
-    extClass = '.ComicGardo'
-    themePkg = 'gigaviewer'
-    baseUrl = 'https://comic-gardo.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

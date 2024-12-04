@@ -1,9 +1,0 @@
-ext {
-    extName = 'Assorted Scans'
-    extClass = '.AssortedScans'
-    themePkg = 'mangadventure'
-    baseUrl = 'https://assortedscans.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

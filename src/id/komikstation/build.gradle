@@ -1,9 +1,0 @@
-ext {
-    extName = 'Komik Station'
-    extClass = '.KomikStation'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://komikstation.co'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

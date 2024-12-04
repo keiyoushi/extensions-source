@@ -1,9 +1,0 @@
-ext {
-    extName = 'NovelMic'
-    extClass = '.NovelMic'
-    themePkg = 'madara'
-    baseUrl = 'https://novelmic.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

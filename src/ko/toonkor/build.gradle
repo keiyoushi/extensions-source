@@ -1,7 +1,0 @@
-ext {
-    extName = 'Toonkor'
-    extClass = '.Toonkor'
-    extVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

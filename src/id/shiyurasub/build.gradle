@@ -1,9 +1,0 @@
-ext {
-    extName = 'ShiyuraSub'
-    extClass = '.ShiyuraSub'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://shiyurasub.blogspot.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

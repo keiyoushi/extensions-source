@@ -1,7 +1,0 @@
-ext {
-    extName = 'Toomics'
-    extClass = '.ToomicsFactory'
-    extVersionCode = 7
-}
-
-apply from: "$rootDir/common.gradle"

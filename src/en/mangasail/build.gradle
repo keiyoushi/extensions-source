@@ -1,7 +1,0 @@
-ext {
-    extName = 'Mangasail'
-    extClass = '.Mangasail'
-    extVersionCode = 6
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'Niceoppai'
-    extClass = '.Niceoppai'
-    extVersionCode = 28
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

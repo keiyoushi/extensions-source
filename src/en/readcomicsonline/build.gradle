@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Comics Online'
-    extClass = '.ReadComicsOnline'
-    themePkg = 'mmrcms'
-    baseUrl = 'https://readcomicsonline.ru'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

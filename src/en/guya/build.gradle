@@ -1,9 +1,0 @@
-ext {
-    extName = 'Guya'
-    extClass = '.Guya'
-    themePkg = 'guya'
-    baseUrl = 'https://guya.cubari.moe'
-    overrideVersionCode = 18
-}
-
-apply from: "$rootDir/common.gradle"

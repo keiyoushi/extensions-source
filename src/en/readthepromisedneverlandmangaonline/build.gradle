@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read The Promised Neverland Manga Online'
-    extClass = '.ReadThePromisedNeverlandMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww3.readneverland.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

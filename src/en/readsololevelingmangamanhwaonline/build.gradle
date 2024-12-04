@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Solo Leveling Manga Manhwa Online'
-    extClass = '.ReadSoloLevelingMangaManhwaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://readsololeveling.org'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

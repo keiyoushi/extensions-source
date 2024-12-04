@@ -1,9 +1,0 @@
-ext {
-    extName = 'Romantik Manga'
-    extClass = '.RomantikManga'
-    themePkg = 'madara'
-    baseUrl = 'https://romantikmanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

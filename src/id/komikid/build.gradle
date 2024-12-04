@@ -1,9 +1,0 @@
-ext {
-    extName = 'Komikid'
-    extClass = '.Komikid'
-    themePkg = 'mmrcms'
-    baseUrl = 'https://www.komikid.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

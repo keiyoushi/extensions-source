@@ -1,9 +1,0 @@
-ext {
-    extName = 'Tortuga Ceviri'
-    extClass = '.TortugaCeviri'
-    themePkg = 'madara'
-    baseUrl = 'https://tortuga-ceviri.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

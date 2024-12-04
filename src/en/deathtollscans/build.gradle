@@ -1,9 +1,0 @@
-ext {
-    extName = 'Death Toll Scans'
-    extClass = '.DeathTollScans'
-    themePkg = 'foolslide'
-    baseUrl = 'https://reader.deathtollscans.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Astral-Manga'
-    extClass = '.AstralManga'
-    themePkg = 'madara'
-    baseUrl = 'https://astral-manga.fr'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

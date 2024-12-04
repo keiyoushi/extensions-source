@@ -1,9 +1,0 @@
-ext {
-    extName = 'ToonChill'
-    extClass = '.ToonChill'
-    themePkg = 'madara'
-    baseUrl = 'https://toonchill.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

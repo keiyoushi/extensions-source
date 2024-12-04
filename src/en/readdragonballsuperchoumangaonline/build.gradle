@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Dragon Ball Super Chou Manga Online'
-    extClass = '.ReadDragonBallSuperChouMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww6.dbsmanga.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

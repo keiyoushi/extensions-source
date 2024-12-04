@@ -1,7 +1,0 @@
-ext {
-    extName = 'MangaToon (Limited)'
-    extClass = '.MangaToonFactory'
-    extVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"

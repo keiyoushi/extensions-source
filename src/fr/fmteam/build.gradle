@@ -1,9 +1,0 @@
-ext {
-    extName = 'FMTEAM'
-    extClass = '.FMTEAM'
-    themePkg = 'pizzareader'
-    baseUrl = 'https://fmteam.fr'
-    overrideVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

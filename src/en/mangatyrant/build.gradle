@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaTyrant'
-    extClass = '.MangaTyrant'
-    themePkg = 'madara'
-    baseUrl = 'https://mangatyrant.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

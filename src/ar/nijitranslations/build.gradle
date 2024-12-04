@@ -1,9 +1,0 @@
-ext {
-    extName = 'Niji Translations'
-    extClass = '.NijiTranslations'
-    themePkg = 'madara'
-    baseUrl = 'https://niji-translations.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

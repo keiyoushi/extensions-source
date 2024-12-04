@@ -1,7 +1,0 @@
-ext {
-    extName = 'Kill Six Billion Demons'
-    extClass = '.KillSixBillionDemons'
-    extVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"

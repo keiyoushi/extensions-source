@@ -1,7 +1,0 @@
-ext {
-    extName = 'izneo (webtoons)'
-    extClass = '.IzneoFactory'
-    extVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"

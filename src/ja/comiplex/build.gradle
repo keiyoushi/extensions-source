@@ -1,9 +1,0 @@
-ext {
-    extName = 'Comiplex'
-    extClass = '.Comiplex'
-    themePkg = 'gigaviewer'
-    baseUrl = 'https://viewer.heros-web.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

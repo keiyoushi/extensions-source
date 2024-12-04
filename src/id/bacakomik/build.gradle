@@ -1,7 +1,0 @@
-ext {
-    extName = 'BacaKomik'
-    extClass = '.BacaKomik'
-    extVersionCode = 10
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Rimu Scans'
-    extClass = '.RimuScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://rimuscans.fr'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

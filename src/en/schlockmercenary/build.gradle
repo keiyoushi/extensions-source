@@ -1,7 +1,0 @@
-ext {
-    extName = 'Schlock Mercenary'
-    extClass = '.Schlockmercenary'
-    extVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

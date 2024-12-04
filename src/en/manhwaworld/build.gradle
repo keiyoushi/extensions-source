@@ -1,9 +1,0 @@
-ext {
-    extName = 'AQUA Scans'
-    extClass = '.ManhwaWorld'
-    themePkg = 'madara'
-    baseUrl = 'https://aquascans.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

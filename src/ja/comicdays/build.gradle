@@ -1,9 +1,0 @@
-ext {
-    extName = 'Comic Days'
-    extClass = '.ComicDays'
-    themePkg = 'gigaviewer'
-    baseUrl = 'https://comic-days.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

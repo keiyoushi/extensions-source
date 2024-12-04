@@ -1,9 +1,0 @@
-ext {
-    extName = 'ArazNovel'
-    extClass = '.ArazNovel'
-    themePkg = 'madara'
-    baseUrl = 'https://araznovel.com'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

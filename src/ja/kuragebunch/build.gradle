@@ -1,9 +1,0 @@
-ext {
-    extName = 'Kurage Bunch'
-    extClass = '.KurageBunch'
-    themePkg = 'gigaviewer'
-    baseUrl = 'https://kuragebunch.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

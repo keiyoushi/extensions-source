@@ -1,9 +1,0 @@
-ext {
-    extName = 'BarManga'
-    extClass = '.BarManga'
-    themePkg = 'madara'
-    baseUrl = 'https://barmanga.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

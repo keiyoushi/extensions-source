@@ -1,9 +1,0 @@
-ext {
-    extName = 'XOXO Comics'
-    extClass = '.XoxoComics'
-    themePkg = 'wpcomics'
-    baseUrl = 'https://xoxocomic.com'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

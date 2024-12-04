@@ -1,9 +1,0 @@
-ext {
-    extName = 'Mangatellers'
-    extClass = '.Mangatellers'
-    themePkg = 'foolslide'
-    baseUrl = 'https://reader.mangatellers.gr'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

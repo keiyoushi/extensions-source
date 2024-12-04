@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read One-Punch Man Manga Online'
-    extClass = '.ReadOnePunchManMangaOnlineTwo'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww3.readopm.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Ainz Scans ID'
-    extClass = '.AinzScansID'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://ainzscans.net'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga-Scantrad'
-    extClass = '.MangaScantrad'
-    themePkg = 'madara'
-    baseUrl = 'https://manga-scantrad.io'
-    overrideVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

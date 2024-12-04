@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Naruto Boruto Samurai 8 Manga Online'
-    extClass = '.ReadNarutoBorutoSamurai8MangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww7.readnaruto.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

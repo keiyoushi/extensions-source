@@ -1,9 +1,0 @@
-ext {
-    extName = 'Komikzoid'
-    extClass = '.Komikzoid'
-    themePkg = 'colorlibanime'
-    baseUrl = 'https://komikzoid.id'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

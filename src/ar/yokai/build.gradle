@@ -1,9 +1,0 @@
-ext {
-    extName = 'Yokai'
-    extClass = '.Yokai'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://yokai-team.blogspot.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

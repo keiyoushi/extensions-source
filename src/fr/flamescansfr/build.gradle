@@ -1,7 +1,0 @@
-ext {
-    extName = 'Legacy Scans'
-    extClass = '.LegacyScans'
-    extVersionCode = 31
-}
-
-apply from: "$rootDir/common.gradle"

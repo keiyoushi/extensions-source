@@ -1,9 +1,0 @@
-ext {
-    extName = 'Animated Glitched Scans'
-    extClass = '.AnimatedGlitchedScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://anigliscans.xyz'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

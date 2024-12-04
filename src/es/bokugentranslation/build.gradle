@@ -1,9 +1,0 @@
-ext {
-    extName = 'BokugenTranslation'
-    extClass = '.BokugenTranslation'
-    themePkg = 'madara'
-    baseUrl = 'https://bokugents.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

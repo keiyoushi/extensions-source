@@ -1,9 +1,0 @@
-ext {
-    extName = 'ManhuaPlus (unoriginal)'
-    extClass = '.ManhuaPlusOrg'
-    themePkg = 'liliana'
-    baseUrl = 'https://manhuaplus.org'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

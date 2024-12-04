@@ -1,9 +1,0 @@
-ext {
-    extName = 'Raw1001'
-    extClass = '.Raw1001'
-    themePkg = 'liliana'
-    baseUrl = 'https://raw1001.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

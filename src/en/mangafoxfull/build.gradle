@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaFoxFull'
-    extClass = '.MangaFoxFull'
-    themePkg = 'madara'
-    baseUrl = 'https://mangafoxfull.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

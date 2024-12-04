@@ -1,7 +1,0 @@
-ext {
-    extName = 'vomic'
-    extClass = '.Vomic'
-    extVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

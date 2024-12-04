@@ -1,9 +1,0 @@
-ext {
-    extName = 'Sleepy Translations'
-    extClass = '.SleepyTranslations'
-    themePkg = 'madara'
-    baseUrl = 'https://sleepytranslations.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

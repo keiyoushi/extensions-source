@@ -1,9 +1,0 @@
-ext {
-    extName = 'Doodmanga'
-    extClass = '.Doodmanga'
-    themePkg = 'madara'
-    baseUrl = 'https://www.doodmanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

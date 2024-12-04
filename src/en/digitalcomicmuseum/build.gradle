@@ -1,7 +1,0 @@
-ext {
-    extName = 'Digital Comic Museum'
-    extClass = '.DigitalComicMuseum'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaTone'
-    extClass = '.MangaTone'
-    themePkg = 'madara'
-    baseUrl = 'https://mangatone.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

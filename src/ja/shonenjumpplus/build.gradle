@@ -1,9 +1,0 @@
-ext {
-    extName = 'Shonen Jump+'
-    extClass = '.ShonenJumpPlus'
-    themePkg = 'gigaviewer'
-    baseUrl = 'https://shonenjumpplus.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

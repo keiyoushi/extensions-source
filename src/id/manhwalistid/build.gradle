@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manhwa List'
-    extClass = '.ManhwaList'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://manhwalist.in'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

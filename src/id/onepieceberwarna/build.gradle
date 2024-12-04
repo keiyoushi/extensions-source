@@ -1,7 +1,0 @@
-ext {
-    extName = 'One Piece Berwarna'
-    extClass = '.OnePieceBerwarna'
-    extVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Perf Scan'
-    extClass = '.PerfScan'
-    themePkg = 'heancms'
-    baseUrl = 'https://perf-scan.fr'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Menudo-Fansub'
-    extClass = '.MenudoFansub'
-    themePkg = 'foolslide'
-    baseUrl = 'https://www.menudo-fansub.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

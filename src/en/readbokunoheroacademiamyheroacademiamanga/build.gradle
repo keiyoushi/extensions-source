@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Boku no Hero Academia My Hero Academia Manga'
-    extClass = '.ReadBokuNoHeroAcademiaMyHeroAcademiaManga'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww6.readmha.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

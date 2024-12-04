@@ -1,9 +1,0 @@
-ext {
-    extName = 'Zandy no Fansub'
-    extClass = '.ZandynoFansub'
-    themePkg = 'madara'
-    baseUrl = 'https://zandynofansub.aishiteru.org'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

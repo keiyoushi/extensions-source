@@ -1,9 +1,0 @@
-ext {
-    extName = 'Ragnarok Scanlation'
-    extClass = '.RagnarokScanlation'
-    themePkg = 'madara'
-    baseUrl = 'https://ragnarokscanlation.org'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

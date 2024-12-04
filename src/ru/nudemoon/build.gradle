@@ -1,8 +1,0 @@
-ext {
-    extName = 'Nude-Moon'
-    extClass = '.Nudemoon'
-    extVersionCode = 18
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

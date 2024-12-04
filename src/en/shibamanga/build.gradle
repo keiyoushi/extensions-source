@@ -1,9 +1,0 @@
-ext {
-    extName = 'Shiba Manga'
-    extClass = '.ShibaManga'
-    themePkg = 'madara'
-    baseUrl = 'https://shibamanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

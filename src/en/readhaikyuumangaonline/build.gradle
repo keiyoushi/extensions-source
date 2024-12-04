@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read Haikyuu!! Manga Online'
-    extClass = '.ReadHaikyuuMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww6.readhaikyuu.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

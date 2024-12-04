@@ -1,9 +1,0 @@
-ext {
-    extName = 'Origami Orpheans'
-    extClass = '.OrigamiOrpheans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://origami-orpheans.com'
-    overrideVersionCode = 10
-}
-
-apply from: "$rootDir/common.gradle"

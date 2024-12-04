@@ -1,9 +1,0 @@
-ext {
-    extName = 'GalaxyDegenScans'
-    extClass = '.GalaxyDegenScans'
-    themePkg = 'madara'
-    baseUrl = 'https://gdscans.com'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

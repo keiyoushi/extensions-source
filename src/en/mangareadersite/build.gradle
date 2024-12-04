@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaReader.site'
-    extClass = '.MangaReaderSite'
-    themePkg = 'mangahub'
-    baseUrl = 'https://mangareader.site'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

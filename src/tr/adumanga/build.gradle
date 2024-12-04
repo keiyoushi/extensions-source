@@ -1,9 +1,0 @@
-ext {
-    extName = 'Adu Manga'
-    extClass = '.AduManga'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://adumanga.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Harimanga'
-    extClass = '.Harimanga'
-    themePkg = 'madara'
-    baseUrl = 'https://harimanga.me'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

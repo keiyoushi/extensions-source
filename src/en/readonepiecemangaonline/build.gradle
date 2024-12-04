@@ -1,9 +1,0 @@
-ext {
-    extName = 'Read One Piece Manga Online'
-    extClass = '.ReadOnePieceMangaOnline'
-    themePkg = 'mangacatalog'
-    baseUrl = 'https://ww8.readonepiece.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

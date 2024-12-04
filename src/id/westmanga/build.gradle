@@ -1,9 +1,0 @@
-ext {
-    extName = 'West Manga'
-    extClass = '.WestManga'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://westmanga.fun'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

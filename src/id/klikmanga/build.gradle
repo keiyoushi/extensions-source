@@ -1,9 +1,0 @@
-ext {
-    extName = 'KlikManga'
-    extClass = '.KlikManga'
-    themePkg = 'madara'
-    baseUrl = 'https://klikmanga.id'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

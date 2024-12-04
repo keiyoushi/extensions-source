@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manganato'
-    extClass = '.Manganato'
-    themePkg = 'mangabox'
-    baseUrl = 'https://manganato.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Asura Scans.us (unoriginal)'
-    extClass = '.AsuraScansUs'
-    themePkg = 'madara'
-    baseUrl = 'https://asurascans.us'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

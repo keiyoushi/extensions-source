@@ -1,9 +1,0 @@
-ext {
-    extName = 'Coffee Manga'
-    extClass = '.CoffeeManga'
-    themePkg = 'madara'
-    baseUrl = 'https://coffeemanga.io'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

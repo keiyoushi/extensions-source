@@ -1,9 +1,0 @@
-ext {
-    extName = 'Argos Comics'
-    extClass = '.ArgosComics'
-    themePkg = 'madara'
-    baseUrl = 'https://argoscomic.com'
-    overrideVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"

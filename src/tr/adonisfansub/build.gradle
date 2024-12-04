@@ -1,9 +1,0 @@
-ext {
-    extName = 'Adonis Fansub'
-    extClass = '.AdonisFansub'
-    themePkg = 'madara'
-    baseUrl = 'https://manga.adonisfansub.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

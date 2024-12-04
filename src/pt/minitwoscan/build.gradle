@@ -1,9 +1,0 @@
-ext {
-    extName = 'MiniTwo Scan'
-    extClass = '.MiniTwoScan'
-    themePkg = 'madara'
-    baseUrl = 'https://minitwoscan.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

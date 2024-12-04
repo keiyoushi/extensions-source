@@ -1,9 +1,0 @@
-ext {
-    extName = 'Comicsekai'
-    extClass = '.Comicsekai'
-    themePkg = 'mangathemesia'
-    baseUrl = 'http://www.comicsekai.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

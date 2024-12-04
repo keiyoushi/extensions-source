@@ -1,9 +1,0 @@
-ext {
-    extName = 'Wicked Witch Scan'
-    extClass = '.WickedWitchScan'
-    themePkg = 'peachscan'
-    baseUrl = 'https://wicked-witch-scan.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
