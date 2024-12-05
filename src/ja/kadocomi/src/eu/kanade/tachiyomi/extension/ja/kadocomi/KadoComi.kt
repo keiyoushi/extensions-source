@@ -89,7 +89,7 @@ class KadoComi : HttpSource() {
 
         val workCode = work.getString("code")
         val mangaTitle = work.getString("title")
-        val thumbnailUrl = work.getString("thumbnail")
+        val thumbnailUrl = getThumbnailUrl(work)
         val serializationStatus = work.getString("serializationStatus")
         val summary = work.getString("summary")
         val genreName = getGenres(work)
@@ -291,6 +291,10 @@ class KadoComi : HttpSource() {
         return manga.url.split("/").reversed().first()
     }
 
+    private fun getThumbnailUrl(json: JSONObject): String {
+        return if (json.has("bookCover")) json.getString("bookCover") else json.getString("thumbnail")
+    }
+
     // https://stackoverflow.com/a/66614516
     private fun String.decodeHex(): ByteArray {
         check(length % 2 == 0) { "Must have an even length" }
@@ -322,7 +326,7 @@ class KadoComi : HttpSource() {
                 SManga.create().apply {
                     url = "/detail/${manga.getString("code")}"
                     title = manga.getString("title")
-                    thumbnail_url = manga.getString("thumbnail")
+                    thumbnail_url = getThumbnailUrl(manga)
                 },
             )
         }
