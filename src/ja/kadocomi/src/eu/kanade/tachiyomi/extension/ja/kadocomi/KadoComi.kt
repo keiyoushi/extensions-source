@@ -234,22 +234,7 @@ class KadoComi : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val responseJson = JSONObject(response.body.string())
         val result = responseJson.getJSONArray("result")
-
-        val list: MutableList<SManga> = arrayListOf()
-
-        for (i in 0 until result.length()) {
-            val manga = result.getJSONObject(i)
-
-            list.add(
-                SManga.create().apply {
-                    url = "/detail/${manga.getString("code")}"
-                    title = manga.getString("title")
-                    thumbnail_url = manga.getString("thumbnail")
-                },
-            )
-        }
-
-        return MangasPage(list, result.length() >= SEARCH_LIMIT)
+        return MangasPage(searchResultsParse(responseJson), result.length() >= SEARCH_LIMIT)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -271,23 +256,7 @@ class KadoComi : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseJson = JSONObject(response.body.string())
-        val result = responseJson.getJSONArray("result")
-
-        val list: MutableList<SManga> = arrayListOf()
-
-        for (i in 0 until result.length()) {
-            val manga = result.getJSONObject(i)
-
-            list.add(
-                SManga.create().apply {
-                    url = "/detail/${manga.getString("code")}"
-                    title = manga.getString("title")
-                    thumbnail_url = manga.getString("thumbnail")
-                },
-            )
-        }
-
-        return MangasPage(list, false)
+        return MangasPage(searchResultsParse(responseJson), false)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -304,23 +273,7 @@ class KadoComi : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val responseJson = JSONObject(response.body.string())
-        val result = responseJson.getJSONArray("result")
-
-        val list: MutableList<SManga> = arrayListOf()
-
-        for (i in 0 until result.length()) {
-            val manga = result.getJSONObject(i)
-
-            list.add(
-                SManga.create().apply {
-                    url = "/detail/${manga.getString("code")}"
-                    title = manga.getString("title")
-                    thumbnail_url = manga.getString("thumbnail")
-                },
-            )
-        }
-
-        return MangasPage(list, false)
+        return MangasPage(searchResultsParse(responseJson), false)
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -357,6 +310,23 @@ class KadoComi : HttpSource() {
 
     private fun removeFragmentFromRequestUrl(request: Request): Request {
         return request.newBuilder().url(request.url.toString().substringBeforeLast("#")).build()
+    }
+
+    private fun searchResultsParse(responseJson: JSONObject): List<SManga> {
+        val result = responseJson.getJSONArray("result")
+        val list: MutableList<SManga> = arrayListOf()
+        for (i in 0 until result.length()) {
+            val manga = result.getJSONObject(i)
+
+            list.add(
+                SManga.create().apply {
+                    url = "/detail/${manga.getString("code")}"
+                    title = manga.getString("title")
+                    thumbnail_url = manga.getString("thumbnail")
+                },
+            )
+        }
+        return list
     }
 
     companion object {
