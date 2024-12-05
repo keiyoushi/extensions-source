@@ -6,7 +6,7 @@ import java.util.Locale
 
 class WebtoonHatti : Madara(
     "Webtoon Hatti",
-    "https://webtoonhatti.net",
+    "https://webtoonhatti.dev",
     "tr",
     dateFormat = SimpleDateFormat("dd MMMM", Locale("tr")),
 ) {
