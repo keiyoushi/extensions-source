@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga Koleji'
+    extClass = '.MangaKoleji'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangakoleji.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
