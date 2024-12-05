@@ -14,7 +14,7 @@ class ThunderScansFactory : SourceFactory {
 
 class LavaScans : MangaThemesiaAlt(
     "Lava Scans",
-    "https://lavascans.com",
+    "https://lavatoons.com",
     "ar",
     dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
 ) {
