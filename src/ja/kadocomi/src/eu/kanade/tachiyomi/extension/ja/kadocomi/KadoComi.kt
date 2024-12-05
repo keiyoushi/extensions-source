@@ -126,8 +126,8 @@ class KadoComi : HttpSource() {
             description = summary
             genre = genreName
             status = when (serializationStatus.lowercase()) {
-                SERIALIZATION_ONGOING -> SManga.ONGOING
-                SERIALIZATION_UNKNOWN -> SManga.UNKNOWN
+                "ongoing" -> SManga.ONGOING
+                "unknown" -> SManga.UNKNOWN
                 else -> SManga.UNKNOWN
             }
         }
@@ -148,7 +148,7 @@ class KadoComi : HttpSource() {
             list.add(tagName)
         }
 
-        return list.joinToString(", ")
+        return list.joinToString()
     }
 
     // ============================== Chapters ===============================
@@ -217,7 +217,7 @@ class KadoComi : HttpSource() {
             val drmHash = manuscript.getString("drmHash")
             val imageUrl = "$drmImageUrl#$drmHash" // hacky workaround to get drmHash to interceptor
 
-            list.add(Page(i, "", imageUrl = imageUrl))
+            list.add(Page(i, imageUrl = imageUrl))
         }
 
         if (list.size < 1) {
@@ -305,11 +305,9 @@ class KadoComi : HttpSource() {
     }
 
     private fun descrambleImage(imageByteArray: ByteArray, hashByteArray: ByteArray): ByteArray {
-        val result = ByteArray(imageByteArray.size)
-        for (i in result.indices) {
-            result[i] = imageByteArray[i] xor hashByteArray[i % hashByteArray.size]
-        }
-        return result
+        return imageByteArray.mapIndexed { idx, byte ->
+            byte xor hashByteArray[idx % hashByteArray.size]
+        }.toByteArray()
     }
 
     private fun removeFragmentFromRequestUrl(request: Request): Request {
@@ -354,10 +352,6 @@ class KadoComi : HttpSource() {
         private const val SEARCH_LIMIT = 20
         private const val RANKING_LIMIT = 50
         private const val NEW_LIMIT = 100
-
-        // manga serialization status
-        private const val SERIALIZATION_ONGOING = "ongoing"
-        private const val SERIALIZATION_UNKNOWN = "unknown"
 
         // author/artist roles
         private val AUTHOR_ROLES = arrayOf("原作")
