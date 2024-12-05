@@ -34,14 +34,16 @@ class Tojimangas : ParsedHttpSource() {
     private fun makeMangaRequest(
         page: Int,
         addToBuilder: (HttpUrl.Builder) -> HttpUrl.Builder,
-    ): Request {
-        var url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("biblioteca")
-            addPathSegment("page")
-            addPathSegment(page.toString())
-        }
-        return GET(addToBuilder(url).build(), headers)
-    }
+    ): Request = GET(
+        addToBuilder(
+            baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("biblioteca")
+                addPathSegment("page")
+                addPathSegment(page.toString())
+            },
+        ).build(),
+        headers,
+    )
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         makeMangaRequest(page) {
@@ -57,9 +59,9 @@ class Tojimangas : ParsedHttpSource() {
     }
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
+        setUrlWithoutDomain(element.absUrl("href"))
         title = element.attr("title")
-        thumbnail_url = element.selectFirst("img")?.attr("src")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
@@ -67,44 +69,43 @@ class Tojimangas : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga =
         searchMangaFromElement(element)
 
-    private fun getInfoGridValue(infoGridData: String, key: String): String? {
-        return """$key\S+ (\S*)<""".toRegex().find(infoGridData)?.groups?.get(1)?.value
-    }
-
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        thumbnail_url = document.selectFirst("thumb img")?.attr("src")
+        thumbnail_url = document.selectFirst("thumb img")?.absUrl("src")
 
-        description = document.selectFirst(".desc")
-            ?.select("p:not([style='display: none;'])")
-            ?.filter { p -> p.text() != "" }
-            ?.joinToString { p -> p.text() }
+        description =
+            document.select(".desc > div > :not(h2, [style='display: none;'], .manga-update-info)")
+                .filter { p -> p.text() != "" }
+                .joinToString { p -> p.text() }
 
         genre = document.select(".genre-info a").joinToString { a -> a.text() }
 
-        val infoGridData = document.selectFirst(".infox .spe")?.html()
-        if (infoGridData != null) {
-            author = getInfoGridValue(infoGridData, "Autor")
+        val infoGrid = document.selectFirst(".infox .spe")
 
-            status = when (getInfoGridValue(infoGridData, "Estado")?.lowercase()) {
+        author = infoGrid?.selectFirst("span:contains(Autor)")?.text()?.substringAfter("Autor")
+
+        status =
+            when (
+                infoGrid?.selectFirst("span:contains(Estado)")?.text()?.substringAfter("Estado")
+                    ?.trim()?.lowercase()
+            ) {
                 "activo" -> SManga.ONGOING
                 "finalizado" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-        }
     }
 
     private val dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale("es"))
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val a = element.selectFirst("a")
-        a?.attr("href")?.let { setUrlWithoutDomain(it) }
-        name = a?.text().toString()
+        a?.absUrl("href")?.let { setUrlWithoutDomain(it) }
+        name = a?.text() ?: ""
         date_upload = element.selectFirst(".date")?.text()?.let { dateFormat.parse(it)?.time } ?: 0
     }
 
     override fun pageListParse(document: Document): List<Page> =
         document.select(".reader-area img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.attr("src"))
+            Page(idx, imageUrl = img.absUrl("src"))
         }
 
     override fun imageUrlParse(document: Document): String = ""
