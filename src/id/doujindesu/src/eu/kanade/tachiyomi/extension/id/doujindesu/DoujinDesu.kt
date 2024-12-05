@@ -65,6 +65,10 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
+    private class AuthorFilter : Filter.Text("Author")
+
+    private class CharacterFilter : Filter.Text("Karakter")
+
     private class Order(title: String, val key: String) : Filter.TriState(title) {
         override fun toString(): String {
             return name
@@ -78,21 +82,21 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     private val orderBy = arrayOf(
-        Order("All", ""),
+        Order("Semua", ""),
         Order("A-Z", "title"),
-        Order("Latest Update", "update"),
-        Order("Latest Added", "latest"),
-        Order("Popular", "popular"),
+        Order("Update Terbaru", "update"),
+        Order("Baru Ditambahkan", "latest"),
+        Order("Populer", "popular"),
     )
 
     private val statusList = arrayOf(
-        Status("All", ""),
-        Status("Publishing", "Publishing"),
-        Status("Finished", "Finished"),
+        Status("Semua", ""),
+        Status("Berlanjut", "Publishing"),
+        Status("Selesai", "Finished"),
     )
 
     private val categoryNames = arrayOf(
-        Category("All", ""),
+        Category("Semua", ""),
         Category("Doujinshi", "Doujinshi"),
         Category("Manga", "Manga"),
         Category("Manhwa", "Manhwa"),
@@ -252,17 +256,15 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Genre("Yuri"),
     )
 
-    private class CategoryNames(categories: Array<Category>) :
-        Filter.Select<Category>("Category", categories, 0)
-
-    private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Order", orders, 0)
+    private class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Kategori", categories, 0)
+    private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Urutkan", orders, 0)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
     private class StatusList(statuses: Array<Status>) : Filter.Select<Status>("Status", statuses, 0)
 
     private fun basicInformationFromElement(element: Element): SManga {
         val manga = SManga.create()
         element.select("a").let {
-            manga.title = it.attr("title")
+            manga.title = element.select("h3.title").text()
             manga.setUrlWithoutDomain(it.attr("href"))
         }
         element.select("a > figure.thumbnail > img").first()?.let {
@@ -310,9 +312,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // Element Selectors
 
-    override fun latestUpdatesSelector(): String = "#archives > div.entries > article"
     override fun popularMangaSelector(): String = "#archives > div.entries > article"
-    override fun searchMangaSelector(): String = "#archives > div.entries > article"
+    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun searchMangaSelector() = popularMangaSelector()
 
     override fun popularMangaNextPageSelector(): String = "nav.pagination > ul > li.last > a"
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
@@ -333,6 +335,12 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                     val order = filter.values[filter.state]
                     url.addQueryParameter("order", order.key)
                 }
+                is AuthorFilter -> {
+                    url.addQueryParameter("author", filter.state)
+                }
+                is CharacterFilter -> {
+                    url.addQueryParameter("character", filter.state)
+                }
                 is GenreList -> {
                     filter.state
                         .filter { it.state }
@@ -349,6 +357,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 else -> {}
             }
         }
+
         return GET(url.build(), headers)
     }
 
@@ -358,6 +367,8 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     override fun getFilterList() = FilterList(
         Filter.Header("NB: Filter diabaikan jika memakai pencarian teks!"),
         Filter.Separator(),
+        AuthorFilter(),
+        CharacterFilter(),
         StatusList(statusList),
         CategoryNames(categoryNames),
         OrderBy(orderBy),
@@ -368,29 +379,60 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("section.metadata").first()!!
+        val AuthorName = when {
+            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Author) + td:nth-child(2) > a")
+                .isEmpty() -> "Tidak Diketahui"
+            else -> document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Author) + td:nth-child(2) > a")
+                .joinToString { it.text() }
+        }
+        val GroupName = when {
+            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Group) + td:nth-child(2) > a")
+                .isEmpty() -> "Tidak Diketahui"
+            else -> document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Group) + td:nth-child(2) > a")
+                .joinToString { it.text() }
+        }
+        val CharacterName = when {
+            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Character) + td:nth-child(2) > a")
+                .isEmpty() -> "Tidak Diketahui"
+            else -> document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Character) + td:nth-child(2) > a")
+                .joinToString { it.text() }
+        }
+        val SeriesName = when {
+            document.select("section.metadata > table:nth-child(2) > tbody > tr.parodies > td:nth-child(2) > a")
+                .isEmpty() -> "Tidak Diketahui"
+            else -> document.select("section.metadata > table:nth-child(2) > tbody > tr.parodies > td:nth-child(2) > a")
+                .joinToString { it.text() }
+        }
+        val SeriesParser = if ("Manhwa" in SeriesName) {
+            document.select("section.metadata > table:nth-child(2) > tbody > tr:nth-child(5) > td:nth-child(2)").text()
+        } else {
+            document.select("section.metadata > table:nth-child(2) > tbody > tr.parodies > td:nth-child(2) > a").text()
+        }
+        val AlternativeTitle = when {
+            document.select("section.metadata > h1.title > span.alter")
+                .isEmpty() -> "Tidak Diketahui"
+            else -> document.select("section.metadata > h1.title > span.alter")
+                .joinToString { it.text() }
+        }
         val manga = SManga.create()
         manga.description = when {
             document.select("section.metadata > div.pb-2 > p:nth-child(1)")
-                .isEmpty() -> "Tidak ada deskripsi yang tersedia bosque"
-            else -> document.select("section.metadata > div.pb-2 > p:nth-child(1)").first()!!.text()
+                .isEmpty() -> "Tidak ada deskripsi yang tersedia bosque\n\nJudul Alternatif : $AlternativeTitle"
+            else -> (document.select("section.metadata > div.pb-2 > p:nth-child(1)").first()!!.text() + "\n\nJudul Alternatif : $AlternativeTitle")
         }
         val genres = mutableListOf<String>()
         infoElement.select("div.tags > a").forEach { element ->
             val genre = element.text()
             genres.add(genre)
         }
-        manga.author =
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Author) + td:nth-child(2) > a")
-                .joinToString { it.text() }
+        manga.author = "Author : $AuthorName\nGroup  : $GroupName"
         manga.genre = infoElement.select("div.tags > a").joinToString { it.text() }
         manga.status = parseStatus(
             document.select("section.metadata > table:nth-child(2) > tbody > tr:nth-child(1) > td:nth-child(2) > a")
                 .first()!!.text(),
         )
         manga.thumbnail_url = document.selectFirst("figure.thumbnail img")?.attr("src")
-        manga.artist =
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Character) + td:nth-child(2) > a")
-                .joinToString { it.text() }
+        manga.artist = "Character : $CharacterName\nSeries       : $SeriesParser"
 
         return manga
     }
@@ -441,9 +483,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     companion object {
         private val PREF_DOMAIN_KEY = "preferred_domain_name_v${AppInfo.getVersionName()}"
-        private const val PREF_DOMAIN_TITLE = "Override BaseUrl"
+        private const val PREF_DOMAIN_TITLE = "Mengganti BaseUrl"
         private const val PREF_DOMAIN_DEFAULT = "https://doujindesu.tv"
-        private const val PREF_DOMAIN_SUMMARY = "Override default domain with a different one"
+        private const val PREF_DOMAIN_SUMMARY = "Mengganti domain default dengan domain yang berbeda"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -456,7 +498,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             setDefaultValue(PREF_DOMAIN_DEFAULT)
 
             setOnPreferenceChangeListener { _, newValue ->
-                Toast.makeText(screen.context, "Restart App to apply new setting.", Toast.LENGTH_LONG).show()
+                Toast.makeText(screen.context, "Mulai ulang aplikasi untuk menerapkan pengaturan baru.", Toast.LENGTH_LONG).show()
                 true
             }
         }.also(screen::addPreference)
