@@ -365,7 +365,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         basicInformationFromElement(element)
 
     override fun getFilterList() = FilterList(
-        Filter.Header("NB: Filter diabaikan jika memakai pencarian teks!"),
+        Filter.Header("NB: Filter bisa digabungkan dengan memakai pencarian teks!"),
         Filter.Separator(),
         AuthorFilter(),
         CharacterFilter(),
