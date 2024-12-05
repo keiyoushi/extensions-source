@@ -48,7 +48,7 @@ class ComposedImageInterceptor(
         val request = chain.request()
         val url = request.url.toString()
 
-        val isPageImageUrl = url.contains("storage.${baseUrl.substringAfterLast("/")}", true)
+        val isPageImageUrl = url.contains("${baseUrl.substringAfterLast("/")}/storage/", true)
         if (isPageImageUrl.not()) {
             return chain.proceed(request)
         }
@@ -84,7 +84,10 @@ class ComposedImageInterceptor(
 
         val output = ByteArrayOutputStream()
 
-        val format = when (url.substringAfterLast(".").lowercase()) {
+        val ext = url.substringBefore("#")
+            .substringAfterLast(".")
+            .lowercase()
+        val format = when (ext) {
             "png" -> Bitmap.CompressFormat.PNG
             "jpeg", "jpg" -> Bitmap.CompressFormat.JPEG
             else -> Bitmap.CompressFormat.WEBP
