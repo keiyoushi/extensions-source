@@ -7,13 +7,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.json.JSONObject
+import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -66,6 +68,8 @@ class KadoComi : HttpSource() {
         .addNetworkInterceptor(imageDescrambler)
         .build()
 
+    private val json: Json by injectLazy()
+
     // ============================== Manga Details ===============================
 
     override fun getMangaUrl(manga: SManga): String {
@@ -84,26 +88,15 @@ class KadoComi : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val responseJson = JSONObject(response.body.string())
-        val work = responseJson.getJSONObject("work")
-
-        val workCode = work.getString("code")
-        val mangaTitle = work.getString("title")
-        val thumbnailUrl = getThumbnailUrl(work)
-        val serializationStatus = work.getString("serializationStatus")
-        val summary = work.getString("summary")
-        val genreName = getGenres(work)
-        val authors = work.getJSONArray("authors")
+        val details = KadoComiWorkDto.let {
+            json.decodeFromString<KadoComiWorkDto>(response.body.string())
+        }
 
         var mangaAuthor: String? = null
         var mangaArtist: String? = null
 
-        for (i in 0 until authors.length()) {
-            val author = authors.getJSONObject(i)
-            val role = author.getString("role")
-            val name = author.getString("name")
-
-            when (role) {
+        details.work.authors!!.forEach {
+            when (it.role) {
                 in AUTHOR_ROLES -> {
                     mangaAuthor = name
                 }
@@ -118,14 +111,14 @@ class KadoComi : HttpSource() {
         }
 
         return SManga.create().apply {
-            url = "/detail/$workCode"
-            title = mangaTitle
-            thumbnail_url = thumbnailUrl
+            url = "/detail/${details.work.code}"
+            title = details.work.title
+            thumbnail_url = getThumbnailUrl(details.work)
             author = mangaAuthor
             artist = mangaArtist
-            description = summary
-            genre = genreName
-            status = when (serializationStatus.lowercase()) {
+            description = details.work.summary
+            genre = getGenres(details.work)
+            status = when (details.work.serializationStatus.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "unknown" -> SManga.UNKNOWN
                 else -> SManga.UNKNOWN
@@ -133,21 +126,9 @@ class KadoComi : HttpSource() {
         }
     }
 
-    private fun getGenres(work: JSONObject): String {
-        val list: MutableList<String> = arrayListOf()
-
-        val genreName = work.getJSONObject("genre").getString("name")
-        val subGenreName = work.getJSONObject("subGenre").getString("name")
-        val tags = work.getJSONArray("tags")
-
-        list.add(genreName)
-        list.add(subGenreName)
-        for (i in 0 until tags.length()) {
-            val tag = tags.getJSONObject(i)
-            val tagName = tag.getString("name")
-            list.add(tagName)
-        }
-
+    private fun getGenres(work: KadoComiWork): String {
+        val list: MutableList<String> = arrayListOf(work.genre!!.name, work.subGenre!!.name)
+        work.tags!!.forEach { list.add(it.name) }
         return list.joinToString()
     }
 
@@ -173,29 +154,19 @@ class KadoComi : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val responseJson = JSONObject(response.body.string())
-        val work = responseJson.getJSONObject("work")
-        val workCode = work.getString("code")
-
+        val details = KadoComiWorkDto.let {
+            json.decodeFromString<KadoComiWorkDto>(response.body.string())
+        }
+        val workCode = details.work.code
         val list: MutableList<SChapter> = arrayListOf()
-        val episodes = responseJson.getJSONObject("latestEpisodes").getJSONArray("result")
 
-        for (i in 0 until episodes.length()) {
-            val episode = episodes.getJSONObject(i)
-            val episodeId = episode.getString("id")
-            val episodeCode = episode.getString("code")
-            var episodeTitle = episode.getString("title")
-            val dateUpload = episode.getString("updateDate")
-            if (!episode.getBoolean("isActive")) {
-                episodeTitle = "$LOCK $episodeTitle"
-            }
-
+        details.latestEpisodes!!.result.forEach {
             list.add(
                 SChapter.create().apply {
-                    url = "/api/contents/viewer?episodeId=$episodeId&imageSizeType=width%3A1284#workCode=$workCode&episodeCode=$episodeCode"
-                    name = episodeTitle
-                    date_upload = parseDate(dateUpload)
-                    chapter_number = episode.getJSONObject("internal").getInt("episodeNo").toFloat()
+                    url = "/api/contents/viewer?episodeId=${it.id}&imageSizeType=width%3A1284#workCode=$workCode&episodeCode=${it.code}"
+                    name = "${if (!it.isActive) LOCK else ""} ${it.title}"
+                    date_upload = parseDate(it.updateDate)
+                    chapter_number = it.internal.episodeNo.toFloat()
                 },
             )
         }
@@ -206,18 +177,13 @@ class KadoComi : HttpSource() {
     // ============================== Pages ===============================
 
     override fun pageListParse(response: Response): List<Page> {
-        val responseJson = JSONObject(response.body.string())
-        val manuscripts = responseJson.getJSONArray("manuscripts")
-
+        val viewer = KadoComiViewerDto.let {
+            json.decodeFromString<KadoComiViewerDto>(response.body.string())
+        }
         val list: MutableList<Page> = arrayListOf()
 
-        for (i in 0 until manuscripts.length()) {
-            val manuscript = manuscripts.getJSONObject(i)
-            val drmImageUrl = manuscript.getString("drmImageUrl").substringAfter(baseUrl)
-            val drmHash = manuscript.getString("drmHash")
-            val imageUrl = "$drmImageUrl#$drmHash" // hacky workaround to get drmHash to interceptor
-
-            list.add(Page(i, imageUrl = imageUrl))
+        viewer.manuscripts.forEachIndexed { idx, manuscript ->
+            list.add(Page(idx, imageUrl = "${manuscript.drmImageUrl.substringAfter(baseUrl)}#${manuscript.drmHash}"))
         }
 
         if (list.size < 1) {
@@ -232,9 +198,10 @@ class KadoComi : HttpSource() {
     // ============================== Search ===============================
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val responseJson = JSONObject(response.body.string())
-        val result = responseJson.getJSONArray("result")
-        return MangasPage(searchResultsParse(responseJson), result.length() >= SEARCH_LIMIT)
+        val results = KadoComiWorkDto.let {
+            json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
+        }
+        return MangasPage(searchResultsParse(results), results.result.size >= SEARCH_LIMIT)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -255,8 +222,10 @@ class KadoComi : HttpSource() {
     // ============================== Latest ===============================
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val responseJson = JSONObject(response.body.string())
-        return MangasPage(searchResultsParse(responseJson), false)
+        val results = KadoComiWorkDto.let {
+            json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
+        }
+        return MangasPage(searchResultsParse(results), false)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -272,8 +241,10 @@ class KadoComi : HttpSource() {
     // ============================== Popular ===============================
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val responseJson = JSONObject(response.body.string())
-        return MangasPage(searchResultsParse(responseJson), false)
+        val results = KadoComiWorkDto.let {
+            json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
+        }
+        return MangasPage(searchResultsParse(results), false)
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -291,8 +262,8 @@ class KadoComi : HttpSource() {
         return manga.url.split("/").reversed().first()
     }
 
-    private fun getThumbnailUrl(json: JSONObject): String {
-        return if (json.has("bookCover")) json.getString("bookCover") else json.getString("thumbnail")
+    private fun getThumbnailUrl(work: KadoComiWork): String {
+        return work.bookCover ?: work.thumbnail
     }
 
     // https://stackoverflow.com/a/66614516
@@ -314,26 +285,25 @@ class KadoComi : HttpSource() {
         return request.newBuilder().url(request.url.toString().substringBeforeLast("#")).build()
     }
 
-    private fun searchResultsParse(responseJson: JSONObject): List<SManga> {
-        val result = responseJson.getJSONArray("result")
+    private fun searchResultsParse(results: KadoComiSearchResultsDto): List<SManga> {
         val list: MutableList<SManga> = arrayListOf()
-        for (i in 0 until result.length()) {
-            val manga = result.getJSONObject(i)
 
+        results.result.forEach {
             list.add(
                 SManga.create().apply {
-                    url = "/detail/${manga.getString("code")}"
-                    title = manga.getString("title")
-                    thumbnail_url = getThumbnailUrl(manga)
+                    url = "/detail/${it.code}"
+                    title = it.title
+                    thumbnail_url = getThumbnailUrl(it)
                 },
             )
         }
+
         return list
     }
 
     companion object {
         // inactive chapter icon
-        private const val LOCK = "🔒"
+        private const val LOCK = "🔒 "
 
         // date formatting
         private fun parseDate(dateStr: String): Long {
