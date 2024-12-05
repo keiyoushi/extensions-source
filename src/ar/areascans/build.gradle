@@ -2,8 +2,8 @@ ext {
     extName = 'Area Scans'
     extClass = '.AreaScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://ar.kenmanga.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://ar.areascans.org'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
