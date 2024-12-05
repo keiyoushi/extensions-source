@@ -41,7 +41,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private val defaultBaseUrl = "https://vlogtruyen34.com"
+    private val defaultBaseUrl = "https://vlogtruyen35.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

@@ -61,7 +61,7 @@ data class MangaDto(
             7 -> SManga.CANCELLED // "Ngừng xuất bản" -> No more publications
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = dto.thumbnail
+        thumbnail_url = "https://storage.yurineko.my/" + dto.thumbnail
         initialized = true
     }
 }

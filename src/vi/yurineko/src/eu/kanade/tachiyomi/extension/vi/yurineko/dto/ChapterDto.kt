@@ -50,5 +50,5 @@ data class ReadResponseDto(
 ) {
     fun toPageList(): List<Page> = this@ReadResponseDto
         .url
-        .mapIndexed { index, url -> Page(index, "", url) }
+        .mapIndexed { index, url -> Page(index, imageUrl = "https://storage.yurineko.my" + url) }
 }

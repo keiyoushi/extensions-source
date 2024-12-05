@@ -32,13 +32,13 @@ class YuriNeko : HttpSource() {
 
     override val name = "YuriNeko"
 
-    override val baseUrl = "https://yurineko.moe"
+    override val baseUrl = "https://yurineko.my"
 
     override val lang = "vi"
 
     override val supportsLatest = false
 
-    private val apiUrl = "https://api.yurineko.moe"
+    private val apiUrl = "https://api.yurineko.my"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
