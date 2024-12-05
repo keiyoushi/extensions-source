@@ -113,7 +113,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
                     .firstInstanceOrNull<CoverArtDto>()
                     ?.attributes?.fileName
             }
-            helper.createBasicManga(mangaDataDto, fileName, coverSuffix, dexLang)
+            helper.createBasicManga(mangaDataDto, fileName, coverSuffix, dexLang, preferences.preferSourceLangTitle)
         }
 
         return MangasPage(mangaList, mangaListDto.hasNextPage)
@@ -177,7 +177,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
                     .firstInstanceOrNull<CoverArtDto>()
                     ?.attributes?.fileName
             }
-            helper.createBasicManga(mangaDataDto, fileName, coverSuffix, dexLang)
+            helper.createBasicManga(mangaDataDto, fileName, coverSuffix, dexLang, preferences.preferSourceLangTitle)
         }
 
         return MangasPage(mangaList, chapterListDto.hasNextPage)
@@ -360,7 +360,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
                     .firstInstanceOrNull<CoverArtDto>()
                     ?.attributes?.fileName
             }
-            helper.createBasicManga(mangaDataDto, fileName, coverSuffix, dexLang)
+            helper.createBasicManga(mangaDataDto, fileName, coverSuffix, dexLang, preferences.preferSourceLangTitle)
         }
 
         return mangaList
@@ -423,6 +423,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             dexLang,
             preferences.coverQuality,
             preferences.altTitlesInDesc,
+            preferences.preferSourceLangTitle,
         )
     }
 
@@ -757,11 +758,27 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             }
         }
 
+        val preferSourceLangTitlePref = SwitchPreferenceCompat(screen.context).apply {
+            key = MDConstants.getPreferSourceLangTitlePrefKey(dexLang)
+            title = helper.intl["prefer_title_in_source_language"]
+            summary = helper.intl["prefer_title_in_source_language_summary"]
+            setDefaultValue(true)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+
+                preferences.edit()
+                    .putBoolean(MDConstants.getPreferSourceLangTitlePrefKey(dexLang), checkValue)
+                    .commit()
+            }
+        }
+
         screen.addPreference(coverQualityPref)
         screen.addPreference(tryUsingFirstVolumeCoverPref)
         screen.addPreference(dataSaverPref)
         screen.addPreference(standardHttpsPortPref)
         screen.addPreference(altTitlesInDescPref)
+        screen.addPreference(preferSourceLangTitlePref)
         screen.addPreference(contentRatingPref)
         screen.addPreference(originalLanguagePref)
         screen.addPreference(blockedGroupsPref)
@@ -839,6 +856,9 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
     private val SharedPreferences.altTitlesInDesc
         get() = getBoolean(MDConstants.getAltTitlesInDescPrefKey(dexLang), false)
+
+    private val SharedPreferences.preferSourceLangTitle
+        get() = getBoolean(MDConstants.getPreferSourceLangTitlePrefKey(dexLang), true)
 
     /**
      * Previous versions of the extension allowed invalid UUID values to be stored in the
