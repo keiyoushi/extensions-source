@@ -23,9 +23,11 @@ class KadoComi : HttpSource() {
 
     override val name = "カドコミ" // KadoComi, formerly Comic Walker
 
-    override val baseUrl = "https://comic-walker.com/"
+    override val baseUrl = "https://comic-walker.com"
 
-    private val apiUrl = "https://comic-walker.com/api/"
+    private val apiUrl = "https://comic-walker.com/api"
+
+    private val cdnUrl = "https://cdn.comic-walker.com"
 
     override val lang = "ja"
 
@@ -33,19 +35,15 @@ class KadoComi : HttpSource() {
 
     private val imageDescrambler: Interceptor = Interceptor { chain ->
         val request: Request = chain.request()
-
-        // retrieve the DRM Hash value from the fragment
+        val urlString = request.url.toString()
+        val isPage = urlString.contains("$cdnUrl/images/") && urlString.contains("&Key-Pair-Id=")
         val drmHash = request.url.fragment ?: ""
 
-        if (request.url.toString().contains(".webp")) {
-            // remove the fragment from the request URL
-            request.newBuilder().url(request.url.toString().substringBeforeLast("#")).build()
-        }
+        if (isPage) removeFragmentFromRequestUrl(request)
 
-        // continue with the request
         val response: Response = chain.proceed(request)
 
-        if (request.url.toString().contains(".webp")) {
+        if (isPage) {
             val oldBody = response.body.bytes()
             val descrambled = descrambleImage(oldBody, drmHash.decodeHex())
             val newBody = descrambled.toResponseBody("image/jpeg".toMediaTypeOrNull())
@@ -59,12 +57,7 @@ class KadoComi : HttpSource() {
 
     private val chapterUrlInterceptor: Interceptor = Interceptor { chain ->
         val request: Request = chain.request()
-
-        if (request.url.toString().contains("$apiUrl/contents/viewer/")) {
-            // remove the fragment from the request URL
-            request.newBuilder().url(request.url.toString().substringBeforeLast("#")).build()
-        }
-
+        if (request.url.toString().contains("$apiUrl/contents/viewer/")) removeFragmentFromRequestUrl(request)
         chain.proceed(request)
     }
 
@@ -125,7 +118,7 @@ class KadoComi : HttpSource() {
         }
 
         return SManga.create().apply {
-            url = "detail/$workCode"
+            url = "/detail/$workCode"
             title = mangaTitle
             thumbnail_url = thumbnailUrl
             author = mangaAuthor
@@ -199,7 +192,7 @@ class KadoComi : HttpSource() {
 
             list.add(
                 SChapter.create().apply {
-                    url = "api/contents/viewer?episodeId=$episodeId&imageSizeType=width%3A1284#workCode=$workCode&episodeCode=$episodeCode"
+                    url = "/api/contents/viewer?episodeId=$episodeId&imageSizeType=width%3A1284#workCode=$workCode&episodeCode=$episodeCode"
                     name = episodeTitle
                     date_upload = parseDate(dateUpload)
                     chapter_number = episode.getJSONObject("internal").getInt("episodeNo").toFloat()
@@ -249,7 +242,7 @@ class KadoComi : HttpSource() {
 
             list.add(
                 SManga.create().apply {
-                    url = "detail/${manga.getString("code")}"
+                    url = "/detail/${manga.getString("code")}"
                     title = manga.getString("title")
                     thumbnail_url = manga.getString("thumbnail")
                 },
@@ -287,7 +280,7 @@ class KadoComi : HttpSource() {
 
             list.add(
                 SManga.create().apply {
-                    url = "detail/${manga.getString("code")}"
+                    url = "/detail/${manga.getString("code")}"
                     title = manga.getString("title")
                     thumbnail_url = manga.getString("thumbnail")
                 },
@@ -320,7 +313,7 @@ class KadoComi : HttpSource() {
 
             list.add(
                 SManga.create().apply {
-                    url = "detail/${manga.getString("code")}"
+                    url = "/detail/${manga.getString("code")}"
                     title = manga.getString("title")
                     thumbnail_url = manga.getString("thumbnail")
                 },
@@ -355,13 +348,15 @@ class KadoComi : HttpSource() {
     }
 
     private fun descrambleImage(imageByteArray: ByteArray, hashByteArray: ByteArray): ByteArray {
-        var result = ByteArray(imageByteArray.size)
-
+        val result = ByteArray(imageByteArray.size)
         for (i in result.indices) {
             result[i] = imageByteArray[i] xor hashByteArray[i % hashByteArray.size]
         }
-
         return result
+    }
+
+    private fun removeFragmentFromRequestUrl(request: Request): Request {
+        return request.newBuilder().url(request.url.toString().substringBeforeLast("#")).build()
     }
 
     companion object {
