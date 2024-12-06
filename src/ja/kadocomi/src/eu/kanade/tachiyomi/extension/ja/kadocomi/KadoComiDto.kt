@@ -23,7 +23,7 @@ data class KadoComiWork(
     val code: String = "",
     val id: String = "",
     val thumbnail: String = "",
-    val bookCover: String? = "",
+    val bookCover: String?,
     val title: String = "",
     val serializationStatus: String = "",
     val summary: String? = "",
