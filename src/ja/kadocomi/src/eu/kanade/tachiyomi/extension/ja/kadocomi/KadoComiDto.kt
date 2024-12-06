@@ -3,13 +3,13 @@ package eu.kanade.tachiyomi.extension.ja.kadocomi
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class KadoComiWorkDto(
+class KadoComiWorkDto(
     val work: KadoComiWork,
     val latestEpisodes: KadoComiEpisodesResult?,
 )
 
 @Serializable
-data class KadoComiSearchResultsDto(
+class KadoComiSearchResultsDto(
     val result: List<KadoComiWork> = emptyList(),
 )
 
