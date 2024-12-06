@@ -125,8 +125,10 @@ class KadoComi : HttpSource() {
     // ============================== Chapters ===============================
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val fragment = chapter.url.substringAfterLast("#")
-        val params = fragment.split("&")
+        // fragment contains two parameters in the format: #workCode={workCode}&episodeCode={episodeCode}"
+        // fragment comes from the URL as a single string, so manipulate to acquire the relevant values
+        val fragment = "$baseUrl${chapter.url}".toHttpUrl().fragment
+        val params = fragment!!.split("&")
         val workCode = params[0].split("=")[1]
         val episodeCode = params[1].split("=")[1]
         return "$baseUrl/detail/$workCode/episodes/$episodeCode"
