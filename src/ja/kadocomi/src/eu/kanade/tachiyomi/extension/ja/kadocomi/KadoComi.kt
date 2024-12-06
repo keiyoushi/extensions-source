@@ -78,14 +78,12 @@ class KadoComi : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val details = KadoComiWorkDto.let {
-            json.decodeFromString<KadoComiWorkDto>(response.body.string())
-        }
+        val details = json.decodeFromString<KadoComiWorkDto>(response.body.string())
 
         var mangaAuthor: String? = null
         var mangaArtist: String? = null
 
-        details.work.authors!!.forEach {
+        details.work.authors?.forEach {
             when (it.role) {
                 in AUTHOR_ROLES -> {
                     mangaAuthor = it.name
@@ -117,9 +115,9 @@ class KadoComi : HttpSource() {
     }
 
     private fun getGenres(work: KadoComiWork): String {
-        val list: MutableList<String> = arrayListOf(work.genre!!.name, work.subGenre!!.name)
-        work.tags!!.forEach { list.add(it.name) }
-        return list.joinToString()
+        return listOfNotNull(work.genre?.name, work.subGenre?.name)
+            .plus(work.tags.orEmpty().map { it.name })
+            .joinToString()
     }
 
     // ============================== Chapters ===============================
@@ -146,43 +144,33 @@ class KadoComi : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val details = KadoComiWorkDto.let {
-            json.decodeFromString<KadoComiWorkDto>(response.body.string())
-        }
+        val details = json.decodeFromString<KadoComiWorkDto>(response.body.string())
         val workCode = details.work.code
-        val list: MutableList<SChapter> = arrayListOf()
 
-        details.latestEpisodes!!.result.forEach {
-            list.add(
-                SChapter.create().apply {
-                    url = "/api/contents/viewer?episodeId=${it.id}&imageSizeType=width%3A1284#workCode=$workCode&episodeCode=${it.code}"
-                    name = "${if (!it.isActive) LOCK else ""} ${it.title}"
-                    date_upload = parseDate(it.updateDate)
-                    chapter_number = it.internal.episodeNo.toFloat()
-                },
-            )
+        return details.latestEpisodes?.result.orEmpty().map { episode ->
+            SChapter.create().apply {
+                url = "/api/contents/viewer?episodeId=${episode.id}&imageSizeType=width%3A1284#workCode=$workCode&episodeCode=${episode.code}"
+                name = "${if (!episode.isActive) LOCK else ""} ${episode.title}"
+                date_upload = parseDate(episode.updateDate)
+                chapter_number = episode.internal.episodeNo.toFloat()
+            }
         }
-
-        return list
     }
 
     // ============================== Pages ===============================
 
     override fun pageListParse(response: Response): List<Page> {
-        val viewer = KadoComiViewerDto.let {
-            json.decodeFromString<KadoComiViewerDto>(response.body.string())
-        }
-        val list: MutableList<Page> = arrayListOf()
+        val viewer = json.decodeFromString<KadoComiViewerDto>(response.body.string())
 
-        viewer.manuscripts.forEachIndexed { idx, manuscript ->
-            list.add(Page(idx, imageUrl = "${manuscript.drmImageUrl.substringAfter(baseUrl)}#${manuscript.drmHash}"))
+        val pages = viewer.manuscripts.mapIndexed { idx, manuscript ->
+            Page(idx, imageUrl = "${manuscript.drmImageUrl.substringAfter(baseUrl)}#${manuscript.drmHash}")
         }
 
-        if (list.size < 1) {
+        if (pages.isEmpty()) {
             throw Exception("このチャプターは非公開です\nChapter is not available!")
         }
 
-        return list
+        return pages
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -190,9 +178,7 @@ class KadoComi : HttpSource() {
     // ============================== Search ===============================
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val results = KadoComiWorkDto.let {
-            json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
-        }
+        val results = json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
         return MangasPage(searchResultsParse(results), results.result.size >= SEARCH_LIMIT)
     }
 
@@ -214,9 +200,7 @@ class KadoComi : HttpSource() {
     // ============================== Latest ===============================
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val results = KadoComiWorkDto.let {
-            json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
-        }
+        val results = json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
         return MangasPage(searchResultsParse(results), false)
     }
 
@@ -233,9 +217,7 @@ class KadoComi : HttpSource() {
     // ============================== Popular ===============================
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val results = KadoComiWorkDto.let {
-            json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
-        }
+        val results = json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
         return MangasPage(searchResultsParse(results), false)
     }
 
@@ -251,7 +233,7 @@ class KadoComi : HttpSource() {
     // ============================= Utilities ==============================
 
     private fun getWorkCode(manga: SManga): String {
-        return manga.url.split("/").reversed().first()
+        return manga.url.substringAfterLast("/")
     }
 
     private fun getThumbnailUrl(work: KadoComiWork): String {
@@ -274,19 +256,13 @@ class KadoComi : HttpSource() {
     }
 
     private fun searchResultsParse(results: KadoComiSearchResultsDto): List<SManga> {
-        val list: MutableList<SManga> = arrayListOf()
-
-        results.result.forEach {
-            list.add(
-                SManga.create().apply {
-                    url = "/detail/${it.code}"
-                    title = it.title
-                    thumbnail_url = getThumbnailUrl(it)
-                },
-            )
+        return results.result.map {
+            SManga.create().apply {
+                url = "/detail/${it.code}"
+                title = it.title
+                thumbnail_url = getThumbnailUrl(it)
+            }
         }
-
-        return list
     }
 
     companion object {

@@ -14,12 +14,12 @@ data class KadoComiSearchResultsDto(
 )
 
 @Serializable
-data class KadoComiViewerDto(
+class KadoComiViewerDto(
     val manuscripts: List<KadoComiManuscript> = emptyList(),
 )
 
 @Serializable
-data class KadoComiWork(
+class KadoComiWork(
     val code: String = "",
     val id: String = "",
     val thumbnail: String = "",
@@ -34,23 +34,23 @@ data class KadoComiWork(
 )
 
 @Serializable
-data class KadoComiTag(
+class KadoComiTag(
     val name: String = "",
 )
 
 @Serializable
-data class KadoComiAuthor(
+class KadoComiAuthor(
     val name: String = "",
     val role: String = "",
 )
 
 @Serializable
-data class KadoComiEpisodesResult(
+class KadoComiEpisodesResult(
     val result: List<KadoComiEpisode> = emptyList(),
 )
 
 @Serializable
-data class KadoComiEpisode(
+class KadoComiEpisode(
     val id: String = "",
     val code: String = "",
     val title: String = "",
@@ -60,12 +60,12 @@ data class KadoComiEpisode(
 )
 
 @Serializable
-data class KadoComiEpisodeInternalInfo(
+class KadoComiEpisodeInternalInfo(
     val episodeNo: Int = 1,
 )
 
 @Serializable
-data class KadoComiManuscript(
+class KadoComiManuscript(
     val drmHash: String = "",
     val drmImageUrl: String = "",
 )
