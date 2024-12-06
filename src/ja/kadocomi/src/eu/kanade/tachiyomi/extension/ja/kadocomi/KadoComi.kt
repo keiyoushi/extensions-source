@@ -38,14 +38,11 @@ class KadoComi : HttpSource() {
     private val imageDescrambler: Interceptor = Interceptor { chain ->
         val request: Request = chain.request()
         val urlString = request.url.toString()
-        val isPage = urlString.contains("$cdnUrl/images/") && urlString.contains("&Key-Pair-Id=")
         val drmHash = request.url.fragment ?: ""
-
-        if (isPage) removeFragmentFromRequestUrl(request)
 
         val response: Response = chain.proceed(request)
 
-        if (isPage) {
+        if (urlString.contains("$cdnUrl/images/") && urlString.contains("&Key-Pair-Id=")) {
             val oldBody = response.body.bytes()
             val descrambled = descrambleImage(oldBody, drmHash.decodeHex())
             val newBody = descrambled.toResponseBody("image/jpeg".toMediaTypeOrNull())
@@ -57,14 +54,7 @@ class KadoComi : HttpSource() {
         }
     }
 
-    private val chapterUrlInterceptor: Interceptor = Interceptor { chain ->
-        val request: Request = chain.request()
-        if (request.url.toString().contains("$apiUrl/contents/viewer/")) removeFragmentFromRequestUrl(request)
-        chain.proceed(request)
-    }
-
     override val client = network.client.newBuilder()
-        .addNetworkInterceptor(chapterUrlInterceptor)
         .addNetworkInterceptor(imageDescrambler)
         .build()
 
@@ -279,10 +269,6 @@ class KadoComi : HttpSource() {
         return imageByteArray.mapIndexed { idx, byte ->
             byte xor hashByteArray[idx % hashByteArray.size]
         }.toByteArray()
-    }
-
-    private fun removeFragmentFromRequestUrl(request: Request): Request {
-        return request.newBuilder().url(request.url.toString().substringBeforeLast("#")).build()
     }
 
     private fun searchResultsParse(results: KadoComiSearchResultsDto): List<SManga> {
