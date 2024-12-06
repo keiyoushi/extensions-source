@@ -88,14 +88,14 @@ class KadoComi : HttpSource() {
         details.work.authors!!.forEach {
             when (it.role) {
                 in AUTHOR_ROLES -> {
-                    mangaAuthor = name
+                    mangaAuthor = it.name
                 }
                 in ARTIST_ROLES -> {
-                    mangaArtist = name
+                    mangaArtist = it.name
                 }
                 in COMBINED_ROLES -> {
-                    mangaAuthor = name
-                    mangaArtist = name
+                    mangaAuthor = it.name
+                    mangaArtist = it.name
                 }
             }
         }
