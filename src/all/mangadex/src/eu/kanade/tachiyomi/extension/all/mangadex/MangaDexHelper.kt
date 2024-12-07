@@ -283,12 +283,12 @@ class MangaDexHelper(lang: String) {
         coverFileName: String?,
         coverSuffix: String?,
         lang: String,
-        preferSourceLangTitle: Boolean,
+        preferExtensionLangTitle: Boolean,
     ): SManga = SManga.create().apply {
         url = "/manga/${mangaDataDto.id}"
         val titleMap = mangaDataDto.attributes!!.title
         val dirtyTitle =
-            titleMap[lang] ?: if (preferSourceLangTitle) {
+            titleMap[lang] ?: if (preferExtensionLangTitle) {
                 mangaDataDto.attributes.altTitles
                     .find { it[lang] !== null } // try use the source language
                     ?.values?.singleOrNull()
@@ -323,7 +323,7 @@ class MangaDexHelper(lang: String) {
         lang: String,
         coverSuffix: String?,
         altTitlesInDesc: Boolean,
-        preferSourceLangTitle: Boolean,
+        preferExtensionLangTitle: Boolean,
     ): SManga {
         val attr = mangaDataDto.attributes!!
 
@@ -383,7 +383,7 @@ class MangaDexHelper(lang: String) {
             }
         }
 
-        return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferSourceLangTitle).apply {
+        return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
             description = desc
             author = authors.joinToString()
             artist = artists.joinToString()

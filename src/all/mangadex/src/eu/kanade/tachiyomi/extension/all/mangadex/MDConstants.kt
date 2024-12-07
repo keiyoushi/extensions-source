@@ -138,9 +138,9 @@ object MDConstants {
         return "${altTitlesInDescPref}_$dexLang"
     }
 
-    private const val preferSourceLangTitlePref = "preferSourceLangTitle"
-    fun getPreferSourceLangTitlePrefKey(dexLang: String): String {
-        return "${preferSourceLangTitlePref}_$dexLang"
+    private const val preferExtensionLangTitlePref = "preferExtensionLangTitle"
+    fun getPreferExtensionLangTitlePrefKey(dexLang: String): String {
+        return "${preferExtensionLangTitlePref}_$dexLang"
     }
 
     private const val tagGroupContent = "content"
