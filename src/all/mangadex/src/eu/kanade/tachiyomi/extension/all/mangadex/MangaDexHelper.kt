@@ -275,6 +275,9 @@ class MangaDexHelper(lang: String) {
         return GET(tokenRequestUrl, headers, cacheControl)
     }
 
+    private fun List<Map<String, String>>.findTitleByLang(lang: String): String? =
+        firstOrNull { it[lang] != null }?.values?.singleOrNull()
+
     /**
      * Create a [SManga] from the JSON element with only basic attributes filled.
      */
@@ -286,24 +289,21 @@ class MangaDexHelper(lang: String) {
         preferExtensionLangTitle: Boolean,
     ): SManga = SManga.create().apply {
         url = "/manga/${mangaDataDto.id}"
-        val titleMap = mangaDataDto.attributes!!.title
-        val dirtyTitle =
-            titleMap[lang] ?: if (preferExtensionLangTitle) {
-                mangaDataDto.attributes.altTitles
-                    .find { it[lang] !== null } // try use the source language
-                    ?.values?.singleOrNull()
-                    ?: titleMap.values.firstOrNull() // fallback to the original language title
-                    ?: mangaDataDto.attributes.altTitles
-                        .find { it["en"] !== null } // if all else fails, try to find an english title
-                        ?.values?.singleOrNull()
-            } else {
-                titleMap.values.firstOrNull() // use literally anything from title as first resort
-                    ?: mangaDataDto.attributes.altTitles
-                        .find { (it[lang] ?: it["en"]) !== null }
-                        ?.values?.singleOrNull() // find something else from alt titles
-            }
 
-        title = dirtyTitle?.removeEntities().orEmpty()
+        val titleMap = mangaDataDto.attributes!!.title
+        title = with(mangaDataDto.attributes) {
+            titleMap[lang] ?: altTitles.run {
+                val mainTitle = titleMap.values.firstOrNull()
+                val langTitle = findTitleByLang(lang)
+                val enTitle = findTitleByLang("en")
+
+                if (preferExtensionLangTitle) {
+                    listOf(langTitle, mainTitle, enTitle)
+                } else {
+                    listOf(mainTitle, langTitle, enTitle)
+                }.firstNotNullOfOrNull { it }
+            }
+        }?.removeEntities().orEmpty()
 
         coverFileName?.let {
             thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
