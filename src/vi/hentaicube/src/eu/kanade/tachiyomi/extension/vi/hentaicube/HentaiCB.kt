@@ -10,8 +10,6 @@ class HentaiCB : Madara("CBHentai", "https://hentaicube.xyz", "vi", SimpleDateFo
 
     override val id: Long = 823638192569572166
 
-    override val mangaSubString = "read"
-
     override val filterNonMangaItems = false
 
     override fun pageListParse(document: Document): List<Page> {
