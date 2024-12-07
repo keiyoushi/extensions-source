@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga Koinu'
+    extClass = '.MangaKoinu'
+    themePkg = 'mccms'
+    baseUrl = 'https://www.mangakoinu.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
