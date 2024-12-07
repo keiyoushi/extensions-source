@@ -262,7 +262,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private fun basicInformationFromElement(element: Element): SManga {
         val manga = SManga.create()
         element.select("a").let {
-            manga.title = element.select("h3.title").text()
+            manga.title = element.selectFirst("h3.title")!!.text()
             manga.setUrlWithoutDomain(it.attr("href"))
         }
         element.select("a > figure.thumbnail > img").first()?.let {
@@ -378,59 +378,62 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("section.metadata").first()!!
         val AuthorName = when {
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Author) + td:nth-child(2) > a")
+            document.select(".metadata > table > tbody > tr > td:contains(Author) ~ td")
                 .isEmpty() -> "Tidak Diketahui"
-            else -> document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Author) + td:nth-child(2) > a")
+            else -> document.select(".metadata > table > tbody > tr > td:contains(Author) ~ td")
                 .joinToString { it.text() }
         }
         val GroupName = when {
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Group) + td:nth-child(2) > a")
+            document.select(".metadata > table > tbody > tr > td:contains(Group) ~ td")
                 .isEmpty() -> "Tidak Diketahui"
-            else -> document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Group) + td:nth-child(2) > a")
+            else -> document.select(".metadata > table > tbody > tr > td:contains(Group) ~ td")
                 .joinToString { it.text() }
         }
+        val AuthorParser = when {
+            AuthorName.isNullOrEmpty() || AuthorName == "Tidak Diketahui" -> GroupName.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" } ?: "Tidak Diketahui"
+            else -> AuthorName
+        }
         val CharacterName = when {
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Character) + td:nth-child(2) > a")
+            document.select(".metadata > table > tbody > tr > td:contains(Character) ~ td")
                 .isEmpty() -> "Tidak Diketahui"
-            else -> document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Character) + td:nth-child(2) > a")
+            else -> document.select(".metadata > table > tbody > tr > td:contains(Character) ~ td")
                 .joinToString { it.text() }
         }
         val SeriesName = when {
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.parodies > td:nth-child(2) > a")
+            document.select(".metadata > table > tbody > tr.parodies > td:nth-child(2) > a")
                 .isEmpty() -> "Tidak Diketahui"
-            else -> document.select("section.metadata > table:nth-child(2) > tbody > tr.parodies > td:nth-child(2) > a")
+            else -> document.select(".metadata > table > tbody > tr.parodies > td:nth-child(2) > a")
                 .joinToString { it.text() }
         }
         val SeriesParser = if ("Manhwa" in SeriesName) {
-            document.select("section.metadata > table:nth-child(2) > tbody > tr:nth-child(5) > td:nth-child(2)").text()
+            document.select(".metadata > table > tbody > tr:nth-child(5) > td:nth-child(2)").text()
         } else {
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.parodies > td:nth-child(2) > a").text()
+            document.select(".metadata > table > tbody > tr.parodies > td:nth-child(2) > a").text()
         }
         val AlternativeTitle = when {
-            document.select("section.metadata > h1.title > span.alter")
+            document.select(".metadata > h1.title > span.alter")
                 .isEmpty() -> "Tidak Diketahui"
-            else -> document.select("section.metadata > h1.title > span.alter")
+            else -> document.select(".metadata > h1.title > span.alter")
                 .joinToString { it.text() }
         }
         val manga = SManga.create()
         manga.description = when {
             document.select("section.metadata > div.pb-2 > p:nth-child(1)")
-                .isEmpty() -> "Tidak ada deskripsi yang tersedia bosque\n\nJudul Alternatif : $AlternativeTitle"
-            else -> (document.select("section.metadata > div.pb-2 > p:nth-child(1)").first()!!.text() + "\n\nJudul Alternatif : $AlternativeTitle")
+                .isEmpty() -> "Tidak ada deskripsi yang tersedia bosque\n\nJudul Alternatif : $AlternativeTitle\nGroup                 : $GroupName\nCharacter           : $CharacterName\nSeries                 : $SeriesParser"
+            else -> ((document.selectFirst("section.metadata > div.pb-2 > p:nth-child(1)")?.text() ?: "") + "\n\nJudul Alternatif : $AlternativeTitle\nSeries                 : $SeriesParser")
         }
         val genres = mutableListOf<String>()
         infoElement.select("div.tags > a").forEach { element ->
             val genre = element.text()
             genres.add(genre)
         }
-        manga.author = "Author : $AuthorName\nGroup  : $GroupName"
+        manga.author = "$AuthorParser"
         manga.genre = infoElement.select("div.tags > a").joinToString { it.text() }
         manga.status = parseStatus(
             document.select("section.metadata > table:nth-child(2) > tbody > tr:nth-child(1) > td:nth-child(2) > a")
                 .first()!!.text(),
         )
         manga.thumbnail_url = document.selectFirst("figure.thumbnail img")?.attr("src")
-        manga.artist = "Character : $CharacterName\nSeries       : $SeriesParser"
 
         return manga
     }
