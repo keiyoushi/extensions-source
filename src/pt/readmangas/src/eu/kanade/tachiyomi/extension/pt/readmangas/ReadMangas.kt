@@ -161,11 +161,7 @@ class ReadMangas() : HttpSource() {
                 }
 
             document.selectFirst("div.flex > div.inline-flex.items-center:last-child")?.text()?.let {
-                status = when (it.lowercase()) {
-                    "ongoing" -> SManga.ONGOING
-                    "hiatus" -> SManga.ON_HIATUS
-                    else -> SManga.UNKNOWN
-                }
+                status = it.toStatus()
             }
         }
     }
@@ -256,10 +252,7 @@ class ReadMangas() : HttpSource() {
                 title = it.title
                 thumbnail_url = it.thumbnailUrl
                 author = it.author
-                status = when (it.slug.lowercase()) {
-                    "ongoing" -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
+                status = it.status.toStatus()
                 url = "/title/${it.slug}#${it.id}"
             }
         }
@@ -272,6 +265,12 @@ class ReadMangas() : HttpSource() {
 
     private fun String.toDate() =
         try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
+
+    private fun String.toStatus() = when (lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "hiatus" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     @SuppressLint("SimpleDateFormat")
     companion object {

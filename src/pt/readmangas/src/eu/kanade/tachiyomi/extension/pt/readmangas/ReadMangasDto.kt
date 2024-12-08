@@ -5,25 +5,25 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 
 @Serializable
-data class WrapperResult<T>(
+class WrapperResult<T>(
     val result: Result<T>? = null,
 ) {
     @Serializable
-    data class Result<T>(val `data`: Data<T>)
+    class Result<T>(val `data`: Data<T>)
 
     @Serializable
-    data class Data<T>(val json: T)
+    class Data<T>(val json: T)
 }
 
 @Serializable
-data class MangaListDto(
+class MangaListDto(
     @JsonNames("items")
     val mangas: List<MangaDto>,
     val nextCursor: String?,
 )
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     val author: String,
     @SerialName("coverImage")
     val thumbnailUrl: String,
@@ -34,18 +34,16 @@ data class MangaDto(
 )
 
 @Serializable
-data class ChapterListDto(
-    val count: Int,
+class ChapterListDto(
     val currentPage: Int,
     val chapters: List<ChapterDto>,
-    val perPage: Int,
     val totalPages: Int,
 ) {
     fun hasNext() = currentPage < totalPages
 }
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val id: String,
     val title: String,
     val number: String,
