@@ -110,12 +110,12 @@ class SlimeRead : HttpSource() {
         // Handling a large manga list
         return Observable.just(popularMangeCache!!)
             .map { mangaPage ->
-                val (mangas) = mangaPage
+                val mangas = mangaPage.mangas
                 val pageSize = 15
 
                 currentSlice = (page - 1) * pageSize
 
-                val startIndex = min(mangas.size, currentSlice)
+                val startIndex = min(mangas.size - 1, currentSlice)
                 val endIndex = min(mangas.size, currentSlice + pageSize)
 
                 val slice = mangas.subList(startIndex, endIndex)
@@ -264,7 +264,7 @@ class SlimeRead : HttpSource() {
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        val FUNCTION_REGEX = """function\s*\(\)\s*\{(?:(?!function)[\s\S])*?slimeread\.com:8443[^\}]*\}""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        val FUNCTION_REGEX = """\{[^{]*slimeread\.com:8443[^}]*\}""".toRegex(RegexOption.DOT_MATCHES_ALL)
         val BASEURL_VAL_REGEX = """baseURL\s*:\s*(\w+)""".toRegex()
     }
 }

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Xs Scan'
+    extClass = '.XsScan'
+    themePkg = 'madara'
+    baseUrl = 'https://xsscan.xyz'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

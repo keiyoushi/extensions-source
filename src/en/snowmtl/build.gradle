@@ -1,0 +1,8 @@
+ext {
+    extName = 'Snow Machine Translations'
+    extClass = '.Snowmtl'
+    extVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

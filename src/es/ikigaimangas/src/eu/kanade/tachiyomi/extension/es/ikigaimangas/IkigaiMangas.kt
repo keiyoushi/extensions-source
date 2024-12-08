@@ -33,7 +33,12 @@ import kotlin.concurrent.thread
 
 class IkigaiMangas : HttpSource(), ConfigurableSource {
 
-    override val baseUrl = "https://ikigaimangas.com"
+    private val isCi = System.getenv("CI") == "true"
+
+    override val baseUrl get() = when {
+        isCi -> defaultBaseUrl
+        else -> preferences.getPrefBaseUrl()
+    }
 
     private val defaultBaseUrl: String = "https://lectorikigai.acamu.net"
 
@@ -42,10 +47,10 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         try {
             val initClient = network.cloudflareClient
             val headers = super.headersBuilder().build()
-            val document = initClient.newCall(GET(baseUrl, headers)).execute().asJsoup()
+            val document = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute().asJsoup()
             val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Nuevo dominio)")?.attr("on:click")
                 ?: preferences.getPrefBaseUrl()
-            val script = initClient.newCall(GET("$baseUrl/build/$scriptUrl", headers)).execute().body.string()
+            val script = initClient.newCall(GET("https://ikigaimangas.com/build/$scriptUrl", headers)).execute().body.string()
             val domain = script.substringAfter("window.open(\"").substringBefore("\"")
             val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
             val newDomain = "https://$host"

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -66,19 +67,20 @@ class WeebCentral : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.ifEmpty { getFilterList() }
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/search/data".toHttpUrl().newBuilder().apply {
             addQueryParameter("text", query)
             filterList.filterIsInstance<UriFilter>().forEach {
                 it.addToUri(this)
             }
             addQueryParameter("limit", FETCH_LIMIT.toString())
             addQueryParameter("offset", ((page - 1) * FETCH_LIMIT).toString())
+            addQueryParameter("display_mode", "Full Display")
         }.build()
 
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector(): String = "#search-results > article:not(#search-more-container)"
+    override fun searchMangaSelector(): String = "article:has(section)"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
@@ -88,7 +90,7 @@ class WeebCentral : ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaNextPageSelector(): String = "#search-more-container > button"
+    override fun searchMangaNextPageSelector(): String = "button"
 
     // =============================== Filters ==============================
 
@@ -130,10 +132,10 @@ class WeebCentral : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListSelector() = "a"
+    override fun chapterListSelector() = "a[x-data]"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        name = element.selectFirst("span.flex")!!.text()
+        name = element.selectFirst("span.flex > span")!!.text()
         setUrlWithoutDomain(element.attr("abs:href"))
         element.selectFirst("time[datetime]")?.also {
             date_upload = it.attr("datetime").parseDate()
@@ -148,6 +150,23 @@ class WeebCentral : ParsedHttpSource() {
         }
     }
     // =============================== Pages ================================
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val newUrl = (baseUrl + chapter.url)
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegment("images")
+            ?.addQueryParameter("is_prev", "False")
+            ?.addQueryParameter("reading_style", "long_strip")
+            ?.build()
+            ?.toString()
+            ?: (baseUrl + chapter.url)
+        return GET(newUrl, headers)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("section[x-data~=scroll] > img").mapIndexed { index, element ->

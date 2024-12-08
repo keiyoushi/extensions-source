@@ -22,8 +22,11 @@ import org.jsoup.select.Evaluator
 import rx.Observable
 
 open class MangaReader(
-    override val lang: String,
+    val language: Language,
 ) : MangaReader() {
+
+    override val lang = language.code
+
     override val name = "MangaReader"
 
     override val baseUrl = "https://mangareader.to"
@@ -33,10 +36,10 @@ open class MangaReader(
         .build()
 
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/filter?sort=latest-updated&language=$lang&page=$page", headers)
+        GET("$baseUrl/filter?sort=latest-updated&language=${language.infix}&page=$page", headers)
 
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/filter?sort=most-viewed&language=$lang&page=$page", headers)
+        GET("$baseUrl/filter?sort=most-viewed&language=${language.infix}&page=$page", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
@@ -47,7 +50,7 @@ open class MangaReader(
             }
         } else {
             urlBuilder.addPathSegment("filter").apply {
-                addQueryParameter("language", lang)
+                addQueryParameter("language", language.infix)
                 addQueryParameter("page", page.toString())
                 filters.ifEmpty(::getFilterList).forEach { filter ->
                     when (filter) {
@@ -142,7 +145,7 @@ open class MangaReader(
     override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
         val container = response.parseHtmlProperty().run {
             val type = if (isVolume) "volumes" else "chapters"
-            selectFirst(Evaluator.Id("$lang-$type")) ?: return emptyList()
+            selectFirst(Evaluator.Id("${language.chapterInfix}-$type")) ?: return emptyList()
         }
         return container.children()
     }

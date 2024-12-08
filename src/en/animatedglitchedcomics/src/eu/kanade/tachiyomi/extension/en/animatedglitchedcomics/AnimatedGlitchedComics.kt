@@ -1,16 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.animatedglitchedcomics
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.OkHttpClient
+import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
-class AnimatedGlitchedComics : MangaThemesia(
+class AnimatedGlitchedComics : Keyoapp(
     "Animated Glitched Comics",
-    "https://agscomics.com",
+    "https://agrcomics.com",
     "en",
-    mangaUrlDirectory = "/series",
 ) {
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
-        .build()
+    override val versionId = 2
 }

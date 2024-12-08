@@ -10,7 +10,7 @@ import java.util.Locale
 
 class DomalFansub : Madara(
     "Domal Fansub",
-    "https://domalfansub.com.tr",
+    "https://domalfansb.online",
     "tr",
     dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
 ) {

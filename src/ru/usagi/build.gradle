@@ -1,0 +1,10 @@
+ext {
+    extName = 'Usagi'
+    extClass = '.Usagi'
+    themePkg = 'grouple'
+    baseUrl = 'https://web.usagi.one'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

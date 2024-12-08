@@ -3,7 +3,7 @@ ext {
     extClass = '.Cocomic'
     themePkg = 'madara'
     baseUrl = 'https://cocomic.co'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

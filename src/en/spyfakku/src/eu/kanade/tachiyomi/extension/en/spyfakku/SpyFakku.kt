@@ -83,6 +83,10 @@ class SpyFakku : HttpSource() {
                         addQueryParameter("order", if (filter.state!!.ascending) "asc" else "desc")
                     }
 
+                    is SelectFilter -> {
+                        addQueryParameter("limit", filter.vals[filter.state])
+                    }
+
                     is TextFilter -> {
                         if (filter.state.isNotEmpty()) {
                             terms += filter.state.split(",").filter { it.isNotBlank() }.map { tag ->
@@ -101,11 +105,6 @@ class SpyFakku : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }
-        return GET(baseUrl + manga.url.substringBefore("?") + "/__data.json", headers)
-    }
-
     override fun getFilterList() = getFilters()
 
     // Details
@@ -118,8 +117,8 @@ class SpyFakku : HttpSource() {
     }
 
     private fun getAdditionals(data: List<JsonElement>): ShortHentai {
-        fun Collection<JsonElement>.getTags(): List<String> = this.map {
-            data[it.jsonPrimitive.int + 2].jsonPrimitive.content
+        fun Collection<JsonElement>.getTags(): List<Name> = this.map {
+            Name(data[it.jsonPrimitive.int + 2].jsonPrimitive.content, data[it.jsonPrimitive.int + 3].jsonPrimitive.content)
         }
         val hentaiIndexes = json.decodeFromJsonElement<HentaiIndexes>(data[1])
 
@@ -132,22 +131,14 @@ class SpyFakku : HttpSource() {
         val size = data[hentaiIndexes.size].jsonPrimitive.long
         val pages = data[hentaiIndexes.pages].jsonPrimitive.int
 
-        val circles = data[hentaiIndexes.circles].jsonArray.emptyToNull()?.getTags()
-        val publishers = data[hentaiIndexes.publishers].jsonArray.emptyToNull()?.getTags()
-        val magazines = data[hentaiIndexes.magazines].jsonArray.emptyToNull()?.getTags()
-        val events = data[hentaiIndexes.events].jsonArray.emptyToNull()?.getTags()
-        val parodies = data[hentaiIndexes.parodies].jsonArray.emptyToNull()?.getTags()
+        val tags = data[hentaiIndexes.tags].jsonArray.emptyToNull()?.getTags()
         return ShortHentai(
             hash = hash,
             thumbnail = thumbnail,
             description = description,
             released_at = released_at,
             created_at = created_at,
-            publishers = publishers,
-            circles = circles,
-            magazines = magazines,
-            parodies = parodies,
-            events = events,
+            tags = tags,
             size = size,
             pages = pages,
         )
@@ -159,62 +150,79 @@ class SpyFakku : HttpSource() {
     private fun Hentai.toSManga() = SManga.create().apply {
         title = this@toSManga.title
         url = "/g/$id?$pages&hash=$hash"
-        artist = artists?.joinToString()
-        genre = tags?.joinToString()
+        author = tags?.filter { it.namespace == "circle" }?.joinToString { it.name }
+        artist = tags?.filter { it.namespace == "artist" }?.joinToString { it.name }
+        genre = tags?.filter { it.namespace == "tag" }?.joinToString { it.name }
         thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
         status = SManga.COMPLETED
     }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        var response: Response = client.newCall(mangaDetailsRequest(manga)).execute()
-        var attempts = 0
-        while (attempts < 3 && response.code != 200) {
-            try {
-                response = client.newCall(mangaDetailsRequest(manga)).execute()
-            } catch (_: Exception) {
-            } finally {
-                attempts++
+        val response1: Response = client.newCall(mangaDetailsRequest(manga)).execute()
+        val add: ShortHentai
+
+        if (response1.isSuccessful) {
+            add = response1.parseAs<ShortHentai>()
+        } else {
+            var response: Response = client.newCall(mangaDetailsRequest(manga)).execute()
+            var attempts = 0
+            while (attempts < 3 && response.code != 200) {
+                try {
+                    response = client.newCall(mangaDetailsRequest(manga)).execute()
+                } catch (_: Exception) {
+                } finally {
+                    attempts++
+                }
             }
+            add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
         }
-        val add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+
         return Observable.just(
             manga.apply {
                 with(add) {
+                    val tags = tags?.groupBy { it.namespace }
+
                     url = "/g/$id?$pages&hash=$hash"
-                    author = (circles ?: listOf(manga.artist)).joinToString()
+                    author = (tags?.get("circle") ?: tags?.get("artist"))?.joinToString { it.name }
+                    artist = tags?.get("artist")?.joinToString { it.name }
                     thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
+                    genre = tags?.get("tag")?.joinToString { it.name }
                     this@apply.description = buildString {
                         description?.let {
                             append(it, "\n\n")
                         }
 
-                        circles?.emptyToNull()?.joinToString()?.let {
+                        tags?.get("circle")?.emptyToNull()?.joinToString { it.name }?.let {
                             append("Circles: ", it, "\n")
                         }
-                        publishers?.emptyToNull()?.joinToString()?.let {
+                        tags?.get("publisher")?.emptyToNull()?.joinToString { it.name }?.let {
                             append("Publishers: ", it, "\n")
                         }
-                        magazines?.emptyToNull()?.joinToString()?.let {
+                        tags?.get("magazine")?.emptyToNull()?.joinToString { it.name }?.let {
                             append("Magazines: ", it, "\n")
                         }
-                        events?.emptyToNull()?.joinToString()?.let {
+                        tags?.get("event")?.emptyToNull()?.joinToString { it.name }?.let {
                             append("Events: ", it, "\n\n")
                         }
-                        parodies?.emptyToNull()?.joinToString()?.let {
+                        tags?.get("parody")?.emptyToNull()?.joinToString { it.name }?.let {
                             append("Parodies: ", it, "\n")
                         }
                         append("Pages: ", pages, "\n\n")
 
                         try {
-                            releasedAtFormat.parse(released_at)?.let {
-                                append("Released: ", dateReformat.format(it.time), "\n")
+                            releasedAt?.let {
+                                releasedAtFormat.parse(it)?.let {
+                                    append("Released: ", dateReformat.format(it.time), "\n")
+                                }
                             }
                         } catch (_: Exception) {
                         }
 
                         try {
-                            createdAtFormat.parse(created_at)?.let {
-                                append("Added: ", dateReformat.format(it.time), "\n")
+                            createdAt?.let {
+                                createdAtFormat.parse(it)?.let {
+                                    append("Added: ", dateReformat.format(it.time), "\n")
+                                }
                             }
                         } catch (_: Exception) {
                         }
@@ -235,22 +243,39 @@ class SpyFakku : HttpSource() {
             },
         )
     }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }
+        return GET(baseApiUrl + manga.url.substringBefore("?"), headers)
+    }
+    private fun mangaDetailsRequest2(manga: SManga): Request {
+        manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }
+        return GET(baseUrl + manga.url.substringBefore("?") + "/__data.json", headers)
+    }
+
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("?")
 
     // Chapters
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        var response: Response = client.newCall(chapterListRequest(manga)).execute()
-        var attempts = 0
-        while (attempts < 3 && response.code != 200) {
-            try {
-                response = client.newCall(chapterListRequest(manga)).execute()
-            } catch (_: Exception) {
-            } finally {
-                attempts++
+        val response1: Response = client.newCall(chapterListRequest(manga)).execute()
+        val add: ShortHentai
+
+        if (response1.isSuccessful) {
+            add = response1.parseAs<ShortHentai>()
+        } else {
+            var response: Response = client.newCall(chapterListRequest2(manga)).execute()
+            var attempts = 0
+            while (attempts < 3 && response.code != 200) {
+                try {
+                    response = client.newCall(mangaDetailsRequest(manga)).execute()
+                } catch (_: Exception) {
+                } finally {
+                    attempts++
+                }
             }
+            add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
         }
-        val add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
         return Observable.just(
             listOf(
                 SChapter.create().apply {
@@ -267,13 +292,25 @@ class SpyFakku : HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore("?")
+
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+    private fun chapterListRequest2(manga: SManga) = mangaDetailsRequest2(manga)
+
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // Pages
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (!chapter.url.contains("&hash=") && !chapter.url.contains("?")) {
-            val response = client.newCall(pageListRequest(chapter)).execute()
+            val response1 = client.newCall(pageListRequest(chapter)).execute()
+            if (response1.isSuccessful) {
+                val hentai = response1.parseAs<Hentai>()
+                return Observable.just(
+                    List(hentai.pages) { index ->
+                        Page(index, imageUrl = "$baseImageUrl/${hentai.hash}/${index + 1}")
+                    },
+                )
+            }
+            val response = client.newCall(pageListRequest2(chapter)).execute()
             val add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
             return Observable.just(
                 List(add.pages) { index ->
@@ -293,8 +330,13 @@ class SpyFakku : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }
+        return GET(baseApiUrl + chapter.url.substringBefore("?"), headers)
+    }
+    private fun pageListRequest2(chapter: SChapter): Request {
+        chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }
         return GET(baseUrl + chapter.url.substringBefore("?") + "/__data.json", headers)
     }
+
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     // Others

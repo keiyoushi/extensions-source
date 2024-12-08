@@ -1,0 +1,8 @@
+ext {
+    extName = 'SchaleNetwork'
+    extClass = '.KoharuFactory'
+    extVersionCode = 11
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

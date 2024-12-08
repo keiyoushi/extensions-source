@@ -1,12 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.peachscan
 
 import android.annotation.SuppressLint
-import android.app.ActivityManager
-import android.app.Application
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Rect
-import android.util.Base64
+import eu.kanade.tachiyomi.lib.zipinterceptor.ZipInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -21,23 +16,16 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.zip.ZipInputStream
 
 @SuppressLint("WrongConstant")
 abstract class PeachScan(
@@ -53,7 +41,7 @@ abstract class PeachScan(
 
     override val client = network.cloudflareClient
         .newBuilder()
-        .addInterceptor(::zipImageInterceptor)
+        .addInterceptor(ZipInterceptor()::zipImageInterceptor)
         .build()
 
     private val json: Json by injectLazy()
@@ -190,90 +178,6 @@ abstract class PeachScan(
             .add("Referer", page.url)
             .build()
         return GET(page.imageUrl!!, imgHeaders)
-    }
-
-    private val dataUriRegex = Regex("""base64,([0-9a-zA-Z/+=\s]+)""")
-
-    private fun zipImageInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-        val filename = request.url.pathSegments.last()
-
-        if (request.url.fragment != "page" || !filename.contains(".zip")) {
-            return response
-        }
-
-        val zis = ZipInputStream(response.body.byteStream())
-
-        val images = generateSequence { zis.nextEntry }
-            .mapNotNull {
-                val entryName = it.name
-                val splitEntryName = entryName.split('.')
-                val entryIndex = splitEntryName.first().toInt()
-                val entryType = splitEntryName.last()
-
-                val imageData = if (entryType == "avif" || splitEntryName.size == 1) {
-                    zis.readBytes()
-                } else {
-                    val svgBytes = zis.readBytes()
-                    val svgContent = svgBytes.toString(Charsets.UTF_8)
-                    val b64 = dataUriRegex.find(svgContent)?.groupValues?.get(1)
-                        ?: return@mapNotNull null
-
-                    Base64.decode(b64, Base64.DEFAULT)
-                }
-
-                entryIndex to PeachScanUtils.decodeImage(imageData, isLowRamDevice, filename, entryName)
-            }
-            .sortedBy { it.first }
-            .toList()
-
-        zis.closeEntry()
-        zis.close()
-
-        val totalWidth = images.maxOf { it.second.width }
-        val totalHeight = images.sumOf { it.second.height }
-
-        val result = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
-
-        var dy = 0
-
-        images.forEach {
-            val srcRect = Rect(0, 0, it.second.width, it.second.height)
-            val dstRect = Rect(0, dy, it.second.width, dy + it.second.height)
-
-            canvas.drawBitmap(it.second, srcRect, dstRect, null)
-
-            dy += it.second.height
-        }
-
-        val output = ByteArrayOutputStream()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, output)
-
-        val image = output.toByteArray()
-        val body = image.toResponseBody("image/jpeg".toMediaType())
-
-        return response.newBuilder()
-            .body(body)
-            .build()
-    }
-
-    /**
-     * ActivityManager#isLowRamDevice is based on a system property, which isn't
-     * necessarily trustworthy. 1GB is supposedly the regular threshold.
-     *
-     * Instead, we consider anything with less than 3GB of RAM as low memory
-     * considering how heavy image processing can be.
-     */
-    private val isLowRamDevice by lazy {
-        val ctx = Injekt.get<Application>()
-        val activityManager = ctx.getSystemService("activity") as ActivityManager
-        val memInfo = ActivityManager.MemoryInfo()
-
-        activityManager.getMemoryInfo(memInfo)
-
-        memInfo.totalMem < 3L * 1024 * 1024 * 1024
     }
 
     companion object {
