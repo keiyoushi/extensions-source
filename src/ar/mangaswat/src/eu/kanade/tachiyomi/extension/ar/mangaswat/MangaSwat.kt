@@ -4,14 +4,23 @@ import android.app.Application
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
+import okhttp3.FormBody
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
@@ -35,13 +44,86 @@ class MangaSwat :
     }
 
     override val client = super.client.newBuilder()
+        .addInterceptor(::tokenInterceptor)
         .rateLimit(1)
         .build()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val filter = FilterList(OrderByFilter("", orderByFilterOptions, "added"))
+    // From Akuma - CSRF token
+    private var storedToken: String? = null
 
-        return searchMangaRequest(page, "", filter)
+    private fun tokenInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        if (request.method == "POST" && request.header("X-CSRF-TOKEN") == null) {
+            val newRequest = request.newBuilder()
+            val token = getToken()
+            val response = chain.proceed(
+                newRequest
+                    .addHeader("X-CSRF-TOKEN", token)
+                    .build(),
+            )
+
+            if (response.code == 419) {
+                response.close()
+                storedToken = null // reset the token
+                val newToken = getToken()
+                return chain.proceed(
+                    newRequest
+                        .addHeader("X-CSRF-TOKEN", newToken)
+                        .build(),
+                )
+            }
+
+            return response
+        }
+
+        val response = chain.proceed(request)
+
+        if (response.header("Content-Type")?.contains("text/html") != true) {
+            return response
+        }
+
+        storedToken = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
+            .selectFirst("head meta[name*=csrf-token]")
+            ?.attr("content")
+
+        return response
+    }
+
+    private fun getToken(): String {
+        if (storedToken.isNullOrEmpty()) {
+            val request = GET(baseUrl, headers)
+            client.newCall(request).execute().close() // updates token in interceptor
+        }
+        return storedToken!!
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val xhrHeaders = headersBuilder()
+            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        val formBody = FormBody.Builder()
+            .add("action", "more_manga_home")
+            .add("paged", (page - 1).toString())
+            .build()
+
+        return POST("$baseUrl/ajax-request", xhrHeaders, formBody)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        return json
+            .decodeFromString<MoreMangaHomeDto>(response.body.string())
+            .html.toResponseBody("text/html".toMediaType())
+            .let { response.newBuilder().body(it).build() }
+            .let { super.latestUpdatesParse(it) }
+            .let { page ->
+                MangasPage(
+                    mangas = page.mangas,
+                    hasNextPage = page.mangas.size >= 24, // info not present
+                )
+            }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -111,6 +193,11 @@ class MangaSwat :
     @Serializable
     class ReaderImageSource(
         val images: List<String>,
+    )
+
+    @Serializable
+    class MoreMangaHomeDto(
+        val html: String,
     )
 
     companion object {
