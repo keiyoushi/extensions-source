@@ -42,7 +42,7 @@ open class Wolf(
 
     // TODO
     override val baseUrl: String
-        get() = "https://wfwf355.com"
+        get() = "https://wfwf360.com"
 
     override val supportsLatest = true
 
@@ -230,7 +230,8 @@ open class Wolf(
             title = document.selectFirst(".text-box h1")!!.text()
             thumbnail_url = document.selectFirst(".img-box img")?.absUrl("src")
             description = document.selectFirst(".text-box .txt")?.text()
-            genre = document.selectFirst(".text-box .sub")?.ownText()?.replace("/", ", ")
+            genre = document.selectFirst(".text-box .sub:has(> strong:contains(장르))")?.ownText()?.replace("/", ", ")
+            author = document.selectFirst(".text-box .sub:has(> strong:contains(작가))")?.ownText()?.replace("/", ", ")
         }
     }
 
@@ -247,7 +248,7 @@ open class Wolf(
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        return document.select(".bbs-list a").map { el ->
+        return document.select(".webtoon-bbs-list a.view_open").map { el ->
             val chapUrl = el.absUrl("href").toHttpUrl()
             SChapter.create().apply {
                 url = json.encodeToString(
