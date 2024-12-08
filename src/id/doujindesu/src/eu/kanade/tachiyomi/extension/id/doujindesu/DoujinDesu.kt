@@ -379,7 +379,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         val infoElement = document.select("section.metadata").first()!!
         val AuthorName = when {
             infoElement.select("td:contains(Author) ~ td")
-                .isEmpty() -> "Tidak Diketahui"
+                .isEmpty() -> null
             else -> infoElement.select("td:contains(Author) ~ td")
                 .joinToString { it.text() }
         }
@@ -390,9 +390,10 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 .joinToString { it.text() }
         }
         val AuthorParser = when {
-            AuthorName.isNullOrEmpty() || AuthorName == "Tidak Diketahui" -> GroupName.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" } ?: "Tidak Diketahui"
+            AuthorName.isNullOrEmpty()
+                -> GroupName?.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" }
             else -> AuthorName
-        }
+        } ?: null
         val CharacterName = when {
             infoElement.select("td:contains(Character) ~ td")
                 .isEmpty() -> "Tidak Diketahui"
