@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.snowmtl
+package eu.kanade.tachiyomi.extension.all.snowmtl
 
 import android.graphics.Color
 import android.os.Build
@@ -18,13 +18,15 @@ import kotlinx.serialization.json.put
 class PageDto(
     @SerialName("img_url")
     val imageUrl: String,
-    @Serializable(with = TranslationsListSerializer::class)
-    val translations: List<Translation> = emptyList(),
+
+    @SerialName("translations")
+    @Serializable(with = DialogListSerializer::class)
+    val dialogues: List<Dialog> = emptyList(),
 )
 
 @Serializable
 @RequiresApi(Build.VERSION_CODES.O)
-class Translation(
+data class Dialog(
     val x1: Float,
     val y1: Float,
     val x2: Float,
@@ -55,12 +57,12 @@ class Translation(
     }
 }
 
-private object TranslationsListSerializer :
-    JsonTransformingSerializer<List<Translation>>(ListSerializer(Translation.serializer())) {
+private object DialogListSerializer :
+    JsonTransformingSerializer<List<Dialog>>(ListSerializer(Dialog.serializer())) {
     override fun transformDeserialize(element: JsonElement): JsonElement {
         return JsonArray(
             element.jsonArray.map { jsonElement ->
-                val (coordinates, text) = getCoordinatesAndCaption(jsonElement)
+                val (coordinates, text) = getCoordinatesAndDialog(jsonElement)
 
                 buildJsonObject {
                     put("x1", coordinates[0])
@@ -83,7 +85,7 @@ private object TranslationsListSerializer :
         )
     }
 
-    private fun getCoordinatesAndCaption(element: JsonElement): Pair<JsonArray, JsonElement> {
+    private fun getCoordinatesAndDialog(element: JsonElement): Pair<JsonArray, JsonElement> {
         return try {
             val arr = element.jsonArray
             arr[0].jsonArray to arr[1]

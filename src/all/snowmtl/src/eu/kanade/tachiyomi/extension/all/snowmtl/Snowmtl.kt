@@ -1,7 +1,11 @@
-package eu.kanade.tachiyomi.extension.en.snowmtl
+package eu.kanade.tachiyomi.extension.all.snowmtl
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import eu.kanade.tachiyomi.extension.all.snowmtl.enginetranslator.BingTranslator
+import eu.kanade.tachiyomi.extension.all.snowmtl.enginetranslator.TranslatorEngine
+import eu.kanade.tachiyomi.extension.all.snowmtl.interceptors.ComposedImageInterceptor
+import eu.kanade.tachiyomi.extension.all.snowmtl.interceptors.TranslationInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -24,21 +28,26 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-@RequiresApi(Build.VERSION_CODES.M)
-class Snowmtl : ParsedHttpSource() {
+@RequiresApi(Build.VERSION_CODES.O)
+class Snowmtl(
+    source: Source,
+) : ParsedHttpSource() {
 
     override val name = "Snow Machine Translations"
 
     override val baseUrl = "https://snowmtl.ru"
 
-    override val lang = "en"
+    override val lang = source.lang
 
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
+    private val translator: TranslatorEngine = BingTranslator(network.cloudflareClient, headers)
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .addInterceptor(TranslationInterceptor(source, translator))
         .addInterceptor(ComposedImageInterceptor(baseUrl, super.client))
         .build()
 
@@ -158,7 +167,9 @@ class Snowmtl : ParsedHttpSource() {
                 dto.imageUrl.startsWith("http") -> dto.imageUrl
                 else -> "https://${dto.imageUrl}"
             }
-            val fragment = json.encodeToString<List<Translation>>(dto.translations)
+            val fragment = json.encodeToString<List<Dialog>>(
+                dto.dialogues.filter { it.text.isNotBlank() },
+            )
             Page(index, imageUrl = "$imageUrl#$fragment")
         }
     }
@@ -203,6 +214,7 @@ class Snowmtl : ParsedHttpSource() {
     }
 
     companion object {
+        val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
         const val PREFIX_SEARCH = "id:"
         private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US)
     }
