@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.ko.wolfdotcom
 
+import android.app.Application
+import android.content.SharedPreferences
 import android.util.Log
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -18,12 +21,16 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.net.URLEncoder
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -40,15 +47,20 @@ open class Wolf(
 
     override val lang = "ko"
 
-    // TODO
     override val baseUrl: String
-        get() = "https://wfwf360.com"
+        get() = "https://wfwf$domainNumber.com"
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::domainNumberInterceptor)
+        .build()
 
     private val json: Json by injectLazy()
+
+    private val preference: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return fetchSearchManga(page, "", POPULAR)
@@ -294,30 +306,93 @@ open class Wolf(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        return
+        EditTextPreference(screen.context).apply {
+            key = PREF_DOMAIN_NUM
+            title = "도메인 번호"
+            setOnPreferenceChangeListener { _, newValue ->
+                val value = newValue as String
+                if (value.isEmpty() || value.toIntOrNull() == null) {
+                    false
+                } else {
+                    domainNumber = value.trim()
+                    false
+                }
+            }
+        }.also(screen::addPreference)
     }
+
+    private var domainNumber = ""
+        get() {
+            val currentValue = field
+            if (currentValue.isNotEmpty()) return currentValue
+
+            val prefValue = preference.getString(PREF_DOMAIN_NUM, "")!!
+
+            if (prefValue.isNotEmpty()) {
+                field = prefValue
+                return prefValue
+            }
+
+            return "359" // fallback
+        }
+        set(value) {
+            preference.edit().putString(PREF_DOMAIN_NUM, value).apply()
+
+            field = value
+        }
+
+    private fun domainNumberInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        val url = request.url.toString()
+
+        if (url.contains(domainRegex)) {
+            val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
+            val newUrl = document.selectFirst("""#pop-content a[href~=^https?://wfwf\d+\.com]""")
+                ?: return response
+
+            response.close()
+
+            val newDomainNum = domainRegex.find(newUrl.attr("href"))?.groupValues?.get(1)
+                ?: throw IOException("Failed to update domain number")
+
+            domainNumber = newDomainNum.trim()
+
+            return chain.proceed(
+                request.newBuilder()
+                    .url(
+                        request.url.newBuilder()
+                            .host(baseUrl.toHttpUrl().host)
+                            .build(),
+                    )
+                    .build(),
+            )
+        }
+
+        return response
+    }
+
+    private val domainRegex = Regex("""^https?://wfwf(\d+)\.com""")
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
     }
-
     override fun popularMangaParse(response: Response): MangasPage {
         throw UnsupportedOperationException()
     }
-
     override fun popularMangaRequest(page: Int): Request {
         throw UnsupportedOperationException()
     }
-
     override fun latestUpdatesParse(response: Response): MangasPage {
         throw UnsupportedOperationException()
     }
-
     override fun latestUpdatesRequest(page: Int): Request {
         throw UnsupportedOperationException()
     }
-
     override fun searchMangaParse(response: Response): MangasPage {
         throw UnsupportedOperationException()
     }
 }
+
+private const val PREF_DOMAIN_NUM = "domain_number"
