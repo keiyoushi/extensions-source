@@ -22,7 +22,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -137,19 +136,22 @@ abstract class GigaViewer(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val readableProductList = document.selectFirst("div.js-readable-product-list")!!
-        val firstListEndpoint = readableProductList.attr("data-first-list-endpoint")
-            .toHttpUrl()
-        val latestListEndpoint = readableProductList.attr("data-latest-list-endpoint")
-            .toHttpUrlOrNull() ?: firstListEndpoint
-        val numberSince = latestListEndpoint.queryParameter("number_since")!!.toFloat()
-            .coerceAtLeast(firstListEndpoint.queryParameter("number_since")!!.toFloat())
+        val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
 
         val newHeaders = headers.newBuilder()
             .set("Referer", response.request.url.toString())
             .build()
-        var readMoreEndpoint = firstListEndpoint.newBuilder()
-            .setQueryParameter("number_since", numberSince.toString())
+
+        var readMoreEndpoint = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("api")
+            .addPathSegment("viewer")
+            .addPathSegment("readable_products")
+            .addQueryParameter("aggregate_id", aggregateId)
+            .addQueryParameter("number_since", Int.MAX_VALUE.toString())
+            .addQueryParameter("number_until", "0")
+            .addQueryParameter("read_more_num", "150")
+            .addQueryParameter("type", "episode")
+            .build()
             .toString()
 
         val chapters = mutableListOf<SChapter>()
