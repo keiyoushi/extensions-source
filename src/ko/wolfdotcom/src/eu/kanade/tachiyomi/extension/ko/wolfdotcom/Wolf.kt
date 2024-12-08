@@ -333,7 +333,7 @@ open class Wolf(
                 return prefValue
             }
 
-            return "359" // fallback
+            return "360" // fallback
         }
         set(value) {
             preference.edit().putString(PREF_DOMAIN_NUM, value).apply()
