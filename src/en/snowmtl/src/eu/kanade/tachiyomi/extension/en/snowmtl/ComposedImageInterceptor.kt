@@ -32,7 +32,7 @@ import kotlin.math.sqrt
 // The Interceptor joins the captions and pages of the manga.
 @RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
-    private val baseUrl: String,
+    baseUrl: String,
     private val client: OkHttpClient,
 ) : Interceptor {
 
@@ -44,11 +44,16 @@ class ComposedImageInterceptor(
         "normal" to Pair<String, Typeface?>("$baseUrl/images/normal.ttf", null),
     )
 
+    private val imageRegex = Regex(
+        "$baseUrl.*?\\.(webp|png|jpg|jpeg)#\\[.*?]",
+        RegexOption.IGNORE_CASE,
+    )
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url.toString()
 
-        val isPageImageUrl = url.contains("${baseUrl.substringAfterLast("/")}/storage/", true)
+        val isPageImageUrl = imageRegex.containsMatchIn(url)
         if (isPageImageUrl.not()) {
             return chain.proceed(request)
         }
