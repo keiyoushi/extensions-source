@@ -390,8 +390,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 .joinToString { it.text() }
         }
         val AuthorParser = when {
-            AuthorName.isNullOrEmpty()
-                -> GroupName?.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" }
+            AuthorName.isNullOrEmpty() -> GroupName?.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" }
             else -> AuthorName
         } ?: null
         val CharacterName = when {
