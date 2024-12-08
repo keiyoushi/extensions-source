@@ -275,6 +275,9 @@ class MangaDexHelper(lang: String) {
         return GET(tokenRequestUrl, headers, cacheControl)
     }
 
+    private fun List<Map<String, String>>.findTitleByLang(lang: String): String? =
+        firstOrNull { it[lang] != null }?.values?.singleOrNull()
+
     /**
      * Create a [SManga] from the JSON element with only basic attributes filled.
      */
@@ -283,15 +286,24 @@ class MangaDexHelper(lang: String) {
         coverFileName: String?,
         coverSuffix: String?,
         lang: String,
+        preferExtensionLangTitle: Boolean,
     ): SManga = SManga.create().apply {
         url = "/manga/${mangaDataDto.id}"
+
         val titleMap = mangaDataDto.attributes!!.title
-        val dirtyTitle =
-            titleMap.values.firstOrNull() // use literally anything from title as first resort
-                ?: mangaDataDto.attributes.altTitles
-                    .find { (it[lang] ?: it["en"]) !== null }
-                    ?.values?.singleOrNull() // find something else from alt titles
-        title = dirtyTitle?.removeEntities().orEmpty()
+        title = with(mangaDataDto.attributes) {
+            titleMap[lang] ?: altTitles.run {
+                val mainTitle = titleMap.values.firstOrNull()
+                val langTitle = findTitleByLang(lang)
+                val enTitle = findTitleByLang("en")
+
+                if (preferExtensionLangTitle) {
+                    listOf(langTitle, mainTitle, enTitle)
+                } else {
+                    listOf(mainTitle, langTitle, enTitle)
+                }.firstNotNullOfOrNull { it }
+            }
+        }?.removeEntities().orEmpty()
 
         coverFileName?.let {
             thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
@@ -311,6 +323,7 @@ class MangaDexHelper(lang: String) {
         lang: String,
         coverSuffix: String?,
         altTitlesInDesc: Boolean,
+        preferExtensionLangTitle: Boolean,
     ): SManga {
         val attr = mangaDataDto.attributes!!
 
@@ -370,7 +383,7 @@ class MangaDexHelper(lang: String) {
             }
         }
 
-        return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang).apply {
+        return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
             description = desc
             author = authors.joinToString()
             artist = artists.joinToString()
