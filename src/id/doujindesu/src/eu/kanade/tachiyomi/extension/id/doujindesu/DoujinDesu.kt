@@ -421,7 +421,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             val genre = element.text()
             genres.add(genre)
         }
-        manga.author = "$AuthorParser"
+        manga.author = AuthorParser
         manga.genre = infoElement.select("div.tags > a").joinToString { it.text() }
         manga.status = parseStatus(
             infoElement.select("td:contains(Status) ~ td").first()!!.text(),
