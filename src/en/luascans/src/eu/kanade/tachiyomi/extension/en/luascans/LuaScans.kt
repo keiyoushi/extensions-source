@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
 class LuaScans : Keyoapp(
     "Lua Scans",
-    "https://luacomic.net",
+    "https://luacomic.org",
     "en",
 ) {
     // migrated from MangaThemesia to Keyoapp
