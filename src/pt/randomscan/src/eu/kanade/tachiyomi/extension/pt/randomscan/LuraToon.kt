@@ -3,11 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.randomscan
 import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Capitulo
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.CapituloPagina
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.MainPage
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Manga
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.SearchResponse
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
@@ -25,6 +20,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
+import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -36,10 +32,15 @@ import java.util.TimeZone
 import kotlin.getValue
 
 class LuraToon : HttpSource(), ConfigurableSource {
+
     override val baseUrl = "https://luratoons.net"
+
     override val name = "Lura Toon"
+
     override val lang = "pt-BR"
+
     override val supportsLatest = true
+
     override val versionId = 2
 
     private val json: Json by injectLazy()
@@ -59,40 +60,30 @@ class LuraToon : HttpSource(), ConfigurableSource {
         )
         .build()
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
+    // ============================== Popular =============================
+
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/api/autocomplete/$query", headers)
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
-    override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
-    }
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.parseAs<MainPageDTO>()
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val data = response.parseAs<Manga>()
-        title = data.titulo
-        author = data.autor
-        artist = data.artista
-        genre = data.generos.joinToString(", ") { it.name }
-        status = when (data.status) {
-            "Em Lançamento" -> SManga.ONGOING
-            "Finalizado" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+        val mangas = document.top_10.map {
+            SManga.create().apply {
+                title = it.title
+                thumbnail_url = "$baseUrl${it.capa}"
+                setUrlWithoutDomain("/${it.slug}/")
+            }
         }
-        thumbnail_url = "$baseUrl${data.capa}"
 
-        val category = data.tipo
-        val synopsis = data.sinopse
-        description = "Tipo: $category\n\n$synopsis"
+        return MangasPage(mangas, false)
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString<T>(body.string())
-    }
+    // ============================== Latest =============================
+
+    override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.parseAs<MainPage>()
+        val document = response.parseAs<MainPageDTO>()
 
         val mangas = document.lancamentos.map {
             SManga.create().apply {
@@ -105,46 +96,12 @@ class LuraToon : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, document.lancamentos.isNotEmpty())
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
-            .asObservable()
-            .map { response ->
-                chapterListParse(manga, response)
-            }
-    }
+    // ============================== Search ==============================
 
-    fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
-        if (response.code == 404) {
-            throw Exception("Capitulos não encontrados, tente migrar o manga, alguns nomes da LuraToon mudaram")
-        }
-
-        val comics = response.parseAs<Manga>()
-
-        return comics.caps.sortedByDescending {
-            it.num
-        }.map { chapterFromElement(manga, it) }
-    }
-
-    private fun chapterFromElement(manga: SManga, capitulo: Capitulo) = SChapter.create().apply {
-        val capSlug = capitulo.slug.trimStart('/')
-        val mangaUrl = manga.url.trimEnd('/').trimStart('/')
-        setUrlWithoutDomain("/api/obra/$mangaUrl/$capSlug")
-        name = capitulo.num.toString().removeSuffix(".0")
-        date_upload = runCatching {
-            dateFormat.parse(capitulo.data)!!.time
-        }.getOrDefault(0L)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val capitulo = response.parseAs<CapituloPagina>()
-        val pathSegments = response.request.url.pathSegments
-        return (0 until capitulo.files).map { i ->
-            Page(i, baseUrl, "$baseUrl/api/cap-download/${capitulo.obra.id}/${capitulo.id}/$i?obra_id=${capitulo.obra.id}&cap_id=${capitulo.id}&slug=${pathSegments[2]}&cap_slug=${pathSegments[3]}")
-        }
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/api/autocomplete/$query", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<SearchResponse>().obras.map {
+        val mangas = response.parseAs<SearchResponseDTO>().obras.map {
             SManga.create().apply {
                 title = it.titulo
                 thumbnail_url = "$baseUrl${it.capa}"
@@ -155,18 +112,93 @@ class LuraToon : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, false)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.parseAs<MainPage>()
+    // ============================== Details =============================
 
-        val mangas = document.top_10.map {
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        return response.parseAs<MangaDTO>().let { data ->
             SManga.create().apply {
-                title = it.title
-                thumbnail_url = "$baseUrl${it.capa}"
-                setUrlWithoutDomain("/${it.slug}/")
+                title = data.titulo
+                author = data.autor
+                artist = data.artista
+                genre = data.generos.joinToString(", ") { it.name }
+                status = when (data.status) {
+                    "Em Lançamento" -> SManga.ONGOING
+                    "Finalizado" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+                thumbnail_url = "$baseUrl${data.capa}"
+
+                val category = data.tipo
+                val synopsis = data.sinopse
+                description = "Tipo: $category\n\n$synopsis"
             }
         }
+    }
 
-        return MangasPage(mangas, false)
+    // ============================== Chapters =============================
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return client.newCall(chapterListRequest(manga))
+            .asObservable()
+            .map { response ->
+                chapterListParse(manga, response)
+            }
+    }
+
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+
+    fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
+        if (response.code == 404) {
+            throw Exception("Capitulos não encontrados, tente migrar o manga, alguns nomes da LuraToon mudaram")
+        }
+
+        val comics = response.parseAs<MangaDTO>()
+
+        return comics.caps.sortedByDescending {
+            it.num
+        }.map { chapterFromElement(manga, it) }
+    }
+
+    private fun chapterFromElement(manga: SManga, capitulo: CapituloDTO) = SChapter.create().apply {
+        val capSlug = capitulo.slug.trimStart('/')
+        val mangaUrl = manga.url.trimEnd('/').trimStart('/')
+        setUrlWithoutDomain("/api/484d2a13/$mangaUrl/$capSlug") // api/484d2a13/slug_obra/slug
+        name = capitulo.num.toString().removeSuffix(".0")
+        date_upload = runCatching {
+            dateFormat.parse(capitulo.data)!!.time
+        }.getOrDefault(0L)
+    }
+
+    // ============================== Pages ===============================
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun pageListParse(response: Response): List<Page> {
+        val capitulo = response.parseAs<CapituloPagina>()
+        val pathSegments = response.request.url.pathSegments
+        return (0 until capitulo.files).map { i ->
+            Page(i, baseUrl, "$baseUrl/api/cap-download/${capitulo.obra.id}/${capitulo.id}/$i?obra_id=${capitulo.obra.id}&cap_id=${capitulo.id}&slug=${pathSegments[2]}&cap_slug=${pathSegments[3]}")
+        }
+    }
+
+    // ============================== Utils ===============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
+    }
+
+    private inline fun <reified T> Response.parseAs(): T {
+        return json.decodeFromString<T>(body.string())
     }
 
     private fun loggedVerifyInterceptor(chain: Interceptor.Chain): Response {
@@ -184,8 +216,4 @@ class LuraToon : HttpSource(), ConfigurableSource {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply {
         timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 }
