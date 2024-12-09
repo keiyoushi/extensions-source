@@ -1,21 +1,21 @@
-package eu.kanade.tachiyomi.extension.pt.randomscan.dto
+package eu.kanade.tachiyomi.extension.pt.randomscan
 
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Genero(
+class GeneroDTO(
     val name: String,
 )
 
 @Serializable
-data class Capitulo(
+class CapituloDTO(
     val num: Double,
     val data: String,
     val slug: String,
 )
 
 @Serializable
-data class Manga(
+class MangaDTO(
     val capa: String,
     val titulo: String,
     val autor: String?,
@@ -23,43 +23,43 @@ data class Manga(
     val status: String,
     val sinopse: String,
     val tipo: String,
-    val generos: List<Genero>,
-    val caps: List<Capitulo>,
+    val generos: List<GeneroDTO>,
+    val caps: List<CapituloDTO>,
 )
 
 @Serializable
-data class Obra(
+class ObraDTO(
     val id: Int,
 )
 
 @Serializable
-data class CapituloPagina(
+class CapituloPaginaDTO(
     val id: Int,
-    val obra: Obra,
+    val obra: ObraDTO,
     val files: Int,
 )
 
 @Serializable
-data class MainPageManga(
+class MainPageMangaDTO(
     val title: String,
     val capa: String,
     val slug: String,
 )
 
 @Serializable
-data class MainPage(
-    val lancamentos: List<MainPageManga>,
-    val top_10: List<MainPageManga>,
+class MainPageDTO(
+    val lancamentos: List<MainPageMangaDTO>,
+    val top_10: List<MainPageMangaDTO>,
 )
 
 @Serializable
-data class SearchResponseManga(
+class SearchResponseMangaDTO(
     val titulo: String,
     val capa: String,
     val slug: String,
 )
 
 @Serializable
-data class SearchResponse(
-    val obras: List<SearchResponseManga>,
+class SearchResponseDTO(
+    val obras: List<SearchResponseMangaDTO>,
 )
