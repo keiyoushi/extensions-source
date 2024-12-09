@@ -105,7 +105,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
             SManga.create().apply {
                 title = it.titulo
                 thumbnail_url = "$baseUrl${it.capa}"
-                setUrlWithoutDomain("/${it.slug}/")
+                url = "/${it.slug}/"
             }
         }
 
@@ -172,7 +172,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
     private fun chapterFromElement(manga: SManga, capitulo: CapituloDTO) = SChapter.create().apply {
         val capSlug = capitulo.slug.trimStart('/')
         val mangaUrl = manga.url.trimEnd('/').trimStart('/')
-        setUrlWithoutDomain("/api/484d2a13/$mangaUrl/$capSlug") // api/484d2a13/slug_obra/slug
+        url = "$mangaUrl/$capSlug"
         name = capitulo.num.toString().removeSuffix(".0")
         date_upload = runCatching {
             dateFormat.parse(capitulo.data)!!.time
