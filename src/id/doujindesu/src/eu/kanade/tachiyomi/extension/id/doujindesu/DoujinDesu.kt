@@ -424,7 +424,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         manga.author = AuthorParser
         manga.genre = infoElement.select("div.tags > a").joinToString { it.text() }
         manga.status = parseStatus(
-            infoElement.select("td:contains(Status) ~ td").first()!!.text(),
+            infoElement.selectFirst("td:contains(Status) ~ td")!!.text(),
         )
         manga.thumbnail_url = document.selectFirst("figure.thumbnail img")?.attr("src")
 
