@@ -55,13 +55,18 @@ class TranslationInterceptor(
             translator.translate(source.origin, source.target, token).split(delimiter)
         }
 
-        return tokens.mapNotNull { token ->
-            val list = token.parseAs<List<String>>()
-            val key = list.first()
-            val text = list.last()
+        return replaceDialoguesWithTranslations(tokens, mapping)
+    }
 
-            mapping[key]?.second?.dialog?.copy(text = text)
-        }
+    private fun replaceDialoguesWithTranslations(
+        tokens: List<String>,
+        mapping: Map<String, Pair<String, AssociatedDialog>>,
+    ) = tokens.mapNotNull { token ->
+        val list = token.parseAs<List<String>>()
+        val key = list.first()
+        val text = list.last()
+
+        mapping[key]?.second?.dialog?.copy(text = text)
     }
 
     /**

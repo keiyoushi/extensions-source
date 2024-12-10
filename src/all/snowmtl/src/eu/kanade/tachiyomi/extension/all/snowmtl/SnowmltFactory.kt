@@ -15,5 +15,7 @@ data class Source(val lang: String, val target: String = lang, val origin: Strin
 private val languageList = listOf(
     Source("en"),
     Source("es"),
+    Source("id"),
+    Source("it"),
     Source("pt-BR", "pt"),
 )
