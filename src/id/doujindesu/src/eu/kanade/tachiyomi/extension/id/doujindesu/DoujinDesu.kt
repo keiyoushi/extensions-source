@@ -391,7 +391,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             groupName?.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" }
         } else {
             authorName
-        } ?: null
+        }
         val characterName = if (infoElement.select("td:contains(Character) ~ td").isEmpty()) {
             "Tidak Diketahui"
         } else {
