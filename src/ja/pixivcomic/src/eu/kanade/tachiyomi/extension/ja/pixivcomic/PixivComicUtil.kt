@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.pixivcomic
 
+import android.annotation.SuppressLint
 import android.os.Build
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -9,8 +10,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.abs
-
-private const val TIME_SALT = "M7w5HORvvX-VP4tRj2CFQOQFPocBqLvHTIbhTU36UCo"
 
 private class NoSuchTagException(message: String) : Exception(message)
 
@@ -38,7 +37,7 @@ internal fun randomString(): String {
 }
 
 @OptIn(ExperimentalUnsignedTypes::class)
-internal fun getTimeAndHash(): Pair<String, String> {
+internal fun getTimeAndHash(salt: String): Pair<String, String> {
     val timeFormatted = if (Build.VERSION.SDK_INT < 24) {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).format(Date())
             .plus(getCurrentTimeZoneOffsetString())
@@ -46,7 +45,7 @@ internal fun getTimeAndHash(): Pair<String, String> {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH).format(Date())
     }
 
-    val saltedTimeArray = timeFormatted.plus(TIME_SALT).toByteArray()
+    val saltedTimeArray = timeFormatted.plus(salt).toByteArray()
     val saltedTimeHash = MessageDigest.getInstance("SHA-256")
         .digest(saltedTimeArray).toUByteArray()
     val hexadecimalTimeHash = saltedTimeHash.joinToString("") {
@@ -63,6 +62,7 @@ internal fun getTimeAndHash(): Pair<String, String> {
 /**
  * workaround to retrieve time zone offset for android with version lower than 24
  */
+@SuppressLint("DefaultLocale")
 private fun getCurrentTimeZoneOffsetString(): String {
     val timeZone = TimeZone.getDefault()
     val offsetInMillis = timeZone.rawOffset
