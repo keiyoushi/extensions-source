@@ -8,8 +8,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -37,10 +41,6 @@ class PixivComic : HttpSource() {
      */
     private val key by lazy {
         randomString()
-    }
-
-    private val timeAndHash by lazy {
-        getTimeAndHash()
     }
 
     override val client = network.cloudflareClient.newBuilder()
@@ -244,12 +244,17 @@ class PixivComic : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
+        val doc = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
+        val salt = doc.selectFirst("script#__NEXT_DATA__")!!.data().let {
+            json.decodeFromString<JsonElement>(it).jsonObject["props"]!!.jsonObject["pageProps"]!!
+                .jsonObject["salt"]!!.jsonPrimitive.content
+        }
         val url = apiBuilder()
             .addPathSegment("episodes")
             .addPathSegment(chapter.url)
             .addPathSegment("read_v4")
             .build()
-
+        val timeAndHash = getTimeAndHash(salt)
         val header = headers.newBuilder()
             .add("X-Client-Time", timeAndHash.first)
             .add("X-Client-Hash", timeAndHash.second)
