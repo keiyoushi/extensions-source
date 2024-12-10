@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.enginetranslator
+package eu.kanade.tachiyomi.extension.all.snowmtl.translator
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -25,8 +25,10 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
 
     private val tokens: TokenGroup by lazy { loadTokens() }
 
+    override val capacity: Int = MAX_CHARS_ALLOW
+
     override fun translate(from: String, to: String, text: String): String {
-        if (text.length > MAX_CHARS_ALLOW) {
+        if (text.length > capacity) {
             throw Exception("Translator capacity exceed")
         }
 

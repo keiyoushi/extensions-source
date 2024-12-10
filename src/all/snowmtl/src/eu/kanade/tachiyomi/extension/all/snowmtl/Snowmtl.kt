@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.all.snowmtl
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import eu.kanade.tachiyomi.extension.all.snowmtl.enginetranslator.BingTranslator
-import eu.kanade.tachiyomi.extension.all.snowmtl.enginetranslator.TranslatorEngine
 import eu.kanade.tachiyomi.extension.all.snowmtl.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.extension.all.snowmtl.interceptors.TranslationInterceptor
+import eu.kanade.tachiyomi.extension.all.snowmtl.translator.BingTranslator
+import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -27,6 +27,7 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 @RequiresApi(Build.VERSION_CODES.O)
 class Snowmtl(
@@ -43,7 +44,11 @@ class Snowmtl(
 
     private val json: Json by injectLazy()
 
-    private val translator: TranslatorEngine = BingTranslator(network.cloudflareClient, headers)
+    private val translatorClient = network.cloudflareClient.newBuilder()
+        .rateLimit(1, 3, TimeUnit.SECONDS)
+        .build()
+
+    private val translator: TranslatorEngine = BingTranslator(translatorClient, headers)
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
