@@ -376,52 +376,62 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     // Detail Parse
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("section.metadata").first()!!
-        val AuthorName = when {
-            infoElement.select("td:contains(Author) ~ td")
-                .isEmpty() -> null
-            else -> infoElement.select("td:contains(Author) ~ td")
-                .joinToString { it.text() }
+        val infoElement = document.selectFirst("section.metadata")!!
+        val authorName = if (infoElement.select("td:contains(Author) ~ td").isEmpty()) {
+            null
+        } else {
+            infoElement.select("td:contains(Author) ~ td").joinToString { it.text() }
         }
-        val GroupName = when {
-            infoElement.select("td:contains(Group) ~ td")
-                .isEmpty() -> "Tidak Diketahui"
-            else -> infoElement.select("td:contains(Group) ~ td")
-                .joinToString { it.text() }
+        val groupName = if (infoElement.select("td:contains(Group) ~ td").isEmpty()) {
+            "Tidak Diketahui"
+        } else {
+            infoElement.select("td:contains(Group) ~ td").joinToString { it.text() }
         }
-        val AuthorParser = when {
-            AuthorName.isNullOrEmpty() -> GroupName?.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" }
-            else -> AuthorName
+        val authorParser = if (authorName.isNullOrEmpty()) {
+            groupName?.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" }
+        } else {
+            authorName
         } ?: null
-        val CharacterName = when {
-            infoElement.select("td:contains(Character) ~ td")
-                .isEmpty() -> "Tidak Diketahui"
-            else -> infoElement.select("td:contains(Character) ~ td")
-                .joinToString { it.text() }
+        val characterName = if (infoElement.select("td:contains(Character) ~ td").isEmpty()) {
+            "Tidak Diketahui"
+        } else {
+            infoElement.select("td:contains(Character) ~ td").joinToString { it.text() }
         }
-        val SeriesParser = if (infoElement.select("td:contains(Series) ~ td").text() == "Manhwa") {
+        val seriesParser = if (infoElement.select("td:contains(Series) ~ td").text() == "Manhwa") {
             infoElement.select("td:contains(Serialization) ~ td").text()
         } else {
             infoElement.select("td:contains(Series) ~ td").text()
         }
-        val AlternativeTitle = when {
-            infoElement.select("h1.title > span.alter")
-                .isEmpty() -> "Tidak Diketahui"
-            else -> infoElement.select("h1.title > span.alter")
-                .joinToString { it.text() }
+        val alternativeTitle = if (infoElement.select("h1.title > span.alter").isEmpty()) {
+            "Tidak Diketahui"
+        } else {
+            infoElement.select("h1.title > span.alter").joinToString { it.text() }
         }
         val manga = SManga.create()
-        manga.description = when {
-            infoElement.select("div.pb-2 > p:nth-child(1)")
-                .isEmpty() -> "Tidak ada deskripsi yang tersedia bosque\n\nJudul Alternatif : $AlternativeTitle\nGroup                 : $GroupName\nCharacter           : $CharacterName\nSeries                 : $SeriesParser"
-            else -> ((infoElement.selectFirst("div.pb-2 > p:nth-child(1)")?.text() ?: "") + "\n\nJudul Alternatif : $AlternativeTitle\nSeries                 : $SeriesParser")
+        manga.description = if (infoElement.select("div.pb-2 > p:nth-child(1)").isEmpty()) {
+            """
+            Tidak ada deskripsi yang tersedia bosque
+
+            Judul Alternatif : $alternativeTitle
+            Group            : $groupName
+            Character        : $characterName
+            Series           : $seriesParser
+            """.trimIndent()
+        } else {
+            val showDescription = infoElement.selectFirst("div.pb-2 > p:nth-child(1)")?.text() ?: ""
+            """
+            $showDescription
+
+            Judul Alternatif : $alternativeTitle
+            Series           : $seriesParser
+            """.trimIndent()
         }
         val genres = mutableListOf<String>()
         infoElement.select("div.tags > a").forEach { element ->
             val genre = element.text()
             genres.add(genre)
         }
-        manga.author = AuthorParser
+        manga.author = authorParser
         manga.genre = infoElement.select("div.tags > a").joinToString { it.text() }
         manga.status = parseStatus(
             infoElement.selectFirst("td:contains(Status) ~ td")!!.text(),
