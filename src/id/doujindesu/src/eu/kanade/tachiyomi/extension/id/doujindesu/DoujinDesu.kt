@@ -413,9 +413,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             Tidak ada deskripsi yang tersedia bosque
 
             Judul Alternatif : $alternativeTitle
-            Group            : $groupName
-            Character        : $characterName
-            Series           : $seriesParser
+            Grup             : $groupName
+            Karakter         : $characterName
+            Seri             : $seriesParser
             """.trimIndent()
         } else {
             val showDescription = infoElement.selectFirst("div.pb-2 > p:nth-child(1)")!!.text()
@@ -423,7 +423,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             $showDescription
 
             Judul Alternatif : $alternativeTitle
-            Series           : $seriesParser
+            Seri             : $seriesParser
             """.trimIndent()
         }
         val genres = mutableListOf<String>()
