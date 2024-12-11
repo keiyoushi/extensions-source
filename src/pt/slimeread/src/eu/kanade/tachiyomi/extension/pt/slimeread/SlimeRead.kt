@@ -264,7 +264,7 @@ class SlimeRead : HttpSource() {
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        val FUNCTION_REGEX = """function\s*\(\)\s*\{(?:(?!function)[\s\S])*?slimeread\.com:8443[^\}]*\}""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        val FUNCTION_REGEX = """\{[^{]*slimeread\.com:8443[^}]*\}""".toRegex(RegexOption.DOT_MATCHES_ALL)
         val BASEURL_VAL_REGEX = """baseURL\s*:\s*(\w+)""".toRegex()
     }
 }

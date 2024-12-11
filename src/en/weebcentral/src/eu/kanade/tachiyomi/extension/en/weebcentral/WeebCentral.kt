@@ -160,10 +160,12 @@ class WeebCentral : ParsedHttpSource() {
             ?.addQueryParameter("reading_style", "long_strip")
             ?.build()
             ?.toString()
-            ?: chapter.url
+            ?: (baseUrl + chapter.url)
+        return GET(newUrl, headers)
+    }
 
-        chapter.setUrlWithoutDomain(newUrl)
-        return super.pageListRequest(chapter)
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url
     }
 
     override fun pageListParse(document: Document): List<Page> {

@@ -1,8 +1,0 @@
-ext {
-    extName = 'ColoredManga'
-    extClass = '.ColoredManga'
-    extVersionCode = 36
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

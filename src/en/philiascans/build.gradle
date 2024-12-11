@@ -1,0 +1,9 @@
+ext {
+    extName = 'Philia Scans'
+    extClass = '.PhiliaScans'
+    themePkg = 'iken'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
