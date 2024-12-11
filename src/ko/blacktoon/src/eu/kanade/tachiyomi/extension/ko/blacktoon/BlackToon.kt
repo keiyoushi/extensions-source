@@ -19,16 +19,16 @@ import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 import kotlin.random.Random
 
-class BlackToon : HttpSource() {
+class Happytoon01 : HttpSource() {
 
-    override val name = "블랙툰"
+    override val name = "해피툰"
 
     override val lang = "ko"
 
     private var currentBaseUrlHost = ""
-    override val baseUrl = "https://blacktoon.me"
+    override val baseUrl = "https://happytoon01.com/"
 
-    private val cdnUrl = "https://blacktoonimg.com/"
+    private val cdnUrl = "https://happytoon01.com//"
 
     override val supportsLatest = true
 
