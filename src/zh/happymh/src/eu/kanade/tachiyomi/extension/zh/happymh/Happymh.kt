@@ -193,10 +193,9 @@ class Happymh : HttpSource(), ConfigurableSource {
             .map { it.flatten().sortedByDescending { chapter -> chapter.chapter_number } }
             .map {
                 // remove order mark
-                it.forEach { chapter ->
+                it.onEach { chapter ->
                     chapter.chapter_number = 0f
                 }
-                it
             }
     }
 
