@@ -418,7 +418,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             Series           : $seriesParser
             """.trimIndent()
         } else {
-            val showDescription = infoElement.selectFirst("div.pb-2 > p:nth-child(1)")?.text() ?: ""
+            val showDescription = infoElement.selectFirst("div.pb-2 > p:nth-child(1)")!!.text()
             """
             $showDescription
 
