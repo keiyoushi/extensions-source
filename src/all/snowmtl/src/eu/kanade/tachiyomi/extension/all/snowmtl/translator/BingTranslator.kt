@@ -23,21 +23,18 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
 
     private val json: Json by injectLazy()
 
-    private var tokens = loadTokens()
+    private var tokens: TokenGroup = TokenGroup()
 
     override val capacity: Int = MAX_CHARS_ALLOW
 
-    override fun translate(from: String, to: String, text: String): String {
-        if (text.length > capacity) {
-            throw Exception("Translator capacity exceed")
-        }
+    private val attempts = 3
 
-        if (tokens.isNotValid()) {
+    override fun translate(from: String, to: String, text: String): String {
+        if (tokens.isNotValid() && refreshTokens().not()) {
             return text
         }
 
-        var attempts = 0
-        do {
+        repeat(attempts) {
             try {
                 val dto = client
                     .newCall(translatorRequest(from, to, text))
@@ -46,12 +43,15 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
 
                 return dto.firstOrNull()?.text ?: text
             } catch (e: Exception) {
-                tokens = loadTokens()
-                attempts++
+                refreshTokens()
             }
-        } while (attempts < 3)
-
+        }
         return text
+    }
+
+    private fun refreshTokens(): Boolean {
+        tokens = loadTokens()
+        return tokens.isValid()
     }
 
     private fun translatorRequest(from: String, to: String, text: String): Request {
@@ -122,6 +122,8 @@ private class TokenGroup(
     val ig: String = "",
 ) {
     fun isNotValid() = listOf(token, key, iid, ig).any(String::isBlank)
+
+    fun isValid() = isNotValid().not()
 }
 
 @Serializable
