@@ -30,11 +30,11 @@ class LuraZipInterceptor : ZipInterceptor() {
     }
 
     override fun requestIsZipImage(request: Request): Boolean {
-        return request.url.pathSegments.contains("cap-download")
+        return request.url.pathSegments.contains("9f8e078ec1ea")
     }
 
     override fun zipGetByteStream(request: Request, response: Response): InputStream {
-        val keyData = listOf("obra_id", "slug", "cap_id", "cap_slug").joinToString("") {
+        val keyData = listOf("cap_id", "obra_id", "slug", "cap_slug", "salt").joinToString("") {
             request.url.queryParameterValues(it).first().toString()
         }.toByteArray(StandardCharsets.UTF_8)
         val encryptedData = response.body.bytes()

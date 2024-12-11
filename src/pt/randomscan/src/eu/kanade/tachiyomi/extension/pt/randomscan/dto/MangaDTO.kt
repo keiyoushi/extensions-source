@@ -9,6 +9,7 @@ data class Genero(
 
 @Serializable
 data class Capitulo(
+    val id: Int,
     val num: Double,
     val data: String,
     val slug: String,
@@ -16,6 +17,7 @@ data class Capitulo(
 
 @Serializable
 data class Manga(
+    val id: Int,
     val capa: String,
     val titulo: String,
     val autor: String?,
