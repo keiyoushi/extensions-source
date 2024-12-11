@@ -62,7 +62,7 @@ class TranslationInterceptor(
         tokens: List<String>,
         mapping: Map<String, Pair<String, AssociatedDialog>>,
     ) = tokens.mapNotNull { token ->
-        val list = token.parseAs<List<String>>()
+        val list = token.decode().parseAs<List<String>>()
         val key = list.first()
         val text = list.last()
 
@@ -88,12 +88,15 @@ class TranslationInterceptor(
      */
     private fun buildMap(dialogues: List<Dialog>): Map<String, Pair<String, AssociatedDialog>> {
         return dialogues.map {
-            it.hashCode().toString() to AssociatedDialog(
-                it,
-                json.encodeToString<List<String>>(listOf(it.hashCode().toString(), it.text)),
-            )
+            val payload = json.encodeToString<List<String>>(listOf(it.hashCode().toString(), it.text))
+                .encode()
+            it.hashCode().toString() to AssociatedDialog(it, payload)
         }.associateBy { it.first }
     }
+
+    // Prevents the translator's response from removing quotation marks from some texts
+    private fun String.encode() = "\"${this}\""
+    private fun String.decode() = this.substringAfter("\"").substringBeforeLast("\"")
 
     private val delimiter: String = "|"
 
