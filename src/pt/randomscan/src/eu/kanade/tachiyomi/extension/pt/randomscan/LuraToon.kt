@@ -33,10 +33,11 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 import kotlin.getValue
 
 class LuraToon : HttpSource(), ConfigurableSource {
-    override val baseUrl = "https://luratoons.com"
+    override val baseUrl = "https://luratoons.net"
     override val name = "Lura Toon"
     override val lang = "pt-BR"
     override val supportsLatest = true
@@ -50,9 +51,9 @@ class LuraToon : HttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient
         .newBuilder()
+        .rateLimit(25, 1, TimeUnit.MINUTES)
         .addInterceptor(::loggedVerifyInterceptor)
         .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
-        .rateLimit(3)
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
