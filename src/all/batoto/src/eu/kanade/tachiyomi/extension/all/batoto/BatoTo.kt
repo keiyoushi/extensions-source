@@ -362,30 +362,12 @@ open class BatoTo(
         else -> SManga.UNKNOWN
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val url = client.newCall(
-            GET(
-                when {
-                    manga.url.startsWith("http") -> manga.url
-                    else -> "$baseUrl${manga.url}"
-                },
-            ),
-        ).execute().asJsoup()
-        if (getAltChapterListPref() || checkChapterLists(url)) {
-            val id = manga.url.substringBeforeLast("/").substringAfterLast("/").trim()
-            return client.newCall(GET("$baseUrl/rss/series/$id.xml"))
-                .asObservableSuccess()
-                .map { altChapterParse(it, manga.title) }
-        }
-        return super.fetchChapterList(manga)
-    }
-
-    private fun altChapterParse(response: Response, title: String): List<SChapter> {
+    private fun altChapterParse(response: Response): List<SChapter> {
         return Jsoup.parse(response.body.string(), response.request.url.toString(), Parser.xmlParser())
             .select("channel > item").map { item ->
                 SChapter.create().apply {
                     url = item.selectFirst("guid")!!.text()
-                    name = item.selectFirst("title")!!.text().substringAfter(title).trim()
+                    name = item.selectFirst("title")!!.text()
                     date_upload = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US).parse(item.selectFirst("pubDate")!!.text())?.time ?: 0L
                 }
             }
@@ -396,10 +378,30 @@ open class BatoTo(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        if (manga.url.startsWith("http")) {
-            return GET(manga.url, headers)
+        return if (getAltChapterListPref()) {
+            val id = manga.url.substringBeforeLast("/").substringAfterLast("/").trim()
+
+            GET("$baseUrl/rss/series/$id.xml", headers)
+        } else if (manga.url.startsWith("http")) {
+            GET(manga.url, headers)
+        } else {
+            super.chapterListRequest(manga)
         }
-        return super.chapterListRequest(manga)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        if (getAltChapterListPref()) {
+            return altChapterParse(response)
+        }
+
+        val document = response.asJsoup()
+
+        if (checkChapterLists(document)) {
+            throw Exception("Deleted from site")
+        }
+
+        return document.select(chapterListSelector())
+            .map(::chapterFromElement)
     }
 
     override fun chapterListSelector() = "div.main div.p-2"
