@@ -26,6 +26,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 
 class ReadMangas() : HttpSource() {
 
@@ -40,6 +41,7 @@ class ReadMangas() : HttpSource() {
     private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
+        .readTimeout(2, TimeUnit.MINUTES)
         .rateLimit(2)
         .build()
 
@@ -176,14 +178,14 @@ class ReadMangas() : HttpSource() {
         val id = manga.url.substringAfterLast("#")
         val input = buildJsonObject {
             put(
-                "1",
+                "0",
                 buildJsonObject {
                     put(
                         "json",
                         buildJsonObject {
                             put("id", id)
                             put("page", page)
-                            put("limit", 10)
+                            put("limit", 50)
                             put("sort", "desc")
                             put("search", "")
                         },
@@ -192,19 +194,25 @@ class ReadMangas() : HttpSource() {
             )
         }
 
-        val url = "$baseUrl/api/trpc/manga.getLiked,chapter.publicAllChapters".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/trpc/chapter.publicAllChapters".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
 
-        return GET(url, headers)
+        val apiHeaders = headers.newBuilder()
+            .set("Referer", "$baseUrl${manga.url.substringBeforeLast("#")}")
+            .set("Content-Type", "application/json")
+            .set("Cache-Control", "no-cache")
+            .build()
+
+        return GET(url, apiHeaders)
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapters = mutableListOf<SChapter>()
         var page = 1
         do {
-            val response = client.newCall(this.chapterListRequest(manga, page++)).execute()
+            val response = tryFetchChapterPage(manga, page++)
             val dto = response
                 .parseAs<List<WrapperResult<ChapterListDto>>>()
                 .firstNotNullOf { it.result }
@@ -213,6 +221,15 @@ class ReadMangas() : HttpSource() {
         } while (dto.hasNext())
 
         return Observable.just(chapters)
+    }
+
+    private val attempts = 3
+
+    private fun tryFetchChapterPage(manga: SManga, page: Int): Response {
+        repeat(attempts) { index ->
+            try { return client.newCall(this.chapterListRequest(manga, page)).execute() } catch (e: Exception) { /* do nothing */ }
+        }
+        throw Exception("Não foi possivel obter os capitulos da página: $page")
     }
 
     private fun chapterListParse(chapters: List<ChapterDto>): List<SChapter> {
