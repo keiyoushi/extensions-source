@@ -33,11 +33,13 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.parser.ParseError
 import org.jsoup.parser.Parser
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -368,9 +370,18 @@ open class BatoTo(
                 SChapter.create().apply {
                     url = item.selectFirst("guid")!!.text()
                     name = item.selectFirst("title")!!.text()
-                    date_upload = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US).parse(item.selectFirst("pubDate")!!.text())?.time ?: 0L
+                    date_upload = parseAltChapterDate(item.selectFirst("pubDate")!!.text())
                 }
             }
+    }
+
+    private val altDateFormat = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US)
+    private fun parseAltChapterDate(date: String): Long {
+        return try {
+            altDateFormat.parse(date)!!.time
+        } catch (_: ParseException) {
+            0L
+        }
     }
 
     private fun checkChapterLists(document: Document): Boolean {
