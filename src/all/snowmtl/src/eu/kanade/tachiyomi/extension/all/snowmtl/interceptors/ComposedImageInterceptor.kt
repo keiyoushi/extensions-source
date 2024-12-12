@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.snowmtl
+package eu.kanade.tachiyomi.extension.all.snowmtl.interceptors
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -12,6 +12,8 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.annotation.RequiresApi
+import eu.kanade.tachiyomi.extension.all.snowmtl.Dialog
+import eu.kanade.tachiyomi.extension.all.snowmtl.Snowmtl.Companion.PAGE_REGEX
 import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -29,7 +31,7 @@ import java.io.InputStream
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-// The Interceptor joins the captions and pages of the manga.
+// The Interceptor joins the dialogues and pages of the manga.
 @RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
     baseUrl: String,
@@ -44,22 +46,16 @@ class ComposedImageInterceptor(
         "normal" to Pair<String, Typeface?>("$baseUrl/images/normal.ttf", null),
     )
 
-    private val imageRegex = Regex(
-        "$baseUrl.*?\\.(webp|png|jpg|jpeg)#\\[.*?]",
-        RegexOption.IGNORE_CASE,
-    )
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url.toString()
 
-        val isPageImageUrl = imageRegex.containsMatchIn(url)
-        if (isPageImageUrl.not()) {
+        if (PAGE_REGEX.containsMatchIn(url).not()) {
             return chain.proceed(request)
         }
 
-        val translation = request.url.fragment?.parseAs<List<Translation>>()
-            ?: throw IOException("Translation not found")
+        val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
+            ?: throw IOException("Dialogues not found")
 
         val imageRequest = request.newBuilder()
             .url(url)
@@ -78,14 +74,12 @@ class ComposedImageInterceptor(
 
         val canvas = Canvas(bitmap)
 
-        translation
-            .filter { it.text.isNotBlank() }
-            .forEach { caption ->
-                val textPaint = createTextPaint(selectFontFamily(caption.type))
-                val dialogBox = createDialogBox(caption, textPaint, bitmap)
-                val y = getYAxis(textPaint, caption, dialogBox)
-                canvas.draw(dialogBox, caption, caption.x1, y)
-            }
+        dialogues.forEach { dialog ->
+            val textPaint = createTextPaint(selectFontFamily(dialog.type))
+            val dialogBox = createDialogBox(dialog, textPaint, bitmap)
+            val y = getYAxis(textPaint, dialog, dialogBox)
+            canvas.draw(dialogBox, dialog, dialog.x1, y)
+        }
 
         val output = ByteArrayOutputStream()
 
@@ -189,49 +183,49 @@ class ComposedImageInterceptor(
     /**
      * Adjust the text to the center of the dialog box when feasible.
      */
-    private fun getYAxis(textPaint: TextPaint, caption: Translation, dialogBox: StaticLayout): Float {
+    private fun getYAxis(textPaint: TextPaint, dialog: Dialog, dialogBox: StaticLayout): Float {
         val fontHeight = textPaint.fontMetrics.let { it.bottom - it.top }
 
-        val dialogBoxLineCount = caption.height / fontHeight
+        val dialogBoxLineCount = dialog.height / fontHeight
 
         /**
-         * Centers text in y for captions smaller than the dialog box
+         * Centers text in y for dialogues smaller than the dialog box
          */
         return when {
-            dialogBox.lineCount < dialogBoxLineCount -> caption.centerY - dialogBox.lineCount / 2f * fontHeight
-            else -> caption.y1
+            dialogBox.lineCount < dialogBoxLineCount -> dialog.centerY - dialogBox.lineCount / 2f * fontHeight
+            else -> dialog.y1
         }
     }
 
-    private fun createDialogBox(caption: Translation, textPaint: TextPaint, bitmap: Bitmap): StaticLayout {
-        var dialogBox = createBoxLayout(caption, textPaint)
+    private fun createDialogBox(dialog: Dialog, textPaint: TextPaint, bitmap: Bitmap): StaticLayout {
+        var dialogBox = createBoxLayout(dialog, textPaint)
 
         /**
          * The best way I've found to adjust the text in the dialog box (Especially in long dialogues)
          */
-        while (dialogBox.height > caption.height) {
+        while (dialogBox.height > dialog.height) {
             textPaint.textSize -= 0.5f
-            dialogBox = createBoxLayout(caption, textPaint)
+            dialogBox = createBoxLayout(dialog, textPaint)
         }
 
         // Use source setup
-        if (caption.isNewApi) {
-            textPaint.color = caption.foregroundColor
-            textPaint.bgColor = caption.backgroundColor
-            textPaint.style = if (caption.isBold) Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
+        if (dialog.isNewApi) {
+            textPaint.color = dialog.foregroundColor
+            textPaint.bgColor = dialog.backgroundColor
+            textPaint.style = if (dialog.isBold) Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
         }
 
         /**
          * Forces font color correction if the background color of the dialog box and the font color are too similar.
          * It's a source configuration problem.
          */
-        textPaint.adjustTextColor(caption, bitmap)
+        textPaint.adjustTextColor(dialog, bitmap)
 
         return dialogBox
     }
 
-    private fun createBoxLayout(caption: Translation, textPaint: TextPaint) =
-        StaticLayout.Builder.obtain(caption.text, 0, caption.text.length, textPaint, caption.width.toInt()).apply {
+    private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint) =
+        StaticLayout.Builder.obtain(dialog.text, 0, dialog.text.length, textPaint, dialog.width.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
             setIncludePad(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -240,12 +234,12 @@ class ComposedImageInterceptor(
         }.build()
 
     // Invert color in black dialog box.
-    private fun TextPaint.adjustTextColor(caption: Translation, bitmap: Bitmap) {
-        val pixelColor = bitmap.getPixel(caption.centerX.toInt(), caption.centerY.toInt())
+    private fun TextPaint.adjustTextColor(dialog: Dialog, bitmap: Bitmap) {
+        val pixelColor = bitmap.getPixel(dialog.centerX.toInt(), dialog.centerY.toInt())
         val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
 
         val minDistance = 80f // arbitrary
-        if (colorDistance(pixelColor, caption.foregroundColor) > minDistance) {
+        if (colorDistance(pixelColor, dialog.foregroundColor) > minDistance) {
             return
         }
         color = inverseColor
@@ -255,10 +249,10 @@ class ComposedImageInterceptor(
         return json.decodeFromString(this)
     }
 
-    private fun Canvas.draw(layout: StaticLayout, caption: Translation, x: Float, y: Float) {
+    private fun Canvas.draw(layout: StaticLayout, dialog: Dialog, x: Float, y: Float) {
         save()
         translate(x, y)
-        rotate(caption.angle)
+        rotate(dialog.angle)
         layout.draw(this)
         restore()
     }

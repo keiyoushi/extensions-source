@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.snowmtl
+package eu.kanade.tachiyomi.extension.all.snowmtl
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
