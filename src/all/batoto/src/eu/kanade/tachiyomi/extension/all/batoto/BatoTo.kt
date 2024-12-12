@@ -117,7 +117,7 @@ open class BatoTo(
         .build()
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/browse?langs=$siteLang&sort=update&page=$page")
+        return GET("$baseUrl/browse?langs=$siteLang&sort=update&page=$page", headers)
     }
 
     override fun latestUpdatesSelector(): String {
@@ -141,7 +141,7 @@ open class BatoTo(
     override fun latestUpdatesNextPageSelector() = "div#mainer nav.d-none .pagination .page-item:last-of-type:not(.disabled)"
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/browse?langs=$siteLang&sort=views_a&page=$page")
+        return GET("$baseUrl/browse?langs=$siteLang&sort=views_a&page=$page", headers)
     }
 
     override fun popularMangaSelector() = latestUpdatesSelector()
