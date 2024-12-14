@@ -14,7 +14,7 @@ class Apkomik : MangaThemesia(
     // Formerly "Komik AV (WP Manga Stream)"
     override val id = 7875815514004535629
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
 

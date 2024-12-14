@@ -11,7 +11,7 @@ import java.util.Locale
 class Doodmanga : Madara("Doodmanga", "https://www.doodmanga.com", "th", SimpleDateFormat("dd MMMMM yyyy", Locale("th"))) {
     override val filterNonMangaItems = false
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(ScrambledImageInterceptor)
         .build()
 

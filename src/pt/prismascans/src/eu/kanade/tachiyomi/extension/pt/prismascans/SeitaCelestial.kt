@@ -19,7 +19,7 @@ class SeitaCelestial : MangaThemesia(
     // They changed their name from Prisma Scans to Demon Sect and now to Celestial Sect.
     override val id: Long = 8168108118738519332
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 

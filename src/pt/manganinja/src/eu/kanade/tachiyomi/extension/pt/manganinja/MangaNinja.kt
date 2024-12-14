@@ -12,7 +12,7 @@ class MangaNinja : Madara(
     SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 

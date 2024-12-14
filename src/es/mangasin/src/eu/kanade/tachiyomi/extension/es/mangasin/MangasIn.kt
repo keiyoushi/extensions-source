@@ -28,7 +28,7 @@ class MangasIn : MMRCMS(
     supportsAdvancedSearch = false,
     dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .build()
 

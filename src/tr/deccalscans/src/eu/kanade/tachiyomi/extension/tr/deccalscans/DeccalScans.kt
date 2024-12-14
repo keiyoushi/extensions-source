@@ -11,7 +11,7 @@ class DeccalScans : Madara(
     "tr",
     SimpleDateFormat("dd MMM yyyy", Locale("tr")),
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 

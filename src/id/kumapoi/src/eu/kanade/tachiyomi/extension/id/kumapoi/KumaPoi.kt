@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 
 class KumaPoi : MangaThemesia("KumaPoi", "https://kumapoi.info", "id") {
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
 

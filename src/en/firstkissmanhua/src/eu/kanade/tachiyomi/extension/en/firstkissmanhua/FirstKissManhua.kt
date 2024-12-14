@@ -8,7 +8,7 @@ class FirstKissManhua : Madara(
     "https://1stkissmanhua.net",
     "en",
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 

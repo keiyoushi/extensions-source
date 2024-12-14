@@ -13,7 +13,7 @@ class SussyScan : Madara(
     "pt-BR",
     SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 

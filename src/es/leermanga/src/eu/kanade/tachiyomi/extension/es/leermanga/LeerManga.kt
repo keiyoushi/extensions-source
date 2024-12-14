@@ -18,7 +18,7 @@ class LeerManga : Madara(
     "https://leermanga.net",
     "es",
 ) {
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 

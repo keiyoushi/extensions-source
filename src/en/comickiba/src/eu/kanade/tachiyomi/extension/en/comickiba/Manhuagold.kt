@@ -12,7 +12,7 @@ class Manhuagold : Liliana(
     // MangaReader -> Liliana
     override val versionId = 2
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 }

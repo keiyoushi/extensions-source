@@ -13,7 +13,7 @@ import uy.kohesive.injekt.api.get
 
 class HentaiSlayer : FuzzyDoodle("هنتاي سلاير", "https://hentaislayer.net", "ar"), ConfigurableSource {
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 

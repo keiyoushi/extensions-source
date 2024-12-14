@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import okhttp3.OkHttpClient
 
 class Manhuaga : Madara("Manhuaga", "https://manhuaga.com", "en") {
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val originalRequest = chain.request()
             chain.proceed(originalRequest).let { response ->

@@ -6,7 +6,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class TopManhua : Madara("Top Manhua", "https://mangatop.org", "en", SimpleDateFormat("MM/dd/yy", Locale.US)) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 

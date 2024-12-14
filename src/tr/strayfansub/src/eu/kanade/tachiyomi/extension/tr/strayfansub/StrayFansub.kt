@@ -29,7 +29,7 @@ class StrayFansub : Madara(
         return pageList
     }
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
         .build()
 }

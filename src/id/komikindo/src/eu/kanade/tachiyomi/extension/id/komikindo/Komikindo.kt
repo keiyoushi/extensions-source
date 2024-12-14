@@ -16,7 +16,7 @@ class Komikindo : MangaThemesia(
 
     private val cdnHeaders = imageRequest(Page(0, "$baseUrl/", baseUrl)).headers
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()

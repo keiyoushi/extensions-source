@@ -21,7 +21,7 @@ class TopTruyen : WPComics(
     dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()),
     gmtOffset = null,
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 

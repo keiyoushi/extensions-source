@@ -10,7 +10,7 @@ class KomikindoCo : MangaThemesia("KomikIndo.co", "https://komiksin.id", "id", d
     // Formerly "Komikindo.co"
     override val id = 734619124437406170
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
 

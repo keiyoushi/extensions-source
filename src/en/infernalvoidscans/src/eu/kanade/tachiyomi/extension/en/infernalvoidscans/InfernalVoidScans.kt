@@ -10,7 +10,7 @@ class InfernalVoidScans : MangaThemesia(
     "https://hivetoon.com",
     "en",
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder()

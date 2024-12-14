@@ -6,7 +6,7 @@ import okhttp3.OkHttpClient
 
 class Hentai20 : MangaThemesia("Hentai20", "https://hentai20.io", "en") {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1)
         .build()
 }

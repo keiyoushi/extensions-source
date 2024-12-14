@@ -13,7 +13,7 @@ class MHScans : Madara(
     "es",
     dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
 ) {
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 3, TimeUnit.SECONDS)
         .build()
 

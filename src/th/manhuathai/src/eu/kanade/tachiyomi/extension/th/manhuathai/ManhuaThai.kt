@@ -35,7 +35,7 @@ class ManhuaThai : Madara(
     override val fetchGenres = false // While genres exist, they can't be used in standard Madara search
 
     // Descrambling logic from ManhuaKey
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::imageDescrambler)
         .build()
 

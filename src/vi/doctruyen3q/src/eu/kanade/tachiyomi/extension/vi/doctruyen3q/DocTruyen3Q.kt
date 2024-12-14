@@ -24,7 +24,7 @@ class DocTruyen3Q : WPComics(
     },
     gmtOffset = null,
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 

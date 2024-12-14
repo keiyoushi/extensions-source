@@ -12,7 +12,7 @@ class EsMi2Manga : Madara(
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
 

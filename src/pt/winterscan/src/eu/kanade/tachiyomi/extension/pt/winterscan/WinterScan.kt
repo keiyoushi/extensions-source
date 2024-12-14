@@ -14,7 +14,7 @@ class WinterScan : Madara(
     SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 }

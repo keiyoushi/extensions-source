@@ -11,7 +11,7 @@ import org.jsoup.nodes.Document
 
 class SectScans : Madara("SectScans", "https://sectscans.com", "en") {
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 

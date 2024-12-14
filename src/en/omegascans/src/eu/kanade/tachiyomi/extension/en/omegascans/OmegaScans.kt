@@ -6,7 +6,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class OmegaScans : HeanCms("Omega Scans", "https://omegascans.org", "en") {
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(apiUrl.toHttpUrl(), 1)
         .build()
 

@@ -21,7 +21,7 @@ class ManhwaLatino : Madara(
     SimpleDateFormat("dd/MM/yyyy", Locale("es")),
 ) {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .addInterceptor { chain ->
             val request = chain.request()

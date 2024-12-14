@@ -17,7 +17,7 @@ class MirrorDesu : MangaThemesia(
     "id",
     "/komik",
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
 

@@ -9,7 +9,7 @@ class MangaTerra : TerraScan(
     "https://manga-terra.com",
     "pt-BR",
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 }

@@ -6,7 +6,7 @@ import okhttp3.OkHttpClient
 
 class Otsugami : MangaThemesia("Otsugami", "https://otsugami.id", "id") {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 

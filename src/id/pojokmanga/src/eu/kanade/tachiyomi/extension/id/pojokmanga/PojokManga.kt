@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 
 class PojokManga : Madara("Pojok Manga", "https://pojokmanga.info", "id", SimpleDateFormat("MMM dd, yyyy", Locale.US)) {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(10, 2, TimeUnit.SECONDS)
         .build()
 

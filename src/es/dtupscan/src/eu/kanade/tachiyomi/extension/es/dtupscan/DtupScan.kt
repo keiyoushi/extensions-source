@@ -12,7 +12,7 @@ class DtupScan : MangaThemesia(
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
         .build()
 }

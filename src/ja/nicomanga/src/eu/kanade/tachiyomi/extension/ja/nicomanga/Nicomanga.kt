@@ -13,7 +13,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 
 class Nicomanga : FMReader("Nicomanga", "https://nicomanga.com", "ja") {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 

@@ -29,7 +29,7 @@ class Hiperdex :
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),

@@ -28,7 +28,7 @@ class MangasNoSekai : Madara(
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
         .build()
 

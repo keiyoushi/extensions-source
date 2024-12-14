@@ -9,7 +9,7 @@ class ManhwaFreake : MangaThemesia(
     "en",
     mangaUrlDirectory = "/series",
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 }

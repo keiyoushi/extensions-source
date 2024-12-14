@@ -9,7 +9,7 @@ class MangaSect : Liliana(
     "en",
     usesPostSearch = true,
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
         .build()
 }

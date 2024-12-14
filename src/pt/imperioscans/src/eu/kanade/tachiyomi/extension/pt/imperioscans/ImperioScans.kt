@@ -16,7 +16,7 @@ class ImperioScans : Madara(
     // Source renamed from Império Scans to Neroxus
     override val id = 1369117541868504584
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 }

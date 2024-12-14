@@ -22,7 +22,7 @@ class ManhuaKey : Madara("ManhuaKey", "https://www.manhuakey.com", "th") {
     override val filterNonMangaItems = false
     override fun searchMangaSelector() = "div.page-item-detail"
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::imageDescrambler)
         .build()
 

@@ -15,7 +15,7 @@ class ManhwaDesu : MangaThemesia(
     SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
 ) {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
 

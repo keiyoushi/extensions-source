@@ -8,7 +8,7 @@ class SinensisScan : PeachScan(
     "https://sinensis.leitorweb.com",
     "pt-BR",
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 }

@@ -16,7 +16,7 @@ class ArthurScan : Madara(
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 ) {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())

@@ -11,7 +11,7 @@ class MoonDaisyScans : MangaThemesia(
     "tr",
     dateFormat = SimpleDateFormat("MMMM d, yyy", Locale("tr")),
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 }

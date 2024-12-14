@@ -12,7 +12,7 @@ class MangaTX : MangaThemesia(
     mangaUrlDirectory = "/manga-list",
     dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT),
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 

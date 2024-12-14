@@ -29,7 +29,7 @@ class RizzComic : MangaThemesiaAlt(
     dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
 ) {
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1, 3)
         .addInterceptor { chain ->
             val request = chain.request()

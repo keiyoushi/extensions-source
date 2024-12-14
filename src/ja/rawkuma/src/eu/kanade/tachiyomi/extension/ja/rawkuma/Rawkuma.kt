@@ -6,7 +6,7 @@ import okhttp3.OkHttpClient
 
 class Rawkuma : MangaThemesia("Rawkuma", "https://rawkuma.com", "ja") {
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(4)
         .build()
 }

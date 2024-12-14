@@ -12,7 +12,7 @@ class HikariScan : Madara(
     "pt-BR",
     dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
 ) {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .build()
 

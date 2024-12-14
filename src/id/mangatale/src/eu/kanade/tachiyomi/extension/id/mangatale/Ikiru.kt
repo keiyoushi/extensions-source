@@ -11,7 +11,7 @@ class Ikiru : MangaThemesia("Ikiru", "https://ikiru.one", "id") {
 
     override val id = 1532456597012176985
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(12, 3)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
