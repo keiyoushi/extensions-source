@@ -577,7 +577,6 @@ abstract class LibGroup(
         private const val API_DOMAIN_PREF = "REMangaDomain"
         private const val API_DOMAIN_TITLE = "Выбор домена API"
         private const val API_DOMAIN_DEFAULT = "https://api.imglib.info"
-        private val API_DOMAINS = arrayOf(API_DOMAIN_DEFAULT, "https://api.lib.social", "https://api2.mangalib.me")
 
         private const val TOKEN_STORE = "TokenStore"
 
@@ -634,9 +633,12 @@ abstract class LibGroup(
         val domainApiPref = ListPreference(screen.context).apply {
             key = API_DOMAIN_PREF
             title = API_DOMAIN_TITLE
-            entries = API_DOMAINS
-            entryValues = API_DOMAINS
-            summary = "%s"
+            entries = arrayOf("Официальное приложение (api.imglib.info)", "Основной (api.lib.social)", "Резервный (https://api2.mangalib.me)")
+            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api.lib.social", "https://api2.mangalib.me")
+            summary = "%s" +
+                "\n\nВыбор домена API, используемого для работы приложения." +
+                "\n\nПо умолчанию «Официальное приложение»" +
+                "\n\nⓘВы не увидите его нигде глазами, но источник должен начать работать стибильнее."
             setDefaultValue(API_DOMAIN_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
