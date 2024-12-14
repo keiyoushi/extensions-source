@@ -70,7 +70,7 @@ abstract class LibGroup(
 
     abstract val siteId: Int // Important in api calls
 
-    private val apiDomain: String = "https://api.lib.social"
+    private val apiDomain: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString()
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
@@ -574,6 +574,11 @@ abstract class LibGroup(
         private const val LANGUAGE_PREF = "MangaLibTitleLanguage"
         private const val LANGUAGE_PREF_TITLE = "Выбор языка на обложке"
 
+        private const val API_DOMAIN_PREF = "REMangaDomain"
+        private const val API_DOMAIN_TITLE = "Выбор домена API"
+        private const val API_DOMAIN_DEFAULT = "https://api.imglib.info"
+        private val API_DOMAINS = arrayOf(API_DOMAIN_DEFAULT, "https://api.lib.social", "https://api2.mangalib.me")
+
         private const val TOKEN_STORE = "TokenStore"
 
         val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US) }
@@ -625,11 +630,27 @@ abstract class LibGroup(
                 true
             }
         }
+
+        val domainApiPref = ListPreference(screen.context).apply {
+            key = API_DOMAIN_PREF
+            title = API_DOMAIN_TITLE
+            entries = API_DOMAINS
+            entryValues = API_DOMAINS
+            summary = "%s"
+            setDefaultValue(API_DOMAIN_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+
         screen.addPreference(serverPref)
         screen.addPreference(sortingPref)
         screen.addPreference(screen.editTextPreference(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT, groupTranslates()))
         screen.addPreference(scanlatorUsername)
         screen.addPreference(titleLanguagePref)
+        screen.addPreference(domainApiPref)
     }
     private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String): androidx.preference.EditTextPreference {
         return androidx.preference.EditTextPreference(context).apply {
