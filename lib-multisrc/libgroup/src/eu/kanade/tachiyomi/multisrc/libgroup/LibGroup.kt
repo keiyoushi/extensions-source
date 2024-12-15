@@ -574,7 +574,7 @@ abstract class LibGroup(
         private const val LANGUAGE_PREF = "MangaLibTitleLanguage"
         private const val LANGUAGE_PREF_TITLE = "Выбор языка на обложке"
 
-        private const val API_DOMAIN_PREF = "REMangaDomain"
+        private const val API_DOMAIN_PREF = "MangaLibApiDomain"
         private const val API_DOMAIN_TITLE = "Выбор домена API"
         private const val API_DOMAIN_DEFAULT = "https://api.imglib.info"
 
