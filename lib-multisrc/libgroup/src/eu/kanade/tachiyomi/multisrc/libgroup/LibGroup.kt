@@ -633,8 +633,8 @@ abstract class LibGroup(
         val domainApiPref = ListPreference(screen.context).apply {
             key = API_DOMAIN_PREF
             title = API_DOMAIN_TITLE
-            entries = arrayOf("Официальное приложение (api.imglib.info)", "Основной (api.lib.social)", "Резервный (api2.mangalib.me)")
-            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api.lib.social", "https://api2.mangalib.me")
+            entries = arrayOf("Официальное приложение (api.imglib.info)", "Основной (api.lib.social)", "Резервный (api.mangalib.me)", "Резервный 2 (api2.mangalib.me)")
+            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api.lib.social", "https://api.mangalib.me", "https://api2.mangalib.me")
             summary = "%s" +
                 "\n\nВыбор домена API, используемого для работы приложения." +
                 "\n\nПо умолчанию «Официальное приложение»" +
