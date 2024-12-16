@@ -1,14 +1,19 @@
 package eu.kanade.tachiyomi.extension.en.infernalvoidscans
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.iken.Iken
+import eu.kanade.tachiyomi.multisrc.iken.SearchResponse
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
-import okhttp3.Request
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import okhttp3.Response
+import uy.kohesive.injekt.injectLazy
 
-class InfernalVoidScans : MangaThemesia(
+class InfernalVoidScans : Iken(
     "Infernal Void Scans",
-    "https://hivetoon.com",
     "en",
+    "https://hivetoon.com",
 ) {
     override val client = super.client.newBuilder()
         .addInterceptor { chain ->
@@ -20,21 +25,26 @@ class InfernalVoidScans : MangaThemesia(
         }
         .build()
 
+    private val json by injectLazy<Json>()
+
     override fun headersBuilder() = super.headersBuilder()
         .set("Cache-Control", "max-age=0")
 
-    override val pageSelector = "div#readerarea > p > img"
+    private val titleCache by lazy {
+        val response = client.newCall(GET("$baseUrl/api/query?perPage=9999", headers)).execute()
+        val data = json.decodeFromString<SearchResponse>(response.body.string())
+        data.posts
+            .filterNot { it.isNovel }
+            .associateBy { it.slug }
+    }
 
-    override val hasProjectPage = true
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = super.searchMangaRequest(page, query, filters).url.newBuilder()
-            .removeAllQueryParameters("title")
-
-        // Filters are not loaded with the ‘s’ parameter. Fix genres filter
-        if (query.isNotBlank()) {
-            url.addQueryParameter("s", query)
+        val entries = document.select(".group a").mapNotNull {
+            titleCache[it.absUrl("href").substringAfter("series/")]?.toSManga()
         }
-        return GET(url.build(), headers)
+
+        return MangasPage(entries, false)
     }
 }
