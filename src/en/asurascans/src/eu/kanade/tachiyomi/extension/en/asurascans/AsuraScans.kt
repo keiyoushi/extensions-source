@@ -241,7 +241,8 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListSelector() = "div.scrollbar-thumb-themecolor > div.group"
+    override fun chapterListSelector() =
+        if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href").toPermSlugIfNeeded())
@@ -288,6 +289,13 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             summary = "Automatically update random numbers in manga URLs.\nHelps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\nNote: This setting may require clearing database in advanced settings and migrating all manga to the same source."
             setDefaultValue(true)
         }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HIDE_PREMIUM_CHAPTERS
+            title = "Hide premium chapters"
+            summary = "Hides the chapters that require a subscription to view"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
     }
 
     private var SharedPreferences.slugMap: MutableMap<String, String>
@@ -306,6 +314,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         }
 
     private fun SharedPreferences.dynamicUrl(): Boolean = getBoolean(PREF_DYNAMIC_URL, true)
+    private fun SharedPreferences.hidePremiumChapters(): Boolean = getBoolean(
+        PREF_HIDE_PREMIUM_CHAPTERS,
+        true,
+    )
 
     private fun String.toPermSlugIfNeeded(): String {
         if (!preferences.dynamicUrl()) return this
@@ -327,5 +339,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
         private const val PREF_SLUG_MAP = "pref_slug_map_2"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
+        private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
     }
 }
