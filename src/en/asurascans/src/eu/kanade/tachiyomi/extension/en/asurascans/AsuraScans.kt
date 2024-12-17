@@ -17,6 +17,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -66,8 +67,26 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::forceHighQualityInterceptor)
         .rateLimit(1, 3)
         .build()
+
+    private fun forceHighQualityInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        if (preferences.forceHighQuality() && request.url.host == apiUrl.toHttpUrl().host) {
+            OPTIMIZED_IMAGE_PATH_REGEX.find(request.url.encodedPath)?.also { match ->
+                val (id, page) = match.destructured
+                val newUrl = request.url.newBuilder()
+                    .encodedPath("/storage/media/$id/$page.webp")
+                    .build()
+
+                return chain.proceed(request.newBuilder().url(newUrl).build())
+            }
+        }
+
+        return chain.proceed(request)
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -296,6 +315,13 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             summary = "Hides the chapters that require a subscription to view"
             setDefaultValue(true)
         }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_FORCE_HIGH_QUALITY
+            title = "Force high quality chapter images"
+            summary = "Attempt to use high quality chapter images. Will increase bandwidth by ~50%"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
     }
 
     private var SharedPreferences.slugMap: MutableMap<String, String>
@@ -318,6 +344,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         PREF_HIDE_PREMIUM_CHAPTERS,
         true,
     )
+    private fun SharedPreferences.forceHighQuality(): Boolean = getBoolean(
+        PREF_FORCE_HIGH_QUALITY,
+        false,
+    )
 
     private fun String.toPermSlugIfNeeded(): String {
         if (!preferences.dynamicUrl()) return this
@@ -337,8 +367,11 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
+        private val OPTIMIZED_IMAGE_PATH_REGEX = """^/storage/media/(\d+)/conversions/(.*)-optimized\.webp$""".toRegex()
+
         private const val PREF_SLUG_MAP = "pref_slug_map_2"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
         private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
+        private const val PREF_FORCE_HIGH_QUALITY = "pref_force_high_quality"
     }
 }
