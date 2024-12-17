@@ -290,6 +290,7 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
             "cn.czmanga.com",
             "tw.czmanga.com",
             "www.czmanga.com",
+            "www.twmanga.com",
             "cn.dinnerku.com",
             "tw.dinnerku.com",
             "www.dinnerku.com",
