@@ -12,7 +12,7 @@ class DragonTea : Madara(
     "en",
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
 ) {
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1)
         .build()
 

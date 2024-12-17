@@ -11,7 +11,7 @@ class CultureSubs : MangaThemesia(
     "tr",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 }

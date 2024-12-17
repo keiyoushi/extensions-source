@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.blogtruyen.BlogTruyen
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class BlogTruyenMoi : BlogTruyen("BlogTruyen", "https://blogtruyenmoi.com", "vi") {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
 

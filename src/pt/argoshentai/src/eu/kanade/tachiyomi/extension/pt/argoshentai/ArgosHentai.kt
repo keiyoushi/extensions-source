@@ -11,7 +11,7 @@ class ArgosHentai : Madara(
     "pt-BR",
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 }

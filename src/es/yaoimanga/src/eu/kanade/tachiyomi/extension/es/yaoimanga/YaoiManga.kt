@@ -10,7 +10,7 @@ class YaoiManga : Madara(
     "es",
 ) {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
         .build()
 

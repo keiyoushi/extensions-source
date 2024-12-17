@@ -31,7 +31,7 @@ class EmperorScan :
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),

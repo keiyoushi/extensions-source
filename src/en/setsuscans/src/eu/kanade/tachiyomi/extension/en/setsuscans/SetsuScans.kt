@@ -10,7 +10,7 @@ class SetsuScans : Madara(
     "https://setsuscans.com",
     "en",
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addNetworkInterceptor { chain ->
             val request = chain.request()
             val url = request.url

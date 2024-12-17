@@ -14,7 +14,7 @@ class KnightNoScanlation : Madara(
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2, 1, TimeUnit.SECONDS)
         .build()
 

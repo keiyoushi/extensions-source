@@ -11,7 +11,7 @@ class HaremDeKira : Madara(
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 

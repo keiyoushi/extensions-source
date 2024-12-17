@@ -11,7 +11,7 @@ class SummerToon : MangaThemesia(
     "tr",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(1, 1)
         .build()
 

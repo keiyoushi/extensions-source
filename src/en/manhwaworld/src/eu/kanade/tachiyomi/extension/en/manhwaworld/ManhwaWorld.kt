@@ -11,7 +11,7 @@ class ManhwaWorld : Madara(
 ) {
     override val id = 8857833474626810640
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
         .build()
 

@@ -42,7 +42,7 @@ class SushiScan :
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),

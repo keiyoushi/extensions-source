@@ -6,7 +6,7 @@ import okhttp3.OkHttpClient
 
 class DojingNet : MangaThemesia("Dojing.net", "https://dojing.net", "id") {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()
 

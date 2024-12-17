@@ -11,7 +11,7 @@ class BRMangasTop : Madara(
     "pt-BR",
     SimpleDateFormat("dd 'de' MMM 'de' yyyy", Locale("pt", "BR")),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
 

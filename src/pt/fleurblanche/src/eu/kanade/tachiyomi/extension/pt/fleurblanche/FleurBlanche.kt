@@ -15,7 +15,7 @@ class FleurBlanche : Madara(
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addInterceptor(::authWarningIntercept)
         .rateLimit(1, 2)
         .build()

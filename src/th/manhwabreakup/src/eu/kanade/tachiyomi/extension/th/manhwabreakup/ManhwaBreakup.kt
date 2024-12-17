@@ -31,7 +31,7 @@ class ManhwaBreakup : Madara(
     override val filterNonMangaItems = false
 
     // Descrambling logic from ManhuaKey
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addNetworkInterceptor(::imageDescrambler)
         .build()
 

@@ -22,7 +22,7 @@ class Manhastro : Madara(
 
     override val mangaSubString = "lermanga"
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1)
         .readTimeout(1, TimeUnit.MINUTES)
         .connectTimeout(1, TimeUnit.MINUTES)

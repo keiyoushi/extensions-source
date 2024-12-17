@@ -10,7 +10,7 @@ class NightScans : MangaThemesiaAlt("NIGHT SCANS", "https://nightsup.net", "en",
     override val listUrl = "/manga/list-mode"
     override val slugRegex = Regex("""^(\d+(st)?-)""")
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 4, TimeUnit.SECONDS)
         .build()
 }

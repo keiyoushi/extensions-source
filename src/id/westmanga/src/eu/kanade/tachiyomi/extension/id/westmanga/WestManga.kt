@@ -11,7 +11,7 @@ class WestManga : MangaThemesia("West Manga", "https://westmanga.fun", "id") {
     // Formerly "West Manga (WP Manga Stream)"
     override val id = 8883916630998758688
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()
 

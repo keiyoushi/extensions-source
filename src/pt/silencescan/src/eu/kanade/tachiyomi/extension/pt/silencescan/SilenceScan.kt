@@ -16,7 +16,7 @@ class SilenceScan : MangaThemesia(
 
     override val versionId: Int = 2
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 

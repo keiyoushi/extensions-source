@@ -11,7 +11,7 @@ class HikariGaNai : PeachScan(
     // Moved from Madara to PeachScan
     override val versionId = 2
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
 }

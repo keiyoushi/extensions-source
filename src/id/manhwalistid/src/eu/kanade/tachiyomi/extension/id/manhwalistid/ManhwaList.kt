@@ -9,7 +9,7 @@ class ManhwaList : MangaThemesia(
     "https://manhwalist.in",
     "id",
 ) {
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
         .build()
 }

@@ -16,7 +16,7 @@ class CosmicScansID : MangaThemesia(
     "id",
 ) {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 4, TimeUnit.SECONDS)
         .build()
 

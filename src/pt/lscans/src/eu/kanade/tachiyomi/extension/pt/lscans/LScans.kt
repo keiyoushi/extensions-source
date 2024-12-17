@@ -11,7 +11,7 @@ class LScans : MangaThemesia(
     // Moved from PeachScan to Mangathemsia
     override val versionId = 3
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 }

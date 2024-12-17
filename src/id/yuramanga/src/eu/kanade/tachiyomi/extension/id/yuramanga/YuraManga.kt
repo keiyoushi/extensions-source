@@ -16,7 +16,7 @@ class YuraManga : ZManga(
     // Moved from Madara to ZManga
     override val versionId = 3
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             if (response.request.url.pathSegments.contains("login")) {

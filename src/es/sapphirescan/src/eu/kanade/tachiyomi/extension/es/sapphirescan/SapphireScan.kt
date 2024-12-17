@@ -16,7 +16,7 @@ class SapphireScan : Madara(
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
         .build()
 

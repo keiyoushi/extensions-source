@@ -13,7 +13,7 @@ class TresDaosScan : MangaThemesia(
 ) {
     override val versionId = 4
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
 }

@@ -39,7 +39,7 @@ class ArgosComics : Madara(
         return this
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .ignoreAllSSLErrors()
         .addInterceptor { chain ->

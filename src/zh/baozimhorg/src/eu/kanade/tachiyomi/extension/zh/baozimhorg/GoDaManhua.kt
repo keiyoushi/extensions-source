@@ -34,7 +34,7 @@ class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
         }
     }
 
-    override val client = network.cloudflareClient.newBuilder().addInterceptor(NotFoundInterceptor()).build()
+    override val client = super.client.newBuilder().addInterceptor(NotFoundInterceptor()).build()
 
     private val json: Json = Injekt.get()
 

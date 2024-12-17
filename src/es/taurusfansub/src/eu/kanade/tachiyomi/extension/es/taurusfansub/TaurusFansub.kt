@@ -14,7 +14,7 @@ class TaurusFansub : Madara(
     "es",
     dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
 

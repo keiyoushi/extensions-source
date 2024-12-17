@@ -23,7 +23,7 @@ class XoxoComics : WPComics(
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
     gmtOffset = null,
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addNetworkInterceptor { chain ->
             val request = chain.request()
             if (!request.url.toString().endsWith("#imagereq")) {

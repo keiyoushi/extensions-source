@@ -20,7 +20,7 @@ class YANPFansub : Madara(
     // Scanlator changed the theme from WpMangaReader to Madara.
     override val versionId: Int = 2
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .addInterceptor(::checkPasswordProtectedIntercept)
         .build()

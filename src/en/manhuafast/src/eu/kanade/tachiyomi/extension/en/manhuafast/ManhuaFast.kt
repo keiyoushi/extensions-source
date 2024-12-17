@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit
 
 class ManhuaFast : Madara("ManhuaFast", "https://manhuafast.com", "en") {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 4, TimeUnit.SECONDS)
         .build()
 

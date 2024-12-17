@@ -12,7 +12,7 @@ class SkyManga : MangaThemesia(
     "/manga-list",
     SimpleDateFormat("dd-MM-yyyy", Locale.US),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 }

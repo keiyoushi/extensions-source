@@ -11,7 +11,7 @@ class NirvanaScan : Madara(
     "pt-BR",
     SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 

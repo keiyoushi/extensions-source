@@ -11,7 +11,7 @@ class YonaBar : Madara(
     "ar",
     SimpleDateFormat("MMM dd, yyyy", Locale("ar")),
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 

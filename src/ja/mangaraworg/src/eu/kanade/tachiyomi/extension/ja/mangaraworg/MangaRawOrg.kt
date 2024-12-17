@@ -19,7 +19,7 @@ import rx.Observable
 class MangaRawOrg : MangaThemesia("Manga Raw.org", "https://mangaraw.org", "ja") {
     override val id = 6223520752496636410
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()
 

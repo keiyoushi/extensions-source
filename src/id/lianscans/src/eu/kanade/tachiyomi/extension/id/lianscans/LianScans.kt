@@ -6,7 +6,7 @@ import okhttp3.OkHttpClient
 
 class LianScans : MangaThemesia("LianScans", "https://www.lianscans.com", "id") {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()
 

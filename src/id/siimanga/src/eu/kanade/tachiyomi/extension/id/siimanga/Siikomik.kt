@@ -10,7 +10,7 @@ class Siikomik : MangaThemesia(
 ) {
     override val versionId = 2
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 

@@ -9,7 +9,7 @@ class HastaTeam : PizzaReader(
     "https://reader.hastateam.com",
     "it",
 ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val url = chain.request().url.newBuilder()
                 .scheme("https")

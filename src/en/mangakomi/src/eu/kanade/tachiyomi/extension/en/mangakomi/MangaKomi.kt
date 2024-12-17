@@ -11,7 +11,7 @@ class MangaKomi : Madara(
     "en",
 ) {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 1, TimeUnit.SECONDS)
         .build()
 }

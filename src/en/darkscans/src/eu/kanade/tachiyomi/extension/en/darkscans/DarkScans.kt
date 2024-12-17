@@ -6,7 +6,7 @@ import okhttp3.OkHttpClient
 
 class DarkScans : Madara("Dark Scans", "https://darkscans.net", "en") {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 4)
         .build()
 

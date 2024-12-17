@@ -43,7 +43,7 @@ class MangaSwat :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addInterceptor(::tokenInterceptor)
         .rateLimit(1)
         .build()

@@ -15,7 +15,7 @@ class TopReadManhwa : Madara(
     SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH),
 ) {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1)
         .build()
 

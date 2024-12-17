@@ -9,7 +9,7 @@ class KomikStation : MangaThemesia("Komik Station", "https://komikstation.co", "
     // Formerly "Komik Station (WP Manga Stream)"
     override val id = 6148605743576635261
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()
 

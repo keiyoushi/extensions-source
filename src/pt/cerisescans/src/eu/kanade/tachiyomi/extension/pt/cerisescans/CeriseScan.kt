@@ -10,7 +10,7 @@ class CeriseScan : PeachScan(
 ) {
     override val versionId: Int = 2
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(1, 2)
         .build()
 }

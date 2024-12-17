@@ -17,7 +17,7 @@ class PinkSeaUnicorn : Madara(
     SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
 ) {
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .addNetworkInterceptor(::checkPasswordProtectedIntercept)
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()

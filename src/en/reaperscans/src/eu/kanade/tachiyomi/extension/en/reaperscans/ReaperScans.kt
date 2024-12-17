@@ -16,7 +16,7 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
 
     override val versionId = 3
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(1)
         .build()
 

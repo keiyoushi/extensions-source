@@ -27,7 +27,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         .build()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()

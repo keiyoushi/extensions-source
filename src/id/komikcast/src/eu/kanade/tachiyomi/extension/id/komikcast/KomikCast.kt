@@ -22,7 +22,7 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.bz", "id", "/da
     // Formerly "Komik Cast (WP Manga Stream)"
     override val id = 972717448578983812
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
         .build()
 

@@ -15,7 +15,7 @@ class DrakeScans : MangaThemesia(
     // madara -> mangathemesia
     override val versionId = 2
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
         .build()
 

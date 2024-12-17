@@ -25,7 +25,7 @@ class TheBlank :
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(1)
         .setRandomUserAgent(
             preferences.getPrefUAType(),
