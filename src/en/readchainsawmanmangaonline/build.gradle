@@ -3,7 +3,7 @@ ext {
     extClass = '.ReadChainsawManMangaOnline'
     themePkg = 'mangacatalog'
     baseUrl = 'https://ww1.readchainsawman.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
