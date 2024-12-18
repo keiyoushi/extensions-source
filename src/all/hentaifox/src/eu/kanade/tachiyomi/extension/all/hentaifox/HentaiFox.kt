@@ -1,10 +1,24 @@
 package eu.kanade.tachiyomi.extension.all.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.SortOrderFilter
+import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.runBlocking
+import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class HentaiFox(
@@ -100,4 +114,116 @@ class HentaiFox(
             Filter.Header("HINT: Use double quote (\") for exact match"),
         ) + super.getFilterList().list,
     )
+
+    private val sidebarPath = "includes/sidebar.php"
+
+    private fun sidebarMangaSelector() = "div.item"
+
+    private fun Element.sidebarMangaTitle() =
+        selectFirst("img")?.attr("alt")
+
+    private fun Element.sidebarMangaUrl() =
+        selectFirst("a")?.attr("abs:href")
+
+    private fun Element.sidebarMangaThumbnail() =
+        selectFirst("img")?.imgAttr()
+
+    private fun fetchHomepage(): Request {
+        return GET(baseUrl, headers)
+    }
+
+    private fun homepageCsrfParser(document: Document): String {
+        return document.select("[name=csrf-token]").attr("content")
+    }
+
+    private fun setSidebarHeaders(csrfToken: String?): Headers {
+        if (csrfToken == null) {
+            return xhrHeaders
+        }
+        return xhrHeaders.newBuilder()
+            .add("X-Csrf-Token", csrfToken)
+            .build()
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        // Sidebar mangas should always override any other search, so they should appear first
+        // in the case/when and only propagate to super when a "normal" search is issued
+        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
+
+        return when {
+            sortOrderFilter?.state == 2 ->
+                sidebarRequest("top_rated")
+
+            sortOrderFilter?.state == 3 ->
+                sidebarRequest("top_faved")
+
+            sortOrderFilter?.state == 4 ->
+                sidebarRequest("top_fapped")
+
+            sortOrderFilter?.state == 5 ->
+                sidebarRequest("top_downloaded")
+
+            else ->
+                super.searchMangaRequest(page, query, filters)
+        }
+    }
+
+    private var csrfToken: String? = null
+
+    private fun sidebarRequest(category: String): Request {
+        // Use Elvis operator to fetch CSRF only if it is null
+
+        csrfToken ?: runBlocking {
+            launchIO {
+                runCatching {
+                    csrfToken = client.newCall(fetchHomepage())
+                        .execute().asJsoup().let { homepageCsrfParser(it) }
+                }
+            }.join()
+        }
+
+        val url = "$baseUrl/$sidebarPath".toHttpUrl().newBuilder()
+        return POST(
+            url.build().toString(),
+            setSidebarHeaders(csrfToken),
+            FormBody.Builder()
+                .add("type", category)
+                .build(),
+        )
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        if (response.request.url.toString().endsWith(sidebarPath)) {
+            val document = response.asJsoup()
+            val mangas = document.select(sidebarMangaSelector())
+                .map {
+                    SMangaDto(
+                        title = it.sidebarMangaTitle()!!,
+                        url = it.sidebarMangaUrl()!!,
+                        thumbnail = it.sidebarMangaThumbnail(),
+                        lang = LANGUAGE_MULTI,
+                    )
+                }
+                .map {
+                    SManga.create().apply {
+                        title = it.title
+                        setUrlWithoutDomain(it.url)
+                        thumbnail_url = it.thumbnail
+                    }
+                }
+
+            return MangasPage(mangas, false)
+        } else {
+            return super.searchMangaParse(response)
+        }
+    }
+
+    override fun getSortOrderURIs(): List<Pair<String, String>> {
+        return super.getSortOrderURIs() + listOf(
+            Pair("Top Rated", "tr"),
+            Pair("Most Faved", "mv"),
+            Pair("Most Fapped", "mf"),
+            Pair("Most Downloaded", "md"),
+        )
+    }
 }
