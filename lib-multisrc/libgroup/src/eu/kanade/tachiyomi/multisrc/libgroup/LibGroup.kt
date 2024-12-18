@@ -34,7 +34,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -65,38 +64,37 @@ abstract class LibGroup(
 
     override val supportsLatest = true
 
-    private val userAgentMobile = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.3"
-
     private var bearerToken: String? = null
 
     private var userId: Int? = null
 
     abstract val siteId: Int // Important in api calls
 
-    private val apiDomain: String = "https://api.lib.social"
+    private val apiDomain: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(3)
-        .rateLimitHost(apiDomain.toHttpUrl(), 1)
-        .connectTimeout(5, TimeUnit.MINUTES)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .addInterceptor(::checkForToken)
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            if (response.code == 419) {
-                throw IOException("HTTP error ${response.code}. Проверьте сайт. Для завершения авторизации необходимо перезапустить приложение с полной остановкой.")
+    override val client by lazy {
+        network.cloudflareClient.newBuilder()
+            .rateLimit(3)
+            .rateLimitHost(apiDomain.toHttpUrl(), 1)
+            .rateLimitHost(baseUrl.toHttpUrl(), 1)
+            .connectTimeout(5, TimeUnit.MINUTES)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .addInterceptor(::checkForToken)
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                if (response.code == 419) {
+                    throw IOException("HTTP error ${response.code}. Проверьте сайт. Для завершения авторизации необходимо перезапустить приложение с полной остановкой.")
+                }
+                if (response.code == 404) {
+                    throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView\uD83C\uDF0E︎ и обновите список. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
+                }
+                return@addInterceptor response
             }
-            if (response.code == 404) {
-                throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView\uD83C\uDF0E︎ и обновите список. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
-            }
-            return@addInterceptor response
-        }
-        .build()
+            .build()
+    }
 
     override fun headersBuilder() = Headers.Builder().apply {
-        // User-Agent required for authorization through third-party accounts (mobile version for correct display in WebView)
-        add("User-Agent", userAgentMobile)
         add("Accept", "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         add("Referer", baseUrl)
         add("Site-Id", siteId.toString())
@@ -385,8 +383,6 @@ abstract class LibGroup(
 
     override fun imageRequest(page: Page): Request {
         val imageHeader = Headers.Builder().apply {
-            // User-Agent required for authorization through third-party accounts (mobile version for correct display in WebView)
-            add("User-Agent", userAgentMobile)
             add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             add("Referer", baseUrl)
         }
@@ -578,6 +574,10 @@ abstract class LibGroup(
         private const val LANGUAGE_PREF = "MangaLibTitleLanguage"
         private const val LANGUAGE_PREF_TITLE = "Выбор языка на обложке"
 
+        private const val API_DOMAIN_PREF = "MangaLibApiDomain"
+        private const val API_DOMAIN_TITLE = "Выбор домена API"
+        private const val API_DOMAIN_DEFAULT = "https://api.imglib.info"
+
         private const val TOKEN_STORE = "TokenStore"
 
         val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US) }
@@ -629,11 +629,30 @@ abstract class LibGroup(
                 true
             }
         }
+
+        val domainApiPref = ListPreference(screen.context).apply {
+            key = API_DOMAIN_PREF
+            title = API_DOMAIN_TITLE
+            entries = arrayOf("Официальное приложение (api.imglib.info)", "Основной (api.lib.social)", "Резервный (api.mangalib.me)", "Резервный 2 (api2.mangalib.me)")
+            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api.lib.social", "https://api.mangalib.me", "https://api2.mangalib.me")
+            summary = "%s" +
+                "\n\nВыбор домена API, используемого для работы приложения." +
+                "\n\nПо умолчанию «Официальное приложение»" +
+                "\n\nⓘВы не увидите его нигде глазами, но источник должен начать работать стибильнее."
+            setDefaultValue(API_DOMAIN_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+
         screen.addPreference(serverPref)
         screen.addPreference(sortingPref)
         screen.addPreference(screen.editTextPreference(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT, groupTranslates()))
         screen.addPreference(scanlatorUsername)
         screen.addPreference(titleLanguagePref)
+        screen.addPreference(domainApiPref)
     }
     private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String): androidx.preference.EditTextPreference {
         return androidx.preference.EditTextPreference(context).apply {
