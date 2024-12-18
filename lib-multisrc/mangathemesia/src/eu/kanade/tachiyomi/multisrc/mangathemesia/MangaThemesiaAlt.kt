@@ -29,7 +29,6 @@ abstract class MangaThemesiaAlt(
     mangaUrlDirectory: String = "/manga",
     dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
     private val randomUrlPrefKey: String = "pref_auto_random_url",
-    private val hidePaidChaptersPrefKey: String = "pref_hide_paid_chapters",
 ) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat), ConfigurableSource {
 
     protected open val listUrl = "$mangaUrlDirectory/list-mode/"
@@ -48,13 +47,6 @@ abstract class MangaThemesiaAlt(
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
-            key = hidePaidChaptersPrefKey
-            title = intl["pref_hide_paid_chapters_title"]
-            summary = intl["pref_hide_paid_chapters_summary"]
-            setDefaultValue(true)
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
             key = randomUrlPrefKey
             title = intl["pref_dynamic_url_title"]
             summary = intl["pref_dynamic_url_summary"]
@@ -62,7 +54,6 @@ abstract class MangaThemesiaAlt(
         }.also(screen::addPreference)
     }
 
-    private fun getHidePaidChaptersPref() = preferences.getBoolean(hidePaidChaptersPrefKey, true)
     private fun getRandomUrlPref() = preferences.getBoolean(randomUrlPrefKey, true)
 
     private val mutex = Mutex()
@@ -184,15 +175,4 @@ abstract class MangaThemesiaAlt(
     }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListSelector(): String {
-        val baseChapterListSelector = super.chapterListSelector()
-
-        if (!getHidePaidChaptersPref()) {
-            return baseChapterListSelector
-        }
-
-        val lockedSelector = "a[data-bs-target='#lockedChapterModal']"
-        return ":is($baseChapterListSelector):not($lockedSelector):not(:has($lockedSelector))"
-    }
 }
