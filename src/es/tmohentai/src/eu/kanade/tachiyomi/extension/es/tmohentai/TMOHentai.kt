@@ -34,7 +34,7 @@ class TMOHentai : ConfigurableSource, ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .build()
 

@@ -67,6 +67,8 @@ constructor(
 
     override val supportsLatest = true
 
+    override val client = network.cloudflareClient
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 

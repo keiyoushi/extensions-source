@@ -27,6 +27,8 @@ abstract class ZeistManga(
 
     override val supportsLatest = true
 
+    override val client = network.cloudflareClient
+
     protected val json: Json by injectLazy()
 
     private val intl by lazy { ZeistMangaIntl(lang) }
