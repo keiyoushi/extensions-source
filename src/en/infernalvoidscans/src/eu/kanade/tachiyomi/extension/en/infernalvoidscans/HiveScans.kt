@@ -3,15 +3,16 @@ package eu.kanade.tachiyomi.extension.en.infernalvoidscans
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
-class InfernalVoidScans : Iken(
-    "Infernal Void Scans",
+class HiveScans : Iken(
+    "Hive Scans",
     "en",
     "https://hivetoon.com",
 ) {
+
+    override val versionId = 2
+
     override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
@@ -21,8 +22,6 @@ class InfernalVoidScans : Iken(
             chain.proceed(request.newBuilder().headers(headers).build())
         }
         .build()
-
-    private val json by injectLazy<Json>()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Cache-Control", "max-age=0")
