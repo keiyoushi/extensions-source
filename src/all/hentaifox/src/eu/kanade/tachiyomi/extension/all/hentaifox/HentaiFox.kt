@@ -15,7 +15,6 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -182,9 +181,9 @@ class HentaiFox(
             }.join()
         }
 
-        val url = "$baseUrl/$sidebarPath".toHttpUrl().newBuilder()
+        val url = "$baseUrl/$sidebarPath"
         return POST(
-            url.build().toString(),
+            url,
             setSidebarHeaders(csrfToken),
             FormBody.Builder()
                 .add("type", category)
@@ -193,7 +192,7 @@ class HentaiFox(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().endsWith(sidebarPath)) {
+        if (response.request.url.encodedPath.endsWith(sidebarPath)) {
             val document = response.asJsoup()
             val mangas = document.select(sidebarMangaSelector())
                 .map {

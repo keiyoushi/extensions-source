@@ -3,7 +3,7 @@ ext {
     extClass = '.HentaiFoxFactory'
     themePkg = 'galleryadults'
     baseUrl = 'https://hentaifox.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 6
     isNsfw = true
 }
 
