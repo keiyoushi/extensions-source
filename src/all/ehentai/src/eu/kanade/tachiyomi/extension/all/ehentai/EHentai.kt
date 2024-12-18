@@ -398,7 +398,7 @@ abstract class EHentai(
         .appendQueryParameter(param, value)
         .toString()
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .cookieJar(CookieJar.NO_COOKIES)
         .addInterceptor { chain ->
             val newReq = chain
