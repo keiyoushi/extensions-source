@@ -777,7 +777,7 @@ abstract class GalleryAdults(
 
     /* Filters */
     private val scope = CoroutineScope(Dispatchers.IO)
-    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+    protected fun launchIO(block: () -> Unit) = scope.launch { block() }
     private var tagsFetched = false
     private var tagsFetchAttempt = 0
 
