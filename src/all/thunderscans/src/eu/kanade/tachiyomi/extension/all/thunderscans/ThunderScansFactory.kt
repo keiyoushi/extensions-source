@@ -29,11 +29,11 @@ class LavaScans : MangaThemesiaAlt(
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
-    override fun chapterListSelector(): String
-    {
+    override fun chapterListSelector(): String {
         return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
             super.chapterListSelector(),
-            preferences)
+            preferences,
+        )
     }
 }
 
@@ -50,10 +50,10 @@ class ThunderScans : MangaThemesiaAlt(
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
-    override fun chapterListSelector(): String
-    {
+    override fun chapterListSelector(): String {
         return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
             super.chapterListSelector(),
-            preferences)
+            preferences,
+        )
     }
 }

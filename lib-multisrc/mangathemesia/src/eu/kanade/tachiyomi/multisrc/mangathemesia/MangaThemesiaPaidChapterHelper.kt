@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.lib.i18n.Intl
 
 class MangaThemesiaPaidChapterHelper(
     private val hidePaidChaptersPrefKey: String = "pref_hide_paid_chapters",
-    private val lockedChapterSelector: String = "a[data-bs-target='#lockedChapterModal']"
+    private val lockedChapterSelector: String = "a[data-bs-target='#lockedChapterModal']",
 ) {
     fun addHidePaidChaptersPreferenceToScreen(screen: PreferenceScreen, intl: Intl) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -20,8 +20,7 @@ class MangaThemesiaPaidChapterHelper(
 
     fun getHidePaidChaptersPref(preferences: SharedPreferences) = preferences.getBoolean(hidePaidChaptersPrefKey, true)
 
-    fun getChapterListSelectorBasedOnHidePaidChaptersPref(baseChapterListSelector: String, preferences: SharedPreferences): String
-    {
+    fun getChapterListSelectorBasedOnHidePaidChaptersPref(baseChapterListSelector: String, preferences: SharedPreferences): String {
         if (!getHidePaidChaptersPref(preferences)) {
             return baseChapterListSelector
         }

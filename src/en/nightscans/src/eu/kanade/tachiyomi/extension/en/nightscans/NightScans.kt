@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.nightscans
 
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -24,10 +23,10 @@ class NightScans : MangaThemesiaAlt("NIGHT SCANS", "https://nightsup.net", "en",
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
-    override fun chapterListSelector(): String
-    {
+    override fun chapterListSelector(): String {
         return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
             super.chapterListSelector(),
-            preferences)
+            preferences,
+        )
     }
 }
