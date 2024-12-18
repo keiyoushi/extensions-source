@@ -17,6 +17,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -71,17 +72,25 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         .rateLimit(1, 3)
         .build()
 
+    private var failedHighQuality = false
+
     private fun forceHighQualityInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
-        if (preferences.forceHighQuality() && request.url.host == apiUrl.toHttpUrl().host) {
+        if (preferences.forceHighQuality() && !failedHighQuality && request.url.fragment == "pageListParse") {
             OPTIMIZED_IMAGE_PATH_REGEX.find(request.url.encodedPath)?.also { match ->
                 val (id, page) = match.destructured
                 val newUrl = request.url.newBuilder()
                     .encodedPath("/storage/media/$id/$page.webp")
                     .build()
 
-                return chain.proceed(request.newBuilder().url(newUrl).build())
+                val response = chain.proceed(request.newBuilder().url(newUrl).build())
+                if (response.code != 404) {
+                    return response
+                } else {
+                    failedHighQuality = true
+                    response.close()
+                }
             }
         }
 
@@ -291,7 +300,16 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             .joinToString("") { it.data().substringAfter("\"").substringBeforeLast("\"") }
         val pagesData = PAGES_REGEX.find(scriptData)?.groupValues?.get(1) ?: throw Exception("Failed to find chapter pages")
         val pageList = json.decodeFromString<List<PageDto>>(pagesData.unescape()).sortedBy { it.order }
-        return pageList.mapIndexed { i, page -> Page(i, imageUrl = page.url) }
+        return pageList.mapIndexed { i, page ->
+            val newUrl = page.url.toHttpUrlOrNull()?.run {
+                newBuilder()
+                    .fragment("pageListParse")
+                    .build()
+                    .toString()
+            }
+
+            Page(i, imageUrl = newUrl ?: page.url)
+        }
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -319,7 +337,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_FORCE_HIGH_QUALITY
             title = "Force high quality chapter images"
-            summary = "Attempt to use high quality chapter images. Will increase bandwidth by ~50%"
+            summary = "Attempt to use high quality chapter images.\nWill increase bandwidth by ~50%."
+            if (failedHighQuality) {
+                summary = "$summary\n*DISABLED* because of missing high quality images."
+            }
             setDefaultValue(false)
         }.let(screen::addPreference)
     }
