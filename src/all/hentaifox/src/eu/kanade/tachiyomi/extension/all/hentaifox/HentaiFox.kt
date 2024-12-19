@@ -146,25 +146,17 @@ class HentaiFox(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // Sidebar mangas should always override any other search, so they should appear first
-        // in the case/when and only propagate to super when a "normal" search is issued
+        // and only propagate to super when a "normal" search is issued
         val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
 
-        return when {
-            sortOrderFilter?.state == 2 ->
-                sidebarRequest("top_rated")
-
-            sortOrderFilter?.state == 3 ->
-                sidebarRequest("top_faved")
-
-            sortOrderFilter?.state == 4 ->
-                sidebarRequest("top_fapped")
-
-            sortOrderFilter?.state == 5 ->
-                sidebarRequest("top_downloaded")
-
-            else ->
-                super.searchMangaRequest(page, query, filters)
+        sortOrderFilter?.let {
+            if (sortOrderFilter.state > 1) {
+                return sidebarRequest(
+                    sidebarCategoriesFilterStateMap.getValue(sortOrderFilter.state),
+                )
+            }
         }
+        return super.searchMangaRequest(page, query, filters)
     }
 
     private var csrfToken: String? = null
@@ -224,5 +216,14 @@ class HentaiFox(
             Pair("Most Fapped", "mf"),
             Pair("Most Downloaded", "md"),
         )
+    }
+
+    companion object {
+        private val sidebarCategoriesFilterStateMap = mapOf(
+            2 to "top_rated",
+            3 to "top_faved",
+            4 to "top_fapped",
+            5 to "top_downloaded",
+        ).withDefault { "top_rated" }
     }
 }
