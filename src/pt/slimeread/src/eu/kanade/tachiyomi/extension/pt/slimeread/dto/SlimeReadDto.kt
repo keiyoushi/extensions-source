@@ -5,14 +5,14 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PopularMangaDto(
+class PopularMangaDto(
     @SerialName("book_image") val thumbnail_url: String?,
     @SerialName("book_id") val id: Int,
     @SerialName("book_name_original") val name: String,
 )
 
 @Serializable
-data class LatestResponseDto(
+class LatestResponseDto(
     val pages: Int,
     val page: Int,
     val data: List<PopularMangaDto>,
@@ -27,7 +27,7 @@ fun List<PopularMangaDto>.toSMangaList(): List<SManga> = map { item ->
 }
 
 @Serializable
-data class MangaInfoDto(
+class MangaInfoDto(
     @SerialName("book_id") val id: Int,
     @SerialName("book_image") val thumbnail_url: String?,
     @SerialName("book_name_original") val name: String,
@@ -36,28 +36,28 @@ data class MangaInfoDto(
     @SerialName("book_categories") private val _categories: List<CategoryDto>,
 ) {
     @Serializable
-    data class CategoryDto(val categories: CatDto)
+    class CategoryDto(val categories: CatDto)
 
     @Serializable
-    data class CatDto(@SerialName("cat_name_ptBR") val name: String)
+    class CatDto(@SerialName("cat_name_ptBR") val name: String)
 
     val categories = _categories.map { it.categories.name }
 }
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     @SerialName("btc_cap") val number: Float,
     val scan: ScanDto?,
 ) {
     @Serializable
-    data class ScanDto(val scan_name: String?)
+    class ScanDto(val scan_name: String?)
 }
 
 @Serializable
-data class PageListDto(@SerialName("book_temp_cap_unit") val pages: List<PageDto>)
+class PageListDto(@SerialName("book_temp_cap_unit") val pages: List<PageDto>)
 
 @Serializable
-data class PageDto(
+class PageDto(
     @SerialName("btcu_image") private val path: String,
     @SerialName("btcu_provider_host") private val hostId: Int?,
 ) {
