@@ -18,6 +18,18 @@
                 <data android:host="*.webmota.com" />
                 <data android:host="webmota.com" />
 
+                <data android:host="*.kukuc.co" />
+                <data android:host="kukuc.co" />
+
+                <data android:host="*.czmanga.com" />
+                <data android:host="czmanga.com" />
+
+                <data android:host="*.twmanga.com" />
+                <data android:host="twmanga.com" />
+
+                <data android:host="*.dinnerku.com" />
+                <data android:host="dinnerku.com" />
+
                 <data
                     android:pathPattern="/comic/..*"
                     android:scheme="https" />
