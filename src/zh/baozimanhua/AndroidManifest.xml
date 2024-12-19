@@ -21,9 +21,6 @@
                 <data android:host="*.kukuc.co" />
                 <data android:host="kukuc.co" />
 
-                <data android:host="*.czmanga.com" />
-                <data android:host="czmanga.com" />
-
                 <data android:host="*.twmanga.com" />
                 <data android:host="twmanga.com" />
 
