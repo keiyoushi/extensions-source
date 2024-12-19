@@ -1,17 +1,16 @@
 package eu.kanade.tachiyomi.extension.all.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.Genre
 import eu.kanade.tachiyomi.multisrc.galleryadults.SortOrderFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.coroutines.runBlocking
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -127,11 +126,7 @@ class HentaiFox(
     private fun Element.sidebarMangaThumbnail() =
         selectFirst("img")?.imgAttr()
 
-    private fun fetchHomepage(): Request {
-        return GET(baseUrl, headers)
-    }
-
-    private fun homepageCsrfParser(document: Document): String {
+    private fun csrfParser(document: Document): String {
         return document.select("[name=csrf-token]").attr("content")
     }
 
@@ -161,18 +156,12 @@ class HentaiFox(
 
     private var csrfToken: String? = null
 
+    override fun tagsParser(document: Document): List<Genre> {
+        csrfToken = csrfParser(document)
+        return super.tagsParser(document)
+    }
+
     private fun sidebarRequest(category: String): Request {
-        // Use Elvis operator to fetch CSRF only if it is null
-
-        csrfToken ?: runBlocking {
-            launchIO {
-                runCatching {
-                    csrfToken = client.newCall(fetchHomepage())
-                        .execute().asJsoup().let { homepageCsrfParser(it) }
-                }
-            }.join()
-        }
-
         val url = "$baseUrl/$sidebarPath"
         return POST(
             url,
