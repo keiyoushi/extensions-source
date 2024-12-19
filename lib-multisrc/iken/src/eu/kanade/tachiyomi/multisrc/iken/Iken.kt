@@ -33,7 +33,7 @@ abstract class Iken(
         .set("Referer", "$baseUrl/")
 
     private var genres = emptyList<Pair<String, String>>()
-    private val titleCache by lazy {
+    protected val titleCache by lazy {
         val response = client.newCall(GET("$baseUrl/api/query?perPage=9999", headers)).execute()
         val data = response.parseAs<SearchResponse>()
 
