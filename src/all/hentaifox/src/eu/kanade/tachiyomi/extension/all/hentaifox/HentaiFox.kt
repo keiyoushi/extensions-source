@@ -126,6 +126,13 @@ class HentaiFox(
     private fun Element.sidebarMangaThumbnail() =
         selectFirst("img")?.imgAttr()
 
+    private var csrfToken: String? = null
+
+    override fun tagsParser(document: Document): List<Genre> {
+        csrfToken = csrfParser(document)
+        return super.tagsParser(document)
+    }
+
     private fun csrfParser(document: Document): String {
         return document.select("[name=csrf-token]").attr("content")
     }
@@ -152,13 +159,6 @@ class HentaiFox(
             }
         }
         return super.searchMangaRequest(page, query, filters)
-    }
-
-    private var csrfToken: String? = null
-
-    override fun tagsParser(document: Document): List<Genre> {
-        csrfToken = csrfParser(document)
-        return super.tagsParser(document)
     }
 
     private fun sidebarRequest(category: String): Request {
