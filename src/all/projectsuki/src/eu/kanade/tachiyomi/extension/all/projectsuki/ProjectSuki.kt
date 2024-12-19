@@ -208,7 +208,7 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
      * (this is a permalink, check for updated version),
      * most client options are already set as they should be, including the [Cache][okhttp3.Cache].
      */
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
             userAgentType = preferences.shared.getPrefUAType(),
             customUA = preferences.shared.getPrefCustomUA(),

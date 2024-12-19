@@ -33,7 +33,7 @@ open class MangaFire(
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .addInterceptor(ImageInterceptor)
         .build()
 

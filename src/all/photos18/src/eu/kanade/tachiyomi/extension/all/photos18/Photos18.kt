@@ -34,7 +34,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
     private val baseUrlWithLang get() = if (useTrad) baseUrl else "$baseUrl/zh-hans"
     private fun String.stripLang() = removePrefix("/zh-hans")
 
-    override val client = network.client.newBuilder().followRedirects(false).build()
+    override val client = network.cloudflareClient.newBuilder().followRedirects(false).build()
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", baseUrl)

@@ -24,7 +24,7 @@ abstract class MDB(
     override val lang: String = "zh",
 ) : ParsedHttpSource() {
 
-    override val client = network.client.newBuilder().rateLimit(2).build()
+    override val client = network.cloudflareClient.newBuilder().rateLimit(2).build()
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", baseUrl)
 

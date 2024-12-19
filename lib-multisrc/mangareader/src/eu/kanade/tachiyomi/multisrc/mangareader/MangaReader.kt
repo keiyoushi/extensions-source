@@ -22,6 +22,8 @@ abstract class MangaReader : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
+    override val client = network.cloudflareClient
+
     final override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     final override fun popularMangaParse(response: Response) = searchMangaParse(response)

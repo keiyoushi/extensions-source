@@ -35,7 +35,7 @@ class TaoSect : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 

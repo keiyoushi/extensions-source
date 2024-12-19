@@ -177,7 +177,7 @@ abstract class Comick(
         add("User-Agent", "Tachiyomi ${System.getProperty("http.agent")}")
     }
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::errorInterceptor)
         .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()

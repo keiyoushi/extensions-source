@@ -31,7 +31,7 @@ open class MangaReader(
 
     override val baseUrl = "https://mangareader.to"
 
-    override val client = network.client.newBuilder()
+    override val client = super.client.newBuilder()
         .addInterceptor(ImageInterceptor)
         .build()
 
