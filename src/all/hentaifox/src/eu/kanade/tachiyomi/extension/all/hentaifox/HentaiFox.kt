@@ -152,9 +152,10 @@ class HentaiFox(
         val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
 
         sortOrderFilter?.let {
-            if (sortOrderFilter.state > 1) {
+            val selectedCategory = sortOrderFilter.values.get(sortOrderFilter.state)
+            if (sidebarCategoriesFilterStateMap.containsKey(selectedCategory)) {
                 return sidebarRequest(
-                    sidebarCategoriesFilterStateMap.getValue(sortOrderFilter.state),
+                    sidebarCategoriesFilterStateMap.getValue(selectedCategory),
                 )
             }
         }
@@ -199,20 +200,15 @@ class HentaiFox(
     }
 
     override fun getSortOrderURIs(): List<Pair<String, String>> {
-        return super.getSortOrderURIs() + listOf(
-            Pair("Top Rated", "tr"),
-            Pair("Most Faved", "mv"),
-            Pair("Most Fapped", "mf"),
-            Pair("Most Downloaded", "md"),
-        )
+        return super.getSortOrderURIs() + sidebarCategoriesFilterStateMap.toList()
     }
 
     companion object {
         private val sidebarCategoriesFilterStateMap = mapOf(
-            2 to "top_rated",
-            3 to "top_faved",
-            4 to "top_fapped",
-            5 to "top_downloaded",
+            "Top Rated" to "top_rated",
+            "Most Faved" to "top_faved",
+            "Most Fapped" to "top_fapped",
+            "Most Downloaded" to "top_downloaded",
         ).withDefault { "top_rated" }
     }
 }
