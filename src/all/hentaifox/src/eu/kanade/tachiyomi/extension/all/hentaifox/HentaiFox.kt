@@ -1,10 +1,22 @@
 package eu.kanade.tachiyomi.extension.all.hentaifox
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.Genre
+import eu.kanade.tachiyomi.multisrc.galleryadults.SortOrderFilter
+import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class HentaiFox(
@@ -100,4 +112,107 @@ class HentaiFox(
             Filter.Header("HINT: Use double quote (\") for exact match"),
         ) + super.getFilterList().list,
     )
+
+    private val sidebarPath = "includes/sidebar.php"
+
+    private fun sidebarMangaSelector() = "div.item"
+
+    private fun Element.sidebarMangaTitle() =
+        selectFirst("img")?.attr("alt")
+
+    private fun Element.sidebarMangaUrl() =
+        selectFirst("a")?.attr("abs:href")
+
+    private fun Element.sidebarMangaThumbnail() =
+        selectFirst("img")?.imgAttr()
+
+    private var csrfToken: String? = null
+
+    override fun tagsParser(document: Document): List<Genre> {
+        csrfToken = csrfParser(document)
+        return super.tagsParser(document)
+    }
+
+    private fun csrfParser(document: Document): String {
+        return document.select("[name=csrf-token]").attr("content")
+    }
+
+    private fun setSidebarHeaders(csrfToken: String?): Headers {
+        if (csrfToken == null) {
+            return xhrHeaders
+        }
+        return xhrHeaders.newBuilder()
+            .add("X-Csrf-Token", csrfToken)
+            .build()
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        // Sidebar mangas should always override any other search, so they should appear first
+        // and only propagate to super when a "normal" search is issued
+        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
+
+        sortOrderFilter?.let {
+            if (sortOrderFilter.state > 1) {
+                return sidebarRequest(
+                    sidebarCategoriesFilterStateMap.getValue(sortOrderFilter.state),
+                )
+            }
+        }
+        return super.searchMangaRequest(page, query, filters)
+    }
+
+    private fun sidebarRequest(category: String): Request {
+        val url = "$baseUrl/$sidebarPath"
+        return POST(
+            url,
+            setSidebarHeaders(csrfToken),
+            FormBody.Builder()
+                .add("type", category)
+                .build(),
+        )
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        if (response.request.url.encodedPath.endsWith(sidebarPath)) {
+            val document = response.asJsoup()
+            val mangas = document.select(sidebarMangaSelector())
+                .map {
+                    SMangaDto(
+                        title = it.sidebarMangaTitle()!!,
+                        url = it.sidebarMangaUrl()!!,
+                        thumbnail = it.sidebarMangaThumbnail(),
+                        lang = LANGUAGE_MULTI,
+                    )
+                }
+                .map {
+                    SManga.create().apply {
+                        title = it.title
+                        setUrlWithoutDomain(it.url)
+                        thumbnail_url = it.thumbnail
+                    }
+                }
+
+            return MangasPage(mangas, false)
+        } else {
+            return super.searchMangaParse(response)
+        }
+    }
+
+    override fun getSortOrderURIs(): List<Pair<String, String>> {
+        return super.getSortOrderURIs() + listOf(
+            Pair("Top Rated", "tr"),
+            Pair("Most Faved", "mv"),
+            Pair("Most Fapped", "mf"),
+            Pair("Most Downloaded", "md"),
+        )
+    }
+
+    companion object {
+        private val sidebarCategoriesFilterStateMap = mapOf(
+            2 to "top_rated",
+            3 to "top_faved",
+            4 to "top_fapped",
+            5 to "top_downloaded",
+        ).withDefault { "top_rated" }
+    }
 }
