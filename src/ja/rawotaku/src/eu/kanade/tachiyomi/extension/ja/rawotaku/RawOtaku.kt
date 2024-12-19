@@ -32,7 +32,7 @@ class RawOtaku : MangaReader() {
 
     override val baseUrl = "https://rawotaku.com"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
 

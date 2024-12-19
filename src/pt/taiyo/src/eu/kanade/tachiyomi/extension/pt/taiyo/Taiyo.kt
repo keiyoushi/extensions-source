@@ -60,7 +60,7 @@ class Taiyo : ParsedHttpSource() {
 
     private var bearerToken: String = preferences.getString(BEARER_TOKEN_PREF, "").toString()
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .rateLimitHost(IMG_CDN.toHttpUrl(), 2)
         .addInterceptor(::authorizationInterceptor)
