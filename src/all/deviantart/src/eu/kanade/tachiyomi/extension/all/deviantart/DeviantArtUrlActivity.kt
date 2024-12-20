@@ -13,12 +13,12 @@ class DeviantArtUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
 
         if (pathSegments != null && pathSegments.size >= 3) {
-            val user = pathSegments[0]
-            val id = pathSegments[2]
+            val username = pathSegments[0]
+            val folderId = pathSegments[2]
 
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "gallery:$user/$id")
+                putExtra("query", "gallery:$username/$folderId")
                 putExtra("filter", packageName)
             }
 

@@ -61,9 +61,7 @@ class DeviantArt : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoupXml()
-
-        val firstItem = document.selectFirst("item")
-        requireNotNull(firstItem) { SEARCH_ERROR_MSG }
+        requireNotNull(document.selectFirst("item")) { SEARCH_ERROR_MSG }
 
         val (username, folderId) = response.request.url.queryParameter("q")!!.split(" ")
             .find { it.startsWith("gallery:") }
