@@ -92,7 +92,7 @@ class DeviantArt : HttpSource() {
                 ?: document.selectFirst(".kyUNb")!!.ownText()
             author = document.title().substringBefore(" ")
             description = document.selectFirst(".py0Gw._3urCH")?.wholeText()
-            thumbnail_url = document.selectFirst("._1xcj5._1QdgI img")!!.attr("src")
+            thumbnail_url = document.selectFirst("._1xcj5._1QdgI img")?.absUrl("src")
         }
         manga.setUrlWithoutDomain(response.request.url.toString())
         return manga
@@ -114,7 +114,7 @@ class DeviantArt : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoupXml()
         val chapterList = parseToChapterList(document).toMutableList()
-        var nextUrl = document.selectFirst("[rel=next]")?.attr("href")
+        var nextUrl = document.selectFirst("[rel=next]")?.absUrl("href")
 
         while (nextUrl != null) {
             val newRequest = GET(nextUrl, headers)
@@ -123,7 +123,7 @@ class DeviantArt : HttpSource() {
             val newChapterList = parseToChapterList(newDocument)
             chapterList.addAll(newChapterList)
 
-            nextUrl = newDocument.selectFirst("[rel=next]")?.attr("href")
+            nextUrl = newDocument.selectFirst("[rel=next]")?.absUrl("href")
         }
 
         return indexChapterList(chapterList.toList())
@@ -136,8 +136,8 @@ class DeviantArt : HttpSource() {
             chapter.setUrlWithoutDomain(it.selectFirst("link")!!.text())
             chapter.apply {
                 name = it.selectFirst("title")!!.text()
-                date_upload = parseDate(it.selectFirst("pubDate")!!.text())
-                scanlator = it.selectFirst("media|credit")!!.text()
+                date_upload = it.selectFirst("pubDate")?.text()?.let(::parseDate) ?: 0L
+                scanlator = it.selectFirst("media|credit")?.text()
             }
         }
     }
