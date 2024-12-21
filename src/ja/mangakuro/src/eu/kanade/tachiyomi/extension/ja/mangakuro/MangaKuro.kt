@@ -51,7 +51,7 @@ class MangaKuro : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga =
         SManga.create().apply {
             element.selectFirst("a")?.let { setUrlWithoutDomain(it.absUrl("href")) }
-            title = element.selectFirst(".mg_name a")?.text().toString()
+            title = element.selectFirst(".mg_name a")?.text() ?: ""
             thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
 
@@ -83,12 +83,12 @@ class MangaKuro : ParsedHttpSource() {
     }
 
     private val chapterIDRegex = """CHAPTER_ID = (\d+);""".toRegex()
-    private val imageRegex = """src=.?"(\S+)\\"""".toRegex()
+    private val imageRegex = """src=\\"([^"]+)\\""".toRegex()
 
     override fun pageListParse(document: Document): List<Page> {
         val id = chapterIDRegex.find(document.outerHtml())?.groupValues?.get(1) ?: return listOf()
 
-        val response = client.newCall(GET("https://mangakuro.net/ajax/image/list/chap/$id", headers)).execute()
+        val response = client.newCall(GET("$baseUrl/ajax/image/list/chap/$id", headers)).execute()
         return imageRegex.findAll(response.body.string()).mapIndexed { idx, img ->
             Page(idx, imageUrl = img.groupValues[1])
         }.toList()
