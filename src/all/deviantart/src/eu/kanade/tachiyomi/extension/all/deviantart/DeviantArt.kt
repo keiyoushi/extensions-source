@@ -86,13 +86,14 @@ class DeviantArt : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
+        val subFolderGallery = document.selectFirst("#sub-folder-gallery")!!
         val manga = SManga.create().apply {
             // If manga is sub-gallery then use sub-gallery name, else use gallery name
-            title = document.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
-                ?: document.selectFirst(".kyUNb")!!.ownText()
+            title = subFolderGallery.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
+                ?: subFolderGallery.selectFirst("[aria-haspopup=listbox]")!!.ownText()
             author = document.title().substringBefore(" ")
-            description = document.selectFirst(".py0Gw._3urCH")?.wholeText()
-            thumbnail_url = document.selectFirst("._1xcj5._1QdgI img")?.absUrl("src")
+            description = subFolderGallery.selectFirst(".legacy-journal")?.wholeText()
+            thumbnail_url = subFolderGallery.selectFirst("img[property=contentUrl]")?.absUrl("src")
         }
         manga.setUrlWithoutDomain(response.request.url.toString())
         return manga
