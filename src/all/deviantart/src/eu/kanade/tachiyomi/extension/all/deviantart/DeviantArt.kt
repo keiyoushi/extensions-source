@@ -90,7 +90,7 @@ class DeviantArt : HttpSource() {
         val manga = SManga.create().apply {
             // If manga is sub-gallery then use sub-gallery name, else use gallery name
             title = subFolderGallery.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
-                ?: subFolderGallery.selectFirst("[aria-haspopup=listbox]")!!.ownText()
+                ?: document.selectFirst(".ds-card-selected h2")!!.text()
             author = document.title().substringBefore(" ")
             description = subFolderGallery.selectFirst(".legacy-journal")?.wholeText()
             thumbnail_url = subFolderGallery.selectFirst("img[property=contentUrl]")?.absUrl("src")
