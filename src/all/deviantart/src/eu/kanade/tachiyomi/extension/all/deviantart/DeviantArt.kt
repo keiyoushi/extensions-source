@@ -49,12 +49,10 @@ class DeviantArt : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         require(query.startsWith("gallery:")) { SEARCH_ERROR_MSG }
-        try {
-            val (username, folderId) = query.substringAfter(":").split("/")
-            return GET("$baseUrl/$username/gallery/$folderId", headers)
-        } catch (_: IndexOutOfBoundsException) {
-            throw IllegalArgumentException(SEARCH_ERROR_MSG)
-        }
+        val querySegments = query.substringAfter(":").split("/")
+        val username = querySegments[0]
+        val folderId = querySegments.getOrElse(1) { "all" }
+        return GET("$baseUrl/$username/gallery/$folderId", headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -90,9 +88,15 @@ class DeviantArt : HttpSource() {
         val username = pathSegments[0]
         val folderId = pathSegments[2]
 
+        val query = if (folderId == "all") {
+            "gallery:$username"
+        } else {
+            "gallery:$username/$folderId"
+        }
+
         val url = backendBuilder()
             .addPathSegment("rss.xml")
-            .addQueryParameter("q", "gallery:$username/$folderId")
+            .addQueryParameter("q", query)
             .build()
 
         return GET(url, headers)
