@@ -77,9 +77,8 @@ abstract class LibGroup(
             .rateLimit(3)
             .rateLimitHost(apiDomain.toHttpUrl(), 1)
             .rateLimitHost(baseUrl.toHttpUrl(), 1)
-            .connectTimeout(5, TimeUnit.MINUTES)
+            .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(::checkForToken)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
