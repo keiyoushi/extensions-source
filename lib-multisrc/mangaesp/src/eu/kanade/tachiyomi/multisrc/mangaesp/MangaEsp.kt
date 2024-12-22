@@ -46,6 +46,8 @@ abstract class MangaEsp(
 
     protected open val seriesPath = "/ver"
 
+    protected open val useApiSearch = false
+
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
@@ -62,7 +64,9 @@ abstract class MangaEsp(
         val topWeekly = responseData.response.topWeekly.flatten().map { it.data }
         val topMonthly = responseData.response.topMonthly.flatten().map { it.data }
 
-        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }.map { it.toSManga(seriesPath) }
+        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }
+            .additionalParse()
+            .map { it.toSManga(seriesPath) }
 
         return MangasPage(mangas, false)
     }
@@ -72,7 +76,9 @@ abstract class MangaEsp(
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseData = json.decodeFromString<LastUpdatesDto>(response.body.string())
 
-        val mangas = responseData.response.map { it.toSManga(seriesPath) }
+        val mangas = responseData.response
+            .additionalParse()
+            .map { it.toSManga(seriesPath) }
 
         return MangasPage(mangas, false)
     }
@@ -93,18 +99,31 @@ abstract class MangaEsp(
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comics", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        return if (useApiSearch) {
+            GET("$apiBaseUrl$apiPath/comics", headers)
+        } else {
+            GET("$baseUrl/comics", headers)
+        }
+    }
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     protected open fun searchMangaParse(response: Response, page: Int, query: String, filters: FilterList): MangasPage {
-        val document = response.asJsoup()
-        val script = document.select("script:containsData(self.__next_f.push)").joinToString { it.data() }
-        val jsonString = MANGA_LIST_REGEX.find(script)?.groupValues?.get(1)
-            ?: throw Exception(intl["comics_list_error"])
-        val unescapedJson = jsonString.unescape()
-        comicsList = json.decodeFromString<List<SeriesDto>>(unescapedJson).toMutableList()
+        comicsList = if (useApiSearch) {
+            json.decodeFromString<List<SeriesDto>>(response.body.string()).toMutableList()
+        } else {
+            val script = response.asJsoup().select("script:containsData(self.__next_f.push)").joinToString { it.data() }
+            val jsonString = MANGA_LIST_REGEX.find(script)?.groupValues?.get(1)
+                ?: throw Exception(intl["comics_list_error"])
+            val unescapedJson = jsonString.unescape()
+            json.decodeFromString<List<SeriesDto>>(unescapedJson).toMutableList()
+        }.additionalParse().toMutableList()
         return parseComicsList(page, query, filters)
+    }
+
+    protected open fun List<SeriesDto>.additionalParse(): List<SeriesDto> {
+        return this
     }
 
     private var filteredList = mutableListOf<SeriesDto>()
