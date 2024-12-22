@@ -1,0 +1,7 @@
+ext {
+    extName = 'MangaKuro'
+    extClass = '.MangaKuro'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
