@@ -814,8 +814,8 @@ abstract class GalleryAdults(
                 val tags = mutableListOf<Genre>()
                 runBlocking {
                     val jobsPool = mutableListOf<Job>()
-                    // Get first 3 pages
-                    (1..3).forEach { page ->
+                    // Get first 5 pages
+                    (1..5).forEach { page ->
                         jobsPool.add(
                             launchIO {
                                 runCatching {

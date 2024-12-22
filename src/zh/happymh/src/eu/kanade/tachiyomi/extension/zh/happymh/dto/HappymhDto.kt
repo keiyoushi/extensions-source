@@ -21,10 +21,22 @@ data class MangaDto(
 
 // Chapters
 @Serializable
-data class ChapterListDto(val chapterList: List<ChapterDto>) {
-    @Serializable
-    data class ChapterDto(val id: String, val chapterName: String)
-}
+class ChapterByPageResponseDataItem(
+    val chapterName: String,
+    val order: Int,
+    val codes: String,
+)
+
+@Serializable
+class ChapterByPageResponseData(
+    val items: List<ChapterByPageResponseDataItem>,
+    val isEnd: Int,
+)
+
+@Serializable
+class ChapterByPageResponse(
+    val data: ChapterByPageResponseData,
+)
 
 // Pages
 @Serializable

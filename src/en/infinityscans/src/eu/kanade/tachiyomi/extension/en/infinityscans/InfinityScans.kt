@@ -26,7 +26,7 @@ class InfinityScans : HttpSource() {
 
     override val name = "InfinityScans"
 
-    override val baseUrl = "https://infinityscans.net"
+    override val baseUrl = "https://infinityscans.org"
     private val cdnHost = "cdn.infinityscans.net"
 
     override val lang = "en"
