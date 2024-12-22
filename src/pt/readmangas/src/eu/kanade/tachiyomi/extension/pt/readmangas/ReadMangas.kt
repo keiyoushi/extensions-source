@@ -32,7 +32,7 @@ class ReadMangas() : HttpSource() {
 
     override val name = "Read Mangas"
 
-    override val baseUrl = "https://readmangas.org"
+    override val baseUrl = "https://app.loobyt.com"
 
     override val lang = "pt-BR"
 
@@ -247,13 +247,12 @@ class ReadMangas() : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val script = document.select("script").map { it.data() }
-            .firstOrNull { IMAGE_URL_REGEX.containsMatchIn(it) }
-            ?: return emptyList()
-
-        return IMAGE_URL_REGEX.findAll(script).mapIndexed { index, match ->
+        val scripts = document.select("script").joinToString("\n") { it.data() }
+        val pages = IMAGE_URL_REGEX.findAll(scripts).mapIndexed { index, match ->
             Page(index, imageUrl = match.groups["imageUrl"]!!.value)
         }.toList()
+
+        return pages
     }
 
     override fun imageUrlParse(response: Response) = ""
