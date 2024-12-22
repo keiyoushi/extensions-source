@@ -599,7 +599,7 @@ abstract class LibGroup(
         val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US) }
     }
 
-    private fun isServer(): String = preferences.getString(SERVER_PREF, "auto")!!
+    private fun isServer(): String = preferences.getString(SERVER_PREF, "compress")!!
     private fun isEng(): String = preferences.getString(LANGUAGE_PREF, "eng")!!
     private fun groupTranslates(): String = preferences.getString(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT)!!
     private fun isScanUser(): Boolean = preferences.getBoolean(IS_SCAN_USER, false)
@@ -610,10 +610,10 @@ abstract class LibGroup(
             entries = arrayOf("Автовыбор", "Первый", "Второй", "Сжатия")
             entryValues = IMG_SERVERS
             summary = "%s \n\n" +
-                "По умолчанию «Автовыбор». \n\n" +
+                "По умолчанию в приложении и на сайте «Сжатия» - самый стабильный и быстрый. \n\n" +
                 "«Автовыбор» - проходит по всем серверам и показывает только загруженную картинку. \nМожет происходить медленно. \n\n" +
                 "ⓘВыбор другого сервера помогает при ошибках и медленной загрузки изображений глав."
-            setDefaultValue("auto")
+            setDefaultValue("compress")
             setOnPreferenceChangeListener { _, newValue ->
                 val warning = "Для смены сервера: Настройки -> Дополнительно -> Очистить кэш глав"
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
