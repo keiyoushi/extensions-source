@@ -3,7 +3,7 @@ ext {
     extClass = '.EternalMangasFactory'
     themePkg = 'mangaesp'
     baseUrl = 'https://eternalmangas.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
