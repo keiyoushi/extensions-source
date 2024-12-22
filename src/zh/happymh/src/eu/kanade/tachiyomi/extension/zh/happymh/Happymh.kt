@@ -232,11 +232,7 @@ class Happymh : HttpSource(), ConfigurableSource {
                 page += 1
             }
         }
-        if (code == null) {
-            return null
-        }
-        chapterUrlToCode.put(chapter.url, code)
-        return code
+        return code?.also { chapterUrlToCode.put(chapter.url, it) }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
