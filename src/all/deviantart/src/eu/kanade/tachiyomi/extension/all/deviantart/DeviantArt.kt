@@ -8,9 +8,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -146,19 +143,9 @@ class DeviantArt : HttpSource() {
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = backendBuilder()
-            .addPathSegment("oembed")
-            .addQueryParameter("url", baseUrl + chapter.url)
-            .build()
-        return GET(url, headers)
-    }
-
     override fun pageListParse(response: Response): List<Page> {
-        val imageUrl = Json.parseToJsonElement(response.body.string())
-            .jsonObject["url"]!!
-            .jsonPrimitive
-            .content
+        val document = response.asJsoup()
+        val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
         return listOf(Page(0, imageUrl = imageUrl))
     }
 
