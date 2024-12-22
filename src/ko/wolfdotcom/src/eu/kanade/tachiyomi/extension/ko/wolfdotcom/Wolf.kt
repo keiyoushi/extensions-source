@@ -191,7 +191,7 @@ open class Wolf(
         )
     }
 
-    private val specialChars = Regex("""[^가-힣0-9a-zA-Z ]""", RegexOption.IGNORE_CASE)
+    private val specialChars = Regex("""[^\p{InHangul_Syllables}0-9a-z ]""", RegexOption.IGNORE_CASE)
     private val styleImage = Regex("""background-image:url\(([^)]+)\)""")
 
     private fun querySearch(query: String): Observable<MangasPage> {
