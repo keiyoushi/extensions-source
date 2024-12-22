@@ -216,10 +216,10 @@ class Happymh : HttpSource(), ConfigurableSource {
     // Pages
 
     private fun fetchChapterCode(chapter: SChapter): String? {
-        val expectPage = chapter.url.substringAfterLast("#").toIntOrNull() ?: 1
-        val pathSegments = chapter.url.substringBeforeLast("#").split("/")
-        val comicId = pathSegments[1]
-        val chapterId = pathSegments[3].toLong()
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val expectPage = url.fragment?.toIntOrNull() ?: 1
+        val comicId = url.pathSegments[0]
+        val chapterId = url.pathSegments[2].toLong()
         var code = fetchChapterByPage(comicId, expectPage).items.find { it.id == chapterId }?.codes
         if (code == null) {
             // Do full search for find target code
