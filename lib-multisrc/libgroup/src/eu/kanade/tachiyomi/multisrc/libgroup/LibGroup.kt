@@ -611,6 +611,7 @@ abstract class LibGroup(
             entryValues = IMG_SERVERS
             summary = "%s \n\n" +
                 "По умолчанию «Автовыбор». \n\n" +
+                "«Автовыбор» - проходит по всем серверам и показывает только загруженную картинку. \nМожет происходить медленно. \n\n" +
                 "ⓘВыбор другого сервера помогает при ошибках и медленной загрузки изображений глав."
             setDefaultValue("auto")
             setOnPreferenceChangeListener { _, newValue ->
