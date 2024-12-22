@@ -40,7 +40,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         else -> preferences.getPrefBaseUrl()
     }
 
-    private val defaultBaseUrl: String = "https://lectorikigai.acamu.net"
+    private val defaultBaseUrl: String = "https://lectorikigai.bakeni.net"
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) preferences.getPrefBaseUrl()
