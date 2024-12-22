@@ -100,6 +100,11 @@ abstract class LibGroup(
         add("Site-Id", siteId.toString())
     }
 
+    private fun imageHeader() = Headers.Builder().apply {
+        add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        add("Referer", baseUrl)
+    }.build()
+
     private var _constants: Constants? = null
     private fun getConstants(): Constants? {
         if (_constants == null) {
@@ -371,9 +376,23 @@ abstract class LibGroup(
         return chapter
     }
 
+    private fun checkImage(url: String): Boolean {
+        val response = client.newCall(GET(url, imageHeader())).execute()
+        return response.isSuccessful && (response.header("content-length", "0")?.toInt()!! > 600)
+    }
+
     override fun fetchImageUrl(page: Page): Observable<String> {
         if (page.imageUrl != null) {
             return Observable.just(page.imageUrl)
+        }
+        if (isServer() == "auto") {
+            for (serverApi in IMG_SERVERS.slice(1 until IMG_SERVERS.size)) {
+                val server = getConstants()?.getServer(serverApi, siteId)?.url
+                val imageUrl = "$server${page.url}"
+                if (checkImage(imageUrl)) {
+                    return Observable.just(imageUrl)
+                }
+            }
         }
         val server = getConstants()?.getServer(isServer(), siteId)?.url ?: throw Exception("Ошибка получения сервера изображений")
         return Observable.just("$server${page.url}")
@@ -382,11 +401,7 @@ abstract class LibGroup(
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val imageHeader = Headers.Builder().apply {
-            add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            add("Referer", baseUrl)
-        }
-        return GET(page.imageUrl!!, imageHeader.build())
+        return GET(page.imageUrl!!, imageHeader())
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -561,6 +576,7 @@ abstract class LibGroup(
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
         private const val SERVER_PREF = "MangaLibImageServer"
+        private val IMG_SERVERS = arrayOf("auto", "main", "secondary", "compress")
 
         private const val SORTING_PREF = "MangaLibSorting"
         private const val SORTING_PREF_TITLE = "Способ выбора переводчиков"
@@ -583,7 +599,7 @@ abstract class LibGroup(
         val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US) }
     }
 
-    private fun isServer(): String = preferences.getString(SERVER_PREF, "main")!!
+    private fun isServer(): String = preferences.getString(SERVER_PREF, "auto")!!
     private fun isEng(): String = preferences.getString(LANGUAGE_PREF, "eng")!!
     private fun groupTranslates(): String = preferences.getString(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT)!!
     private fun isScanUser(): Boolean = preferences.getBoolean(IS_SCAN_USER, false)
@@ -591,12 +607,17 @@ abstract class LibGroup(
         val serverPref = ListPreference(screen.context).apply {
             key = SERVER_PREF
             title = "Сервер изображений"
-            entries = arrayOf("Первый", "Второй", "Сжатия")
-            entryValues = arrayOf("main", "secondary", "compress")
-            summary = "%s \n\nВыбор приоритетного сервера изображений. \n" +
-                "По умолчанию «Первый». \n\n" +
+            entries = arrayOf("Автовыбор", "Первый", "Второй", "Сжатия")
+            entryValues = IMG_SERVERS
+            summary = "%s \n\n" +
+                "По умолчанию «Автовыбор». \n\n" +
                 "ⓘВыбор другого сервера помогает при ошибках и медленной загрузки изображений глав."
-            setDefaultValue("main")
+            setDefaultValue("auto")
+            setOnPreferenceChangeListener { _, newValue ->
+                val warning = "Для смены сервера: Настройки -> Дополнительно -> Очистить кэш глав"
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
         }
 
         val sortingPref = ListPreference(screen.context).apply {
