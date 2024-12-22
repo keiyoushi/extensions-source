@@ -14,46 +14,40 @@ class ThunderScansFactory : SourceFactory {
     )
 }
 
-class LavaScans : MangaThemesiaAlt(
+abstract class ThunderScansBase(
+    name: String,
+    baseUrl: String,
+    lang: String,
+    mangaUrlDirectory: String = "/manga",
+    dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
+) : MangaThemesiaAlt(name, baseUrl, lang, mangaUrlDirectory, dateFormat) {
+    private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super.setupPreferenceScreen(screen)
+        paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
+    }
+
+    override fun chapterListSelector(): String {
+        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+            super.chapterListSelector(),
+            preferences,
+        )
+    }
+}
+
+class LavaScans : ThunderScansBase(
     "Lava Scans",
     "https://lavatoons.com",
     "ar",
     dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
 ) {
     override val id = 3209001028102012989
-
-    private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super.setupPreferenceScreen(screen)
-        paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
-    }
-
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
-            super.chapterListSelector(),
-            preferences,
-        )
-    }
 }
 
-class ThunderScans : MangaThemesiaAlt(
+class ThunderScans : ThunderScansBase(
     "Thunder Scans",
     "https://en-thunderscans.com",
     "en",
     mangaUrlDirectory = "/comics",
-) {
-    private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super.setupPreferenceScreen(screen)
-        paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
-    }
-
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
-            super.chapterListSelector(),
-            preferences,
-        )
-    }
-}
+)
