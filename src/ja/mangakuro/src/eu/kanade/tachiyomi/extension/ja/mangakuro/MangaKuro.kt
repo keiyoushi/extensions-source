@@ -50,9 +50,9 @@ class MangaKuro : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga =
         SManga.create().apply {
-            element.selectFirst("a")?.let { setUrlWithoutDomain(it.absUrl("href")) }
-            title = element.selectFirst(".mg_name a")?.text() ?: ""
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+            title = element.selectFirst(".mg_name a")!!.text()
+            thumbnail_url = element.selectFirst("img")!!.absUrl("src")
         }
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
@@ -76,9 +76,9 @@ class MangaKuro : ParsedHttpSource() {
     override fun chapterListSelector() = ".chapter_box .item"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val a = element.selectFirst("a")
-        a?.absUrl("href")?.let { setUrlWithoutDomain(it) }
-        name = a?.text().toString().substringAfter("# ")
+        val a = element.selectFirst("a")!!
+        setUrlWithoutDomain(a.absUrl("href"))
+        name = a.text().substringAfter("# ")
         // date_upload = no real date in web
     }
 
