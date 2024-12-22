@@ -228,7 +228,10 @@ open class Wolf(
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/$entryPath?toon=${manga.url}"
+        return baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment(entryPath)
+            .addQueryParameter("toon", manga.url)
+            .toString()
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -290,7 +293,12 @@ open class Wolf(
 
     override fun getChapterUrl(chapter: SChapter): String {
         val chapUrl = json.decodeFromString<ChapterUrl>(chapter.url)
-        return "$baseUrl/$readerPath?toon=${chapUrl.toon}&num=${chapUrl.num}"
+
+        return baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment(readerPath)
+            .addQueryParameter("toon", chapUrl.toon)
+            .addQueryParameter("num", chapUrl.num)
+            .toString()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
