@@ -3,7 +3,7 @@ ext {
     extClass = '.MadaraDex'
     themePkg = 'madara'
     baseUrl = 'https://madaradex.org'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
