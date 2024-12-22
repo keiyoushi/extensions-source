@@ -51,6 +51,7 @@ open class BatoTo(
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+            .migrateMirrorPref()
     }
 
     override val name: String = "Bato.to"
@@ -107,6 +108,16 @@ open class BatoTo(
     private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
     private fun isRemoveTitleVersion(): Boolean {
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
+    }
+
+    private fun SharedPreferences.migrateMirrorPref(): SharedPreferences {
+        val selectedMirror = getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)!!
+
+        if (selectedMirror in DEPRECATED_MIRRORS) {
+            edit().putString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE).commit()
+        }
+
+        return this
     }
 
     override val supportsLatest = true
@@ -983,6 +994,7 @@ open class BatoTo(
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private val MIRROR_PREF_ENTRIES = arrayOf(
+            "zbato.org",
             "bato.to",
             "batocomic.com",
             "batocomic.net",
@@ -992,9 +1004,6 @@ open class BatoTo(
             "battwo.com",
             "comiko.net",
             "comiko.org",
-            "mangatoto.com",
-            "mangatoto.net",
-            "mangatoto.org",
             "readtoto.com",
             "readtoto.net",
             "readtoto.org",
@@ -1009,10 +1018,16 @@ open class BatoTo(
             "xbato.org",
             "zbato.com",
             "zbato.net",
-            "zbato.org",
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
+
+        private val DEPRECATED_MIRRORS = listOf(
+            "https://bato.to",
+            "https://mangatoto.com",
+            "https://mangatoto.net",
+            "https://mangatoto.org",
+        )
 
         private const val ALT_CHAPTER_LIST_PREF_KEY = "ALT_CHAPTER_LIST"
         private const val ALT_CHAPTER_LIST_PREF_TITLE = "Alternative Chapter List"
