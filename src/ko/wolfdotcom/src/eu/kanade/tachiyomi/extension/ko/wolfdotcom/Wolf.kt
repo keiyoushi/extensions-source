@@ -273,7 +273,6 @@ open class Wolf(
                     ),
                 )
                 name = el.selectFirst(".subject")!!.ownText()
-                chapter_number = el.selectFirst(".num")!!.ownText().toFloat()
                 date_upload = el.selectFirst(".date")?.text().parseDate()
             }
         }
