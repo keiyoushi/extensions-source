@@ -992,7 +992,6 @@ open class BatoTo(
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private val MIRROR_PREF_ENTRIES = arrayOf(
             "zbato.org",
-            "bato.to",
             "batocomic.com",
             "batocomic.net",
             "batocomic.org",
