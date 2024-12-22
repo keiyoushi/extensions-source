@@ -327,13 +327,24 @@ open class Wolf(
             if (currentValue.isNotEmpty()) return currentValue
 
             val prefValue = preference.getString(PREF_DOMAIN_NUM, "")!!
+            val prefDefaultValue = preference.getString(PREF_DOMAIN_NUM_DEFAULT, "")!!
+
+            if (prefDefaultValue != DEFAULT_DOMAIN_NUMBER) {
+                preference.edit()
+                    .putString(PREF_DOMAIN_NUM_DEFAULT, DEFAULT_DOMAIN_NUMBER)
+                    .putString(PREF_DOMAIN_NUM, DEFAULT_DOMAIN_NUMBER)
+                    .apply()
+
+                field = DEFAULT_DOMAIN_NUMBER
+                return DEFAULT_DOMAIN_NUMBER
+            }
 
             if (prefValue.isNotEmpty()) {
                 field = prefValue
                 return prefValue
             }
 
-            return "360" // fallback
+            return DEFAULT_DOMAIN_NUMBER
         }
         set(value) {
             preference.edit().putString(PREF_DOMAIN_NUM, value).apply()
@@ -396,3 +407,4 @@ open class Wolf(
 }
 
 private const val PREF_DOMAIN_NUM = "domain_number"
+private const val PREF_DOMAIN_NUM_DEFAULT = "domain_number_default"
