@@ -1,0 +1,10 @@
+ext {
+    extName = 'MahouScan'
+    extClass = '.MahouScan'
+    themePkg = 'slimereadtheme'
+    baseUrl = 'https://mahouscan.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

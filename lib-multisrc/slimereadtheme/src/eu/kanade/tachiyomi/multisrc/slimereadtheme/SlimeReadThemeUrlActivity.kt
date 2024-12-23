@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.slimeread
+package eu.kanade.tachiyomi.multisrc.slimereadtheme
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -11,7 +11,7 @@ import kotlin.system.exitProcess
  * Springboard that accepts https://slimeread.com/manga/<id>/<slug> intents
  * and redirects them to the main Tachiyomi process.
  */
-class SlimeReadUrlActivity : Activity() {
+class SlimeReadThemeUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -22,7 +22,7 @@ class SlimeReadUrlActivity : Activity() {
             val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${SlimeRead.PREFIX_SEARCH}$item")
+                putExtra("query", "${SlimeReadTheme.PREFIX_SEARCH}$item")
                 putExtra("filter", packageName)
             }
 
