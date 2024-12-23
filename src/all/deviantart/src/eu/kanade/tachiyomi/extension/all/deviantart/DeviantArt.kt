@@ -40,15 +40,15 @@ class DeviantArt : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException(SEARCH_ERROR_MSG)
+        throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException(SEARCH_ERROR_MSG)
+        throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        require(query.startsWith("gallery:")) { SEARCH_ERROR_MSG }
+        require(query.startsWith("gallery:")) { SEARCH_FORMAT_MSG }
         val querySegments = query.substringAfter(":").split("/")
         val username = querySegments[0]
         val folderId = querySegments.getOrElse(1) { "all" }
@@ -162,6 +162,6 @@ class DeviantArt : HttpSource() {
     }
 
     companion object {
-        const val SEARCH_ERROR_MSG = "No results found. Is your query in the format of gallery:{username}/{folderId}?"
+        const val SEARCH_FORMAT_MSG = "Please enter a query in the format of gallery:{username} or gallery:{username}/{folderId}"
     }
 }
