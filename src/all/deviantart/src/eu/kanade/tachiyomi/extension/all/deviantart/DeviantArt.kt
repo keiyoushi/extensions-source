@@ -31,9 +31,9 @@ class DeviantArt : HttpSource() {
         SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
     }
 
-    private fun parseDate(dateStr: String): Long {
+    private fun parseDate(dateStr: String?): Long {
         return try {
-            dateFormat.parse(dateStr)!!.time
+            dateFormat.parse(dateStr ?: "")!!.time
         } catch (_: ParseException) {
             0L
         }
@@ -127,7 +127,7 @@ class DeviantArt : HttpSource() {
             chapter.setUrlWithoutDomain(it.selectFirst("link")!!.text())
             chapter.apply {
                 name = it.selectFirst("title")!!.text()
-                date_upload = it.selectFirst("pubDate")?.text()?.let(::parseDate) ?: 0L
+                date_upload = parseDate(it.selectFirst("pubDate")?.text())
                 scanlator = it.selectFirst("media|credit")?.text()
             }
         }
