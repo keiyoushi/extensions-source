@@ -16,7 +16,7 @@ import java.util.Locale
 
 class TopTruyen : WPComics(
     "Top Truyen",
-    "https://www.toptruyento.pro",
+    "https://www.toptruyenpro1.com",
     "vi",
     dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()),
     gmtOffset = null,
