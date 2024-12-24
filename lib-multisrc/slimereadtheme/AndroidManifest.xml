@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
-            android:name=".pt.slimeread.SlimeReadUrlActivity"
+            android:name="eu.kanade.tachiyomi.multisrc.slimereadtheme.SlimeReadThemeUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -12,10 +12,10 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="slimeread.com"
-                    android:pathPattern="/manga/..*"
-                    android:scheme="https" />
+                    <data
+                        android:host="${SOURCEHOST}"
+                        android:pathPattern="/manga/..*"
+                        android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
     </application>

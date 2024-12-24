@@ -1,9 +1,9 @@
-package eu.kanade.tachiyomi.extension.pt.slimeread
+package eu.kanade.tachiyomi.multisrc.slimereadtheme
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-object SlimeReadFilters {
+object SlimeReadThemeFilters {
     open class SelectFilter(
         displayName: String,
         val vals: Array<Pair<String, String>>,
