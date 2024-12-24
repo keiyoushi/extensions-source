@@ -7,6 +7,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -197,8 +198,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     // Popular
     private fun rankApiUrl(): HttpUrl.Builder =
-        "$apiUrl/comic/rank/list".toHttpUrl().newBuilder().addQueryParameter("by_time", "3")
-            .addQueryParameter("tag_id", "0").addQueryParameter("rank_type", "0")
+        "$apiUrl/comic/rank/list".toHttpUrl().newBuilder()
+            .addQueryParameter("tag_id", "0")
 
     override fun popularMangaRequest(page: Int): Request = GET(
         rankApiUrl().apply {
@@ -225,15 +226,42 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     override fun searchMangaParse(response: Response): MangasPage =
         response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
 
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        val ranking = filters.filterIsInstance<RankingGroup>().firstOrNull()
+        if (query.isEmpty() && ranking != null) {
+            val url = rankApiUrl().apply {
+                ranking.state.filterIsInstance<QueryFilter>().forEach {
+                    it.addQuery(this)
+                }
+                addQueryParameter("page", page.toString())
+            }.build()
+            return client.newCall(GET(url, apiHeaders)).asObservableSuccess()
+                .map { latestUpdatesParse(it) }
+        } else {
+            return super.fetchSearchManga(page, query, filters)
+        }
+    }
+
     // Latest
     // "$apiUrl/comic/update/list/1/$page" is same content
     override fun latestUpdatesRequest(page: Int): Request =
         GET("$apiUrl/comic/update/list/0/$page", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.parseAs<ResponseDto<List<PageItemDto>>>().data
+        val mangas = response.parseAs<ResponseDto<List<PageItemDto>?>>().data
+        if (mangas.isNullOrEmpty()) {
+            throw Exception("没有更多结果了")
+        }
         return MangasPage(mangas.map { it.toSManga() }, true)
     }
+
+    override fun getFilterList() = FilterList(
+        RankingGroup(),
+    )
 
     companion object {
         val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
