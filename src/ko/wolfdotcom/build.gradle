@@ -1,0 +1,53 @@
+ext {
+    extName = 'Wolf.com'
+    extClass = '.WolfFactory'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+def domainNumberFileName = "src/ko/wolfdotcom/src/eu/kanade/tachiyomi/extension/ko/wolfdotcom/DomainNumber.kt"
+def domainNumberFile = new File(domainNumberFileName)
+def backupFile = new File(domainNumberFileName + "_bak")
+
+tasks.register('updateDomainNumber') {
+    doLast {
+        def domainNumber = -1
+        def response = new URL("https://nicelink52.com/").text
+        def matcher = response =~ ~/https?:\/\/wfwf(\d+)\.com/
+        if (matcher) {
+            domainNumber = matcher[0][1]
+            println("[Wolf.com] new domain number: $domainNumber")
+        } else {
+            println("[Wolf.com] domain number not found")
+        }
+
+        if (domainNumber != -1) {
+            domainNumberFile.renameTo(backupFile)
+            domainNumberFile.withPrintWriter {
+                it.println("// THIS FILE IS AUTO-GENERATED, DO NOT COMMIT")
+                it.println("package eu.kanade.tachiyomi.extension.ko.wolfdotcom")
+                it.println("const val DEFAULT_DOMAIN_NUMBER = \"$domainNumber\"")
+            }
+        }
+    }
+}
+
+preBuild.dependsOn updateDomainNumber
+
+tasks.register('restoreBackup') {
+    doLast {
+        if (backupFile.exists()) {
+            println("[Wolf.com] Restoring placeholder file")
+            domainNumberFile.delete()
+            backupFile.renameTo(domainNumberFile)
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name == "assembleDebug" || task.name == "assembleRelease") {
+        task.finalizedBy(restoreBackup)
+    }
+}
