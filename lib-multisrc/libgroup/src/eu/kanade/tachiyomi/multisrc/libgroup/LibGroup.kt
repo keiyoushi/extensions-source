@@ -376,8 +376,8 @@ abstract class LibGroup(
     }
 
     private fun checkImage(url: String): Boolean {
-        val response = client.newCall(Request.Builder().url(url).head().headers(imageHeader()).build()).execute()
-        Log.d("LibGroup", "Image info: $response")
+        val getUrlHead = Request.Builder().url(url).head().headers(imageHeader()).build()
+        val response = client.newCall(getUrlHead).execute()
         return response.isSuccessful && (response.header("content-length", "0")?.toInt()!! > 600)
     }
 
