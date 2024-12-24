@@ -22,6 +22,7 @@ data class MangaDto(
 // Chapters
 @Serializable
 class ChapterByPageResponseDataItem(
+    val id: Long,
     val chapterName: String,
     val order: Int,
     val codes: String,
