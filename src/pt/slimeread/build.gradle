@@ -1,7 +1,9 @@
 ext {
     extName = 'SlimeRead'
     extClass = '.SlimeRead'
-    extVersionCode = 15
+    themePkg = 'slimereadtheme'
+    baseUrl = 'https://slimeread.com'
+    overrideVersionCode = 15
     isNsfw = true
 }
 
