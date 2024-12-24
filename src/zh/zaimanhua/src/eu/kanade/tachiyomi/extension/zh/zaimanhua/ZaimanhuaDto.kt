@@ -15,14 +15,18 @@ class MangaDto(
     private val description: String? = null,
     private val types: List<TagDto>,
     private val status: List<TagDto>,
-    private val authors: List<TagDto>,
+    private val authors: List<TagDto>? = null,
     @SerialName("chapters")
     private val chapterGroups: List<ChapterGroupDto>,
+    @SerialName("last_update_chapter_id")
+    private val lastUpdateChapterId: Int = 0,
+    @SerialName("last_updatetime")
+    private val lastUpdateTime: Long = 0,
 ) {
     fun toSManga() = SManga.create().apply {
         url = id.toString()
         title = this@MangaDto.title
-        author = authors.joinToString { it.name }
+        author = authors?.joinToString { it.name }
         description = this@MangaDto.description
         genre = types.joinToString { it.name }
         status = parseStatus(this@MangaDto.status[0].name)
@@ -32,9 +36,10 @@ class MangaDto(
 
     fun parseChapterList(): List<SChapter> {
         val mangaId = id.toString()
+        val lastUpdateChapter = lastUpdateChapterId.toString()
         val size = chapterGroups.sumOf { it.size }
         return chapterGroups.flatMapTo(ArrayList(size)) {
-            it.toSChapterList(mangaId)
+            it.toSChapterList(mangaId, lastUpdateChapter, lastUpdateTime)
         }
     }
 }
@@ -44,17 +49,24 @@ class ChapterGroupDto(
     private val title: String,
     private val data: List<ChapterDto>,
 ) {
-    fun toSChapterList(mangaId: String): List<SChapter> {
+    fun toSChapterList(mangaId: String, lastUpdateChapter: String, lastUpdateTime: Long): List<SChapter> {
         val groupName = title
         val isDefaultGroup = groupName == "连载"
         val current = System.currentTimeMillis()
         return data.map {
             it.toSChapterInternal().apply {
-                url = "$mangaId/$url"
                 if (!isDefaultGroup) scanlator = groupName
                 // For some chapters, api will always return current time as upload time
                 // Therefore upload times that differ too little from the current time will be ignored
-                if ((current - date_upload) < 10000) date_upload = 0
+                // When the chapter is the latest chapter, use the last update time as the upload time
+                if ((current - date_upload) < 10000) {
+                    date_upload = if (url == lastUpdateChapter) {
+                        lastUpdateTime * 1000
+                    } else {
+                        0L
+                    }
+                }
+                url = "$mangaId/$url"
             }
         }
     }
