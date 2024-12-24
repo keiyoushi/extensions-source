@@ -3,7 +3,7 @@ ext {
     extClass = '.Siikomik'
     themePkg = 'mangathemesia'
     baseUrl = 'https://siikomik.lat'
-    overrideVersionCode = 9
+    overrideVersionCode = 10
     isNsfw = false
 }
 
