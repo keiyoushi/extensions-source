@@ -53,11 +53,9 @@ abstract class Iken(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val slugs = document.select("div:contains(Popular) + div.swiper div.manga-swipe > a")
-            .map { it.absUrl("href").substringAfterLast("/series/") }
 
-        val entries = slugs.mapNotNull {
-            titleCache[it]?.toSManga()
+        val entries = document.select("aside a:has(img)").mapNotNull {
+            titleCache[it.absUrl("href").substringAfter("series/")]?.toSManga()
         }
 
         return MangasPage(entries, false)
