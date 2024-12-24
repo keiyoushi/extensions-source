@@ -2,8 +2,8 @@ ext {
     extName = 'MangaGezgini'
     extClass = '.MangaGezgini'
     themePkg = 'madara'
-    baseUrl = 'https://mangagezgini.dev'
-    overrideVersionCode = 3
+    baseUrl = 'https://mangagezgini.me'
+    overrideVersionCode = 4
     isNsfw = false
 }
 

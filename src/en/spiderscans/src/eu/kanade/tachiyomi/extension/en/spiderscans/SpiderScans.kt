@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.spiderscans
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class SpiderScans : MangaThemesia(
+class SpiderScans : Madara(
     "Spider Scans",
-    "https://spiderscans.xyz",
+    "https://spidyscans.xyz",
     "en",
 ) {
     override val client = super.client.newBuilder()

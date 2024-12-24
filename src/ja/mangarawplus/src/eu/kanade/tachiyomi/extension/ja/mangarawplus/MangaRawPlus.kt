@@ -7,7 +7,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class MangaRawPlus : Madara("MANGARAW+", "https://mangafenxi.net", "ja") {
+class MangaRawPlus : Madara("MANGARAW+", "https://mangarawx.net", "ja") {
+
+    override val mangaSubString = "threads"
+
     override fun popularMangaSelector() = searchMangaSelector()
 
     override fun popularMangaRequest(page: Int) =
