@@ -164,7 +164,7 @@ class Happymh : HttpSource(), ConfigurableSource {
     }
 
     private fun fetchChapterByPage(manga: SManga, page: Int): ChapterByPageResponseData {
-        val comicId = manga.url.substringAfterLast("/")
+        val comicId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
         return fetchChapterByPage(comicId, page)
     }
 
@@ -182,7 +182,7 @@ class Happymh : HttpSource(), ConfigurableSource {
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val comicId = manga.url.substringAfterLast("/")
+        val comicId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
         return Observable
             .defer {
                 fetchChapterByPageAsObservable(manga, 1)
