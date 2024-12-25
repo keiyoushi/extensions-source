@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.happymh
 
 import android.app.Application
-import android.util.LruCache
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -44,7 +43,7 @@ class Happymh : HttpSource(), ConfigurableSource {
 
     override val baseUrl: String = "https://m.happymh.com"
     private val json: Json by injectLazy()
-    private val chapterUrlToCode = LruCache<String, String>(10000)
+    private val chapterUrlToCode = hashMapOf<String, String>()
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
@@ -210,7 +209,7 @@ class Happymh : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + (chapterUrlToCode.get(chapter.url)?.let { "/mangaread/$it" } ?: chapter.url)
+        return baseUrl + (chapterUrlToCode[chapter.url]?.let { "/mangaread/$it" } ?: chapter.url)
     }
 
     // Pages
@@ -232,7 +231,7 @@ class Happymh : HttpSource(), ConfigurableSource {
                 page += 1
             }
         }
-        return code?.also { chapterUrlToCode.put(chapter.url, it) }
+        return code?.also { chapterUrlToCode[chapter.url] = it }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
