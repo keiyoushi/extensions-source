@@ -10,6 +10,6 @@ class YaoiScan : MangaThemesia(
     lang = "fr",
     mangaUrlDirectory = "/catalogue",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.FRANCE),
-){
-
+) {
+    override val seriesStatusSelector = ".status-value"
 }
