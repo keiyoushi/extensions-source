@@ -2,7 +2,7 @@ ext {
     extName = 'YaoiScan'
     extClass = '.YaoiScan'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://yaoiscan.fr/'
+    baseUrl = 'https://yaoiscan.fr'
     overrideVersionCode = 0
     isNsfw = true
 }
