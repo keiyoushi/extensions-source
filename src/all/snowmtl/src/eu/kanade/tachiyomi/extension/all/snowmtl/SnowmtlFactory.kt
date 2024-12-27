@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 
 @RequiresApi(Build.VERSION_CODES.O)
-class SnowmltFactory : SourceFactory {
+class SnowmtlFactory : SourceFactory {
     override fun createSources(): List<Source> = languageList.map(::Snowmtl)
 }
 
