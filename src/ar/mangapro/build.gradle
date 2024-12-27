@@ -1,9 +1,9 @@
 ext {
     extName = 'Manga Pro'
     extClass = '.MangaPro'
-    themePkg = 'mangathemesia'
+    themePkg = 'iken'
     baseUrl = 'https://promanga.pro'
-    overrideVersionCode = 3
+    overrideVersionCode = 28
 }
 
 apply from: "$rootDir/common.gradle"
