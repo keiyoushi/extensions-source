@@ -35,7 +35,7 @@ data class Dialog(
     val angle: Float = 0f,
     val isBold: Boolean = false,
     val isNewApi: Boolean = false,
-    val type: String = "sub",
+    val type: String = "normal",
     private val fbColor: List<Int> = emptyList(),
     private val bgColor: List<Int> = emptyList(),
 ) {

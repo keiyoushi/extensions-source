@@ -125,12 +125,13 @@ class ComposedImageInterceptor(
     }
 
     private fun loadAllFont(chain: Interceptor.Chain) {
+        val fallback = loadFont("coming_soon_regular.ttf")
         fontFamily.keys.forEach { key ->
             val font = fontFamily[key] ?: return@forEach
             if (font.second != null) {
                 return@forEach
             }
-            fontFamily[key] = key to (loadRemoteFont(font.first, chain) ?: loadFont("coming_soon_regular.ttf"))
+            fontFamily[key] = key to (loadRemoteFont(font.first, chain) ?: fallback)
         }
     }
 
