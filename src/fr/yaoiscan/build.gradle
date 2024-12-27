@@ -1,0 +1,10 @@
+ext {
+    extName = 'YaoiScan'
+    extClass = '.YaoiScan'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://yaoiscan.fr'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
