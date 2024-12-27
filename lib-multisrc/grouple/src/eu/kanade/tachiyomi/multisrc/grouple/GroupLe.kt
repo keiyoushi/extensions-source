@@ -185,7 +185,7 @@ abstract class GroupLe(
                 when (infoElement.select("span.badge:contains(выпуск)").first()?.text()) {
                     "выпуск продолжается" -> SManga.ONGOING
                     "выпуск начат" -> SManga.ONGOING
-                    "выпуск завершён" -> SManga.COMPLETED
+                    "выпуск завершён" -> if (infoElement.select("span.badge:contains(переведено)").first()?.text()?.isNotEmpty() == true) SManga.COMPLETED else SManga.PUBLISHING_FINISHED
                     "выпуск приостановлен" -> SManga.ON_HIATUS
                     else -> SManga.UNKNOWN
                 }
