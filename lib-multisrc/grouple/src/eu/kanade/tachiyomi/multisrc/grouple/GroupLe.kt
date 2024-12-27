@@ -177,17 +177,16 @@ abstract class GroupLe(
             "div#tab-description  .manga-description",
         ).text()
         manga.status = when {
-            infoElement.html()
-                .contains("Запрещена публикация произведения по копирайту") || infoElement.html()
+            document.html()
+                .contains("Запрещена публикация произведения по копирайту") || document.html()
                 .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!") -> SManga.LICENSED
-            infoElement.html().contains("<b>Сингл</b>") -> SManga.COMPLETED
+            infoElement.html().contains("<b>Сингл") -> SManga.COMPLETED
             else ->
-                when (infoElement.select("p:contains(Перевод:) span").first()?.text()) {
-                    "продолжается" -> SManga.ONGOING
-                    "начат" -> SManga.ONGOING
-                    "переведено" -> SManga.COMPLETED
-                    "завершён" -> SManga.COMPLETED
-                    "приостановлен" -> SManga.ON_HIATUS
+                when (infoElement.select("span.badge:contains(выпуск)").first()?.text()) {
+                    "выпуск продолжается" -> SManga.ONGOING
+                    "выпуск начат" -> SManga.ONGOING
+                    "выпуск завершён" -> SManga.COMPLETED
+                    "выпуск приостановлен" -> SManga.ON_HIATUS
                     else -> SManga.UNKNOWN
                 }
         }
@@ -313,7 +312,7 @@ abstract class GroupLe(
 
         val html = document.html()
 
-        val readerMark = "rm_h.readerDoInit(["
+        val readerMark = "rm_h.readerInit(["
 
         if (!html.contains(readerMark)) {
             if (document.select(".input-lg").isNotEmpty() || (
