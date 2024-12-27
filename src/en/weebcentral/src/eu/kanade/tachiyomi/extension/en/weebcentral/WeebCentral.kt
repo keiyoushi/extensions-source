@@ -99,15 +99,17 @@ class WeebCentral : ParsedHttpSource() {
     // =========================== Manga Details ============================
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val descBuilder = StringBuilder()
+
         with(document.select("section[x-data] > section")[0]) {
             thumbnail_url = selectFirst("img")!!.attr("abs:src")
             author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
-            genre = selectFirst("ul > li:has(strong:contains(Type)) > a")!!.text()
-            genre += ", " + select("ul > li:has(strong:contains(Tag)) > span > a").joinToString { it.text() }
+            genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
             status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
-            description = ""
-            if (selectFirst("""ul > li:has(a[href$="official=True"])""") != null) {
-                description += "Official Translation\n\n"
+
+            if (selectFirst("ul > li > strong:contains(Translation) + a:contains(Yes)") != null) {
+                descBuilder.appendLine("Official Translation")
+                descBuilder.appendLine()
             }
         }
 
@@ -116,12 +118,18 @@ class WeebCentral : ParsedHttpSource() {
 
             val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
             if (alternateTitles.size > 0) {
-                description += "Associated Name(s):\n" + alternateTitles.joinToString { it.text() + "\n" } + "\n"
+                descBuilder.appendLine("Associated Name(s):")
+                alternateTitles.forEach { descBuilder.appendLine(it.text()) }
+                descBuilder.appendLine()
             }
 
-            description += selectFirst("li:has(strong:contains(Description)) > p")?.text()
-                ?.replace("NOTE: ", "\n\nNOTE: ")
+            descBuilder.append(
+                selectFirst("li:has(strong:contains(Description)) > p")?.text()
+                    ?.replace("NOTE: ", "\n\nNOTE: "),
+            )
         }
+
+        description = descBuilder.toString()
     }
 
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
