@@ -17,5 +17,6 @@ private val languageList = listOf(
     Source("es"),
     Source("id"),
     Source("it"),
+    Source("ar"),
     Source("pt-BR", "pt"),
 )
