@@ -102,13 +102,24 @@ class WeebCentral : ParsedHttpSource() {
         with(document.select("section[x-data] > section")[0]) {
             thumbnail_url = selectFirst("img")!!.attr("abs:src")
             author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
-            genre = select("ul > li:has(strong:contains(Tag)) > span > a").joinToString { it.text() }
+            genre = selectFirst("ul > li:has(strong:contains(Type)) > a")!!.text()
+            genre += ", " + select("ul > li:has(strong:contains(Tag)) > span > a").joinToString { it.text() }
             status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
+            description = ""
+            if (selectFirst("""ul > li:has(a[href$="official=True"])""") != null) {
+                description += "Official Translation\n\n"
+            }
         }
 
         with(document.select("section[x-data] > section")[1]) {
             title = selectFirst("h1")!!.text()
-            description = selectFirst("li:has(strong:contains(Description)) > p")?.text()
+
+            val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
+            if (alternateTitles.size > 0) {
+                description += "Associated Name(s):\n" + alternateTitles.joinToString { it.text() + "\n" } + "\n"
+            }
+
+            description += selectFirst("li:has(strong:contains(Description)) > p")?.text()
                 ?.replace("NOTE: ", "\n\nNOTE: ")
         }
     }
