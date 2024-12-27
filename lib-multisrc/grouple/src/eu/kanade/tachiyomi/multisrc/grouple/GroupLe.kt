@@ -182,10 +182,10 @@ abstract class GroupLe(
                 .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!") -> SManga.LICENSED
             infoElement.html().contains("<b>Сингл") -> SManga.COMPLETED
             else ->
-                when (infoElement.select("span.badge:contains(выпуск)").first()?.text()) {
+                when (infoElement.selectFirst("span.badge:contains(выпуск)")?.text()) {
                     "выпуск продолжается" -> SManga.ONGOING
                     "выпуск начат" -> SManga.ONGOING
-                    "выпуск завершён" -> if (infoElement.select("span.badge:contains(переведено)").first()?.text()?.isNotEmpty() == true) SManga.COMPLETED else SManga.PUBLISHING_FINISHED
+                    "выпуск завершён" -> if (infoElement.selectFirst("span.badge:contains(переведено)")?.text()?.isNotEmpty() == true) SManga.COMPLETED else SManga.PUBLISHING_FINISHED
                     "выпуск приостановлен" -> SManga.ON_HIATUS
                     else -> SManga.UNKNOWN
                 }
