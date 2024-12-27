@@ -33,7 +33,7 @@ import java.util.Calendar
 
 class NineHentai : HttpSource() {
 
-    override val baseUrl = "https://9hentai.com"
+    override val baseUrl = "https://9hentai.so"
 
     override val name = "NineHentai"
 
