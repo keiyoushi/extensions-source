@@ -60,8 +60,7 @@ class SussyScan : HttpSource() {
     // ============================= Latest ===================================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("obras/novos-capitulos")
+        val url = "$apiUrl/obras/novos-capitulos".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
             .build()
