@@ -2,8 +2,8 @@ ext {
     extName = 'MangaWT'
     extClass = '.MangaWT'
     themePkg = 'madara'
-    baseUrl = 'https://mangawt.net'
-    overrideVersionCode = 2
+    baseUrl = 'https://mangawt.com'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"

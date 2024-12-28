@@ -1,0 +1,9 @@
+ext {
+    extName = 'InfinyxScan'
+    extClass = '.InfinyxScan'
+    themePkg = 'madara'
+    baseUrl = 'https://infinyxscan.cloud'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

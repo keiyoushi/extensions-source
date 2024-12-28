@@ -68,7 +68,7 @@ small, just do a normal full clone instead.**
 1. Do a partial clone.
     ```bash
     git clone --filter=blob:none --sparse <fork-repo-url>
-    cd extensions/
+    cd extensions-source/
     ```
 2. Configure sparse checkout.
 

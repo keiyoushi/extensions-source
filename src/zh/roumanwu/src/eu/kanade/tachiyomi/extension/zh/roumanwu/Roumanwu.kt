@@ -32,7 +32,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
         max(MIRRORS.size - 1, preferences.getString(MIRROR_PREF, MIRROR_DEFAULT)!!.toInt()),
     ]
 
-    override val client = network.client.newBuilder().addInterceptor(ScrambledImageInterceptor).build()
+    override val client = network.cloudflareClient.newBuilder().addInterceptor(ScrambledImageInterceptor).build()
 
     private val imageUrlRegex = """\\"imageUrl\\":\\"(?<imageUrl>[^\\]+)""".toRegex()
 
