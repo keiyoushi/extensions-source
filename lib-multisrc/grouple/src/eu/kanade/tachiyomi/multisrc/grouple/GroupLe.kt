@@ -312,13 +312,17 @@ abstract class GroupLe(
 
         val html = document.html()
 
-        val readerMark = "rm_h.readerInit(["
+        val isAllhentai = document.selectFirst(".navbar-brand")?.attr("title")?.contains("Allhentai") == true
+
+        var readerMark = "rm_h.readerInit(["
+
+        if (isAllhentai) {
+            readerMark = "rm_h.readerDoInit(["
+        }
 
         if (!html.contains(readerMark)) {
             if (document.select(".input-lg").isNotEmpty() || (
-                document.select(".user-avatar")
-                    .isEmpty() && document.select("img.logo").first()?.attr("title")
-                    ?.contains("Allhentai") == true
+                document.select(".user-avatar").isEmpty() && isAllhentai
                 )
             ) {
                 throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
