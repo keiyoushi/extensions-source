@@ -92,8 +92,8 @@ class SussyScan : HttpSource() {
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("obras/${manga.getId()}")
+        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+            .addPathSegment(manga.id)
             .build()
         return GET(url, headers)
     }
@@ -101,14 +101,20 @@ class SussyScan : HttpSource() {
     override fun mangaDetailsParse(response: Response) =
         response.parseAs<WrapperDto<MangaDto>>().results.toSManga()
 
+    private val SManga.id: String get() {
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments(url)
+            .build()
+        return url.pathSegments[2]
+    }
+
     // ============================= Chapters =================================
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val chapterId = chapter.url.substringAfterLast("/")
-        return baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("capitulo")
-            .addPathSegment(chapterId)
-            .build().toString()
+        return "$baseUrl/capitulo".toHttpUrl().newBuilder()
+            .addPathSegment(chapter.id)
+            .build()
+            .toString()
     }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
@@ -131,12 +137,7 @@ class SussyScan : HttpSource() {
             .map { it.sortedBy(SChapter::chapter_number).reversed() }
     }
 
-    private fun SManga.getId(): String {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments(url)
-            .build()
-        return url.pathSegments[2]
-    }
+    private val SChapter.id: String get() = url.substringAfterLast("/")
 
     // ============================= Pages ====================================
 
