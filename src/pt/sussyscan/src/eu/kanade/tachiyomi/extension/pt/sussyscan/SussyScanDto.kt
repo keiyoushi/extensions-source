@@ -16,6 +16,7 @@ data class WrapperDto<T>(
     private val resultados: T,
 ) {
     val results: T get() = resultados
+
     fun hasNextPage() = currentPage < lastPage
 }
 
@@ -34,12 +35,11 @@ class MangaDto(
     @SerialName("status")
     val status: MangaStatus,
 ) {
-
     fun toSManga(): SManga {
         val sManga = SManga.create().apply {
             title = name
             thumbnail_url = thumbnail
-            url = "/obras/$id/$slug"
+            url = "/obra/$id/$slug"
             initialized = true
         }
 
@@ -78,9 +78,9 @@ class ChapterDto(
 )
 
 @Serializable
-class WrapperPageDto(
-    @SerialName("resultado")
-    val result: ChapterPageDto,
+class WrapperChapterDto(
+    @SerialName("capitulos")
+    val chapters: List<ChapterDto>,
 )
 
 @Serializable

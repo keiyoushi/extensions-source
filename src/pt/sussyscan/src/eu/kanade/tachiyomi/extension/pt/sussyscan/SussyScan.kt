@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -43,7 +44,7 @@ class SussyScan : HttpSource() {
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("scan-id", "1") // Required header in the requests
+        .set("scan-id", "1") // Required header for requests
 
     // ============================= Popular ==================================
 
@@ -54,7 +55,7 @@ class SussyScan : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
         val mangas = dto.results.map(MangaDto::toSManga)
-        return MangasPage(mangas, dto.hasNextPage())
+        return MangasPage(mangas, false) // There's a pagination bug
     }
 
     // ============================= Latest ===================================
@@ -67,7 +68,11 @@ class SussyScan : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
+        val mangas = dto.results.map(MangaDto::toSManga)
+        return MangasPage(mangas, dto.hasNextPage())
+    }
 
     // ============================= Search ===================================
 
@@ -80,23 +85,15 @@ class SussyScan : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
     // ============================= Details ==================================
 
-    override fun getMangaUrl(manga: SManga): String {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments(manga.url)
-            .removePathSegment(0)
-            .setPathSegment(0, "obra")
-            .build()
-        return url.toString()
-    }
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast("/")
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment(slug)
+            .addPathSegments("obras/${manga.getId()}")
             .build()
         return GET(url, headers)
     }
@@ -114,19 +111,10 @@ class SussyScan : HttpSource() {
             .build().toString()
     }
 
-    override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
-
-    private fun chapterListRequest(page: Int, manga: SManga): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("obras/${manga.getId()}/capitulos")
-            .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("limite", "100")
-            .build()
-        return GET(url, headers)
-    }
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<WrapperDto<List<ChapterDto>>>().results.map {
+        return response.parseAs<WrapperDto<WrapperChapterDto>>().results.chapters.map {
             SChapter.create().apply {
                 name = it.name
                 it.chapterNumber?.let {
@@ -139,15 +127,8 @@ class SussyScan : HttpSource() {
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapterList = mutableListOf<SChapter>()
-        var page = 1
-        do {
-            val chapters = client.newCall(chapterListRequest(page++, manga))
-                .execute().let(::chapterListParse)
-            chapterList += chapters
-        } while (chapters.isNotEmpty())
-
-        return Observable.just(chapterList.sortedBy(SChapter::chapter_number).reversed())
+        return super.fetchChapterList(manga)
+            .map { it.sortedBy(SChapter::chapter_number).reversed() }
     }
 
     private fun SManga.getId(): String {
@@ -162,8 +143,7 @@ class SussyScan : HttpSource() {
     override fun pageListRequest(chapter: SChapter) = GET("$apiUrl${chapter.url}")
 
     override fun pageListParse(response: Response): List<Page> {
-        val dto = response.parseAs<WrapperPageDto>().result
-
+        val dto = response.parseAs<WrapperDto<ChapterPageDto>>().results
         return dto.pages.mapIndexed { index, image ->
             val imageUrl = CDN_URL.toHttpUrl().newBuilder()
                 .addPathSegments("wp-content/uploads/WP-manga/data")
@@ -206,6 +186,10 @@ class SussyScan : HttpSource() {
 
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromStream(body.byteStream())
+    }
+
+    private fun HttpUrl.Builder.replacePathSegment(index: Int, value: String): HttpUrl.Builder {
+        return this.removePathSegment(index).setPathSegment(index, value)
     }
 
     private fun String.toDate() =
