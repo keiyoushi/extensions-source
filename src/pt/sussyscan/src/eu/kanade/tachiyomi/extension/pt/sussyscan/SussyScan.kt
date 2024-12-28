@@ -43,7 +43,7 @@ class SussyScan : HttpSource() {
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("scan-id", "1")
+        .set("scan-id", "1") // Required header in the requests
 
     // ============================= Popular ==================================
 
