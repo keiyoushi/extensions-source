@@ -73,8 +73,7 @@ class SussyScan : HttpSource() {
     // ============================= Search ===================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("obras")
+        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "8")
             .addQueryParameter("obr_nome", query)
