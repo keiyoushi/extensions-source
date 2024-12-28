@@ -15,7 +15,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
@@ -52,17 +51,8 @@ class SussyScan : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
-        val mangas = dto.results.map(::toSManga)
+        val mangas = dto.results.map(MangaDto::toSManga)
         return MangasPage(mangas, dto.hasNextPage())
-    }
-
-    private fun toSManga(dto: MangaDto) = SManga.create().apply {
-        title = dto.name
-        thumbnail_url = dto.thumbnail
-        Jsoup.parseBodyFragment(dto.description).let { description = it.text() }
-        url = "/obras/${dto.id}/${dto.slug}#${dto.scanId}"
-        initialized = true
-        status = dto.status.toStatus()
     }
 
     // ============================= Latest ===================================
@@ -92,29 +82,44 @@ class SussyScan : HttpSource() {
 
     // ============================= Details ==================================
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-        .replace("obras", "obra")
+    override fun getMangaUrl(manga: SManga): String {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments(manga.url)
+            .removePathSegment(0)
+            .setPathSegment(0, "obra")
+            .build()
+        return url.toString()
+    }
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$apiUrl${manga.url.substringBeforeLast("/")}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url.substringAfterLast("/")
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegment(slug)
+            .build()
+        return GET(url, headers)
+    }
 
     override fun mangaDetailsParse(response: Response) =
-        toSManga(response.parseAs<WrapperDto<MangaDto>>().results)
+        response.parseAs<WrapperDto<MangaDto>>().results.toSManga()
 
     // ============================= Chapters =================================
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
-        .replace("capitulos", "capitulo")
+    override fun getChapterUrl(chapter: SChapter): String {
+        val chapterId = chapter.url.substringAfterLast("/")
+        return baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("capitulo")
+            .addPathSegment(chapterId)
+            .build().toString()
+    }
 
     override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
 
     private fun chapterListRequest(page: Int, manga: SManga): Request {
-        val scanId = manga.url.substringAfter("#")
-        val url = "$apiUrl/obras/${manga.getId()}/capitulos".toHttpUrl().newBuilder()
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("obras/${manga.getId()}/capitulos")
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "100")
             .build()
-
         return GET(url, headers)
     }
 
@@ -144,8 +149,10 @@ class SussyScan : HttpSource() {
     }
 
     private fun SManga.getId(): String {
-        val pathSegment = url.split("/")
-        return pathSegment[pathSegment.size - 2]
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments(url)
+            .build()
+        return url.pathSegments[2]
     }
 
     // ============================= Pages ====================================
@@ -154,8 +161,13 @@ class SussyScan : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<WrapperPageDto>().result
+
         return dto.pages.mapIndexed { index, image ->
-            Page(index, imageUrl = "$CDN_URL/wp-content/uploads/WP-manga/data/${image.src}")
+            val imageUrl = CDN_URL.toHttpUrl().newBuilder()
+                .addPathSegments("wp-content/uploads/WP-manga/data")
+                .addPathSegments(image.src)
+                .build().toString()
+            Page(index, imageUrl = imageUrl)
         }
     }
 
@@ -202,6 +214,6 @@ class SussyScan : HttpSource() {
         const val OLDI_URL = "https://oldi.sussytoons.site"
 
         @SuppressLint("SimpleDateFormat")
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd")
     }
 }
