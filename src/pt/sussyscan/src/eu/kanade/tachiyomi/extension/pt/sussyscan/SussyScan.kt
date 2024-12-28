@@ -48,10 +48,7 @@ class SussyScan : HttpSource() {
     // ============================= Popular ==================================
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("obras/top5")
-            .build()
-        return GET(url, headers)
+        return GET("$apiUrl/obras/top5", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
