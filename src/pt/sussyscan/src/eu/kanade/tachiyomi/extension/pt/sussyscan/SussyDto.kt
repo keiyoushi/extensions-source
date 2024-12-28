@@ -36,16 +36,17 @@ class MangaDto(
 ) {
 
     fun toSManga(): SManga {
-        val sMangaStatus = status.toStatus()
-        val SDescription = description
-        return SManga.create().apply {
+        val sManga = SManga.create().apply {
             title = name
             thumbnail_url = thumbnail
-            Jsoup.parseBodyFragment(SDescription).let { description = it.text() }
             url = "/obras/$id/$slug"
             initialized = true
-            status = sMangaStatus
         }
+
+        Jsoup.parseBodyFragment(description).let { sManga.description = it.text() }
+        sManga.status = status.toStatus()
+
+        return sManga
     }
 
     @Serializable

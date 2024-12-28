@@ -47,7 +47,12 @@ class SussyScan : HttpSource() {
 
     // ============================= Popular ==================================
 
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/obras/top5", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("obras/top5")
+            .build()
+        return GET(url, headers)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
@@ -58,7 +63,8 @@ class SussyScan : HttpSource() {
     // ============================= Latest ===================================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/obras/novos-capitulos".toHttpUrl().newBuilder()
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("obras/novos-capitulos")
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
             .build()
@@ -70,7 +76,8 @@ class SussyScan : HttpSource() {
     // ============================= Search ===================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegment("obras")
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "8")
             .addQueryParameter("obr_nome", query)
@@ -145,7 +152,7 @@ class SussyScan : HttpSource() {
             chapterList += chapters
         } while (chapters.isNotEmpty())
 
-        return Observable.just(chapterList.reversed())
+        return Observable.just(chapterList.sortedBy(SChapter::chapter_number).reversed())
     }
 
     private fun SManga.getId(): String {
