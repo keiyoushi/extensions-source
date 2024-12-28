@@ -32,7 +32,6 @@ abstract class MangafreGlobal(
 
     override val client = network.cloudflareClient.newBuilder().build()
 
-
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
@@ -52,9 +51,9 @@ abstract class MangafreGlobal(
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("a").attr("alt")
-            thumbnail_url = element.selectFirst("img")!!.imgAttr()
-            setUrlWithoutDomain(element.select("a").attr("href"))
+            title = element.select(Evaluator.Tag("a")).attr("alt")
+            thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.imgAttr()
+            setUrlWithoutDomain(element.select(Evaluator.Tag("a")).attr("href"))
         }
     }
 
@@ -69,7 +68,6 @@ abstract class MangafreGlobal(
                 popularMangaParse(response)
             }
     }
-
 
     // =============================== Latest ===============================
 
