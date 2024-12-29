@@ -67,7 +67,7 @@ class ComicExtra : ParsedHttpSource() {
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.select("a.big-link").attr("href"))
-        title = element.select(".big-link").first()?.text().toString()
+        title = element.selectFirst(".big-link")!!.text()
         thumbnail_url = fetchThumbnailURL(element.select("a.big-link").attr("href"))
     }
 
