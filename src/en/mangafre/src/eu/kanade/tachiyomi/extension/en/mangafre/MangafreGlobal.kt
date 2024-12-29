@@ -38,13 +38,6 @@ abstract class MangafreGlobal(
         return GET("$baseUrl/comic/bookclass.html?type=hot_novel&page_num=$page&language=$lang")
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
-        // Mangafre always has a next page button. So we give MangasPage.mangas empty.
-        return MangasPage(mangas, true)
-    }
-
     override fun popularMangaSelector(): String {
         return "#list-page > .col-truyen-main .row"
     }
@@ -61,24 +54,10 @@ abstract class MangafreGlobal(
         return ".pagination > .next"
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return client.newCall(popularMangaRequest(page))
-            .asObservableSuccess()
-            .map { response ->
-                popularMangaParse(response)
-            }
-    }
-
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
         return GET("$baseUrl/comic/bookclass.html?type=last_release&page_num=$page&language=$lang")
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
-        return MangasPage(mangas, true)
     }
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
@@ -87,13 +66,7 @@ abstract class MangafreGlobal(
 
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return client.newCall(latestUpdatesRequest(page))
-            .asObservableSuccess()
-            .map { response ->
-                popularMangaParse(response)
-            }
-    }
+    // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -111,11 +84,6 @@ abstract class MangafreGlobal(
         TODO("Need to implement empty search somewhere")
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
-        return MangasPage(mangas, false)
-    }
     override fun searchMangaSelector(): String = popularMangaSelector()
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
@@ -130,11 +98,7 @@ abstract class MangafreGlobal(
         if (!supportsSearch) {
             return Observable.just(MangasPage(emptyList(), false))
         }
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response)
-            }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     // =============================== Filters ==============================
@@ -164,14 +128,6 @@ abstract class MangafreGlobal(
 
 
     // =============================== Pages ================================
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(GET(baseUrl + chapter.url))
-            .asObservableSuccess()
-            .map { response ->
-                pageListParse(response.asJsoup())
-            }
-    }
 
     override fun pageListParse(document: Document): List<Page> {
         TODO("Not yet implemented")
