@@ -107,7 +107,7 @@ class WeebCentral : ParsedHttpSource() {
             genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
             status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
 
-            if (selectFirst("ul > li > strong:contains(Translation) + a:contains(Yes)") != null) {
+            if (selectFirst("ul > li > strong:contains(Official Translation) + a:contains(Yes)") != null) {
                 descBuilder.appendLine("Official Translation")
                 descBuilder.appendLine()
             }
