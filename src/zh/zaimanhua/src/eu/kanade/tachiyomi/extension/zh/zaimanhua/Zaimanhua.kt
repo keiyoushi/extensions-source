@@ -197,8 +197,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     // Popular
     private fun rankApiUrl(): HttpUrl.Builder =
-        "$apiUrl/comic/rank/list".toHttpUrl().newBuilder().addQueryParameter("by_time", "3")
-            .addQueryParameter("tag_id", "0").addQueryParameter("rank_type", "0")
+        "$apiUrl/comic/rank/list".toHttpUrl().newBuilder()
+            .addQueryParameter("tag_id", "0")
 
     override fun popularMangaRequest(page: Int): Request = GET(
         rankApiUrl().apply {
@@ -214,16 +214,30 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         "$apiUrl/search/index".toHttpUrl().newBuilder().addQueryParameter("source", "0")
             .addQueryParameter("size", "20")
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
-        searchApiUrl().apply {
-            addQueryParameter("keyword", query)
-            addQueryParameter("page", page.toString())
-        }.build(),
-        apiHeaders,
-    )
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val ranking = filters.filterIsInstance<RankingGroup>().firstOrNull()
+        val url = if (query.isEmpty() && ranking != null) {
+            rankApiUrl().apply {
+                ranking.state.filterIsInstance<QueryFilter>().forEach {
+                    it.addQuery(this)
+                }
+                addQueryParameter("page", page.toString())
+            }.build()
+        } else {
+            searchApiUrl().apply {
+                addQueryParameter("keyword", query)
+                addQueryParameter("page", page.toString())
+            }.build()
+        }
+        return GET(url, apiHeaders)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage =
-        response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
+        if (response.request.url.toString().startsWith("$apiUrl/comic/rank/list")) {
+            latestUpdatesParse(response)
+        } else {
+            response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
+        }
 
     // Latest
     // "$apiUrl/comic/update/list/1/$page" is same content
@@ -231,9 +245,16 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         GET("$apiUrl/comic/update/list/0/$page", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.parseAs<ResponseDto<List<PageItemDto>>>().data
+        val mangas = response.parseAs<ResponseDto<List<PageItemDto>?>>().data
+        if (mangas.isNullOrEmpty()) {
+            throw Exception("没有更多结果了")
+        }
         return MangasPage(mangas.map { it.toSManga() }, true)
     }
+
+    override fun getFilterList() = FilterList(
+        RankingGroup(),
+    )
 
     companion object {
         val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
