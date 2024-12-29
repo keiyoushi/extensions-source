@@ -34,8 +34,7 @@ def get_module_list(commitHash: str) -> Tuple[List[str], List[str]]:
             ext_name = ext_match.group("ext_name")
             if Path("src", lang, ext_name).is_dir():
                 modules.add(f':src:{lang}:{ext_name}:assembleRelease')
-            else:
-                deleted.add(f"{lang}.{ext_name}") # TODO: adjust as needed
+            deleted.add(f"{lang}.{ext_name}") # need to add here so we can delete old version during commit stage
         elif multisrc_match:
             multisrc = multisrc_match.group("multisrc")
             if Path("lib-multisrc", multisrc).is_dir():
@@ -69,5 +68,5 @@ print(f"Module chunks to build:\n{json.dumps(chunked, indent=2)}\n\nModule to de
 
 if os.getenv("CI") == "true":
     with open(os.getenv("GITHUB_OUTPUT"), 'a') as out_file:
-        out_file.write(f"individualMatrix={json.dumps(chunked)}\n")
-        out_file.write(f"deletedModules={json.dumps(deleted)}\n")
+        out_file.write(f"matrix={json.dumps(chunked)}\n")
+        out_file.write(f"delete={json.dumps(deleted)}\n")
