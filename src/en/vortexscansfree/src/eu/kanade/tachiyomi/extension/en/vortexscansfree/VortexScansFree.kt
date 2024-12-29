@@ -6,5 +6,4 @@ class VortexScansFree : MangaThemesia(
     "Vortex Scans Free (unoriginal)",
     "https://vortexscansfree.com",
     "en",
-    "/manga",
 )
