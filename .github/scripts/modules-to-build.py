@@ -1,67 +1,41 @@
 import os
-#import requests
-import subprocess
+import subprocess as sp
 import re
 import json
-
-# def getLastSuccessfulCommitHash():
-#     worflowRuns = requests.get(
-#         url = "https://api.github.com/repos/keiyoushi/extensions-source/actions/runs",
-#         params = {"event":"push", "status":"success"},
-#     ).json()["workflow_runs"]
-
-#     for run in worflowRuns:
-#         if run["name"] == "CI":
-#             return run["head_commit"]["id"]
-
-#     return None
+import git
 
 extRegex = re.compile(r"(^src/\w+/\w+)")
 multisrcRegex = re.compile(r"^lib-multisrc/(\w+)")
+libsRegex = re.compile(r"^lib/(\w+)")
 
 def getModuleList(commitHash):
-    fileList = subprocess.check_output(
-        [
-            "git",
-            "diff",
-            "--name-only",
-            commitHash,
-        ]
-    ).decode()
-    srcModules = set()
+    repo = git.Repo(search_parent_directories=True)
+    fileList = repo.git.diff('--name-only', commitHash)
+            
+    modules = set()
     deletedModules = set()
-
-    multisrcToCheck = set()
 
     for file in fileList.splitlines():
         extMatch = extRegex.search(file)
+        multisrcMatch = multisrcRegex.search(file)
+        libMatch = libsRegex.search(file)
         if extMatch:
             directory = extMatch.group(1)
             if os.path.isdir(directory):
-                srcModules.add(f':{directory.replace("/", ":")}:assembleRelease')
+                modules.add(f':{directory.replace("/", ":")}:assembleRelease')
             else:
                 name = directory.split("src/", 1)[1].replace("/", ".")
                 deletedModules.add(name)
-        else:
-            multisrcMatch = multisrcRegex.search(file)
-            if (multisrcMatch):
-                multisrc = multisrcMatch.group(1)
-                if os.path.isdir(f"lib-multisrc/{multisrc}"):
-                    multisrcToCheck.add(multisrc)
-
-    if len(multisrcToCheck) != 0:
-        themePkgRegex = r"themePkg\s*=\s*['\"](" + "|".join(multisrcToCheck) + r")['\"]"
-
-        for lang in os.listdir("src"):
-            for module in os.listdir(f"src/{lang}/"):
-                buildGradle = f"src/{lang}/{module}/build.gradle"
-                if os.path.isfile(buildGradle):
-                    with open(buildGradle, 'r') as file:
-                        data = file.read()
-                    if re.search(themePkgRegex, data):
-                        srcModules.add(f":src:{lang}:{module}:assembleRelease")
-
-    return list(srcModules), list(deletedModules)
+        elif multisrcMatch:
+            multisrc = multisrcMatch.group(1)
+            if os.path.isdir(f"lib-multisrc/{multisrc}"):
+                modules.add(f":lib-multisrc:{multisrc}:assembleReleaseAll")
+        elif libMatch:
+            lib = libMatch.group(1)
+            if os.path.isdir(f"lib/{lib}"):
+                modules.add(f":lib:{lib}:assembleRelease")
+                
+    return list(modules), list(deletedModules)
 
 def chunker(iter, size):
     chunks = []
