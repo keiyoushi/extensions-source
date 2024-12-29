@@ -54,7 +54,7 @@ class DeviantArt : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val matchGroups = requireNotNull(
-            Regex("""gallery:([\w-]+)(?:/(\d+))?""").matchEntire(query)?.groupValues
+            Regex("""gallery:([\w-]+)(?:/(\d+))?""").matchEntire(query)?.groupValues,
         ) { SEARCH_FORMAT_MSG }
         val username = matchGroups[1]
         val folderId = matchGroups[2].ifEmpty { "all" }
