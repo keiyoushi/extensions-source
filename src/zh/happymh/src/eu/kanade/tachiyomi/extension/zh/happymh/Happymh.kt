@@ -43,6 +43,7 @@ class Happymh : HttpSource(), ConfigurableSource {
 
     override val baseUrl: String = "https://m.happymh.com"
     private val json: Json by injectLazy()
+    private val chapterUrlToCode = hashMapOf<String, String>()
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
@@ -151,10 +152,9 @@ class Happymh : HttpSource(), ConfigurableSource {
 
     // Chapters
 
-    private fun fetchChapterByPage(manga: SManga, page: Int): ChapterByPageResponseData {
-        val code = manga.url.substringAfterLast("/")
+    private fun fetchChapterByPage(comicId: String, page: Int): ChapterByPageResponseData {
         val url = "$baseUrl/v2.0/apis/manga/chapterByPage".toHttpUrl().newBuilder()
-            .addQueryParameter("code", code)
+            .addQueryParameter("code", comicId)
             .addQueryParameter("lang", "cn")
             .addQueryParameter("order", "asc")
             .addQueryParameter("page", "$page")
@@ -162,30 +162,37 @@ class Happymh : HttpSource(), ConfigurableSource {
         return client.newCall(GET(url, headers)).execute().parseAs<ChapterByPageResponse>().data
     }
 
-    private fun fetchChapterByPageObservable(
+    private fun fetchChapterByPage(manga: SManga, page: Int): ChapterByPageResponseData {
+        val comicId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
+        return fetchChapterByPage(comicId, page)
+    }
+
+    private fun fetchChapterByPageAsObservable(
         manga: SManga,
         page: Int,
-    ): Observable<ChapterByPageResponseData> {
+    ): Observable<Pair<Int, ChapterByPageResponseData>> {
         return Observable.just(fetchChapterByPage(manga, page)).concatMap {
-            if (it.isEnd == 1 || it.items.isEmpty()) {
-                Observable.just(it)
+            if (it.isPageEnd()) {
+                Observable.just(page to it)
             } else {
-                Observable.just(it).concatWith(fetchChapterByPageObservable(manga, page + 1))
+                Observable.just(page to it).concatWith(fetchChapterByPageAsObservable(manga, page + 1))
             }
         }
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val comicId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
         return Observable
             .defer {
-                fetchChapterByPageObservable(manga, 1)
+                fetchChapterByPageAsObservable(manga, 1)
             }
             .map {
-                it.items.map {
+                it.second.items.map { data ->
                     SChapter.create().apply {
-                        name = it.chapterName
-                        url = "/mangaread/${it.codes}"
-                        chapter_number = it.order.toFloat()
+                        name = data.chapterName
+                        // create a dummy chapter url : /comic_id/dummy_mark/chapter_id#expect_page
+                        url = "/$comicId/$DUMMY_CHAPTER_MARK/${data.id}#${it.first}"
+                        chapter_number = data.order.toFloat()
                     }
                 }
             }
@@ -194,7 +201,7 @@ class Happymh : HttpSource(), ConfigurableSource {
             .map {
                 // remove order mark
                 it.onEach { chapter ->
-                    chapter.chapter_number = 0f
+                    chapter.chapter_number = -1f
                 }
             }
     }
@@ -202,17 +209,37 @@ class Happymh : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
+        return baseUrl + (chapterUrlToCode[chapter.url]?.let { "/mangaread/$it" } ?: chapter.url)
     }
 
     // Pages
 
+    private fun fetchChapterCode(chapter: SChapter): String? {
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val expectPage = url.fragment?.toIntOrNull() ?: 1
+        val comicId = url.pathSegments[0]
+        val chapterId = url.pathSegments[2].toLong()
+        var code = fetchChapterByPage(comicId, expectPage).items.find { it.id == chapterId }?.codes
+        if (code == null) {
+            // Do full search for find target code
+            var page = 1
+            var end = false
+            while (!end && code == null) {
+                val resp = fetchChapterByPage(comicId, page)
+                code = resp.items.find { it.id == chapterId }?.codes
+                end = resp.isPageEnd()
+                page += 1
+            }
+        }
+        return code?.also { chapterUrlToCode[chapter.url] = it }
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
-        if (!chapter.url.contains("mangaread")) {
+        if (!chapter.url.contains(DUMMY_CHAPTER_MARK)) {
             // Old format is detected
             throw Exception("请刷新章节列表")
         }
-        val code = chapter.url.substringAfterLast("/")
+        val code = fetchChapterCode(chapter) ?: throw Exception("找不到章节地址，请尝试刷新章节列表")
         val url = "$baseUrl/v2.0/apis/manga/reading?code=$code&v=v3.1818134"
         // Some chapters return 403 without this header
         val header = headersBuilder()
@@ -263,5 +290,13 @@ class Happymh : HttpSource(), ConfigurableSource {
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream(it.body.byteStream())
+    }
+
+    private fun ChapterByPageResponseData.isPageEnd(): Boolean {
+        return isEnd == 1 || items.isEmpty()
+    }
+
+    companion object {
+        private const val DUMMY_CHAPTER_MARK = "dummy-mark"
     }
 }
