@@ -102,31 +102,13 @@ class SussyScan : HttpSource() {
         response.parseAs<WrapperDto<MangaDto>>().results.toSManga()
 
     private val SManga.id: String get() {
-        val url = apiUrl.toHttpUrl().newBuilder()
+        val mangaUrl = apiUrl.toHttpUrl().newBuilder()
             .addPathSegments(url)
             .build()
-        return url.pathSegments[2]
+        return mangaUrl.pathSegments[2]
     }
 
     // ============================= Chapters =================================
-
-    private fun MangaDto.toSManga(): SManga {
-        val sManga = SManga.create().apply {
-            title = name
-            thumbnail_url = thumbnail
-            initialized = true
-            val url = "$baseUrl/obra".toHttpUrl().newBuilder()
-                .addPathSegment(this@toSManga.id.toString())
-                .addPathSegment(this@toSManga.slug)
-                .build()
-            setUrlWithoutDomain(url.toString())
-        }
-
-        Jsoup.parseBodyFragment(description).let { sManga.description = it.text() }
-        sManga.status = status.toStatus()
-
-        return sManga
-    }
 
     override fun getChapterUrl(chapter: SChapter): String {
         return "$baseUrl/capitulo".toHttpUrl().newBuilder()
@@ -144,7 +126,10 @@ class SussyScan : HttpSource() {
                 it.chapterNumber?.let {
                     chapter_number = it
                 }
-                url = "/capitulos/${it.id}"
+                val chapterApiUrl = "$apiUrl/capitulos".toHttpUrl().newBuilder()
+                    .addPathSegment(it.id.toString())
+                    .build()
+                setUrlWithoutDomain(chapterApiUrl.toString())
                 date_upload = it.updateAt.toDate()
             }
         }
@@ -155,7 +140,12 @@ class SussyScan : HttpSource() {
             .map { it.sortedBy(SChapter::chapter_number).reversed() }
     }
 
-    private val SChapter.id: String get() = url.substringAfterLast("/")
+    private val SChapter.id: String get() {
+        val chapterApiUrl = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments(url)
+            .build()
+        return chapterApiUrl.pathSegments.last()
+    }
 
     // ============================= Pages ====================================
 
@@ -182,6 +172,24 @@ class SussyScan : HttpSource() {
     }
 
     // ============================= Utilities ====================================
+
+    private fun MangaDto.toSManga(): SManga {
+        val sManga = SManga.create().apply {
+            title = name
+            thumbnail_url = thumbnail
+            initialized = true
+            val mangaUrl = "$baseUrl/obra".toHttpUrl().newBuilder()
+                .addPathSegment(this@toSManga.id.toString())
+                .addPathSegment(this@toSManga.slug)
+                .build()
+            setUrlWithoutDomain(mangaUrl.toString())
+        }
+
+        Jsoup.parseBodyFragment(description).let { sManga.description = it.text() }
+        sManga.status = status.toStatus()
+
+        return sManga
+    }
 
     private fun imageLocation(chain: Interceptor.Chain): Response {
         val request = chain.request()
