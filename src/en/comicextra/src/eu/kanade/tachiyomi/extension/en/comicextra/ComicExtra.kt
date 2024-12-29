@@ -68,10 +68,7 @@ class ComicExtra : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.select("a.big-link").attr("href"))
         title = element.selectFirst(".big-link")!!.text()
-        thumbnail_url = fetchThumbnailURL(element.select("a.big-link").attr("href"))
     }
-
-    private fun fetchThumbnailURL(url: String) = client.newCall(GET(url, headers)).execute().asJsoup().select("div.anime-image > img").attr("src")
 
     override fun popularMangaNextPageSelector() = "div.general-nav > a:contains(Next)"
 
