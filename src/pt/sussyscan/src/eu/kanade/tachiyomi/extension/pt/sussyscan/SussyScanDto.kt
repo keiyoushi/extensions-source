@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
-import org.jsoup.Jsoup
 
 @Serializable
 data class WrapperDto<T>(
@@ -35,20 +34,6 @@ class MangaDto(
     @SerialName("status")
     val status: MangaStatus,
 ) {
-    fun toSManga(): SManga {
-        val sManga = SManga.create().apply {
-            title = name
-            thumbnail_url = thumbnail
-            url = "/obra/$id/$slug"
-            initialized = true
-        }
-
-        Jsoup.parseBodyFragment(description).let { sManga.description = it.text() }
-        sManga.status = status.toStatus()
-
-        return sManga
-    }
-
     @Serializable
     class MangaStatus(
         @SerialName("stt_nome")

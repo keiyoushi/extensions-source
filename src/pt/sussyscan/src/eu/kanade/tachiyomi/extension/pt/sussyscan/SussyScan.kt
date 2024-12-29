@@ -11,11 +11,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
@@ -54,7 +54,7 @@ class SussyScan : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
-        val mangas = dto.results.map(MangaDto::toSManga)
+        val mangas = dto.results.map { it.toSManga() }
         return MangasPage(mangas, false) // There's a pagination bug
     }
 
@@ -70,7 +70,7 @@ class SussyScan : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
-        val mangas = dto.results.map(MangaDto::toSManga)
+        val mangas = dto.results.map { it.toSManga() }
         return MangasPage(mangas, dto.hasNextPage())
     }
 
@@ -109,6 +109,24 @@ class SussyScan : HttpSource() {
     }
 
     // ============================= Chapters =================================
+
+    private fun MangaDto.toSManga(): SManga {
+        val sManga = SManga.create().apply {
+            title = name
+            thumbnail_url = thumbnail
+            initialized = true
+            val url = "$baseUrl/obra".toHttpUrl().newBuilder()
+                .addPathSegment(this@toSManga.id.toString())
+                .addPathSegment(this@toSManga.slug)
+                .build()
+            setUrlWithoutDomain(url.toString())
+        }
+
+        Jsoup.parseBodyFragment(description).let { sManga.description = it.text() }
+        sManga.status = status.toStatus()
+
+        return sManga
+    }
 
     override fun getChapterUrl(chapter: SChapter): String {
         return "$baseUrl/capitulo".toHttpUrl().newBuilder()
@@ -187,10 +205,6 @@ class SussyScan : HttpSource() {
 
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromStream(body.byteStream())
-    }
-
-    private fun HttpUrl.Builder.replacePathSegment(index: Int, value: String): HttpUrl.Builder {
-        return this.removePathSegment(index).setPathSegment(index, value)
     }
 
     private fun String.toDate() =
