@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.mangafre
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,9 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
@@ -24,9 +21,9 @@ abstract class MangafreGlobal(
     override val lang: String,
     val supportsSearch: Boolean = true,
 ) : ParsedHttpSource() {
-    override val baseUrl = "https://mangafre.com/"
+    override val baseUrl = "https://allwebnovel.com" // https://mangafre.com
 
-    override val name = "Mangafre"
+    override val name = "NovelFull"
 
     override val supportsLatest = true
 
@@ -103,7 +100,6 @@ abstract class MangafreGlobal(
 
     // =============================== Filters ==============================
 
-    // Can accept only one Genre at the time
     override fun getFilterList() = FilterList(
         Note,
         Filter.Separator(),
@@ -113,29 +109,72 @@ abstract class MangafreGlobal(
     // =========================== Manga Details ============================
 
     override fun mangaDetailsParse(document: Document): SManga {
-        TODO("Not yet implemented")
+        return SManga.create().apply {
+            title = document.selectFirst("h3.title")!!.text()
+            description = document.selectFirst(".desc-text")!!.text()
+            thumbnail_url = document.selectFirst(".books > .book > img")!!.imgAttr()
+            document.selectFirst(Evaluator.Class("info"))!!.children().forEach {
+                when (it.children().first()!!.text()) {
+                    "Author:" -> it.parseAuthorsTo(this)
+                    "Genre:" -> it.parseGenresTo(this)
+                    "Status:" -> it.parseStatusTo(this)
+                }
+            }
+        }
     }
 
     private fun Element.parseAuthorsTo(manga: SManga) {
-        TODO("Not yet implemented")
+        val authors = this.select("a").map { it.text() }
+        manga.author = authors.joinToString(", ")
+    }
+
+    private fun Element.parseGenresTo(manga: SManga) {
+        val genres = this.select("a").map { it.text() }
+        manga.genre = genres.joinToString(", ")
+    }
+
+    private fun Element.parseStatusTo(manga: SManga) {
+        this.selectFirst("h3:last-child").let {
+            it!!
+            when {
+                it.text().contains("ongoing", ignoreCase = true) -> manga.status = SManga.ONGOING
+                it.text().contains("completed", ignoreCase = true) -> manga.status = SManga.COMPLETED
+                else -> {
+                    Log.e("MangafreGlobal", "Unknown status: ${it.text()}")
+                    manga.status = SManga.UNKNOWN
+                }
+            }
+        }
     }
 
     // =============================== Chapters ==============================
 
     override fun chapterFromElement(element: Element): SChapter {
-        TODO("Not yet implemented")
+        return SChapter.create().apply {
+            name = element.attr("title").trim()
+            setUrlWithoutDomain(element.attr("href"))
+        }
     }
 
+    override fun chapterListSelector(): String {
+        return "a:has(> span.chapter-text)" // <a><span class="chapter-text"></span></a>
+    }
+
+    // TODO: We need to get multiple pages for the chapters. Check the android app for hidden API ?
 
     // =============================== Pages ================================
 
     override fun pageListParse(document: Document): List<Page> {
-        TODO("Not yet implemented")
+        return document.select(imageListSelector()).mapIndexed { i, element ->
+            Page(i, "", element.imgAttr())
+        }
     }
 
     override fun imageUrlParse(document: Document): String {
-        TODO("Not yet implemented")
+        throw UnsupportedOperationException("Not used")
     }
+
+    private fun imageListSelector() = "#chapter-content .row.top-item img"
 }
 
 // ============================= Utilities ==============================
