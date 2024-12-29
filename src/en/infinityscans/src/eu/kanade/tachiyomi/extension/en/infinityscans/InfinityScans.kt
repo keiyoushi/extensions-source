@@ -43,7 +43,7 @@ class InfinityScans : HttpSource() {
     }
 
     private val apiHeaders = headersBuilder().apply {
-        add("Accept", "*/*")
+        add("Accept", "application/json, text/javascript, */*; q=0.01")
         add("Sec-Fetch-Dest", "empty")
         add("Sec-Fetch-Mode", "cors")
         add("Sec-Fetch-Site", "same-origin")
