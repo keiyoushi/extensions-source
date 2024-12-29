@@ -1,6 +1,6 @@
 ext {
-    extName = 'Mangafre'
-    extClass = '.Mangafre'
+    extName = 'NovelFull'
+    extClass = '.NovelFullFactory'
     extVersionCode = 1
     isNsfw = true
 }
