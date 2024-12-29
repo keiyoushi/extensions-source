@@ -54,40 +54,10 @@ tasks {
 
 tasks.register("getDependents") {
     doLast {
-        project.getDependents().mapNotNull { project ->
+        project.getDependents().forEach { project ->
             if (project.path.startsWith(":src:")) {
                 println(project.path)
-            } else {
-                null
             }
         }
-    }
-}
-
-tasks.register("assembleDebugAll") {
-    val dependents = project.getDependents().mapNotNull { project ->
-        if (project.path.startsWith(":src:")) {
-            "${project.path}:assembleDebug"
-        } else {
-            null
-        }
-    }
-    setFinalizedBy(dependents)
-    doLast {
-        println("running:\n${dependents.joinToString("\n")}")
-    }
-}
-
-tasks.register("assembleReleaseAll") {
-    val dependents = project.getDependents().mapNotNull { project ->
-        if (project.path.startsWith(":src:")) {
-            "${project.path}:assembleRelease"
-        } else {
-            null
-        }
-    }
-    setFinalizedBy(dependents)
-    doLast {
-        println("running:\n${dependents.joinToString("\n")}")
     }
 }

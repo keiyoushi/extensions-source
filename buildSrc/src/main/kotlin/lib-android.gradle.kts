@@ -45,39 +45,3 @@ tasks.register("getDependents") {
         }
     }
 }
-
-tasks.register("assembleDebugAll") {
-    val dependents = project.getDependents().mapNotNull { dependent ->
-        if (dependent.path == project.path) {
-            null
-        } else if (dependent.path.startsWith(":src:")) {
-            "${dependent.path}:assembleDebug"
-        } else if (dependent.path.startsWith(":lib")) {
-            "${dependent.path}:assembleDebugAll"
-        } else {
-            null
-        }
-    }
-    setFinalizedBy(dependents)
-    doLast {
-        println("running:\n${dependents.joinToString("\n")}")
-    }
-}
-
-tasks.register("assembleReleaseAll") {
-    val dependents = project.getDependents().mapNotNull { dependent ->
-        if (dependent.path == project.path) {
-            null
-        } else if (dependent.path.startsWith(":src:")) {
-            "${dependent.path}:assembleRelease"
-        } else if (dependent.path.startsWith(":lib")) {
-            "${dependent.path}:assembleReleaseAll"
-        } else {
-            null
-        }
-    }
-    setFinalizedBy(dependents)
-    doLast {
-        println("running:\n${dependents.joinToString("\n")}")
-    }
-}
