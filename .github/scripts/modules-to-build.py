@@ -33,7 +33,7 @@ def get_module_list(commitHash: str) -> Tuple[List[str], List[str]]:
             lang = ext_match.group("lang")
             ext_name = ext_match.group("ext_name")
             if Path("src", lang, ext_name).is_dir():
-                modules.add(f':src:{lang}:{ext_name}:assembleRelease')
+                modules.add(f':src:{lang}:{ext_name}')
             deleted.add(f"{lang}.{ext_name}") # need to add here so we can delete old version during commit stage
         elif multisrc_match:
             multisrc = multisrc_match.group("multisrc")
@@ -51,7 +51,7 @@ def get_module_list(commitHash: str) -> Tuple[List[str], List[str]]:
         text=True
     ).stdout
     
-    modules.update([f"{i}:assembleRelease" for i in result.splitlines()])
+    modules.update(result.splitlines())
                 
     return list(modules), list(deleted)
 
@@ -61,7 +61,9 @@ def chunker(iterable: List[str], size: int) -> Dict[str, Any]:
     return {"chunk": [{"num": i, "modules": iterable[i:i + size]} for i in range(0, len(iterable), size)]}
 
 commit = sys.argv[1]
+build_type = sys.argv[2]
 modules, deleted = get_module_list(commit)
+modules = [f"{module}:assemble{build_type}" for module in modules]
 chunked = chunker(modules, int(os.getenv("CI_CHUNK_SIZE", 65)))
 
 print(f"Module chunks to build:\n{json.dumps(chunked, indent=2)}\n\nModule to delete:\n{json.dumps(deleted, indent=2)}")

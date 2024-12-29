@@ -51,7 +51,7 @@ jobs:
       - id: generate-matrices
         name: Create output matrices
         run: |
-          python ./.github/scripts/modules-to-build.py ${{ steps.last_successful_commit.outputs.commit_hash }}
+          python ./.github/scripts/modules-to-build.py ${{ steps.last_successful_commit.outputs.commit_hash }} Release
 
   build_individual:
     name: Build individual modules
