@@ -1,0 +1,9 @@
+ext {
+    extName = 'Monte Tai'
+    extClass = '.MonteTai'
+    themePkg = 'madara'
+    baseUrl = 'https://montetaiscanlator.xyz'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
