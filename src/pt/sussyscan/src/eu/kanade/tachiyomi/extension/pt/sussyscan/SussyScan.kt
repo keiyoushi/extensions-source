@@ -141,7 +141,7 @@ class SussyScan : HttpSource() {
 
     // ============================= Pages ====================================
 
-    override fun pageListRequest(chapter: SChapter) = GET("$apiUrl${chapter.url}")
+    override fun pageListRequest(chapter: SChapter) = GET("$apiUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<WrapperDto<ChapterPageDto>>().results
