@@ -2,8 +2,8 @@ ext {
     extName = 'Webtoon Hatti'
     extClass = '.WebtoonHatti'
     themePkg = 'madara'
-    baseUrl = 'https://webtoonhatti.dev'
-    overrideVersionCode = 4
+    baseUrl = 'https://webtoonhatti.me'
+    overrideVersionCode = 5
 }
 
 apply from: "$rootDir/common.gradle"
