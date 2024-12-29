@@ -32,6 +32,15 @@ jobs:
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@0bdd871935719febd78681f197cd39af5b6e16a6 # v4.2.2
 
+      - name: Set up JDK
+        uses: actions/setup-java@7a6d8a8234af8eb26422e24e3006232cccaa061b # v4.6.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0bdd871935719febd78681f197cd39af5b6e16a6 # v4.2.2
+
       - name: Last Successful Commit Run
         id: last_successful_commit
         uses: nrwl/last-successful-commit-action@v1
@@ -54,20 +63,9 @@ jobs:
       - name: Checkout main branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Set up JDK
-        uses: actions/setup-java@7a6d8a8234af8eb26422e24e3006232cccaa061b # v4.6.0
-        with:
-          java-version: 17
-          distribution: temurin
-
       - name: Prepare signing key
         run: |
           echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@0bdd871935719febd78681f197cd39af5b6e16a6 # v4.2.2
-        with:
-          cache-read-only: ${{ matrix.chunk.num != 0 }}
 
       - name: Build extensions (chunk ${{ matrix.chunk.num }})
         env:
