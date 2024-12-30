@@ -60,13 +60,13 @@ class ComicExtra : ParsedHttpSource() {
     }
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a.eg-image").attr("href"))
-        title = element.select("div.egb-right a").text()
+        setUrlWithoutDomain(element.selectFirst("a.eg-image")!!.absUrl("href"))
+        title = element.selectFirst("div.egb-right a")!!.text()
         thumbnail_url = element.select("img").attr("src")
     }
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a.big-link").attr("href"))
+        setUrlWithoutDomain(element.selectFirst("a.big-link")!!.absUrl("href"))
         title = element.selectFirst(".big-link")!!.text()
     }
 
@@ -87,10 +87,10 @@ class ComicExtra : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             title = document.select("h1").text()
-            thumbnail_url = document.select("div.anime-image > img").attr("src")
-            status = parseStatus(document.select(".status a").text())
-            author = document.select("td:contains(Author:) + td").text()
-            description = document.select("div.detail-desc-content p").text()
+            thumbnail_url = document.selectFirst("div.anime-image > img")?.absUrl("src")
+            document.selectFirst(".status a")?.also { status = parseStatus(it.text()) }
+            document.selectFirst("td:contains(Author:) + td")?.also { author = it.text() }
+            document.selectFirst("div.detail-desc-content p")?.also { description = it.text() }
             genre = document.select("ul.anime-genres > li + li").joinToString { it.text() }
         }
     }
