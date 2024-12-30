@@ -1,0 +1,10 @@
+ext {
+    extName = 'Ragnar Scans'
+    extClass = '.RagnarScans'
+    themePkg = 'madara'
+    baseUrl = 'https://ragnarscans.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
