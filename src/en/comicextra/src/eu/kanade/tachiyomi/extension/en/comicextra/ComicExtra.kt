@@ -116,7 +116,7 @@ class ComicExtra : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         val urlEl = element.select("a")
-        val dateEl = element.select("span")
+        val dateEl = element.selectFirst("span")!!
 
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlEl.attr("href").replace(" ", "%20"))
