@@ -1,5 +1,5 @@
 ext {
-    extName = 'ManhwaIndo'
+    extName = 'Manhwa Indo'
     extClass = '.ManhwaIndo'
     themePkg = 'mangathemesia'
     baseUrl = 'https://manhwaindo.one'
