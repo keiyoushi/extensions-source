@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -23,6 +24,10 @@ class DeviantArt : HttpSource() {
     override val baseUrl = "https://deviantart.com"
     override val lang = "all"
     override val supportsLatest = false
+
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
+    }
 
     private val backendBaseUrl = "https://backend.deviantart.com"
     private fun backendBuilder() = backendBaseUrl.toHttpUrl().newBuilder()
@@ -48,10 +53,11 @@ class DeviantArt : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        require(query.startsWith("gallery:")) { SEARCH_FORMAT_MSG }
-        val querySegments = query.substringAfter(":").split("/")
-        val username = querySegments[0]
-        val folderId = querySegments.getOrElse(1) { "all" }
+        val matchGroups = requireNotNull(
+            Regex("""gallery:([\w-]+)(?:/(\d+))?""").matchEntire(query)?.groupValues,
+        ) { SEARCH_FORMAT_MSG }
+        val username = matchGroups[1]
+        val folderId = matchGroups[2].ifEmpty { "all" }
         return GET("$baseUrl/$username/gallery/$folderId", headers)
     }
 
