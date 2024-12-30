@@ -177,17 +177,16 @@ abstract class GroupLe(
             "div#tab-description  .manga-description",
         ).text()
         manga.status = when {
-            infoElement.html()
-                .contains("Запрещена публикация произведения по копирайту") || infoElement.html()
+            document.html()
+                .contains("Запрещена публикация произведения по копирайту") || document.html()
                 .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!") -> SManga.LICENSED
-            infoElement.html().contains("<b>Сингл</b>") -> SManga.COMPLETED
+            infoElement.html().contains("<b>Сингл") -> SManga.COMPLETED
             else ->
-                when (infoElement.select("p:contains(Перевод:) span").first()?.text()) {
-                    "продолжается" -> SManga.ONGOING
-                    "начат" -> SManga.ONGOING
-                    "переведено" -> SManga.COMPLETED
-                    "завершён" -> SManga.COMPLETED
-                    "приостановлен" -> SManga.ON_HIATUS
+                when (infoElement.selectFirst("span.badge:contains(выпуск)")?.text()) {
+                    "выпуск продолжается" -> SManga.ONGOING
+                    "выпуск начат" -> SManga.ONGOING
+                    "выпуск завершён" -> if (infoElement.selectFirst("span.badge:contains(переведено)")?.text()?.isNotEmpty() == true) SManga.COMPLETED else SManga.PUBLISHING_FINISHED
+                    "выпуск приостановлен" -> SManga.ON_HIATUS
                     else -> SManga.UNKNOWN
                 }
         }
@@ -213,15 +212,9 @@ abstract class GroupLe(
 
     private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
         val document = response.asJsoup()
-        if ((
-            document.select(".expandable.hide-dn").isNotEmpty() && document.select(".user-avatar")
-                .isEmpty() && document.toString()
-                .contains("current_user_country_code = 'RU'")
-            ) || (
-                document.select("img.logo")
-                    .first()?.attr("title")
-                    ?.contains("Allhentai") == true && document.select(".user-avatar").isEmpty()
-                )
+
+        if (document.select(".user-avatar").isEmpty() &&
+            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") }
         ) {
             throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
         }
@@ -313,19 +306,21 @@ abstract class GroupLe(
 
         val html = document.html()
 
-        val readerMark = "rm_h.readerDoInit(["
+        if (document.select(".user-avatar").isEmpty() &&
+            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") }
 
-        if (!html.contains(readerMark)) {
-            if (document.select(".input-lg").isNotEmpty() || (
-                document.select(".user-avatar")
-                    .isEmpty() && document.select("img.logo").first()?.attr("title")
-                    ?.contains("Allhentai") == true
-                )
-            ) {
-                throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
-            }
-            if (!response.request.url.toString().contains(baseUrl)) {
+        ) {
+            throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
+        }
+
+        val readerMark = when {
+            html.contains("rm_h.readerDoInit([") -> "rm_h.readerDoInit(["
+            html.contains("rm_h.readerInit([") -> "rm_h.readerInit(["
+            !response.request.url.toString().contains(baseUrl) -> {
                 throw Exception("Не удалось загрузить главу. Url: ${response.request.url}")
+            }
+            else -> {
+                throw Exception("Дизайн сайта обновлен, для дальнейшей работы необходимо обновление дополнения")
             }
         }
 

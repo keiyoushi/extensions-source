@@ -12,7 +12,7 @@ import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
+class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
     override val id = 1809051393403180443
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
