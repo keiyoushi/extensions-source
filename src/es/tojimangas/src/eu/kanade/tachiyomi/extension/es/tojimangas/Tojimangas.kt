@@ -85,7 +85,7 @@ class Tojimangas : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val content = document.selectFirst(".content")
         thumbnail_url = content?.selectFirst("img")?.absUrl("src")
-        genre = document.select(".meta a").joinToString { a -> a.text() }
+        genre = document.select(".meta a").joinToString { it.text() }
     }
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
@@ -110,7 +110,7 @@ class Tojimangas : ParsedHttpSource() {
     }
 
     protected open fun parseRelativeDate(date: String): Long {
-        val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
+        val number = DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
 
         return when {
@@ -173,4 +173,8 @@ class Tojimangas : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document): String = ""
+
+    companion object {
+        private val DATE_REGEX = """(\d+)""".toRegex()
+    }
 }
