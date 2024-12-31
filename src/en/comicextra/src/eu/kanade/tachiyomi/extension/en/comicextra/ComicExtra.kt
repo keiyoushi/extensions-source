@@ -200,7 +200,6 @@ class ComicExtra : ParsedHttpSource() {
         TriStateFilterOption("Historical", "Historical"),
         TriStateFilterOption("Horror", "Horror"),
         TriStateFilterOption("Leading Ladies", "Leading Ladies"),
-        TriStateFilterOption("LEOMACS", "a><span-class=-comic"),
         TriStateFilterOption("Literature", "Literature"),
         TriStateFilterOption("Magic", "Magic"),
         TriStateFilterOption("Manga", "Manga"),
