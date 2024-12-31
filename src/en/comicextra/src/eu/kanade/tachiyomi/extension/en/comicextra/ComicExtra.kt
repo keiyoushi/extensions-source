@@ -62,12 +62,13 @@ class ComicExtra : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a.eg-image")!!.absUrl("href"))
         title = element.selectFirst("div.egb-right a")!!.text()
-        thumbnail_url = element.select("img").attr("src")
+        element.selectFirst("img")?.also { thumbnail_url = it.absUrl("src") }
     }
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a.big-link")!!.absUrl("href"))
         title = element.selectFirst(".big-link")!!.text()
+        thumbnail_url = "https://azcomix.me/images/sites/default.jpg"
     }
 
     override fun popularMangaNextPageSelector() = "div.general-nav > a:contains(Next)"
@@ -77,16 +78,16 @@ class ComicExtra : ParsedHttpSource() {
     override fun searchMangaSelector() = "div.dl-box"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a.dlb-image").attr("href"))
-        title = element.select("div.dlb-right a.dlb-title").text()
-        thumbnail_url = element.select("a.dlb-image img").attr("src")
+        setUrlWithoutDomain(element.selectFirst("a.dlb-image")!!.absUrl("href"))
+        title = element.selectFirst("div.dlb-right a.dlb-title")!!.text()
+        element.selectFirst("a.dlb-image img")?.also { thumbnail_url = it.absUrl("src") }
     }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            title = document.select("h1").text()
+            title = document.selectFirst("h1")!!.text()
             thumbnail_url = document.selectFirst("div.anime-image > img")?.absUrl("src")
             document.selectFirst(".status a")?.also { status = parseStatus(it.text()) }
             document.selectFirst("td:contains(Author:) + td")?.also { author = it.text() }
@@ -115,14 +116,16 @@ class ComicExtra : ParsedHttpSource() {
     override fun chapterListSelector() = "ul.basic-list li"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlEl = element.select("a")
+        val urlEl = element.selectFirst("a")
         val dateEl = element.selectFirst("span")
 
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(urlEl.attr("href").replace(" ", "%20"))
-        chapter.name = urlEl.text()
-        dateEl?.also { chapter.date_upload = dateParse(it.text()) }
-        return chapter
+        return SChapter.create().apply {
+            urlEl?.also {
+                setUrlWithoutDomain(it.absUrl("href").replace(" ", "%20"))
+                name = it.text()
+            }
+            dateEl?.also { date_upload = dateParse(it.text()) }
+        }
     }
 
     private fun dateParse(dateAsString: String): Long {
@@ -139,7 +142,7 @@ class ComicExtra : ParsedHttpSource() {
         val pages = mutableListOf<Page>()
 
         document.select("div.chapter-container img").forEachIndexed { i, img ->
-            pages.add(Page(i, "", img.attr("abs:src")))
+            pages.add(Page(i, "", img.absUrl("src")))
         }
         return pages
     }
@@ -149,6 +152,8 @@ class ComicExtra : ParsedHttpSource() {
     // Filters
 
     override fun getFilterList() = FilterList(
+        Filter.Header("Note: can't leave both filters as default with a blank search string"),
+        Filter.Separator(),
         StatusFilter(getStatusList, 0),
         GenreGroupFilter(getGenreList()),
     )
