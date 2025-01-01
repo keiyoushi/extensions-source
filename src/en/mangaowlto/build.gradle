@@ -1,7 +1,0 @@
-ext {
-    extName = 'MangaOwl.To'
-    extClass = '.MangaOwlToFactory'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
