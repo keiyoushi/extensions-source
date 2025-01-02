@@ -284,7 +284,8 @@ class ComposedImageInterceptor(
     }
 
     companion object {
-        const val SCALED_DENSITY = 0.75f // arbitrary
+        // w3: Absolute Lengths [...](https://www.w3.org/TR/css3-values/#absolute-lengths)
+        const val SCALED_DENSITY = 0.75f // 1px = 0.75pt
         val mediaType = "image/png".toMediaType()
     }
 }
