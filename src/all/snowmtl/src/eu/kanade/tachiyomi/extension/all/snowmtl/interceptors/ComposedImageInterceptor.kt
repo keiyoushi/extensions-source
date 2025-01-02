@@ -102,7 +102,7 @@ class ComposedImageInterceptor(
     }
 
     private fun createTextPaint(font: Typeface?): TextPaint {
-        val defaultTextSize = 50.sp // arbitrary
+        val defaultTextSize = 24.pt // arbitrary
         return TextPaint().apply {
             color = Color.BLACK
             textSize = defaultTextSize
@@ -258,7 +258,8 @@ class ComposedImageInterceptor(
         restore()
     }
 
-    private val Int.sp: Float get() = this * SCALED_DENSITY
+    // https://pixelsconverter.com/pt-to-px
+    private val Int.pt: Float get() = this / SCALED_DENSITY
 
     // ============================= Utils ======================================
 
@@ -283,7 +284,7 @@ class ComposedImageInterceptor(
     }
 
     companion object {
-        const val SCALED_DENSITY = 1.5f // arbitrary
+        const val SCALED_DENSITY = 0.75f // arbitrary
         val mediaType = "image/png".toMediaType()
     }
 }

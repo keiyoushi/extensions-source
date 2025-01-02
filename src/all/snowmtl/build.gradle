@@ -1,7 +1,7 @@
 ext {
     extName = 'Snow Machine Translations'
     extClass = '.SnowmtlFactory'
-    extVersionCode = 5
+    extVersionCode = 6
     isNsfw = true
 }
 
