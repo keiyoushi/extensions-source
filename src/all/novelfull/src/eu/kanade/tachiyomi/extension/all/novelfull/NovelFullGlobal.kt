@@ -34,7 +34,7 @@ abstract class NovelFullGlobal(
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/comic/bookclass.html?type=hot_novel&page_num=$page&language=$lang")
+        return GET("$baseUrl/comic/bookclass.html?type=hot_novel&page_num=$page&language=$lang", headers)
     }
 
     override fun popularMangaSelector(): String {
