@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -308,6 +309,12 @@ abstract class Keyoapp(
     protected open fun Element.getImageUrl(selector: String): String? {
         return this.selectFirst(selector)?.let { element ->
             IMG_REGEX.find(element.attr("style"))?.groups?.get("url")?.value
+                ?.toHttpUrlOrNull()?.let {
+                    it.newBuilder()
+                        .setQueryParameter("w", "480") // Keyoapp returns the dynamic size of the thumbnail to any size
+                        .build()
+                        .toString()
+                }
         }
     }
 
