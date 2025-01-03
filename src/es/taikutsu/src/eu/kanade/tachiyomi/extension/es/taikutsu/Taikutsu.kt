@@ -4,6 +4,6 @@ import eu.kanade.tachiyomi.multisrc.lectormoe.LectorMoe
 
 class Taikutsu : LectorMoe(
     "Taikutsu",
-    "https://taikutsutl.lector.moe",
+    "https://taikutsutl.capibaratraductor.com",
     "es",
 )

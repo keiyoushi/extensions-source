@@ -2,8 +2,8 @@ ext {
     extName = 'Taikutsu'
     extClass = '.Taikutsu'
     themePkg = 'lectormoe'
-    baseUrl = 'https://taikutsutl.lector.moe'
-    overrideVersionCode = 0
+    baseUrl = 'https://taikutsutl.capibaratraductor.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
