@@ -53,7 +53,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
         .build()
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/home/api/getpage/tp/1-topest-${page - 1}", headers)
+        GET("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val listPage: ListPageDto<MangaDto> = response.parseAs()
