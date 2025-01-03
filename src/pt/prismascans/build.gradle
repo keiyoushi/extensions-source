@@ -3,7 +3,7 @@ ext {
     extClass = '.SeitaCelestial'
     themePkg = 'mangathemesia'
     baseUrl = 'https://seitacelestial.com'
-    overrideVersionCode = 17
+    overrideVersionCode = 18
 }
 
 apply from: "$rootDir/common.gradle"

@@ -7,13 +7,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import rx.Observable
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class SeitaCelestial : MangaThemesia(
     "Seita Celestial",
     "https://seitacelestial.com",
     "pt-BR",
-    "/comics",
+    mangaUrlDirectory = "/comics",
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
 ) {
 
     // They changed their name from Prisma Scans to Demon Sect and now to Celestial Sect.
