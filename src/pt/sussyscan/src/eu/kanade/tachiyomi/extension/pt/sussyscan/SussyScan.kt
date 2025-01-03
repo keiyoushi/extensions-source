@@ -149,7 +149,13 @@ class SussyScan : HttpSource() {
 
     // ============================= Pages ====================================
 
-    override fun pageListRequest(chapter: SChapter) = GET("$apiUrl${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val pageHeaders = headers.newBuilder()
+            .set("Accept", "application/json, text/plain, */*")
+            .set("Accept-Language", "pt-br,pt;q=0.9,en-us;q=0.8,en;q=0.7")
+            .build()
+        return GET("$apiUrl${chapter.url}", pageHeaders)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<WrapperDto<ChapterPageDto>>().results
