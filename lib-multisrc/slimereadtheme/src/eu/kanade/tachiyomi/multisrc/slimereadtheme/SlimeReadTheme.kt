@@ -56,8 +56,8 @@ abstract class SlimeReadTheme(
         if (!scriptResponse.isSuccessful) throw Exception("HTTP error ${scriptResponse.code}")
         val script = scriptResponse.body.string()
         val apiUrl = FUNCTION_REGEX.find(script)?.let { result ->
-            val varBlock = result.groups["script"]?.value ?: return@let null
-            val varUrlInfix = result.groups["infix"]?.value ?: return@let null
+            val varBlock = result.groupValues[1]
+            val varUrlInfix = result.groupValues[2]
 
             val block = """${varBlock.replace(varUrlInfix, "\"$urlInfix\"")}.toString()"""
 
