@@ -3,10 +3,17 @@ package eu.kanade.tachiyomi.extension.en.mehgazone
 import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri.encode
+import android.text.InputType
+import android.text.SpannableString
+import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
+import android.util.Log
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.TextView
 import androidx.preference.CheckBoxPreference
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.en.mehgazone.dto.ChapterListDto
-import eu.kanade.tachiyomi.extension.en.mehgazone.dto.PageListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -16,9 +23,19 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
+import okhttp3.Credentials
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -27,6 +44,9 @@ import org.jsoup.parser.Parser.unescapeEntities
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class Mehgazone : ConfigurableSource, HttpSource() {
 
@@ -41,7 +61,12 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     @Suppress("VIRTUAL_MEMBER_HIDDEN", "unused")
     val supportsRelatedMangas = false
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient by lazy {
+        network.client
+            .newBuilder()
+            .addInterceptor(authInterceptor)
+            .build()
+    }
 
     private val json = Json {
         isLenient = true
@@ -51,11 +76,17 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         prettyPrint = true
     }
 
+    private val fallbackTitleDateFormat: SimpleDateFormat by lazy {
+        SimpleDateFormat("dd-MM-yyyy", Locale.US)
+    }
+
     private val textToImageURL = "https://fakeimg.pl/1500x2126/ffffff/000000/?font=museo&font_size=42"
 
     private fun String.image() = textToImageURL + "&text=" + encode(this)
 
     private fun String.unescape() = unescapeEntities(this, false)
+
+    private fun String.linkify() = SpannableString(this).apply { Linkify.addLinks(this, Linkify.WEB_URLS) }
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
@@ -81,7 +112,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val html = response.asJsoup()
-        val thumbnailRegex = Regex("""/[^/]+-(?<file>[0-9]+\.png)$""", RegexOption.IGNORE_CASE)
+        val thumbnailRegex = Regex("/[^/]+-([0-9]+\\.png)\$", RegexOption.IGNORE_CASE)
 
         title = html.head().selectFirst("title")!!.text().unescape()
         url = response.request.url.toString()
@@ -92,13 +123,16 @@ class Mehgazone : ConfigurableSource, HttpSource() {
                 .select("img")
                 .firstOrNull { it.attr("src").matches(thumbnailRegex) }
                 ?.attr("src")
-                ?.replace(thumbnailRegex, "/$1")
+                ?.replace(thumbnailRegex, "/\$1")
     }
 
     override fun chapterListRequest(manga: SManga): Request = chapterListRequest(manga.url, 1)
 
     private fun chapterListRequest(url: String, page: Int): Request =
-        GET("$url/wp-json/wp/v2/posts?per_page=100&page=$page&_fields=id,title,date_gmt,excerpt", headers)
+        GET(
+            "$url/wp-json/wp/v2/posts?per_page=100&page=$page&_fields=id,title,date_gmt,excerpt",
+            headers,
+        )
 
     private fun hasNextPage(headers: Headers, responseSize: Int, page: Int): Boolean {
         val pages = headers["X-Wp-Totalpages"]?.toInt()
@@ -133,9 +167,17 @@ class Mehgazone : ConfigurableSource, HttpSource() {
             .sortedBy { it.date }
             .mapIndexed { i, it ->
                 SChapter.create().apply {
+                    val premium =
+                        if (it.excerpt.rendered.contains("Unlock with Patreon")) {
+                            "🔒 "
+                        } else {
+                            ""
+                        }
+
                     url = "$mangaUrl/?p=${it.id}"
-                    name = it.title.rendered.unescape()
-                    date_upload = it.date.time
+                    name = premium + it.title.rendered.unescape()
+                        .ifEmpty { fallbackTitleDateFormat.format(it.date.time) }
+                    date_upload = it.date.time.time
                     chapter_number = i.toFloat()
                 }
             }.reversed()
@@ -155,13 +197,18 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request =
-        GET(chapter.url.substringBefore("/?") + "/wp-json/wp/v2/posts?per_page=1&include=" + chapter.url.substringAfter("p="), headers)
+        GET(
+            chapter.url.substringBefore("/?") +
+                "/wp-json/wp/v2/posts?per_page=1&_fields=link,content,excerpt,date,title" +
+                "&include=" + chapter.url.substringAfter("p="),
+            headers,
+        )
 
     override fun pageListParse(response: Response): List<Page> {
         val apiResponse: PageListDto = json.decodeFromString<List<PageListDto>>(response.body.string()).first()
 
         if (showPatreon && apiResponse.excerpt.rendered.contains("Unlock with Patreon")) {
-            return pageListParsePatreon(apiResponse)
+            return pageListParsePatreon(response, apiResponse)
         }
 
         val content = Jsoup.parse(apiResponse.content.rendered, apiResponse.link)
@@ -170,12 +217,10 @@ class Mehgazone : ConfigurableSource, HttpSource() {
             .mapIndexed { i, it -> Page(i, "", it.attr("src")) }
             .toMutableList()
 
-        val numImages = images.size
-
         if (apiResponse.excerpt.rendered.isNotBlank()) {
             images.add(
                 Page(
-                    numImages,
+                    images.size,
                     "",
                     wordWrap(Jsoup.parse(apiResponse.excerpt.rendered.unescape()).text()).image(),
                 ),
@@ -185,30 +230,163 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         return images.toList()
     }
 
-    private fun pageListParsePatreon(apiResponse: PageListDto): List<Page> {
-        val response = client.newCall(GET(apiResponse.link, headers)).execute()
+    private fun pageListParsePatreon(response: Response, apiResponse: PageListDto): List<Page> {
+        val imageRegex = Regex("(-)[0-9]+(\\.png)\$", RegexOption.IGNORE_CASE)
+        val mediaUrl =
+            response.request.url.toString().substringBefore("/wp-json/") +
+                "/wp-json/wp/v2/media?per_page=25&_fields=source_url,media_details"
 
-        val content = response.asJsoup().getElementById("content")!!
+        val mediaApiResponse = client.newCall(GET(mediaUrl, headers)).execute()
+        val mediaApi: MediaDto? = json.decodeFromString<List<MediaDto>>(mediaApiResponse.body.string()).firstOrNull {
+            it.details.width < it.details.height &&
+                it.details.height - it.details.width > 25 &&
+                it.source.matches(imageRegex)
+        }
+        val chapterNumber: String? =
+            "[0-9]+\$"
+                .toRegex(RegexOption.IGNORE_CASE)
+                .find(apiResponse.title.rendered)?.value
 
-        val images = content.select("img")
-            .filter { el -> !el.attr("alt").contains("early access") }
-            .mapIndexed { i, it -> Page(i, "", it.attr("src")) }
-            .toMutableList()
+        val images: MutableList<Page> = mutableListOf()
 
-        val numImages = images.size
+        if (mediaApi != null && chapterNumber != null) {
+            val url = mediaApi.source.toHttpUrl()
+            val segments = url.pathSegments.size
+            val chapterImgUrl =
+                url.newBuilder()
+                    .setPathSegment(segments - 1, url.pathSegments[segments - 1].replace(imageRegex, "\$1$chapterNumber\$2"))
+                    .setPathSegment(segments - 2, (apiResponse.date.get(Calendar.MONTH) + 1).toString().padStart(2, '0'))
+                    .setPathSegment(segments - 3, apiResponse.date.get(Calendar.YEAR).toString())
+                    .build()
 
-        val excerpt = content.children()
-            .filter { el -> el.tagName() == "p" }
-            .joinToString("\n") { it.text().trim() }
-            .split("\\s+".toRegex())
-            .filterIndexed { i, _ -> i < 55 }
-            .joinToString(" ")
+            images.add(
+                Page(
+                    0,
+                    "",
+                    chapterImgUrl.toString(),
+                ),
+            )
+        }
 
-        if (excerpt.isNotBlank()) {
-            images.add(Page(numImages, "", wordWrap(excerpt.unescape()).image()))
+        if (apiResponse.excerpt.rendered.isNotBlank()) {
+            images.add(
+                Page(
+                    1,
+                    "",
+                    wordWrap(Jsoup.parse(apiResponse.excerpt.rendered.unescape()).text()).image(),
+                ),
+            )
+        }
+
+        if (images.size <= 1) {
+            images.add(
+                Page(
+                    0,
+                    "",
+                    wordWrap("Could not find Patreon Chapter").image(),
+                ),
+            )
         }
 
         return images.toList()
+    }
+
+    private class BasicAuthInterceptor(private var user: String?, private var password: String?) : Interceptor {
+        fun setUser(user: String?) {
+            setAuth(user, password)
+        }
+
+        fun setPassword(password: String?) {
+            setAuth(user, password)
+        }
+
+        fun setAuth(user: String?, password: String?) {
+            this.user = user
+            this.password = password
+            credentials = getCredentials()
+        }
+
+        private fun getCredentials(): String? =
+            if (!user.isNullOrBlank() && !password.isNullOrBlank()) {
+                Credentials.basic(user!!, password!!)
+            } else {
+                null
+            }
+
+        private var credentials: String? = getCredentials()
+
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request = chain.request()
+
+            if (
+                !request.url.encodedPath.contains("/wp-json/wp/v2/") ||
+                user.isNullOrBlank() ||
+                password.isNullOrBlank() ||
+                credentials.isNullOrBlank()
+            ) {
+                return chain.proceed(request)
+            }
+
+            val authenticatedRequest = request.newBuilder()
+                .header("Authorization", credentials!!)
+                .build()
+
+            return chain.proceed(authenticatedRequest)
+        }
+    }
+
+    @Serializable
+    private data class ChapterListDto(
+        val id: Int,
+        @Serializable(DateTimeSerializer::class)
+        @SerialName("date_gmt")
+        val date: Calendar,
+        val title: RenderedDto,
+        val excerpt: RenderedDto,
+    )
+
+    @Serializable
+    private data class PageListDto(
+        @Serializable(DateTimeSerializer::class)
+        val date: Calendar,
+        val title: RenderedDto,
+        val link: String,
+        val content: RenderedDto,
+        val excerpt: RenderedDto,
+    )
+
+    @Serializable
+    private data class MediaDto(
+        @SerialName("source_url")
+        val source: String,
+        @SerialName("media_details")
+        val details: DimensionDto,
+    )
+
+    @Serializable
+    private data class DimensionDto(
+        val width: Int,
+        val height: Int,
+    )
+
+    @Serializable
+    private data class RenderedDto(
+        val rendered: String,
+    )
+
+    private object DateTimeSerializer : KSerializer<Calendar> {
+        private val sdf by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US) }
+
+        override val descriptor = PrimitiveSerialDescriptor("DateTime", PrimitiveKind.STRING)
+        override fun serialize(encoder: Encoder, value: Calendar) = encoder.encodeString(sdf.format(value.time))
+        override fun deserialize(decoder: Decoder): Calendar {
+            val cal = Calendar.getInstance()
+            val date = sdf.parse(decoder.decodeString())
+            if (date != null) {
+                cal.time = date
+            }
+            return cal
+        }
     }
 
     private val preferences: SharedPreferences by lazy {
@@ -218,11 +396,32 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     companion object {
         private const val SHOW_PATREON_PREF_KEY = "SHOW_PATREON"
         private const val SHOW_PATREON_PREF_TITLE = "Show Patreon chapters"
-        private const val SHOW_PATREON_PREF_SUMMARY = "If checked, shows chapters that require you to be logged in through Patreon"
+        private const val SHOW_PATREON_PREF_SUMMARY = "If checked, tries to show chapters that require you to be logged in through Patreon while not logged in"
         private const val SHOW_PATREON_PREF_DEFAULT_VALUE = false
+
+        private const val WORDPRESS_USERNAME_PREF_KEY = "WORDPRESS_USERNAME"
+        private const val WORDPRESS_USERNAME_PREF_TITLE = "WordPress username"
+        private const val WORDPRESS_USERNAME_PREF_SUMMARY = "The WordPress username"
+        private const val WORDPRESS_USERNAME_PREF_DIALOG = "To see your username:\n\n" +
+            "Go to https://bodysuit23.mehgazone.com/wp-admin/profile.php and you should see your username near the top of the page."
+        private const val WORDPRESS_USERNAME_PREF_DEFAULT_VALUE = ""
+
+        private const val WORDPRESS_APP_PASSWORD_PREF_KEY = "WORDPRESS_APP_PASSWORD"
+        private const val WORDPRESS_APP_PASSWORD_PREF_TITLE = "WordPress app password"
+        private const val WORDPRESS_APP_PASSWORD_PREF_SUMMARY = "The WordPress app password (not your account password)"
+        private const val WORDPRESS_APP_PASSWORD_PREF_DIALOG = "To setup:\n\n" +
+            "Go to https://bodysuit23.mehgazone.com/wp-admin/profile.php and you should be able to create a new app password near the bottom of the page."
+        private const val WORDPRESS_APP_PASSWORD_PREF_DEFAULT_VALUE = ""
     }
 
     private var showPatreon = preferences.getBoolean(SHOW_PATREON_PREF_KEY, SHOW_PATREON_PREF_DEFAULT_VALUE)
+
+    private val authInterceptor: BasicAuthInterceptor by lazy {
+        BasicAuthInterceptor(
+            preferences.getString(WORDPRESS_USERNAME_PREF_KEY, WORDPRESS_USERNAME_PREF_DEFAULT_VALUE),
+            preferences.getString(WORDPRESS_APP_PASSWORD_PREF_KEY, WORDPRESS_APP_PASSWORD_PREF_DEFAULT_VALUE),
+        )
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         CheckBoxPreference(screen.context).apply {
@@ -236,10 +435,80 @@ class Mehgazone : ConfigurableSource, HttpSource() {
                 true
             }
         }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            val name = preferences.getString(WORDPRESS_USERNAME_PREF_KEY, WORDPRESS_USERNAME_PREF_DEFAULT_VALUE)!!
+
+            key = WORDPRESS_USERNAME_PREF_KEY
+            title = WORDPRESS_USERNAME_PREF_TITLE
+            dialogMessage = WORDPRESS_USERNAME_PREF_DIALOG.linkify()
+            summary = name.ifBlank { WORDPRESS_USERNAME_PREF_SUMMARY }
+            setDefaultValue(WORDPRESS_USERNAME_PREF_DEFAULT_VALUE)
+
+            setOnBindEditTextListener {
+                getDialogMessageFromEditText(it).let {
+                    if (it == null) {
+                        Log.e(name, "Could not find dialog TextView")
+                    } else {
+                        it.movementMethod = LinkMovementMethod.getInstance()
+                    }
+                }
+            }
+
+            setOnPreferenceChangeListener { preference, newValue ->
+                authInterceptor.setUser(newValue as String)
+                preference.summary = newValue.ifBlank { WORDPRESS_USERNAME_PREF_SUMMARY }
+                true
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            val pwd = preferences.getString(WORDPRESS_APP_PASSWORD_PREF_KEY, WORDPRESS_APP_PASSWORD_PREF_DEFAULT_VALUE)!!
+
+            key = WORDPRESS_APP_PASSWORD_PREF_KEY
+            title = WORDPRESS_APP_PASSWORD_PREF_TITLE
+            dialogMessage = WORDPRESS_APP_PASSWORD_PREF_DIALOG.linkify()
+            summary = if (pwd.isBlank()) WORDPRESS_APP_PASSWORD_PREF_SUMMARY else "●".repeat(pwd.length)
+            setDefaultValue(WORDPRESS_APP_PASSWORD_PREF_DEFAULT_VALUE)
+
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                getDialogMessageFromEditText(it).let {
+                    if (it == null) {
+                        Log.e(name, "Could not find dialog TextView")
+                    } else {
+                        it.movementMethod = LinkMovementMethod.getInstance()
+                    }
+                }
+            }
+
+            setOnPreferenceChangeListener { preference, newValue ->
+                authInterceptor.setPassword(newValue as String)
+                preference.summary = if (newValue.isBlank()) WORDPRESS_APP_PASSWORD_PREF_SUMMARY else "●".repeat(newValue.length)
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
+    private fun getDialogMessageFromEditText(editText: EditText): TextView? {
+        val parent = editText.parent
+        if (parent !is ViewGroup || parent.childCount == 0) return null
+
+        for (i in 1..parent.childCount) {
+            val child = parent.getChildAt(i - 1)
+            if (child is TextView && child !is EditText) return child
+        }
+
+        return null
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        Observable.just(MangasPage(emptyList(), false))
+        fetchPopularManga(0).map {
+            MangasPage(
+                it.mangas.filter { m -> m.title.contains(query) },
+                false,
+            )
+        }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
