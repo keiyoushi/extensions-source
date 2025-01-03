@@ -18,18 +18,17 @@ class VortexScans : Iken(
 
     private val json by injectLazy<Json>()
 
-    // regexImagesAfter = [{*[0-9]}]
-    private val regexImagesAfter = "\\[\\{.*\\d\\}\\]".toRegex()
+    private val regexImages = """\\"images\\":(.*?)\\"next""".toRegex()
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
         val images = document.selectFirst("script:containsData(images)")
             ?.data()
+            ?.let { regexImages.find(it)!!.groupValues[1].trim(',') }
             ?.replace("""\"""", "\"")
-            ?.let {
-                json.parseToJsonElement(regexImagesAfter.find(it)!!.groups[0]!!.value).jsonArray
-            } ?: throw Exception("Unable to find images")
+            ?.let { json.parseToJsonElement(it).jsonArray }
+            ?: throw Exception("Unable to find images")
 
         return images.mapIndexed { idx, img ->
             Page(idx, imageUrl = img.jsonObject["url"]!!.jsonPrimitive.content)
