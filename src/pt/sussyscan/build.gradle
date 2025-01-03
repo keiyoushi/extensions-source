@@ -1,7 +1,7 @@
 ext {
     extName = 'Sussy Scan'
     extClass = '.SussyScan'
-    extVersionCode = 42
+    extVersionCode = 43
     isNsfw = true
 }
 
