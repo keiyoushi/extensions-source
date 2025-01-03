@@ -19,7 +19,7 @@ internal class TypeSelect : Filter.Select<String>(
 
 internal class SeriesSort(selection: Selection? = null) : Filter.Sort(
     "Sort",
-    arrayOf("Relevance", "Alphabetically", "Date added", "Date updated"),
+    arrayOf("Relevance", "Alphabetically", "Date added", "Date updated", "Random"),
     selection ?: Selection(0, false),
 )
 
