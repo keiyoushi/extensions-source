@@ -29,7 +29,7 @@ class VortexScans : Iken(
             ?.let { regexImages.find(it)!!.groupValues[1].trim(',') }
             ?.let { json.decodeFromString<String>("\"$it\"") }
             ?.let { json.parseToJsonElement(it).jsonArray }
-            ?: throw Exception("Unable to find images")
+            ?: throw Exception("Unable to parse images")
 
         return images.mapIndexed { idx, img ->
             Page(idx, imageUrl = img.jsonObject["url"]!!.jsonPrimitive.content)
