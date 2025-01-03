@@ -23,7 +23,7 @@ class ComicExtra : ParsedHttpSource() {
 
     override val name = "ComicExtra"
 
-    override val baseUrl = "https://comixextra.com"
+    override val baseUrl = "https://azcomix.me"
 
     override val lang = "en"
 
@@ -31,67 +31,68 @@ class ComicExtra : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun popularMangaSelector() = "div.cartoon-box:has(> div.mb-right)"
+    override fun popularMangaSelector() = "div.eg-box"
 
-    override fun latestUpdatesSelector() = "div.hl-box"
+    override fun latestUpdatesSelector() = "ul.line-list"
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/popular-comic/$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/popular-comics?page=$page", headers)
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic-updates/$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic-updates?page=$page", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotBlank()) {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
-                addQueryParameter("keyword", query)
-                if (page > 1) addQueryParameter("page", page.toString())
-            }.build()
-            GET(url, headers)
-        } else {
-            var url = baseUrl
+        val url = "$baseUrl/advanced-search".toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) addQueryParameter("key", query)
+            if (page > 1) addQueryParameter("page", page.toString())
             filters.forEach { filter ->
                 when (filter) {
-                    is GenreFilter -> url += "/${filter.toUriPart()}"
+                    is GenreGroupFilter -> {
+                        with(filter) {
+                            addQueryParameter("wg", included.joinToString("%20"))
+                            addQueryParameter("wog", excluded.joinToString("%20"))
+                        }
+                    }
+                    is StatusFilter -> addQueryParameter("status", filter.selected)
                     else -> {}
                 }
             }
-            GET(url + if (page > 1) "/$page" else "", headers)
-        }
+        }.build()
+        return GET(url, headers)
     }
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("div.mb-right > h3 > a").attr("href"))
-        title = element.select("div.mb-right > h3 > a").text()
-        thumbnail_url = element.select("img").attr("src")
+        setUrlWithoutDomain(element.selectFirst("a.eg-image")!!.absUrl("href"))
+        title = element.selectFirst("div.egb-right a")!!.text()
+        element.selectFirst("img")?.also { thumbnail_url = it.absUrl("src") }
     }
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("div.hlb-t > a").attr("href"))
-        title = element.select("div.hlb-t > a").text()
-        thumbnail_url = fetchThumbnailURL(element.select("div.hlb-t > a").attr("href"))
+        setUrlWithoutDomain(element.selectFirst("a.big-link")!!.absUrl("href"))
+        title = element.selectFirst(".big-link")!!.text()
+        thumbnail_url = "https://azcomix.me/images/sites/default.jpg"
     }
-
-    private fun fetchThumbnailURL(url: String) = client.newCall(GET(url, headers)).execute().asJsoup().select("div.movie-l-img > img").attr("src")
-
-    private fun fetchPagesFromNav(url: String) = client.newCall(GET(url, headers)).execute().asJsoup()
 
     override fun popularMangaNextPageSelector() = "div.general-nav > a:contains(Next)"
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaSelector() = "div.dl-box"
 
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a.dlb-image")!!.absUrl("href"))
+        title = element.selectFirst("div.dlb-right a.dlb-title")!!.text()
+        element.selectFirst("a.dlb-image img")?.also { thumbnail_url = it.absUrl("src") }
+    }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            title = document.select("div.movie-detail span.title-1").text()
-            thumbnail_url = document.select("div.movie-l-img > img").attr("src")
-            status = parseStatus(document.select("dt:contains(Status:) + dd").text())
-            author = document.select("dt:contains(Author:) + dd").text()
-            description = document.select("div#film-content").text()
-            genre = document.select("dt.movie-dt:contains(Genres:) + dd a").joinToString { it.text() }
+            title = document.selectFirst("h1")!!.text()
+            thumbnail_url = document.selectFirst("div.anime-image > img")?.absUrl("src")
+            document.selectFirst(".status a")?.also { status = parseStatus(it.text()) }
+            document.selectFirst("td:contains(Author:) + td")?.also { author = it.text() }
+            document.selectFirst("div.detail-desc-content p")?.also { description = it.text() }
+            genre = document.select("ul.anime-genres > li + li").joinToString { it.text() }
         }
     }
 
@@ -103,46 +104,28 @@ class ComicExtra : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val nav = document.getElementsByClass("general-nav").first()
         val chapters = ArrayList<SChapter>()
 
         document.select(chapterListSelector()).forEach {
             chapters.add(chapterFromElement(it))
         }
 
-        if (nav == null) {
-            return chapters
-        }
-
-        val pg2url = nav.select("a:contains(next)").attr("href")
-
-        // recursively build the chapter list
-
-        fun parseChapters(nextURL: String) {
-            val newpage = fetchPagesFromNav(nextURL)
-            newpage.select(chapterListSelector()).forEach {
-                chapters.add(chapterFromElement(it))
-            }
-            val newURL = newpage.select(".general-nav a:contains(next)")?.attr("href")
-            if (!newURL.isNullOrBlank()) parseChapters(newURL)
-        }
-
-        parseChapters(pg2url)
-
         return chapters
     }
 
-    override fun chapterListSelector() = "table.table > tbody#list > tr:has(td)"
+    override fun chapterListSelector() = "ul.basic-list li"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlEl = element.select("td:nth-of-type(1) > a").first()!!
-        val dateEl = element.select("td:nth-of-type(2)")
+        val urlEl = element.selectFirst("a")
+        val dateEl = element.selectFirst("span")
 
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(urlEl.attr("href").replace(" ", "%20"))
-        chapter.name = urlEl.text()
-        chapter.date_upload = dateParse(dateEl.text())
-        return chapter
+        return SChapter.create().apply {
+            urlEl!!.also {
+                setUrlWithoutDomain(it.absUrl("href").replace(" ", "%20"))
+                name = it.text()
+            }
+            dateEl?.also { date_upload = dateParse(it.text()) }
+        }
     }
 
     private fun dateParse(dateAsString: String): Long {
@@ -159,7 +142,7 @@ class ComicExtra : ParsedHttpSource() {
         val pages = mutableListOf<Page>()
 
         document.select("div.chapter-container img").forEachIndexed { i, img ->
-            pages.add(Page(i, "", img.attr("abs:src")))
+            pages.add(Page(i, "", img.absUrl("src")))
         }
         return pages
     }
@@ -169,75 +152,92 @@ class ComicExtra : ParsedHttpSource() {
     // Filters
 
     override fun getFilterList() = FilterList(
-        Filter.Header("Note: can't combine search types"),
+        Filter.Header("Note: can't leave both filters as default with a blank search string"),
         Filter.Separator(),
-        GenreFilter(getGenreList),
+        StatusFilter(getStatusList, 0),
+        GenreGroupFilter(getGenreList()),
     )
 
-    private class GenreFilter(genrePairs: Array<Pair<String, String>>) : UriPartFilter("Category", genrePairs)
+    class SelectFilterOption(val name: String, val value: String)
+    class TriStateFilterOption(val value: String, name: String, default: Int = 0) : Filter.TriState(name, default)
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
+    abstract class SelectFilter(name: String, private val options: List<SelectFilterOption>, default: Int = 0) : Filter.Select<String>(name, options.map { it.name }.toTypedArray(), default) {
+        val selected: String
+            get() = options[state].value
     }
 
-    private val getGenreList = arrayOf(
-        Pair("Action", "action-comic"),
-        Pair("Adventure", "adventure-comic"),
-        Pair("Anthology", "anthology-comic"),
-        Pair("Anthropomorphic", "anthropomorphic-comic"),
-        Pair("Biography", "biography-comic"),
-        Pair("Black Mask Studios", "black-mask-studios-comic"),
-        Pair("Children", "children-comic"),
-        Pair("Comedy", "comedy-comic"),
-        Pair("Crime", "crime-comic"),
-        Pair("DC Comics", "dc-comics-comic"),
-        Pair("Dark Horse", "dark-horse-comic"),
-        Pair("Drama", "drama-comic"),
-        Pair("Family", "family-comic"),
-        Pair("Fantasy", "fantasy-comic"),
-        Pair("Fighting", "fighting-comic"),
-        Pair("First Second Books", "first-second-books-comic"),
-        Pair("Graphic Novels", "graphic-novels-comic"),
-        Pair("Historical", "historical-comic"),
-        Pair("Horror", "horror-comic"),
-        Pair("LEOMACS", "a><span-class=-comic"),
-        Pair("LGBTQ", "lgbtq-comic"),
-        Pair("Leading Ladies", "leading-ladies-comic"),
-        Pair("Literature", "literature-comic"),
-        Pair("Manga", "manga-comic"),
-        Pair("Martial Arts", "martial-arts-comic"),
-        Pair("Marvel", "marvel-comic"),
-        Pair("Mature", "mature-comic"),
-        Pair("Military", "military-comic"),
-        Pair("Movie Cinematic Link", "movie-cinematic-link-comic"),
-        Pair("Movies & TV", "movies-&-tv-comic"),
-        Pair("Music", "music-comic"),
-        Pair("Mystery", "mystery-comic"),
-        Pair("Mythology", "mythology-comic"),
-        Pair("New", "new-comic"),
-        Pair("Personal", "personal-comic"),
-        Pair("Political", "political-comic"),
-        Pair("Post-Apocalyptic", "post-apocalyptic-comic"),
-        Pair("Psychological", "psychological-comic"),
-        Pair("Pulp", "pulp-comic"),
-        Pair("Religious", "religious-comic"),
-        Pair("Robots", "robots-comic"),
-        Pair("Romance", "romance-comic"),
-        Pair("School Life", "school-life-comic"),
-        Pair("Sci-Fi", "sci-fi-comic"),
-        Pair("Slice of Life", "slice-of-life-comic"),
-        Pair("Sport", "sport-comic"),
-        Pair("Spy", "spy-comic"),
-        Pair("Superhero", "superhero-comic"),
-        Pair("Supernatural", "supernatural-comic"),
-        Pair("Suspense", "suspense-comic"),
-        Pair("Thriller", "thriller-comic"),
-        Pair("Vampires", "vampires-comic"),
-        Pair("Video Games", "video-games-comic"),
-        Pair("War", "war-comic"),
-        Pair("Western", "western-comic"),
-        Pair("Zombies", "zombies-comic"),
-        Pair("Zulema Scotto Lavina", "zulema-scotto-lavina-comic"),
+    abstract class TriStateGroupFilter(name: String, options: List<TriStateFilterOption>) : Filter.Group<TriStateFilterOption>(name, options) {
+        val included: List<String>
+            get() = state.filter { it.isIncluded() }.map { it.value }
+
+        val excluded: List<String>
+            get() = state.filter { it.isExcluded() }.map { it.value }
+    }
+
+    class StatusFilter(options: List<SelectFilterOption>, default: Int) : SelectFilter("Status", options, default)
+    class GenreGroupFilter(options: List<TriStateFilterOption>) : TriStateGroupFilter("Genre", options)
+
+    private val getStatusList = listOf(
+        SelectFilterOption("All", ""),
+        SelectFilterOption("Ongoing", "ONG"),
+        SelectFilterOption("Completed", "CMP"),
+    )
+
+    private fun getGenreList() = listOf(
+        TriStateFilterOption("Action", "Action"),
+        TriStateFilterOption("Adventure", "Adventure"),
+        TriStateFilterOption("Anthology", "Anthology"),
+        TriStateFilterOption("Anthropomorphic", "Anthropomorphic"),
+        TriStateFilterOption("Biography", "Biography"),
+        TriStateFilterOption("Children", "Children"),
+        TriStateFilterOption("Comedy", "Comedy"),
+        TriStateFilterOption("Crime", "Crime"),
+        TriStateFilterOption("Cyborgs", "Cyborgs"),
+        TriStateFilterOption("DC Comics", "DC Comics"),
+        TriStateFilterOption("Dark Horse", "Dark Horse"),
+        TriStateFilterOption("Demons", "Demons"),
+        TriStateFilterOption("Drama", "Drama"),
+        TriStateFilterOption("Family", "Family"),
+        TriStateFilterOption("Fantasy", "Fantasy"),
+        TriStateFilterOption("Fighting", "Fighting"),
+        TriStateFilterOption("Gore", "Gore"),
+        TriStateFilterOption("Graphic Novels", "Graphic Novels"),
+        TriStateFilterOption("Historical", "Historical"),
+        TriStateFilterOption("Horror", "Horror"),
+        TriStateFilterOption("Leading Ladies", "Leading Ladies"),
+        TriStateFilterOption("Literature", "Literature"),
+        TriStateFilterOption("Magic", "Magic"),
+        TriStateFilterOption("Manga", "Manga"),
+        TriStateFilterOption("Martial Arts", "Martial Arts"),
+        TriStateFilterOption("Marvel", "Marvel"),
+        TriStateFilterOption("Mature", "Mature"),
+        TriStateFilterOption("Mecha", "Mecha"),
+        TriStateFilterOption("Military", "Military"),
+        TriStateFilterOption("Movie Cinematic Link", "Movie Cinematic Link"),
+        TriStateFilterOption("Mystery", "Mystery"),
+        TriStateFilterOption("Mythology", "Mythology"),
+        TriStateFilterOption("Personal", "Personal"),
+        TriStateFilterOption("Political", "Political"),
+        TriStateFilterOption("Post-Apocalyptic", "Post-Apocalyptic"),
+        TriStateFilterOption("Psychological", "Psychological"),
+        TriStateFilterOption("Pulp", "Pulp"),
+        TriStateFilterOption("Robots", "Robots"),
+        TriStateFilterOption("Romance", "Romance"),
+        TriStateFilterOption("Sci-Fi", "Sci-Fi"),
+        TriStateFilterOption("Science Fiction", "Science Fiction"),
+        TriStateFilterOption("Slice of Life", "Slice of Life"),
+        TriStateFilterOption("Sports", "Sports"),
+        TriStateFilterOption("Spy", "Spy"),
+        TriStateFilterOption("Superhero", "Superhero"),
+        TriStateFilterOption("Supernatural", "Supernatural"),
+        TriStateFilterOption("Suspense", "Suspense"),
+        TriStateFilterOption("Thriller", "Thriller"),
+        TriStateFilterOption("Tragedy", "Tragedy"),
+        TriStateFilterOption("Vampires", "Vampires"),
+        TriStateFilterOption("Vertigo", "Vertigo"),
+        TriStateFilterOption("Video Games", "Video Games"),
+        TriStateFilterOption("War", "War"),
+        TriStateFilterOption("Western", "Western"),
+        TriStateFilterOption("Zombies", "Zombies"),
     )
 }
