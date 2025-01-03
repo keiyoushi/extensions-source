@@ -51,3 +51,13 @@ tasks {
         }
     }
 }
+
+tasks.register("getDependents") {
+    doLast {
+        project.getDependents().forEach { project ->
+            if (project.path.startsWith(":src:")) {
+                println(project.path)
+            }
+        }
+    }
+}
