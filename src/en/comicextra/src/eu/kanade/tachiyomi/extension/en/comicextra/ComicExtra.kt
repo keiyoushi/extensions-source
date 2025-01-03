@@ -120,7 +120,7 @@ class ComicExtra : ParsedHttpSource() {
         val dateEl = element.selectFirst("span")
 
         return SChapter.create().apply {
-            urlEl?.also {
+            urlEl!!.also {
                 setUrlWithoutDomain(it.absUrl("href").replace(" ", "%20"))
                 name = it.text()
             }
