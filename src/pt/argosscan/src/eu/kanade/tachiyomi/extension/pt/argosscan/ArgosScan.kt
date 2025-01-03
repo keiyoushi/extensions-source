@@ -110,7 +110,7 @@ class ArgosScan : ParsedHttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).sortedBy(SChapter::chapter_number).reversed()
+        return super.chapterListParse(response).sortedByDescending(SChapter::chapter_number)
     }
 
     // ============================ Pages =======================================
