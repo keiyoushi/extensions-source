@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Capitulo
+import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Episode
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.MainPage
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Manga
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.SearchResponse
@@ -13,7 +14,7 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -23,6 +24,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
 import rx.Observable
@@ -32,8 +34,6 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import kotlin.getValue
 
@@ -52,22 +52,15 @@ class LuraToon : HttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient
         .newBuilder()
-        .rateLimit(25, 1, TimeUnit.MINUTES)
-        .addInterceptor(::loggedVerifyInterceptor)
-        .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .build()
-
-    private val clientWithoutZip = network.cloudflareClient
-        .newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 25, 1, TimeUnit.MINUTES)
         .addInterceptor(::loggedVerifyInterceptor)
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
         )
+        .connectTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
         .build()
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
@@ -75,6 +68,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/api/autocomplete/$query", headers)
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
     override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
+    override fun pageListRequest(chapter: SChapter) = GET(chapter.url)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
@@ -139,7 +133,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
     private fun chapterFromElement(manga: SManga, capitulo: Capitulo) = SChapter.create().apply {
         val capSlug = capitulo.slug.trimStart('/')
         val mangaUrl = manga.url.trimEnd('/').trimStart('/')
-        setUrlWithoutDomain("/api/obra/$mangaUrl/?slug=$capSlug")
+        url = "http://62.146.183.244:81/?manga=$mangaUrl&cap=$capSlug"
         name = capitulo.num.toString().removeSuffix(".0")
         date_upload = runCatching {
             dateFormat.parse(capitulo.data)!!.time
@@ -147,41 +141,10 @@ class LuraToon : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val manga = response.parseAs<Manga>()
-        val pathSegments = response.request.url.pathSegments
-        val slug = response.request.url.queryParameter("slug").toString()
-        val cap = manga.caps.find { it.slug == slug } ?: throw Exception("Capitulo não encontrado")
+        val episode = response.parseAs<Episode>()
 
-        var maxCapsQuantity = -1
-        val executor = Executors.newCachedThreadPool()
-        val tasks: MutableList<Future<*>> = mutableListOf()
-
-        for (i in 39 downTo 0) {
-            val task: Future<*> = executor.submit {
-                val url = "$baseUrl/api/9f8e078ec1ea/${manga.id}/${cap.id}/$i"
-                val request = GET(url, headers)
-                val response = clientWithoutZip.newCall(request).execute()
-                if (response.code == 200) {
-                    synchronized(this) {
-                        if (i > maxCapsQuantity) {
-                            maxCapsQuantity = i
-                        }
-                    }
-                }
-            }
-            tasks.add(task)
-        }
-
-        tasks.forEach { it.get() }
-
-        executor.shutdown()
-
-        if (maxCapsQuantity == -1) {
-            throw Exception("Nenhum capítulo retornou status 200")
-        }
-
-        return (0..maxCapsQuantity).map { i ->
-            Page(i, baseUrl, "$baseUrl/api/9f8e078ec1ea/${manga.id}/${cap.id}/$i?obra_id=${manga.id}&cap_id=${cap.id}&slug=${pathSegments[2]}&cap_slug=${cap.slug}&salt=lura")
+        return episode.caminhos.mapIndexed { i, url ->
+            Page(i, "", url)
         }
     }
 

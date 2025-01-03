@@ -30,15 +30,8 @@ data class Manga(
 )
 
 @Serializable
-data class Obra(
-    val id: Int,
-)
-
-@Serializable
-data class CapituloPagina(
-    val id: Int,
-    val obra: Obra,
-    val files: Int,
+data class Episode(
+    val caminhos: List<String>,
 )
 
 @Serializable
