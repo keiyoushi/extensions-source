@@ -47,6 +47,7 @@ data class MangaInfoDto(
 @Serializable
 data class ChapterDto(
     @SerialName("btc_cap") val number: Float,
+    @SerialName("btc_date_updated") val updated_at: String,
     val scan: ScanDto?,
 ) {
     @Serializable
