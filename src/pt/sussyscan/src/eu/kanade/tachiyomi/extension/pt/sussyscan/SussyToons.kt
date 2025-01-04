@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.sussyscan
 
 import android.annotation.SuppressLint
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -21,9 +23,9 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.concurrent.TimeUnit
 
-class SussyScan : HttpSource() {
+class SussyToons : HttpSource() {
 
-    override val name = "Sussy Scan"
+    override val name = "Sussy Toons"
 
     override val baseUrl = "https://new.sussytoons.site"
 
@@ -32,6 +34,8 @@ class SussyScan : HttpSource() {
     override val lang = "pt-BR"
 
     override val supportsLatest = true
+
+    override val id = 6963507464339951166
 
     // Moved from Madara
     override val versionId = 2
@@ -54,7 +58,7 @@ class SussyScan : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
-        val mangas = dto.results.map { it.toSManga() }
+        val mangas = dto.results.filterNot { it.slug.isNullOrBlank() }.map { it.toSManga() }
         return MangasPage(mangas, false) // There's a pagination bug
     }
 
@@ -70,7 +74,7 @@ class SussyScan : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
-        val mangas = dto.results.map { it.toSManga() }
+        val mangas = dto.results.filterNot { it.slug.isNullOrBlank() }.map { it.toSManga() }
         return MangasPage(mangas, dto.hasNextPage())
     }
 
@@ -150,11 +154,25 @@ class SussyScan : HttpSource() {
     // ============================= Pages ====================================
 
     override fun pageListRequest(chapter: SChapter): Request {
+        val pageHeaders = buildPageListHeaders(chapter)
+        return GET("$apiUrl${chapter.url}", pageHeaders)
+    }
+
+    private fun buildPageListHeaders(chapter: SChapter): Headers {
+        val timestamp = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis())
+        val xClientHash = when {
+            chapter.id.toInt() % 2 != 0 -> ""
+            else -> (headers.get("User-Agent") ?: "").md5()
+        }
         val pageHeaders = headers.newBuilder()
             .set("Accept", "application/json, text/plain, */*")
             .set("Accept-Language", "pt-br,pt;q=0.9,en-us;q=0.8,en;q=0.7")
+            .set("Origin", baseUrl)
+            .set("Referer", "$baseUrl/")
+            .set("x-client-hash", xClientHash)
+            .set("x-timestamp", timestamp.toString())
             .build()
-        return GET("$apiUrl${chapter.url}", pageHeaders)
+        return pageHeaders
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -186,7 +204,7 @@ class SussyScan : HttpSource() {
             initialized = true
             val mangaUrl = "$baseUrl/obra".toHttpUrl().newBuilder()
                 .addPathSegment(this@toSManga.id.toString())
-                .addPathSegment(this@toSManga.slug)
+                .addPathSegment(this@toSManga.slug!!)
                 .build()
             setUrlWithoutDomain(mangaUrl.toString())
         }
@@ -223,6 +241,11 @@ class SussyScan : HttpSource() {
 
     private fun String.toDate() =
         try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
+
+    private fun String.md5(): String {
+        // Base64.NO_WRAP avoids HTTP error in header encoding on special characters (\n,\r, etc)
+        return Base64.encodeToString(this.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+    }
 
     companion object {
         const val CDN_URL = "https://usc1.contabostorage.com/23b45111d96c42c18a678c1d8cba7123:cdn"

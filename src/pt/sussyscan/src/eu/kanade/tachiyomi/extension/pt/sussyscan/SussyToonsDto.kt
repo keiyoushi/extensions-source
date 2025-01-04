@@ -30,7 +30,7 @@ class MangaDto(
     @SerialName("obr_nome")
     val name: String,
     @SerialName("obr_slug")
-    val slug: String,
+    val slug: String?,
     @SerialName("status")
     val status: MangaStatus,
 ) {
