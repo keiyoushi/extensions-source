@@ -12,20 +12,14 @@ class ReaperScans : Keyoapp(
 
     override fun mangaDetailsParse(document: Document): SManga =
         super.mangaDetailsParse(document).apply {
-            // Fix a typo in the class name
             if (description.isNullOrBlank() == true) {
-                description = document.selectFirst("div.grid > div.overflow-hiddfen > p")?.text()
+                description = document.selectFirst("#expand_content > p")?.text()
             }
 
-            // Check that text is "Statut"
-            val statusSpan =
-                document.select("div:has(> img) > span").firstOrNull { it.text() == "Status" }
-            status =
-                statusSpan?.parent()?.parent()?.selectXpath("div[2]")?.firstOrNull().parseStatus()
+            // Search for the sibling div of the image with the status icon
+            status = document.selectFirst("div:has(> img[src*=status]) + div").parseStatus()
 
-            genre = buildList {
-                document.select("div:has(>h1) > div > a").forEach { add(it.text()) }
-            }.joinToString()
+            genre = document.select("div:has(>h1) > div > a").joinToString { it.text() }
         }
 
     // Migrated from Madara to Keyoapp.

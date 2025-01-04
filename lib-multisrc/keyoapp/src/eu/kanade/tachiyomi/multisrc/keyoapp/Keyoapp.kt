@@ -228,7 +228,7 @@ abstract class Keyoapp(
         }.joinToString()
     }
 
-    protected fun Element?.parseStatus(): Int = when (this?.text()?.trim()?.lowercase()) {
+    protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "ongoing" -> SManga.ONGOING
         "dropped" -> SManga.CANCELLED
         "paused" -> SManga.ON_HIATUS
