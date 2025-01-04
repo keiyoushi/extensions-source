@@ -2,7 +2,7 @@ ext {
     extName = 'VCPVMP'
     extClass = '.VCPVMPFactory'
     themePkg = 'vercomics'
-    overrideVersionCode = 9
+    overrideVersionCode = 10
     isNsfw = true
 }
 
