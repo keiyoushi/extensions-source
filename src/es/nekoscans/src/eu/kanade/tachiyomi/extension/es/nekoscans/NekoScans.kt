@@ -2,12 +2,11 @@ package eu.kanade.tachiyomi.extension.es.nekoscans
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.Response
 import java.util.concurrent.TimeUnit
 
 class NekoScans : ZeistManga(
     "NekoScans",
-    "https://www.nekoscans.org",
+    "https://nekoscanlationlector.blogspot.com",
     "es",
 ) {
     // Theme changed from MangaThemesia to ZeistManga
@@ -18,10 +17,6 @@ class NekoScans : ZeistManga(
         .build()
 
     override val excludedCategories = listOf("Anime", "Novel")
-
-    override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
-    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
-    override val supportsLatest = false
 
     override val pageListSelector = "div#readarea img"
 }

@@ -1,0 +1,9 @@
+ext {
+    extName = 'Hianato Scan'
+    extClass = '.HianatoScan'
+    themePkg = 'madara'
+    baseUrl = 'https://hianatoscan.top'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

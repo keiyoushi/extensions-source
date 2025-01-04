@@ -156,6 +156,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
                         1 -> if (type == "series") "metadata.titleSort" else "name"
                         2 -> "createdDate"
                         3 -> "lastModifiedDate"
+                        4 -> "random"
                         else -> return@forEach
                     } + "," + if (state.ascending) "asc" else "desc"
 

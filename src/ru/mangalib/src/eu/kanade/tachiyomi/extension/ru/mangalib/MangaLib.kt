@@ -38,6 +38,6 @@ class MangaLib : LibGroup("MangaLib", "https://mangalib.me", "ru") {
     companion object {
         private const val DOMAIN_PREF = "MangaLibDomain"
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://test-front.mangalib.me"
+        private const val DOMAIN_DEFAULT = "https://mangalib.me"
     }
 }

@@ -3,7 +3,7 @@ ext {
     extClass = '.Nartag'
     themePkg = 'madara'
     baseUrl = 'https://traduccionesamistosas.eyudud.net'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
