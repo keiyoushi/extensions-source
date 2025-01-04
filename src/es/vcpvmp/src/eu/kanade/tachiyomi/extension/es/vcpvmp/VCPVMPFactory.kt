@@ -39,7 +39,6 @@ class VCP : VerComics("VCP", "https://vercomicsporno.com", "es") {
             Pair("Sole Male", "sole-male"),
             Pair("Tetonas", "tetonas"),
         )
-    override val pageListSelector = "div.wp-content > img, div.wp-content > p img"
 }
 
 class VMP : VerComics("VMP", "https://vermangasporno.com", "es") {
