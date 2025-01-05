@@ -12,8 +12,8 @@ if (System.getenv("CI") != "true") {
     /**
      * Add or remove modules to load as needed for local development here.
      */
-//    loadAllIndividualExtensions()
-     loadIndividualExtension("ru", "hotmanga")
+    loadAllIndividualExtensions()
+    // loadIndividualExtension("all", "mangadex")
 } else {
     // Running in CI (GitHub Actions)
 
