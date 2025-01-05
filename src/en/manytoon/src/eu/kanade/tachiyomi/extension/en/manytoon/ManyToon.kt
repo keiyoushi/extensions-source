@@ -11,7 +11,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 
-class ManyToon : Madara("ManyToon", "https://manytoon.org", "en") {
+class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
 
     override val mangaSubString = "comic"
 
