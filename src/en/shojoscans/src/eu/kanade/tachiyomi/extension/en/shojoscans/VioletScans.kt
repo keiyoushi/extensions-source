@@ -7,4 +7,6 @@ class VioletScans : MangaThemesia(
     "https://violetscans.com",
     "en",
     mangaUrlDirectory = "/comics",
-)
+) {
+    override val id = 9079184529211162476
+}
