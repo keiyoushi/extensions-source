@@ -139,7 +139,7 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
     private fun String?.toStatus() = when {
         this == null -> SManga.UNKNOWN
         this.contains("Ongoing") -> SManga.ONGOING
-        this.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
+        this.contains("Completed") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
