@@ -209,7 +209,7 @@ abstract class Keyoapp(
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("div.grid > h1")!!.text()
         thumbnail_url = document.getImageUrl("div[class*=photoURL]")
-        description = document.selectFirst("p.rounded-lg")?.text()
+        description = document.selectFirst("div:containsOwn(Synopsis) ~ div")?.text()
         status = document.selectFirst("div:has(span:containsOwn(Status)) ~ div").parseStatus()
         author = document.selectFirst("div:has(span:containsOwn(Author)) ~ div")?.text()
         artist = document.selectFirst("div:has(span:containsOwn(Artist)) ~ div")?.text()
