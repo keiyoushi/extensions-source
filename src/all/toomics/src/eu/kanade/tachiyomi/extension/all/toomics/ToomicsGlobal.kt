@@ -14,11 +14,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okio.IOException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -48,8 +48,6 @@ abstract class ToomicsGlobal(
         .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(1, TimeUnit.MINUTES)
         .writeTimeout(1, TimeUnit.MINUTES)
-        .addInterceptor(::ageVerificationWarning)
-        .addInterceptor(::preventMangaDetailsRedirectToChapterPage)
         .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
@@ -64,13 +62,15 @@ abstract class ToomicsGlobal(
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.select("h4[class$=title]").first()!!.ownText()
-        setUrlWithoutDomain(element.absUrl("href"))
+
         thumbnail_url = element.selectFirst("img")?.let { img ->
             when {
                 img.hasAttr("data-original") -> img.attr("data-original")
                 else -> img.attr("src")
             }
         }
+        // The path segment '/search/Y' bypasses the age check and prevents redirection to the chapter
+        setUrlWithoutDomain("${element.absUrl("href")}/search/Y")
     }
 
     override fun popularMangaNextPageSelector(): String? = null
@@ -105,18 +105,17 @@ abstract class ToomicsGlobal(
     override fun searchMangaSelector(): String = "#search-list-items li"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("strong")!!.text().trim()
+        title = element.selectFirst("strong")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
 
-        element.selectFirst("a.relative")!!.attr("href").let { href ->
-            val toonId = href
-                .substringAfter("Base.setFamilyMode('N', '")
-                .substringBefore("'")
-                .let { url -> URLDecoder.decode(url, "UTF-8") }
-                .substringAfter("?toon=")
-                .substringBefore("&")
-
-            setUrlWithoutDomain("$baseUrl/$siteLang/webtoon/episode/toon/$toonId")
+        element.selectFirst("a.relative")!!.attr("href").let {
+            val href = it.substringAfter("Base.setFamilyMode('N', '").substringBefore("'")
+            val url = when {
+                href.contains(baseUrl, true) -> href.toHttpUrl()
+                else -> "$baseUrl${URLDecoder.decode(href, "UTF-8")}".toHttpUrl()
+            }
+            // The path segment '/search/Y' bypasses the age check and prevents redirection to the chapter
+            setUrlWithoutDomain("$baseUrl/$siteLang/webtoon/episode/toon/${url.queryParameter("toon")}/search/Y")
         }
     }
 
@@ -127,16 +126,16 @@ abstract class ToomicsGlobal(
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val header = document.selectFirst("#glo_contents section.relative:has(img[src*=thumb])")!!
 
-        title = header.select("h2").text()
+        title = header.selectFirst("h2")!!.text()
         header.selectFirst(".mb-0.text-xs.font-normal")?.let {
-            val info = it.text().trim().split("|")
+            val info = it.text().split("|")
             artist = info.first()
             author = info.last()
         }
 
-        genre = header.select("dt:contains(genres) + dd").text().replace("/", ",")
-        description = header.select(".break-noraml.text-xs").text()
-        thumbnail_url = document.select("head meta[property='og:image']").attr("content")
+        genre = header.selectFirst("dt:contains(genres) + dd")?.text()?.replace("/", ",")
+        description = header.selectFirst(".break-noraml.text-xs")?.text()
+        thumbnail_url = document.selectFirst("head meta[property='og:image']")?.attr("content")
     }
 
     // ================================== Chapters =====================================
@@ -150,14 +149,14 @@ abstract class ToomicsGlobal(
     override fun chapterListSelector(): String = "li.normal_ep:has(.coin-type1, .coin-type6)"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val num = element.select("div.cell-num").text()
+        val num = element.selectFirst("div.cell-num")!!.text()
         val numText = if (num.isNotEmpty()) "$num - " else ""
 
-        name = numText + element.select("div.cell-title strong").first()?.ownText()
+        name = numText + (element.selectFirst("div.cell-title strong")?.ownText() ?: "")
         chapter_number = num.toFloatOrNull() ?: -1f
         date_upload = parseChapterDate(element.select("div.cell-time time").text())
         scanlator = "Toomics"
-        url = element.select("a").attr("onclick")
+        url = element.selectFirst("a")!!.attr("onclick")
             .substringAfter("href='")
             .substringBefore("'")
     }
@@ -183,31 +182,6 @@ abstract class ToomicsGlobal(
             .build()
 
         return GET(page.imageUrl!!, newHeaders)
-    }
-
-    // ================================== Interceptors =================================
-
-    private fun ageVerificationWarning(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-        if (response.request.url.pathSegments.any { it.equals("age_verification", true) }) {
-            throw IOException("Use WebView for age verification")
-        }
-        return response
-    }
-
-    private fun preventMangaDetailsRedirectToChapterPage(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-        if (response.request.url != request.url) {
-            val newRequest = request.newBuilder()
-                .headers(response.request.headers)
-                .build()
-            response.close()
-
-            return chain.proceed(newRequest)
-        }
-        return response
     }
 
     // ================================== Utilities ====================================
