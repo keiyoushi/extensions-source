@@ -1,7 +1,7 @@
 ext {
-    extName = 'Sussy Scan'
-    extClass = '.SussyScan'
-    extVersionCode = 43
+    extName = 'Sussy Toons'
+    extClass = '.SussyToons'
+    extVersionCode = 44
     isNsfw = true
 }
 
