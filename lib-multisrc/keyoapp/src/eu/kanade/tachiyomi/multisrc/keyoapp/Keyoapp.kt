@@ -210,12 +210,12 @@ abstract class Keyoapp(
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("div.grid > h1")!!.text()
         thumbnail_url = document.getImageUrl("div[class*=photoURL]")
-        description = document.selectFirst("div.grid > div.overflow-hidden > p")?.text()
-        status = document.selectFirst("div[alt=Status]").parseStatus()
-        author = document.selectFirst("div[alt=Author]")?.text()
-        artist = document.selectFirst("div[alt=Artist]")?.text()
+        description = document.selectFirst("div:containsOwn(Synopsis) ~ div")?.text()
+        status = document.selectFirst("div:has(span:containsOwn(Status)) ~ div").parseStatus()
+        author = document.selectFirst("div:has(span:containsOwn(Author)) ~ div")?.text()
+        artist = document.selectFirst("div:has(span:containsOwn(Artist)) ~ div")?.text()
         genre = buildList {
-            document.selectFirst("div[alt='Series Type']")?.text()?.replaceFirstChar {
+            document.selectFirst("div:has(span:containsOwn(Type)) ~ div")?.text()?.replaceFirstChar {
                 if (it.isLowerCase()) {
                     it.titlecase(
                         Locale.getDefault(),
