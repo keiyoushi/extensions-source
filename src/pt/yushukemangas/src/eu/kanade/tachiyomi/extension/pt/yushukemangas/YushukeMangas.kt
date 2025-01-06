@@ -202,8 +202,6 @@ class YushukeMangas : ParsedHttpSource() {
 
     // ============================== Filters =============================
 
-//    override fun getFilterList() = FilterList(RadioFilter("Status", statusList))
-
     override fun getFilterList(): FilterList {
         return FilterList(
             RadioFilter("Status", "status", statusList),
@@ -267,7 +265,7 @@ class YushukeMangas : ParsedHttpSource() {
     // ============================== Utilities ===========================
 
     private inline fun <reified T> Response.parseAs(): T {
-        json.decodeFromStream(body.byteStream())
+        return json.decodeFromStream(body.byteStream())
     }
 
     @Serializable
