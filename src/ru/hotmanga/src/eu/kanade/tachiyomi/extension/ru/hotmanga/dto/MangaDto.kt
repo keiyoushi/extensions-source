@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.ru.hotmanga.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     val id: Long,
     val lastChapterId: Long?,
     val lastChapterBranchId: Long?,

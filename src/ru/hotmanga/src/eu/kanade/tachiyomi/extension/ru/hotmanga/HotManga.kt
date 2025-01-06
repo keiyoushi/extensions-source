@@ -23,12 +23,12 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,7 +54,7 @@ class HotManga : ConfigurableSource, HttpSource() {
 
     private val domain: String? = preferences.getString(DOMAIN_PREF, baseOrig)
 
-    private val paidSymbol = "\uD83D\uDCB2"
+    private val paidSymbol = "\uD83D\uDD12"
 
     override val baseUrl = domain.toString()
 
@@ -78,7 +78,7 @@ class HotManga : ConfigurableSource, HttpSource() {
         .writeTimeout(15, TimeUnit.SECONDS).build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", baseUrl)
+        .set("Referer", "$baseUrl/")
         .set("Host", baseUrl.replace("https://", ""))
 
     private val json: Json = Json {
@@ -90,15 +90,10 @@ class HotManga : ConfigurableSource, HttpSource() {
         val pageF = page - 1
         val apiPathVal = apiPathsMap[baseUrl]
         val apiString = "$apiPathVal/catalog?orderBy=-likes&page=$pageF"
-        val url = "${baseUrl}$apiString".toHttpUrl().newBuilder()
-        return GET(url.build(), headers)
+        return GET("${baseUrl}$apiString", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        if (response.code != 200) {
-            return MangasPage(emptyList(), false)
-        }
-
         val values = json.parseToJsonElement(response.body.string()).jsonArray
         val mangaListDto = mutableListOf<MangaDto>()
         for (item in values) {
@@ -127,7 +122,7 @@ class HotManga : ConfigurableSource, HttpSource() {
     private fun MangaDto.toSManga(): SManga =
         SManga.create().apply {
             title = titleEn ?: slug
-            url = "/manga/$slug?bookId=$id&countChapters=$countChapters"
+            url = "/manga/$slug?bookId=$id" // TODO Use HttpUrlBuilder to escape arguments properly.
             // Original host does not work for some locations. Cloudflare protection. Need to change domain.
             // Parameters w and q need to be calculated.
             thumbnail_url = "$baseMirrThird/_next/image?url=$baseMirrThird$imageHigh&w=768&q=75"
@@ -138,124 +133,67 @@ class HotManga : ConfigurableSource, HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw NotImplementedError("Unused")
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        if (response.code != 200) {
-            return MangasPage(emptyList(), false)
-        }
-
-        val values = json.parseToJsonElement(response.body.string()).jsonArray
-        val mangaListDto = mutableListOf<MangaDto>()
-        for (item in values) {
-            try {
-                mangaListDto.add(json.decodeFromJsonElement<MangaDto>(item))
-            } catch (e: Exception) {
-                Log.i("HotManga", e.toString())
-            }
-        }
-        var hasNextPage = true
-        if (mangaListDto.isEmpty()) {
-            hasNextPage = false
-        }
-        val mangas = mutableListOf<SManga>()
-        for (mangaItem in mangaListDto) {
-            val element = mangaItem.toSManga()
-            mangas.add(element)
-        }
-        return MangasPage(mangas, hasNextPage)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val pageF = page - 1
         val apiPathVal = apiPathsMap[baseUrl]
         val apiString = "$apiPathVal/catalog?orderBy=-id&page=$pageF"
-        val url = "${baseUrl}$apiString".toHttpUrl().newBuilder()
-        return GET(url.build(), headers)
+        return GET("${baseUrl}$apiString", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga = throw NotImplementedError("Unused")
 
     override fun pageListParse(response: Response): List<Page> = throw NotImplementedError("Unused")
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.code != 200) {
-            return MangasPage(emptyList(), false)
-        }
-
-        val values = json.parseToJsonElement(response.body.string()).jsonArray
-        val mangaListDto = mutableListOf<MangaDto>()
-        for (item in values) {
-            try {
-                mangaListDto.add(json.decodeFromJsonElement<MangaDto>(item))
-            } catch (e: Exception) {
-                Log.i("HotManga", e.toString())
-            }
-        }
-        var hasNextPage = true
-        if (mangaListDto.isEmpty()) {
-            hasNextPage = false
-        }
-        val mangas = mutableListOf<SManga>()
-        for (mangaItem in mangaListDto) {
-            val element = mangaItem.toSManga()
-            mangas.add(element)
-        }
-        return MangasPage(mangas, hasNextPage)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // TODO Add filters, use page param, investigate limit param
         val apiPathVal = apiPathsMap[baseUrl]
         val apiString = "$apiPathVal/books/search?filter[query]=$query&limit=24"
-        val url = "${baseUrl}$apiString".toHttpUrl().newBuilder()
-        return GET(url.build(), headers)
+        return GET("${baseUrl}$apiString", headers)
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapters = mutableListOf<SChapter>()
-        var page = 0
         val mangaUrl = manga.url
-        val bookId = URI(mangaUrl).findParameterValue("bookId")
-        val countChapters = URI(mangaUrl).findParameterValue("countChapters")?.toLong()
+        val urlObj = mangaUrl.toHttpUrlOrNull()
+        val bookId = urlObj?.queryParameter("bookId")
         val apiPathVal = apiPathsMap[baseUrl]
-        while (chapters.size < countChapters!!) {
-            val urlBase =
-                "$baseUrl$apiPathVal/chapters/with-branches?filter%5BbookId%5D=$bookId&page=$page"
-            val request = GET(urlBase.toHttpUrl(), headers)
-            val body = client.newCall(request).execute().body.string()
-            val values = json.parseToJsonElement(body).jsonArray
-
-            if (values.isEmpty()) {
-                break
+        val urlBase = "$baseUrl$apiPathVal/chapters/with-branches?filter%5BbookId%5D=$bookId"
+        val request = GET(urlBase.toHttpUrl(), headers)
+        val body = client.newCall(request).execute().body.string()
+        val values = json.parseToJsonElement(body).jsonArray
+        for (item in values) {
+            // TODO Use a DTO instead of this.
+            val number = item.jsonObject["number"].toString().replace("\"", "").toFloat()
+            val createdAt = item.jsonObject["createdAt"]?.jsonPrimitive?.content
+            val tom = item.jsonObject["tom"]?.jsonPrimitive?.content
+            val id = item.jsonObject["id"].toString()
+            val chapterBranches = item.jsonObject["chapterBranches"]?.jsonArray
+            var branchId = "0"
+            var isSubscription = false
+            if (chapterBranches != null) {
+                branchId = chapterBranches[0].jsonObject["branchId"].toString()
+                isSubscription =
+                    chapterBranches[0].jsonObject["isSubscription"]?.jsonPrimitive?.content.toBoolean()
             }
-
-            for (item in values) {
-                val number = item.jsonObject["number"].toString().replace("\"", "").toFloat()
-                val createdAt = item.jsonObject["createdAt"]?.jsonPrimitive?.content
-                val tom = item.jsonObject["tom"]?.jsonPrimitive?.content
-                val id = item.jsonObject["id"].toString()
-                val chapterBranches = item.jsonObject["chapterBranches"]?.jsonArray
-                var branchId = "0"
-                var isSubscription = false
-                if (chapterBranches != null) {
-                    branchId = chapterBranches[0].jsonObject["branchId"].toString()
-                    isSubscription = chapterBranches[0].jsonObject["isSubscription"]?.jsonPrimitive?.content.toBoolean()
-                }
-                val cleanUrl = cleanMangaUrlFromBookIdParameter(mangaUrl)
-                val chapterUrl = "$cleanUrl/ch$id?branchId=$branchId"
-                val parseDate = parseDate(createdAt)
-                var chapterName = "$tom. Глава $number"
-                if (isSubscription) {
-                    chapterName += paidSymbol
-                }
-                val sChapter = SChapter.create().apply {
-                    url = chapterUrl
-                    name = chapterName
-                    date_upload = parseDate
-                    chapter_number = number
-                }
-                chapters.add(sChapter)
+            val cleanUrl = cleanMangaUrlFromBookIdParameter(mangaUrl)
+            val chapterUrl = "$cleanUrl/ch$id?branchId=$branchId"
+            val parseDate = parseDate(createdAt)
+            var chapterName = "$tom. Глава $number"
+            if (isSubscription) {
+                chapterName += paidSymbol
             }
-            ++page
+            // TODO Use setUrlWithoutDomain() to allow for easier domain swapping in the future.
+            val sChapter = SChapter.create().apply {
+                url = chapterUrl
+                name = chapterName
+                date_upload = parseDate
+                chapter_number = number
+            }
+            chapters.add(sChapter)
         }
         return Observable.just(chapters)
     }
@@ -294,15 +232,6 @@ class HotManga : ConfigurableSource, HttpSource() {
     override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
 
     private fun cleanMangaUrlFromBookIdParameter(url: String) = url.split("?")[0]
-
-    private fun URI.findParameterValue(parameterName: String): String? {
-        return rawQuery.split('&').map {
-            val parts = it.split('=')
-            val name = parts.firstOrNull() ?: ""
-            val value = parts.drop(1).firstOrNull() ?: ""
-            Pair(name, value)
-        }.firstOrNull { it.first == parameterName }?.second
-    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
