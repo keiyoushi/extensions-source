@@ -205,12 +205,11 @@ class YushukeMangas : ParsedHttpSource() {
 //    override fun getFilterList() = FilterList(RadioFilter("Status", statusList))
 
     override fun getFilterList(): FilterList {
-        val filters = mutableListOf(
+        return FilterList(
             RadioFilter("Status", "status", statusList),
             RadioFilter("Tipo", "tipo", typeList),
             GenreFilter("Gêneros", "tags[]", genresList),
         )
-        return FilterList(filters)
     }
 
     class RadioFilter(
