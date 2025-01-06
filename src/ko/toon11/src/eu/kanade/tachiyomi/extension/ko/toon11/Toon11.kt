@@ -49,24 +49,20 @@ class Toon11 : ParsedHttpSource() {
             GET(url, headers)
         } else {
             var urlString = ""
-            var sortByLatest = false
             var isOver = ""
             var genre = ""
 
             filters.forEach { filter ->
                 when (filter) {
-                    is SortFilter -> {
-                        urlString = filter.selected
-                        if (filter.state == 1) sortByLatest = true
-                    }
+                    is SortFilter -> urlString = filter.selected
                     is StatusFilter -> isOver = filter.selected
-                    is GenreFilter -> if (filter.selected != "전체") genre = filter.selected
+                    is GenreFilter -> genre = filter.selected
                     else -> {}
                 }
             }
 
             val url = urlString.toHttpUrl().newBuilder().apply {
-                if (!sortByLatest) addQueryParameter("is_over", isOver)
+                addQueryParameter("is_over", isOver)
                 if (page > 1) addQueryParameter("page", page.toString())
                 if (genre.isNotEmpty()) addQueryParameter("sca", genre)
             }.build()
@@ -207,7 +203,7 @@ class Toon11 : ParsedHttpSource() {
     // Filters
 
     override fun getFilterList() = FilterList(
-        Filter.Header("Note: can't combine search query with filters, status filter only works with latest"),
+        Filter.Header("Note: can't combine search query with filters, status filter only has effect in 인기만화"),
         Filter.Separator(),
         SortFilter(getSortList, 0),
         StatusFilter(getStatusList, 0),
