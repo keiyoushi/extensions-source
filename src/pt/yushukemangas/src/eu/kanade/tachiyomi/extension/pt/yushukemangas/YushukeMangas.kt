@@ -266,8 +266,8 @@ class YushukeMangas : ParsedHttpSource() {
 
     // ============================== Utilities ===========================
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
+    private inline fun <reified T> Response.parseAs(): T {
+        json.decodeFromStream(body.byteStream())
     }
 
     @Serializable
