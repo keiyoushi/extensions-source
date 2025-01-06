@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.yaoimangaonline
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -15,10 +10,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
-class YaoiMangaOnline : ParsedHttpSource(), ConfigurableSource {
+class YaoiMangaOnline : ParsedHttpSource() {
     override val lang = "all"
 
     override val name = "Yaoi Manga Online"
@@ -27,10 +20,6 @@ class YaoiMangaOnline : ParsedHttpSource(), ConfigurableSource {
 
     // Popular is actually latest
     override val supportsLatest = false
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -87,16 +76,16 @@ class YaoiMangaOnline : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document) =
         SManga.create().apply {
             title = document.select("h1.entry-title").text()
-            if (isRemoveTitleVersion()) {
-                title = title.replace(titleRegex, "").trim()
-            }
-
+            title = title.replace(titleRegex, "").trim()
             thumbnail_url = document
                 .selectFirst(".herald-post-thumbnail img")?.attr("src")
-            description = document.select(".entry-content > p").text()
+            description = document.select(".entry-content > p:not(:contains(You need to login))").text()
             genre = document.select(".meta-tags > a").joinToString { it.text() }
+            author = document.select(".entry-content > p:contains(Mangaka:)").text()
+                .substringAfter("Mangaka:")
+                .substringBefore("Language:")
+                .trim()
         }
-
     override fun chapterListSelector() = ".mpp-toc a"
 
     override fun chapterFromElement(element: Element) =
@@ -125,19 +114,4 @@ class YaoiMangaOnline : ParsedHttpSource(), ConfigurableSource {
 
     override fun getFilterList() =
         FilterList(CategoryFilter(), TagFilter())
-
-    private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = REMOVE_TITLE_VERSION_PREF
-            title = "Remove author name from title"
-            summary = "This removes the author's name from titles"
-            setDefaultValue(false)
-        }.let(screen::addPreference)
-    }
-
-    companion object {
-        private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
-    }
 }
