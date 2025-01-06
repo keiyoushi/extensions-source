@@ -1,9 +1,7 @@
 ext {
     extName = 'Reaper Scans (unoriginal)'
     extClass = '.ReaperScansUnoriginal'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://reaper-scans.com'
-    overrideVersionCode = 0
+    extVersionCode = 31
 }
 
 apply from: "$rootDir/common.gradle"
