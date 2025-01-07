@@ -16,6 +16,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.ArrayList
 import java.util.Date
@@ -74,9 +75,7 @@ class Toon11 : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.selectFirst(".homelist-title")!!.text()
-        element.selectFirst(".homelist-thumb")?.also {
-            thumbnail_url = "https:" + it.attr("data-mobile-image")
-        }
+        thumbnail_url = element.selectFirst(".homelist-thumb")?.absUrl("data-mobile-image")
     }
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
@@ -121,6 +120,15 @@ class Toon11 : ParsedHttpSource() {
         else -> SManga.UNKNOWN
     }
 
+    private tailrec fun parseChapters(nextURL: String, chapters: ArrayList<SChapter>) {
+        val newpage = fetchPagesFromNav(nextURL)
+        newpage.select(chapterListSelector()).forEach {
+            chapters.add(chapterFromElement(it))
+        }
+        val newURL = newpage.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
+        if (!newURL.isNullOrBlank()) parseChapters(newURL, chapters)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val nav = document.selectFirst("span.pg")
@@ -138,16 +146,7 @@ class Toon11 : ParsedHttpSource() {
 
         // recursively build the chapter list
 
-        fun parseChapters(nextURL: String) {
-            val newpage = fetchPagesFromNav(nextURL)
-            newpage.select(chapterListSelector()).forEach {
-                chapters.add(chapterFromElement(it))
-            }
-            val newURL = newpage.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
-            if (!newURL.isNullOrBlank()) parseChapters(newURL)
-        }
-
-        parseChapters(pg2url)
+        parseChapters(pg2url, chapters)
 
         return chapters
     }
@@ -169,9 +168,14 @@ class Toon11 : ParsedHttpSource() {
         }
     }
 
-    private fun dateParse(dateAsString: String): Long {
-        val date: Date? = SimpleDateFormat("yy.MM.dd", Locale.ENGLISH).parse(dateAsString)
+    private val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.ENGLISH)
 
+    private fun dateParse(dateAsString: String): Long {
+        val date: Date? = try {
+            dateFormat.parse(dateAsString)
+        } catch (e: ParseException) {
+            null
+        }
         return date?.time ?: 0L
     }
 
@@ -180,20 +184,18 @@ class Toon11 : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-
         val rawImageLinks = document.selectFirst("script + script[type^=text/javascript]:not([src])")!!.data()
         val imgList = extractList(rawImageLinks)
 
-        imgList.forEachIndexed { i, img ->
-            pages.add(Page(i, "", "https:$img"))
+        return imgList.mapIndexed { i, img ->
+            Page(i, imageUrl = "https:$img")
         }
-        return pages
     }
 
+    private val imgListRegex = """img_list\s*=\s*(\[.*?])""".toRegex(RegexOption.DOT_MATCHES_ALL)
+
     private fun extractList(jsString: String): List<String> {
-        val regex = """img_list\s*=\s*(\[.*?])""".toRegex(RegexOption.DOT_MATCHES_ALL)
-        val matchResult = regex.find(jsString)
+        val matchResult = imgListRegex.find(jsString)
         val listString = matchResult?.groupValues?.get(1) ?: return emptyList()
         return Json.decodeFromString<List<String>>(listString)
     }
