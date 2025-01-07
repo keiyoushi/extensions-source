@@ -1,0 +1,10 @@
+ext {
+    extName = 'Solar Machine Translations'
+    extClass = '.SolarmtlFactory'
+    themePkg = 'machinetranslations'
+    baseUrl = 'https://solarmtl.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

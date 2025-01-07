@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.interceptors
+package eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -12,8 +12,9 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.annotation.RequiresApi
-import eu.kanade.tachiyomi.extension.all.snowmtl.Dialog
-import eu.kanade.tachiyomi.extension.all.snowmtl.Snowmtl.Companion.PAGE_REGEX
+import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
+import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
+import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
 import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -35,6 +36,7 @@ import kotlin.math.sqrt
 @RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
     baseUrl: String,
+    val language: Language,
     private val client: OkHttpClient,
 ) : Interceptor {
 
@@ -225,14 +227,17 @@ class ComposedImageInterceptor(
         return dialogBox
     }
 
-    private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint) =
-        StaticLayout.Builder.obtain(dialog.text, 0, dialog.text.length, textPaint, dialog.width.toInt()).apply {
+    private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint): StaticLayout {
+        val text = dialog.textByLanguage[language.target] ?: dialog.text
+
+        return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
             setIncludePad(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
             }
         }.build()
+    }
 
     // Invert color in black dialog box.
     private fun TextPaint.adjustTextColor(dialog: Dialog, bitmap: Bitmap) {
