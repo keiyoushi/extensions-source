@@ -2,8 +2,8 @@ ext {
     extName = 'PopsManga'
     extClass = '.PopsManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.popsmanga.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://popsmanga.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
