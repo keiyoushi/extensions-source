@@ -70,22 +70,25 @@ class YaoiMangaOnline : ParsedHttpSource() {
             thumbnail_url = element.selectFirst("img")?.attr("src")
         }
 
-    private var titleRegex: Regex =
-        Regex("(?s)(by\\b(?:(?!by\\b).)*\$)", RegexOption.IGNORE_CASE)
-
     override fun mangaDetailsParse(document: Document) =
         SManga.create().apply {
             title = document.select("h1.entry-title").text()
-            title = title.replace(titleRegex, "").trim()
+            title = title.substringBeforeLast("by").trim()
             thumbnail_url = document
                 .selectFirst(".herald-post-thumbnail img")?.attr("src")
-            description = document.select(".entry-content > p:not(:contains(You need to login))").text()
+            description = document.select(".entry-content > p:not(:has(img)):not(:contains(You need to login))")
+                .joinToString("\n\n") {
+                    it.html().replace("<br>", "").split("\n").joinToString("\n") { line ->
+                        line.trim()
+                    }
+                }
             genre = document.select(".meta-tags > a").joinToString { it.text() }
             author = document.select(".entry-content > p:contains(Mangaka:)").text()
                 .substringAfter("Mangaka:")
                 .substringBefore("Language:")
                 .trim()
         }
+
     override fun chapterListSelector() = ".mpp-toc a"
 
     override fun chapterFromElement(element: Element) =
