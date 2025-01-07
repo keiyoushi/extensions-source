@@ -62,7 +62,7 @@ class Desu : ConfigurableSource, HttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 3)
             .build()
 
-    private fun MangaDetDto.toSManga(genresStr: String? = "", authorsStr: String? = ""): SManga {
+    private fun MangaDetDto.toSManga(genresStr: String? = "", authorsStr: String? = null): SManga {
         val ratingValue = score!!
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
@@ -197,7 +197,7 @@ class Desu : ConfigurableSource, HttpSource() {
         val authorsStr = if (responseString.contains("people_name")) {
             json.decodeFromString<SeriesWrapperDto<MangaDetAuthorsDto>>(responseString).response.authors!!.joinToString { it.people_name }
         } else {
-            "Unknown author"
+            null
         }
         return series.response.toSManga(genresStr, authorsStr)
     }
