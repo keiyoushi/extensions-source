@@ -13,11 +13,11 @@ class YushukeMangasUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val id = intent?.data?.getQueryParameter("id")
-        if (id != null) {
+        val pathSegment = intent?.data?.pathSegments
+        if (pathSegment != null && pathSegment.size > 1) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${YushukeMangas.PREFIX_SEARCH}$id")
+                putExtra("query", "${YushukeMangas.PREFIX_SEARCH}${pathSegment[1]}")
                 putExtra("filter", packageName)
             }
 
