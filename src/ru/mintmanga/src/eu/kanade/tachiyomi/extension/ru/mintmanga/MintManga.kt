@@ -22,11 +22,9 @@ class MintManga : GroupLe("MintManga", "https://2.mintmanga.one", "ru") {
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     override fun getChapterSearchParams(document: Document): String {
-        val html = document.html()
+        val scriptContent = document.selectFirst("script:containsData(user_hash)")?.data()
 
-        val userHashRegex = "user_hash.+'(.+)'".toRegex()
-
-        val userHash = userHashRegex.find(html)?.groupValues?.get(1)
+        val userHash = scriptContent?.let { USER_HASH_REGEX.find(it)?.groupValues?.get(1) }
 
         return userHash?.let { "?d=$it" } ?: ""
     }
@@ -212,5 +210,6 @@ class MintManga : GroupLe("MintManga", "https://2.mintmanga.one", "ru") {
         private const val DOMAIN_PREF = "Домен"
         private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
         private const val DOMAIN_TITLE = "Домен"
+        private val USER_HASH_REGEX = "user_hash.+'(.+)'".toRegex()
     }
 }
