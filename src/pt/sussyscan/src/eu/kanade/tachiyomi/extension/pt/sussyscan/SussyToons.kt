@@ -1,7 +1,13 @@
 package eu.kanade.tachiyomi.extension.pt.sussyscan
 
 import android.annotation.SuppressLint
-import android.util.Base64
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -19,8 +25,12 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class SussyToons : HttpSource() {
@@ -44,6 +54,7 @@ class SussyToons : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
+        .addInterceptor(::chapterPages)
         .addInterceptor(::imageLocation)
         .build()
 
@@ -154,25 +165,10 @@ class SussyToons : HttpSource() {
     // ============================= Pages ====================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val pageHeaders = buildPageListHeaders(chapter)
-        return GET("$apiUrl${chapter.url}", pageHeaders)
-    }
-
-    private fun buildPageListHeaders(chapter: SChapter): Headers {
-        val timestamp = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis())
-        val xClientHash = when {
-            chapter.id.toInt() % 2 != 0 -> ""
-            else -> (headers.get("User-Agent") ?: "").md5()
-        }
-        val pageHeaders = headers.newBuilder()
-            .set("Accept", "application/json, text/plain, */*")
-            .set("Accept-Language", "pt-br,pt;q=0.9,en-us;q=0.8,en;q=0.7")
-            .set("Origin", baseUrl)
-            .set("Referer", "$baseUrl/")
-            .set("x-client-hash", xClientHash)
-            .set("x-timestamp", timestamp.toString())
+        val url = "$apiUrl${chapter.url}".toHttpUrl().newBuilder()
+            .fragment(getChapterUrl(chapter))
             .build()
-        return pageHeaders
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -195,25 +191,9 @@ class SussyToons : HttpSource() {
         return GET(page.url, imageHeaders)
     }
 
-    // ============================= Utilities ====================================
+    // ============================= Interceptors =================================
 
-    private fun MangaDto.toSManga(): SManga {
-        val sManga = SManga.create().apply {
-            title = name
-            thumbnail_url = thumbnail
-            initialized = true
-            val mangaUrl = "$baseUrl/obra".toHttpUrl().newBuilder()
-                .addPathSegment(this@toSManga.id.toString())
-                .addPathSegment(this@toSManga.slug!!)
-                .build()
-            setUrlWithoutDomain(mangaUrl.toString())
-        }
-
-        Jsoup.parseBodyFragment(description).let { sManga.description = it.text() }
-        sManga.status = status.toStatus()
-
-        return sManga
-    }
+    private var chapterPageHeaders: Headers? = null
 
     private fun imageLocation(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -235,6 +215,115 @@ class SussyToons : HttpSource() {
         return response
     }
 
+    private fun chapterPages(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val chapterUrl = request.url.fragment?.takeIf { it.contains("capitulo") }
+            ?: return chain.proceed(request)
+
+        val originUrl = request.url.newBuilder()
+            .fragment(null)
+            .build()
+
+        val newRequest = request.newBuilder()
+            .url(originUrl)
+
+        chapterPageHeaders?.let { headers ->
+            newRequest.headers(headers)
+            val response = chain.proceed(newRequest.build())
+            if (response.isSuccessful) {
+                return response
+            }
+            response.close()
+        }
+
+        val chapterPageRequest = request.newBuilder()
+            .url(chapterUrl)
+            .build()
+
+        return chain.proceed(fetchChapterPagesHeaders(chapterPageRequest, newRequest.build()))
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun fetchChapterPagesHeaders(baseRequest: Request, originRequest: Request): Request {
+        val latch = CountDownLatch(1)
+        val headers = originRequest.headers.newBuilder()
+        var webView: WebView? = null
+        val looper = Handler(Looper.getMainLooper())
+
+        looper.post {
+            webView = WebView(Injekt.get<Application>())
+            webView?.let {
+                with(it.settings) {
+                    javaScriptEnabled = true
+                    blockNetworkImage = true
+                }
+            }
+            webView?.webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? {
+                    val ignore = listOf(".css", "google", "fonts", "ads")
+                    val url = request.url.toString()
+                    if (ignore.any { url.contains(it, ignoreCase = true) }) {
+                        return emptyResource()
+                    }
+                    if (request.isOriginRequest() && request.method.equals("GET", true)) {
+                        headers.fill(request.requestHeaders)
+                        latch.countDown()
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+                private fun WebResourceRequest.isOriginRequest() =
+                    originRequest.url.toString().equals(this.url.toString(), ignoreCase = true)
+
+                private fun emptyResource() = WebResourceResponse(null, null, null)
+            }
+            webView?.loadUrl(baseRequest.url.toString())
+        }
+
+        latch.await(client.readTimeoutMillis.toLong(), TimeUnit.MILLISECONDS)
+
+        looper.post {
+            webView?.run {
+                stopLoading()
+                destroy()
+            }
+        }
+
+        chapterPageHeaders = headers.build()
+
+        return originRequest.newBuilder()
+            .headers(chapterPageHeaders!!)
+            .build()
+    }
+
+    private fun Headers.Builder.fill(from: Map<String, String>): Headers.Builder {
+        return from.entries.fold(this) { builder, entry ->
+            builder.set(entry.key, entry.value)
+        }
+    }
+
+    // ============================= Utilities ====================================
+
+    private fun MangaDto.toSManga(): SManga {
+        val sManga = SManga.create().apply {
+            title = name
+            thumbnail_url = thumbnail
+            initialized = true
+            val mangaUrl = "$baseUrl/obra".toHttpUrl().newBuilder()
+                .addPathSegment(this@toSManga.id.toString())
+                .addPathSegment(this@toSManga.slug!!)
+                .build()
+            setUrlWithoutDomain(mangaUrl.toString())
+        }
+
+        Jsoup.parseBodyFragment(description).let { sManga.description = it.text() }
+        sManga.status = status.toStatus()
+
+        return sManga
+    }
+
     private inline fun <reified T> Response.parseAs(): T {
         return json.decodeFromStream(body.byteStream())
     }
@@ -242,16 +331,11 @@ class SussyToons : HttpSource() {
     private fun String.toDate() =
         try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
 
-    private fun String.md5(): String {
-        // Base64.NO_WRAP avoids HTTP error in header encoding on special characters (\n,\r, etc)
-        return Base64.encodeToString(this.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-    }
-
     companion object {
         const val CDN_URL = "https://usc1.contabostorage.com/23b45111d96c42c18a678c1d8cba7123:cdn"
         const val OLDI_URL = "https://oldi.sussytoons.site"
 
         @SuppressLint("SimpleDateFormat")
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
     }
 }
