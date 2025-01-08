@@ -17,6 +17,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -92,14 +93,6 @@ abstract class ToomicsGlobal(
         return POST("$baseUrl/$siteLang/webtoon/ajax_search", headers, formBody)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val response = client.newCall(searchMangaRequest(page, query, filters)).execute()
-        val searchDto = json.decodeFromStream<SearchDto>(response.body.byteStream())
-        val document = Jsoup.parseBodyFragment(searchDto.content.clearHtml(), baseUrl)
-        val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
-        return Observable.just(MangasPage(mangas, false))
-    }
-
     override fun searchMangaSelector(): String = "#search-list-items li"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -118,6 +111,13 @@ abstract class ToomicsGlobal(
     }
 
     override fun searchMangaNextPageSelector(): String? = null
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val searchDto = json.decodeFromStream<SearchDto>(response.body.byteStream())
+        val document = Jsoup.parseBodyFragment(searchDto.content.clearHtml(), baseUrl)
+        val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
+        return MangasPage(mangas, false)
+    }
 
     // ================================== Manga Details ================================
 
