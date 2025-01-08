@@ -218,7 +218,7 @@ class NamicomiHelper(lang: String) {
     /**
      * Create the [SChapter] from the JSON element.
      */
-    fun createChapter(chapterDataDto: ChapterDataDto): SChapter {
+    fun createChapter(chapterDataDto: ChapterDataDto, extLang: String): SChapter {
         val attr = chapterDataDto.attributes!!
         val chapterName = mutableListOf<String>()
 
@@ -244,7 +244,7 @@ class NamicomiHelper(lang: String) {
         }
 
         return SChapter.create().apply {
-            url = "/en/chapter/${chapterDataDto.id}"
+            url = "/$extLang/chapter/${chapterDataDto.id}"
             name = chapterName.joinToString(" ").removeEntities()
             date_upload = parseDate(attr.publishAt)
         }

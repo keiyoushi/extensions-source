@@ -155,7 +155,7 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
     // Manga Details section
 
     override fun getMangaUrl(manga: SManga): String =
-        "$baseUrl/en" + manga.url + "/${helper.titleToSlug(manga.title)}"
+        "$baseUrl/$extLang" + manga.url + "/${helper.titleToSlug(manga.title)}"
 
     /**
      * Get the API endpoint URL for the entry details.
@@ -264,10 +264,10 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
             val isAccessible = accessibleChapterMap.getOrElse(it.id) { true }
             when {
                 // Chapter can be viewed
-                isAccessible -> helper.createChapter(it)
+                isAccessible -> helper.createChapter(it, extLang)
                 // Chapter cannot be viewed and user wants to see locked chapters
                 preferences.showLockedChapters -> {
-                    helper.createChapter(it).apply {
+                    helper.createChapter(it, extLang).apply {
                         name = helper.intl.format("chapter_locked", name)
                     }
                 }
