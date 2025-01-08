@@ -115,8 +115,8 @@ class MangaDistrict :
         }
     }
 
-    private fun loadTagListFromPreferences(): Set<Pair<String, String>> {
-        return preferences.getStringSet(TAG_LIST_PREF, setOf("Manhwa|manhwa"))
+    private fun loadTagListFromPreferences(): Set<Pair<String, String>> =
+        preferences.getStringSet(TAG_LIST_PREF, emptySet())
             ?.mapNotNull {
                 it.split('|')
                     .let { splits ->
@@ -129,15 +129,16 @@ class MangaDistrict :
             }
             ?.toSet()
             // Create at least 1 tag to avoid excessively reading preferences
-            ?: setOf("Manhwa" to "manhwa")
-    }
+            .let { if (it.isNullOrEmpty()) setOf("Manhwa" to "manhwa") else it }
 
     private var tagList: Set<Pair<String, String>> = loadTagListFromPreferences()
-        set(value) =
+        set(value) {
             preferences.edit().putStringSet(
                 TAG_LIST_PREF,
                 value.map { "${it.first}|${it.second}" }.toSet(),
             ).apply()
+            field = value
+        }
 
     override fun getFilterList(): FilterList {
         val filters = super.getFilterList().list.toMutableList()
