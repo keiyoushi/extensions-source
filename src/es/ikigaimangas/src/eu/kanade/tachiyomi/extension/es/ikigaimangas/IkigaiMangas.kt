@@ -49,15 +49,15 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute().asJsoup()
             val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Nuevo dominio)")?.attr("on:click")
-                ?: preferences.getPrefBaseUrl()
+                ?: return@lazy preferences.getPrefBaseUrl()
             val script = initClient.newCall(GET("https://ikigaimangas.com/build/$scriptUrl", headers)).execute().body.string()
             val domain = script.substringAfter("window.open(\"").substringBefore("\"")
             val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
             val newDomain = "https://$host"
             preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
-            return@lazy newDomain
+            newDomain
         } catch (e: Exception) {
-            return@lazy preferences.getPrefBaseUrl()
+            preferences.getPrefBaseUrl()
         }
     }
 
