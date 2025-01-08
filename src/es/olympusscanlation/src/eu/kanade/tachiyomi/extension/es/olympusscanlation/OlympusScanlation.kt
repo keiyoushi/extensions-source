@@ -33,28 +33,29 @@ import kotlin.concurrent.thread
 class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override val versionId = 2
+    private val isCi = System.getenv("CI") == "true"
 
     override val baseUrl: String get() = when {
-        System.getenv("CI") == "true" -> defaultBaseUrl
-        else -> preferences.getPrefBaseUrl()
+        isCi -> defaultBaseUrl
+        else -> preferences.prefBaseUrl
     }
 
     private val defaultBaseUrl: String = "https://olympuslectura.com"
 
     private val fetchedDomainUrl: String by lazy {
-        if (!preferences.fetchDomainPref()) return@lazy preferences.getPrefBaseUrl()
+        if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
         try {
             val initClient = network.cloudflareClient
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://olympus.pages.dev", headers)).execute().asJsoup()
             val domain = document.selectFirst("meta[property=og:url]")?.attr("content")
-                ?: return@lazy preferences.getPrefBaseUrl()
+                ?: return@lazy preferences.prefBaseUrl
             val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
             val newDomain = "https://$host"
-            preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
+            preferences.prefBaseUrl = newDomain
             newDomain
         } catch (_: Exception) {
-            preferences.getPrefBaseUrl()
+            preferences.prefBaseUrl
         }
     }
 
@@ -331,7 +332,19 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         }.also { screen.addPreference(it) }
     }
 
-    private fun SharedPreferences.getPrefBaseUrl() = getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private var _cachedBaseUrl: String? = null
+    private var SharedPreferences.prefBaseUrl: String
+        get() {
+            if (_cachedBaseUrl == null) {
+                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            }
+            return _cachedBaseUrl!!
+        }
+        set(value) {
+            _cachedBaseUrl = value
+            edit().putString(BASE_URL_PREF, value).apply()
+        }
+
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
 
     companion object {
