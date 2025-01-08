@@ -40,10 +40,10 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         else -> preferences.getPrefBaseUrl()
     }
 
-    private val defaultBaseUrl: String = "https://lectorikigai.bakeni.net"
+    private val defaultBaseUrl: String = "https://visorikigai.tvsin.com"
 
     private val fetchedDomainUrl: String by lazy {
-        if (!preferences.fetchDomainPref()) preferences.getPrefBaseUrl()
+        if (!preferences.fetchDomainPref()) return@lazy preferences.getPrefBaseUrl()
         try {
             val initClient = network.cloudflareClient
             val headers = super.headersBuilder().build()
@@ -55,9 +55,9 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
             val newDomain = "https://$host"
             preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
-            newDomain
+            return@lazy newDomain
         } catch (e: Exception) {
-            preferences.getPrefBaseUrl()
+            return@lazy preferences.getPrefBaseUrl()
         }
     }
 
