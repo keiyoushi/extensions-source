@@ -57,13 +57,8 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
         .addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())
 
-            if (!response.isSuccessful) {
-                val exception = when (response.code) {
-                    402 -> helper.intl["error_payment_required"]
-                    else -> helper.intl.format("error_http_error", response.code)
-                }
-
-                throw IOException(exception)
+            if (response.code == 402) {
+                throw IOException(helper.intl["error_payment_required"])
             }
 
             return@addNetworkInterceptor response
