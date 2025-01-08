@@ -62,7 +62,7 @@ class Desu : ConfigurableSource, HttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 3)
             .build()
 
-    private fun MangaDetDto.toSManga(genresStr: String? = ""): SManga {
+    private fun MangaDetDto.toSManga(genresStr: String? = "", authorsStr: String? = null): SManga {
         val ratingValue = score!!
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
@@ -125,6 +125,7 @@ class Desu : ConfigurableSource, HttpSource() {
                     else -> SManga.UNKNOWN
                 }
             }
+            author = authorsStr
         }
     }
 
@@ -188,11 +189,17 @@ class Desu : ConfigurableSource, HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request {
         return GET(baseUrl + "/manga" + manga.url, headers)
     }
+
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val responseString = response.body.string()
         val series = json.decodeFromString<SeriesWrapperDto<MangaDetDto>>(responseString)
         val genresStr = json.decodeFromString<SeriesWrapperDto<MangaDetGenresDto>>(responseString).response.genres!!.joinToString { it.russian }
-        return series.response.toSManga(genresStr)
+        val authorsStr = if (responseString.contains("people_name")) {
+            json.decodeFromString<SeriesWrapperDto<MangaDetAuthorsDto>>(responseString).response.authors!!.joinToString { it.people_name }
+        } else {
+            null
+        }
+        return series.response.toSManga(genresStr, authorsStr)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
