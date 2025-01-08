@@ -117,27 +117,27 @@ class MangaDistrict :
 
     private var tagList: Set<Pair<String, String>> = emptySet()
         get() {
-           if (field.isEmpty()) {
+            if (field.isEmpty()) {
                 field = preferences.getStringSet(TAG_LIST_PREF, emptySet())
-                        ?.mapNotNull {
-                            it.split('|')
-                                .let { splits ->
-                                    if (splits.size == 2) {
-                                        splits[0] to splits[1]
-                                    } else {
-                                        null
-                                    }
+                    ?.mapNotNull {
+                        it.split('|')
+                            .let { splits ->
+                                if (splits.size == 2) {
+                                    splits[0] to splits[1]
+                                } else {
+                                    null
                                 }
-                        }
-                        ?.toSet()
-                        ?: emptySet()
+                            }
+                    }
+                    ?.toSet()
+                    ?: emptySet()
             }
             return field
         }
-        set(value: Set<Pair<String, String>>) =
+        set(value) =
             preferences.edit().putStringSet(
                 TAG_LIST_PREF,
-                field.map { "${it.first}|${it.second}" }.toMutableSet(),
+                value.map { "${it.first}|${it.second}" }.toSet(),
             ).apply()
 
     override fun getFilterList(): FilterList {
