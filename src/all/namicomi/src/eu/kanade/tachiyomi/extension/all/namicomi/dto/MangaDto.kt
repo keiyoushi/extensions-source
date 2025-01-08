@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.namicomi.dto
 
-import eu.kanade.tachiyomi.extension.all.namicomi.NamicomiConstants
+import eu.kanade.tachiyomi.extension.all.namicomi.NamiComiConstants
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -18,7 +18,7 @@ typealias MangaListDto = PaginatedResponseDto<MangaDataDto>
 typealias MangaDto = ResponseDto<MangaDataDto>
 
 @Serializable
-@SerialName(NamicomiConstants.manga)
+@SerialName(NamiComiConstants.manga)
 data class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
 
 @Serializable
@@ -64,15 +64,15 @@ enum class StatusDto(val value: String) {
 abstract class AbstractTagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
 
 @Serializable
-@SerialName(NamicomiConstants.tag)
+@SerialName(NamiComiConstants.tag)
 class TagDto : AbstractTagDto()
 
 @Serializable
-@SerialName(NamicomiConstants.primaryTag)
+@SerialName(NamiComiConstants.primaryTag)
 class PrimaryTagDto : AbstractTagDto()
 
 @Serializable
-@SerialName(NamicomiConstants.secondaryTag)
+@SerialName(NamiComiConstants.secondaryTag)
 class SecondaryTagDto : AbstractTagDto()
 
 @Serializable

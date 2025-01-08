@@ -34,18 +34,18 @@ import okio.IOException
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-abstract class Namicomi(final override val lang: String, private val extLang: String = lang) :
+abstract class NamiComi(final override val lang: String, private val extLang: String = lang) :
     ConfigurableSource, HttpSource() {
 
     override val name = "NamiComi"
-    override val baseUrl = NamicomiConstants.webUrl
+    override val baseUrl = NamiComiConstants.webUrl
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private val helper = NamicomiHelper(lang)
+    private val helper = NamiComiHelper(lang)
 
     final override fun headersBuilder() = super.headersBuilder().apply {
         set("Referer", "$baseUrl/")
@@ -66,12 +66,12 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
         .build()
 
     private fun sortedMangaRequest(page: Int, orderBy: String): Request {
-        val url = NamicomiConstants.apiSearchUrl.toHttpUrl().newBuilder()
+        val url = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
             .addQueryParameter("order[$orderBy]", "desc")
             .addQueryParameter("availableTranslatedLanguages[]", extLang)
-            .addQueryParameter("limit", NamicomiConstants.mangaLimit.toString())
+            .addQueryParameter("limit", NamiComiConstants.mangaLimit.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
-            .addQueryParameter("includes[]", NamicomiConstants.coverArt)
+            .addQueryParameter("includes[]", NamiComiConstants.coverArt)
             .build()
 
         return GET(url, headers, CacheControl.FORCE_NETWORK)
@@ -115,28 +115,28 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
     // Search manga section
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(NamicomiConstants.prefixIdSearch)) {
-            val mangaId = query.removePrefix(NamicomiConstants.prefixIdSearch)
+        if (query.startsWith(NamiComiConstants.prefixIdSearch)) {
+            val mangaId = query.removePrefix(NamiComiConstants.prefixIdSearch)
 
             if (!helper.containsId(mangaId)) {
                 throw Exception(helper.intl["invalid_manga_id"])
             }
 
             // If the query is an ID, return the manga directly
-            val url = NamicomiConstants.apiSearchUrl.toHttpUrl().newBuilder()
-                .addQueryParameter("ids[]", query.removePrefix(NamicomiConstants.prefixIdSearch))
-                .addQueryParameter("includes[]", NamicomiConstants.coverArt)
+            val url = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
+                .addQueryParameter("ids[]", query.removePrefix(NamiComiConstants.prefixIdSearch))
+                .addQueryParameter("includes[]", NamiComiConstants.coverArt)
                 .build()
 
             return GET(url, headers, CacheControl.FORCE_NETWORK)
         }
 
-        val tempUrl = NamicomiConstants.apiSearchUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("limit", NamicomiConstants.mangaLimit.toString())
+        val tempUrl = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("limit", NamiComiConstants.mangaLimit.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
-            .addQueryParameter("includes[]", NamicomiConstants.coverArt)
+            .addQueryParameter("includes[]", NamiComiConstants.coverArt)
 
-        val actualQuery = query.replace(NamicomiConstants.whitespaceRegex, " ")
+        val actualQuery = query.replace(NamiComiConstants.whitespaceRegex, " ")
         if (actualQuery.isNotBlank()) {
             tempUrl.addQueryParameter("title", actualQuery)
         }
@@ -161,12 +161,12 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
      * Get the API endpoint URL for the entry details.
      */
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = (NamicomiConstants.apiUrl + manga.url).toHttpUrl().newBuilder()
-            .addQueryParameter("includes[]", NamicomiConstants.coverArt)
-            .addQueryParameter("includes[]", NamicomiConstants.organization)
-            .addQueryParameter("includes[]", NamicomiConstants.tag)
-            .addQueryParameter("includes[]", NamicomiConstants.primaryTag)
-            .addQueryParameter("includes[]", NamicomiConstants.secondaryTag)
+        val url = (NamiComiConstants.apiUrl + manga.url).toHttpUrl().newBuilder()
+            .addQueryParameter("includes[]", NamiComiConstants.coverArt)
+            .addQueryParameter("includes[]", NamiComiConstants.organization)
+            .addQueryParameter("includes[]", NamiComiConstants.tag)
+            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
+            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
             .build()
 
         return GET(url, headers, CacheControl.FORCE_NETWORK)
@@ -195,9 +195,9 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
      * Required because the chapter list API endpoint is paginated.
      */
     private fun paginatedChapterListRequest(mangaId: String, offset: Int): Request {
-        val url = NamicomiConstants.apiChapterUrl.toHttpUrl().newBuilder()
+        val url = NamiComiConstants.apiChapterUrl.toHttpUrl().newBuilder()
             .addQueryParameter("titleId", mangaId)
-            .addQueryParameter("includes[]", NamicomiConstants.organization)
+            .addQueryParameter("includes[]", NamiComiConstants.organization)
             .addQueryParameter("limit", "500")
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("translatedLanguages[]", extLang)
@@ -213,10 +213,10 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
      */
     private fun accessibleChapterListRequest(chapterIds: List<String>): Request {
         return POST(
-            NamicomiConstants.apiGatingCheckUrl,
+            NamiComiConstants.apiGatingCheckUrl,
             headers,
             chapterIds
-                .map { EntityAccessRequestItemDto(it, NamicomiConstants.chapter) }
+                .map { EntityAccessRequestItemDto(it, NamiComiConstants.chapter) }
                 .let { helper.json.encodeToString(EntityAccessRequestDto(it)) }
                 .toRequestBody(),
             CacheControl.FORCE_NETWORK,
@@ -230,7 +230,7 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
 
         val mangaId = response.request.url.toString()
             .substringBefore("/chapter")
-            .substringAfter("${NamicomiConstants.apiMangaUrl}/")
+            .substringAfter("${NamiComiConstants.apiMangaUrl}/")
 
         val chapterListResponse = response.parseAs<ChapterListDto>()
         val chapterListResults = chapterListResponse.data.toMutableList()
@@ -281,7 +281,7 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfter("/chapter/")
-        val url = "${NamicomiConstants.apiUrl}/images/chapter/$chapterId?newQualities=true"
+        val url = "${NamiComiConstants.apiUrl}/images/chapter/$chapterId?newQualities=true"
         return GET(url, headers, CacheControl.FORCE_NETWORK)
     }
 
@@ -307,11 +307,11 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val coverQualityPref = ListPreference(screen.context).apply {
-            key = NamicomiConstants.getCoverQualityPreferenceKey(extLang)
+            key = NamiComiConstants.getCoverQualityPreferenceKey(extLang)
             title = helper.intl["cover_quality"]
-            entries = NamicomiConstants.getCoverQualityPreferenceEntries(helper.intl)
-            entryValues = NamicomiConstants.getCoverQualityPreferenceEntryValues()
-            setDefaultValue(NamicomiConstants.getCoverQualityPreferenceDefaultValue())
+            entries = NamiComiConstants.getCoverQualityPreferenceEntries(helper.intl)
+            entryValues = NamiComiConstants.getCoverQualityPreferenceEntryValues()
+            setDefaultValue(NamiComiConstants.getCoverQualityPreferenceDefaultValue())
             summary = "%s"
 
             setOnPreferenceChangeListener { _, newValue ->
@@ -320,13 +320,13 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
                 val entry = entryValues[index] as String
 
                 preferences.edit()
-                    .putString(NamicomiConstants.getCoverQualityPreferenceKey(extLang), entry)
+                    .putString(NamiComiConstants.getCoverQualityPreferenceKey(extLang), entry)
                     .commit()
             }
         }
 
         val dataSaverPref = SwitchPreferenceCompat(screen.context).apply {
-            key = NamicomiConstants.getDataSaverPreferenceKey(extLang)
+            key = NamiComiConstants.getDataSaverPreferenceKey(extLang)
             title = helper.intl["data_saver"]
             summary = helper.intl["data_saver_summary"]
             setDefaultValue(false)
@@ -335,13 +335,13 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
                 val checkValue = newValue as Boolean
 
                 preferences.edit()
-                    .putBoolean(NamicomiConstants.getDataSaverPreferenceKey(extLang), checkValue)
+                    .putBoolean(NamiComiConstants.getDataSaverPreferenceKey(extLang), checkValue)
                     .commit()
             }
         }
 
         val showLockedChaptersPref = SwitchPreferenceCompat(screen.context).apply {
-            key = NamicomiConstants.getShowLockedChaptersPreferenceKey(extLang)
+            key = NamiComiConstants.getShowLockedChaptersPreferenceKey(extLang)
             title = helper.intl["show_locked_chapters"]
             summary = helper.intl["show_locked_chapters_summary"]
             setDefaultValue(false)
@@ -350,7 +350,7 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
                 val checkValue = newValue as Boolean
 
                 preferences.edit()
-                    .putBoolean(NamicomiConstants.getShowLockedChaptersPreferenceKey(extLang), checkValue)
+                    .putBoolean(NamiComiConstants.getShowLockedChaptersPreferenceKey(extLang), checkValue)
                     .commit()
             }
         }
@@ -371,11 +371,11 @@ abstract class Namicomi(final override val lang: String, private val extLang: St
         firstOrNull { it is T } as? T?
 
     private val SharedPreferences.coverQuality
-        get() = getString(NamicomiConstants.getCoverQualityPreferenceKey(extLang), "")
+        get() = getString(NamiComiConstants.getCoverQualityPreferenceKey(extLang), "")
 
     private val SharedPreferences.useDataSaver
-        get() = getBoolean(NamicomiConstants.getDataSaverPreferenceKey(extLang), false)
+        get() = getBoolean(NamiComiConstants.getDataSaverPreferenceKey(extLang), false)
 
     private val SharedPreferences.showLockedChapters
-        get() = getBoolean(NamicomiConstants.getShowLockedChaptersPreferenceKey(extLang), false)
+        get() = getBoolean(NamiComiConstants.getShowLockedChaptersPreferenceKey(extLang), false)
 }

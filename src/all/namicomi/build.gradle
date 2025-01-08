@@ -1,6 +1,6 @@
 ext {
-    extName = 'Namicomi'
-    extClass = '.NamicomiFactory'
+    extName = 'NamiComi'
+    extClass = '.NamiComiFactory'
     extVersionCode = 1
     isNsfw = false
 }

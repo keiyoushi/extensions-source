@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.namicomi.dto
 
-import eu.kanade.tachiyomi.extension.all.namicomi.NamicomiConstants
+import eu.kanade.tachiyomi.extension.all.namicomi.NamiComiConstants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 typealias EntityAccessMapDto = ResponseDto<EntityAccessMapDataDto>
 
 @Serializable
-@SerialName(NamicomiConstants.entityAccessMap)
+@SerialName(NamiComiConstants.entityAccessMap)
 data class EntityAccessMapDataDto(
     override val attributes: EntityAccessMapAttributesDto? = null,
 ) : EntityDto()

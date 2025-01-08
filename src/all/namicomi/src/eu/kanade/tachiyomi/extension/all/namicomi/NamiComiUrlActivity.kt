@@ -14,7 +14,7 @@ import kotlin.system.exitProcess
  * you have this extension installed, but still let the main tachiyomi app control
  * things.
  */
-class NamicomiUrlActivity : Activity() {
+class NamiComiUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -25,18 +25,18 @@ class NamicomiUrlActivity : Activity() {
             val titleId = pathSegments[2]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", NamicomiConstants.prefixIdSearch + titleId)
+                putExtra("query", NamiComiConstants.prefixIdSearch + titleId)
                 putExtra("filter", packageName)
             }
 
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("NamicomiUrlActivity", e.toString())
+                Log.e("NamiComiUrlActivity", e.toString())
             }
         } else {
             Toast.makeText(this, "This URL cannot be handled by the Namicomi extension.", Toast.LENGTH_SHORT).show()
-            Log.e("NamicomiUrlActivity", "Could not parse URI from intent $intent")
+            Log.e("NamiComiUrlActivity", "Could not parse URI from intent $intent")
         }
 
         finish()

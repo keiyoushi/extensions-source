@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.namicomi.dto
 
-import eu.kanade.tachiyomi.extension.all.namicomi.NamicomiConstants
+import eu.kanade.tachiyomi.extension.all.namicomi.NamiComiConstants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 typealias ChapterListDto = PaginatedResponseDto<ChapterDataDto>
 
 @Serializable
-@SerialName(NamicomiConstants.chapter)
+@SerialName(NamiComiConstants.chapter)
 data class ChapterDataDto(override val attributes: ChapterAttributesDto? = null) : EntityDto()
 
 @Serializable

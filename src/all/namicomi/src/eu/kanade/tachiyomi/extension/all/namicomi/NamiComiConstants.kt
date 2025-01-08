@@ -5,7 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-object NamicomiConstants {
+object NamiComiConstants {
     const val mangaLimit = 20
 
     val whitespaceRegex = "\\s".toRegex()

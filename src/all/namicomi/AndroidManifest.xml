@@ -4,7 +4,7 @@
 
     <application>
         <activity
-            android:name=".all.namicomi.NamicomiUrlActivity"
+            android:name=".all.namicomi.NamiComiUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">

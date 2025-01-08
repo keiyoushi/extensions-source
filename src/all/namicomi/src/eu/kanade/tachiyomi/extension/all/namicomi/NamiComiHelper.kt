@@ -33,9 +33,9 @@ import kotlinx.serialization.modules.subclass
 import org.jsoup.parser.Parser
 import java.util.Locale
 
-class NamicomiHelper(lang: String) {
+class NamiComiHelper(lang: String) {
 
-    val filters = NamicomiFilters()
+    val filters = NamiComiFilters()
 
     val json = Json {
         isLenient = true
@@ -71,8 +71,8 @@ class NamicomiHelper(lang: String) {
 
     val intl = Intl(
         language = lang,
-        baseLanguage = NamicomiConstants.english,
-        availableLanguages = setOf(NamicomiConstants.english),
+        baseLanguage = NamiComiConstants.english,
+        availableLanguages = setOf(NamiComiConstants.english),
         classLoader = this::class.java.classLoader!!,
         createMessageFileName = { lang -> Intl.createDefaultMessageFileName(lang) },
     )
@@ -90,7 +90,7 @@ class NamicomiHelper(lang: String) {
     /**
      * Get the manga offset pages are 1 based, so subtract 1
      */
-    fun getMangaListOffset(page: Int): String = (NamicomiConstants.mangaLimit * (page - 1)).toString()
+    fun getMangaListOffset(page: Int): String = (NamiComiConstants.mangaLimit * (page - 1)).toString()
 
     /**
      * Remove any HTML characters in manga or chapter name to actual
@@ -124,7 +124,7 @@ class NamicomiHelper(lang: String) {
     }
 
     private fun parseDate(dateAsString: String): Long =
-        NamicomiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
+        NamiComiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
 
     companion object {
         val markdownLinksRegex = "\\[([^]]+)\\]\\(([^)]+)\\)".toRegex()
@@ -153,8 +153,8 @@ class NamicomiHelper(lang: String) {
 
         coverFileName?.let {
             thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
-                true -> "${NamicomiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
-                else -> "${NamicomiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
+                true -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
+                else -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
             }
         }
     }
@@ -199,7 +199,7 @@ class NamicomiHelper(lang: String) {
             .groupBy({ it.attributes!!.group }) { tagDto -> tags[tagDto.id] }
             .mapValues { it.value.filterNotNull().sortedWith(intl.collator) }
 
-        val genreList = NamicomiConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
+        val genreList = NamiComiConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
 
         val desc = (attr.description[lang] ?: attr.description["en"])
             ?.removeEntitiesAndMarkdown()

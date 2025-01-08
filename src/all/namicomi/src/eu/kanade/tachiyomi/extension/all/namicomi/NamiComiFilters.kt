@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 
-class NamicomiFilters {
+class NamiComiFilters {
 
     internal fun getFilterList(intl: Intl): FilterList = FilterList(
         HasAvailableChaptersFilter(intl),
@@ -280,7 +280,7 @@ class NamicomiFilters {
     }
 
     private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> = apply {
-        if (intl.chosenLanguage == NamicomiConstants.english) {
+        if (intl.chosenLanguage == NamiComiConstants.english) {
             return this
         }
 

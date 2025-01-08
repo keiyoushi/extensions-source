@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.namicomi.dto
 
-import eu.kanade.tachiyomi.extension.all.namicomi.NamicomiConstants
+import eu.kanade.tachiyomi.extension.all.namicomi.NamiComiConstants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-@SerialName(NamicomiConstants.coverArt)
+@SerialName(NamiComiConstants.coverArt)
 data class CoverArtDto(override val attributes: CoverArtAttributesDto? = null) : EntityDto()
 
 @Serializable

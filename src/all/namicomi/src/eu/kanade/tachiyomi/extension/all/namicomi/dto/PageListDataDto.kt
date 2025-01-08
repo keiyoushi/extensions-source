@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.namicomi.dto
 
-import eu.kanade.tachiyomi.extension.all.namicomi.NamicomiConstants
+import eu.kanade.tachiyomi.extension.all.namicomi.NamiComiConstants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 typealias PageListDto = ResponseDto<PageListDataDto>
 
 @Serializable
-@SerialName(NamicomiConstants.imageData)
+@SerialName(NamiComiConstants.imageData)
 data class PageListDataDto(
     override val attributes: AttributesDto? = null,
     val baseUrl: String,
