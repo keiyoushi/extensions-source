@@ -39,8 +39,7 @@ class ManhwaXXL : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/hot-releases" + (if (page > 1) "/page/$page" else ""))
@@ -109,12 +108,9 @@ class ManhwaXXL : ParsedHttpSource() {
         val data = script.substringAfter("viewsCacheL10n = ").substringBefore(";")
             .let { json.parseToJsonElement(it).jsonObject }
 
-        val form = FormBody.Builder()
-            .add("action", "baka_ajax")
-            .add("type", "get_chapters_list")
+        val form = FormBody.Builder().add("action", "baka_ajax").add("type", "get_chapters_list")
             .add("id", data.getContent("post_id"))
-            .add("chapters_list_nonce", data.getContent("nonce"))
-            .build()
+            .add("chapters_list_nonce", data.getContent("nonce")).build()
 
         val ajaxResponse = client.newCall(
             POST("$baseUrl/wp-admin/admin-ajax.php", headers, form),
@@ -158,7 +154,7 @@ class ManhwaXXL : ParsedHttpSource() {
     private class GenreFilter(val genres: Array<Genre>) :
         Filter.Select<String>("Genre", genres.map { it.name }.toTypedArray())
 
-    // If you want to add new genres just add the name and id.
+    // If you want to add new genres just add the name and id. (eg. https://hentaitnt.net/genre/action) action is the id
     // You can search more here: https://hentaitnt.net/genres
     private fun getGenreList() = arrayOf(
         Genre("Action", "action"),
