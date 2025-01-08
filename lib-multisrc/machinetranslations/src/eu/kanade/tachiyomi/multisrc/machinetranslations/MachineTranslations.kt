@@ -28,7 +28,7 @@ import java.util.Locale
 abstract class MachineTranslations(
     override val name: String,
     override val baseUrl: String,
-    language: Language,
+    val language: Language,
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -38,7 +38,7 @@ abstract class MachineTranslations(
     override val lang = language.lang
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(ComposedImageInterceptor(baseUrl, language, super.client))
+        .addInterceptor(ComposedImageInterceptor(baseUrl, language))
         .build()
 
     // ============================== Popular ===============================
@@ -158,7 +158,7 @@ abstract class MachineTranslations(
                 else -> "https://${dto.imageUrl}"
             }
             val fragment = json.encodeToString<List<Dialog>>(
-                dto.dialogues.filter { it.text.isNotBlank() },
+                dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
             )
             Page(index, imageUrl = "$imageUrl#$fragment")
         }

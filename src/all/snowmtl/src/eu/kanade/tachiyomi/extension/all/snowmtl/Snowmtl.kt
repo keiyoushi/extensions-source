@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.extension.all.snowmtl.translator.BingTranslator
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations
+import eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.util.concurrent.TimeUnit
 
@@ -20,15 +21,16 @@ class Snowmtl(
 ) {
     override val lang = language.lang
 
-    private val translatorClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 3, TimeUnit.SECONDS)
+    private val clientUtils = network.cloudflareClient.newBuilder()
+        .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
-    private val translator: TranslatorEngine = BingTranslator(translatorClient, headers)
+    private val translator: TranslatorEngine = BingTranslator(clientUtils, headers)
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .readTimeout(2, TimeUnit.MINUTES)
         .addInterceptor(TranslationInterceptor(language, translator))
+        .addInterceptor(ComposedImageInterceptor(baseUrl, language))
         .build()
 }

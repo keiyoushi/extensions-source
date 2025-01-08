@@ -40,7 +40,8 @@ data class Dialog(
     private val fbColor: List<Int> = emptyList(),
     private val bgColor: List<Int> = emptyList(),
 ) {
-    val text: String get() = textByLanguage["text"] ?: " "
+    val text: String get() = textByLanguage["text"] ?: throw Exception("Dialog not found")
+    fun getTextBy(language: Language) = textByLanguage[language.target] ?: text
 
     val width get() = x2 - x1
     val height get() = y2 - y1
@@ -75,8 +76,6 @@ private object DialogListSerializer :
                     put("y2", coordinates[3])
                     put("textByLanguage", textByLanguage)
 
-                    println("MTLManga - ${textByLanguage.keys}")
-
                     try {
                         val obj = jsonElement.jsonObject
                         obj["fg_color"]?.let { put("fbColor", it) }
@@ -105,6 +104,7 @@ private object DialogListSerializer :
             }
         } catch (_: Exception) {
             buildJsonObject {
+                // There is a problem when the "angle" is processed
                 element.jsonObject.entries.forEach {
                     if (it.key in listOf("angle", "bbox")) {
                         return@forEach

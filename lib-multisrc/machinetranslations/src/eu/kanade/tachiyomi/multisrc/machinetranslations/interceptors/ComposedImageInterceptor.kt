@@ -20,7 +20,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import uy.kohesive.injekt.injectLazy
@@ -37,7 +36,6 @@ import kotlin.math.sqrt
 class ComposedImageInterceptor(
     baseUrl: String,
     val language: Language,
-    private val client: OkHttpClient,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
@@ -63,13 +61,15 @@ class ComposedImageInterceptor(
             .url(url)
             .build()
 
+        // Load the fonts before opening the connection to load the image,
+        // so there aren't two open connections inside the interceptor.
+        loadAllFont(chain)
+
         val response = chain.proceed(imageRequest)
 
         if (response.isSuccessful.not()) {
             return response
         }
-
-        loadAllFont(chain)
 
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
             .copy(Bitmap.Config.ARGB_8888, true)
@@ -167,11 +167,17 @@ class ComposedImageInterceptor(
     private fun loadRemoteFont(fontUrl: String, chain: Interceptor.Chain): Typeface? {
         return try {
             val request = GET(fontUrl, chain.request().headers)
-            val response = client
-                .newCall(request).execute()
-                .takeIf(Response::isSuccessful) ?: return null
+            val response = chain.proceed(request)
+
+            if (response.isSuccessful.not()) {
+                response.close()
+                return null
+            }
+
             val fontName = request.url.pathSegments.last()
-            response.body.byteStream().toTypeface(fontName)
+            response.body.use {
+                it.byteStream().toTypeface(fontName)
+            }
         } catch (e: Exception) {
             null
         }
@@ -228,7 +234,7 @@ class ComposedImageInterceptor(
     }
 
     private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint): StaticLayout {
-        val text = dialog.textByLanguage[language.target] ?: dialog.text
+        val text = dialog.getTextBy(language)
 
         return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
