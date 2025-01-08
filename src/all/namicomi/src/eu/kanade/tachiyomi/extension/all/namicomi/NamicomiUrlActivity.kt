@@ -21,7 +21,7 @@ class NamicomiUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
 
         // Supported path: /en/title/12345
-        if (pathSegments != null && pathSegments.size > 2 && pathSegments[1] == "title") {
+        if (pathSegments != null && pathSegments.size > 2) {
             val titleId = pathSegments[2]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
