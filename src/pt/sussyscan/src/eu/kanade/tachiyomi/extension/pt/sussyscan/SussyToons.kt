@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Headers
@@ -24,10 +25,10 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -37,7 +38,7 @@ class SussyToons : HttpSource() {
 
     override val name = "Sussy Toons"
 
-    override val baseUrl = "https://new.sussytoons.site"
+    override val baseUrl = "https://www.sussyscan.com"
 
     private val apiUrl = "https://api-dev.sussytoons.site"
 
@@ -53,7 +54,8 @@ class SussyToons : HttpSource() {
     private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(2)
+        .addInterceptor(::findChapterUrl)
         .addInterceptor(::chapterPages)
         .addInterceptor(::imageLocation)
         .build()
@@ -109,6 +111,7 @@ class SussyToons : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
             .addPathSegment(manga.id)
+            .fragment("$mangaPagePrefix${getMangaUrl(manga)}")
             .build()
         return GET(url, headers)
     }
@@ -125,13 +128,6 @@ class SussyToons : HttpSource() {
 
     // ============================= Chapters =================================
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/capitulo".toHttpUrl().newBuilder()
-            .addPathSegment(chapter.id)
-            .build()
-            .toString()
-    }
-
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -141,45 +137,73 @@ class SussyToons : HttpSource() {
                 it.chapterNumber?.let {
                     chapter_number = it
                 }
-                val chapterApiUrl = "$apiUrl/capitulos".toHttpUrl().newBuilder()
+                val chapterApiUrl = apiUrl.toHttpUrl().newBuilder()
+                    .addEncodedPathSegments(chapterUrl!!)
                     .addPathSegment(it.id.toString())
                     .build()
                 setUrlWithoutDomain(chapterApiUrl.toString())
                 date_upload = it.updateAt.toDate()
             }
-        }
-    }
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return super.fetchChapterList(manga)
-            .map { it.sortedBy(SChapter::chapter_number).reversed() }
-    }
-
-    private val SChapter.id: String get() {
-        val chapterApiUrl = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments(url)
-            .build()
-        return chapterApiUrl.pathSegments.last()
+        }.sortedBy(SChapter::chapter_number).reversed()
     }
 
     // ============================= Pages ====================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$apiUrl${chapter.url}".toHttpUrl().newBuilder()
-            .fragment(getChapterUrl(chapter))
-            .build()
-        return GET(url, headers)
+        return super.pageListRequest(chapter).let { request ->
+            val url = request.url.newBuilder()
+                .fragment("$pageImagePrefix${chapter.url}")
+                .build()
+
+            request.newBuilder()
+                .url(url)
+                .build()
+        }
     }
 
+    private var pageUrl: String? = null
+
     override fun pageListParse(response: Response): List<Page> {
-        val dto = response.parseAs<WrapperDto<ChapterPageDto>>().results
+        pageUrl = pageUrl ?: findPageUrl(response)
+        val chapterPageId = response.request.url.pathSegments.last()
+
+        val chapterUrl = response.request.url.fragment
+            ?.substringAfter(pageImagePrefix)
+            ?: throw Exception("Não foi possivel carregar as páginas")
+
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addEncodedPathSegments(pageUrl!!)
+            .addPathSegment(chapterPageId)
+            .fragment(
+                "$chapterPagePrefix${"$baseUrl$chapterUrl"}",
+            )
+            .build()
+
+        val res = client.newCall(GET(url, headers)).execute()
+
+        val dto = res.parseAs<WrapperDto<ChapterPageDto>>().results
         return dto.pages.mapIndexed { index, image ->
             val imageUrl = CDN_URL.toHttpUrl().newBuilder()
                 .addPathSegments("wp-content/uploads/WP-manga/data")
-                .addPathSegments(image.src)
+                .addPathSegments(image.src.toPathSegment())
                 .build().toString()
             Page(index, imageUrl = imageUrl)
         }
+    }
+
+    /**
+     * Get the “dynamic” path segment of the chapter page
+     */
+    private fun findPageUrl(response: Response): String {
+        val document = response.asJsoup()
+        val scriptUrl = document.select("script[src]")
+            .map { it.absUrl("src") }
+            .firstOrNull { it.contains("app/capitulo", ignoreCase = true) }
+            ?: throw IOException("Não foi possivel encontrar a URL da página")
+
+        return client.newCall(GET(scriptUrl, headers)).execute().use {
+            pageUrlRegex.find(it.body.string())?.groups?.get("pageUrl")?.value?.toPathSegment()
+        } ?: throw IOException("Não foi possivel extrair a URL da página")
     }
 
     override fun imageUrlParse(response: Response): String = ""
@@ -194,6 +218,36 @@ class SussyToons : HttpSource() {
     // ============================= Interceptors =================================
 
     private var chapterPageHeaders: Headers? = null
+
+    private var chapterUrl: String? = null
+
+    /**
+     * Get the “dynamic” path segment of the chapter list
+     */
+    private fun findChapterUrl(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        val mangaUrl = request.url.fragment
+            ?.takeIf {
+                it.contains(mangaPagePrefix, ignoreCase = true) && chapterUrl.isNullOrBlank()
+            }?.substringAfter(mangaPagePrefix)
+            ?: return chain.proceed(request)
+
+        val document = chain.proceed(GET(mangaUrl, headers)).asJsoup()
+
+        val scriptUrl = document.select("script[src]")
+            .map { it.absUrl("src") }
+            .firstOrNull { it.contains("app/obra", ignoreCase = true) }
+            ?: throw IOException("Não foi possivel encontrar a URL do capitulo")
+
+        chapterUrl = chain.proceed(GET(scriptUrl, headers)).use { response ->
+            response.body.string().let {
+                chapterUrlRegex.find(it)?.groups?.get("chapterUrl")?.value?.toPathSegment()
+            } ?: throw IOException("Não foi possivel extrair a URL do capitulo")
+        }
+
+        return chain.proceed(request)
+    }
 
     private fun imageLocation(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -215,9 +269,15 @@ class SussyToons : HttpSource() {
         return response
     }
 
+    /**
+     * Resolve the “dynamic” headers of the chapter page
+     */
     private fun chapterPages(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val chapterUrl = request.url.fragment?.takeIf { it.contains("capitulo") }
+        val chapterUrl = request.url.fragment
+            ?.takeIf { it.contains(chapterPagePrefix) }
+            ?.substringAfter(chapterPagePrefix)?.toHttpUrl()?.newBuilder()?.fragment(null)
+            ?.build()
             ?: return chain.proceed(request)
 
         val originUrl = request.url.newBuilder()
@@ -249,7 +309,6 @@ class SussyToons : HttpSource() {
         val headers = originRequest.headers.newBuilder()
         var webView: WebView? = null
         val looper = Handler(Looper.getMainLooper())
-
         looper.post {
             webView = WebView(Injekt.get<Application>())
             webView?.let {
@@ -279,7 +338,7 @@ class SussyToons : HttpSource() {
 
                 private fun emptyResource() = WebResourceResponse(null, null, null)
             }
-            webView?.loadUrl(baseRequest.url.toString())
+            webView?.loadUrl(baseRequest.url.toString(), headers.build().toMap())
         }
 
         latch.await(client.readTimeoutMillis.toLong(), TimeUnit.MILLISECONDS)
@@ -331,9 +390,24 @@ class SussyToons : HttpSource() {
     private fun String.toDate() =
         try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
 
+    /**
+     * Normalizes path segments:
+     * Ex: [ "/a/b/", "/a/b", "a/b/", "a/b" ]
+     * Result: "a/b"
+     */
+    private fun String.toPathSegment() = this.trim().split("/")
+        .filter(String::isNotEmpty)
+        .joinToString("/")
+
     companion object {
-        const val CDN_URL = "https://usc1.contabostorage.com/23b45111d96c42c18a678c1d8cba7123:cdn"
+        const val CDN_URL = "https://cdn.sussytoons.site"
         const val OLDI_URL = "https://oldi.sussytoons.site"
+        const val mangaPagePrefix = "mangaPage:"
+        const val chapterPagePrefix = "chapterPage:"
+        const val pageImagePrefix = "pageImage:"
+
+        val chapterUrlRegex = """push\("(?<chapterUrl>[^"]*capitulo[^"]*)/?"\.concat""".toRegex()
+        val pageUrlRegex = """\.get\("(?<pageUrl>[^"]*capitulo[^(/?")]*)/?"\.concat""".toRegex()
 
         @SuppressLint("SimpleDateFormat")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
