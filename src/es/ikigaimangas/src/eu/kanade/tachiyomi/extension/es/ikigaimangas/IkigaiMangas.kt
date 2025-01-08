@@ -329,7 +329,6 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             edit().putBoolean(SHOW_NSFW_PREF, value).apply()
         }
 
-
     private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
         filterIsInstance<R>().firstOrNull()
 
