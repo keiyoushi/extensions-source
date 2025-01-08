@@ -1,0 +1,10 @@
+ext {
+    extName = 'Riot Hentai'
+    extClass = '.RiotHentai'
+    themePkg = 'madara'
+    baseUrl = 'https://riothentai.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
+
