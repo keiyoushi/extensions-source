@@ -48,13 +48,13 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://olympus.pages.dev", headers)).execute().asJsoup()
             val domain = document.selectFirst("meta[property=og:url]")?.attr("content")
-                ?: preferences.getPrefBaseUrl()
+                ?: return@lazy preferences.getPrefBaseUrl()
             val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
             val newDomain = "https://$host"
             preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
-            return@lazy newDomain
+            newDomain
         } catch (_: Exception) {
-            return@lazy preferences.getPrefBaseUrl()
+            preferences.getPrefBaseUrl()
         }
     }
 
