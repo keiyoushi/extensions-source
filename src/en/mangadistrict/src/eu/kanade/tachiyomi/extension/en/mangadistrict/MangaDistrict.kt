@@ -53,7 +53,6 @@ class MangaDistrict :
                 .removeSuffix("/").substringAfterLast('/')
         }
         tagList = tagList.plus(tags)
-        saveTagList()
 
         return super.mangaDetailsParse(document).apply {
             if (isRemoveTitleVersion()) {
@@ -116,27 +115,30 @@ class MangaDistrict :
         }
     }
 
-    private var tagList: Set<Pair<String, String>> =
-        preferences.getStringSet(TAG_LIST_PREF, emptySet())
-            ?.mapNotNull {
-                it.split('|')
-                    .let { splits ->
-                        if (splits.size == 2) {
-                            splits[0] to splits[1]
-                        } else {
-                            null
+    private var tagList: Set<Pair<String, String>> = emptySet()
+        get() {
+           if (field.isEmpty()) {
+                field = preferences.getStringSet(TAG_LIST_PREF, emptySet())
+                        ?.mapNotNull {
+                            it.split('|')
+                                .let { splits ->
+                                    if (splits.size == 2) {
+                                        splits[0] to splits[1]
+                                    } else {
+                                        null
+                                    }
+                                }
                         }
-                    }
+                        ?.toSet()
+                        ?: emptySet()
             }
-            ?.toSet()
-            ?: emptySet()
-
-    private fun saveTagList() {
-        preferences.edit().putStringSet(
-            TAG_LIST_PREF,
-            tagList.map { "${it.first}|${it.second}" }.toMutableSet(),
-        ).apply()
-    }
+            return field
+        }
+        set(value: Set<Pair<String, String>>) =
+            preferences.edit().putStringSet(
+                TAG_LIST_PREF,
+                field.map { "${it.first}|${it.second}" }.toMutableSet(),
+            ).apply()
 
     override fun getFilterList(): FilterList {
         val filters = super.getFilterList().list.toMutableList()
