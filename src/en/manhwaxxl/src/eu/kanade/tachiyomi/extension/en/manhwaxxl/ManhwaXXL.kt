@@ -158,7 +158,7 @@ class ManhwaXXL : ParsedHttpSource() {
     private class GenreFilter(val genres: Array<Genre>) :
         Filter.Select<String>("Genre", genres.map { it.name }.toTypedArray())
 
-    // If you want to add new genres just add the name and id,
+    // If you want to add new genres just add the name and id.
     // You can search more here: https://hentaitnt.net/genres
     private fun getGenreList() = arrayOf(
         Genre("Action", "action"),
