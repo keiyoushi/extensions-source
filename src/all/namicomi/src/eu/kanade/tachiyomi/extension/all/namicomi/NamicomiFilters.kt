@@ -225,7 +225,7 @@ class NamicomiFilters {
         return tags.sortIfTranslated(intl)
     }
 
-    // to get all tags from dex https://api.mangadex.org/title/tag
+    // Tags taken from: https://api.namicomi.com/title/tags
     internal fun getTags(intl: Intl): List<Tag> {
         return getContents(intl) + getFormats(intl) + getGenres(intl) + getThemes(intl)
     }
