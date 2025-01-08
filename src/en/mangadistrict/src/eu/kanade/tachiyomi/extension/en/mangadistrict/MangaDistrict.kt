@@ -133,12 +133,6 @@ class MangaDistrict :
     }
 
     private var tagList: Set<Pair<String, String>> = loadTagListFromPreferences()
-        get() {
-            if (field.isEmpty()) {
-                field = loadTagListFromPreferences()
-            }
-            return field
-        }
         set(value) =
             preferences.edit().putStringSet(
                 TAG_LIST_PREF,
