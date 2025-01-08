@@ -37,27 +37,27 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override val baseUrl get() = when {
         isCi -> defaultBaseUrl
-        else -> preferences.getPrefBaseUrl()
+        else -> preferences.prefBaseUrl
     }
 
-    private val defaultBaseUrl: String = "https://lectorikigai.bakeni.net"
+    private val defaultBaseUrl: String = "https://visorikigai.tvsin.com"
 
     private val fetchedDomainUrl: String by lazy {
-        if (!preferences.fetchDomainPref()) preferences.getPrefBaseUrl()
+        if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
         try {
             val initClient = network.cloudflareClient
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute().asJsoup()
             val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Nuevo dominio)")?.attr("on:click")
-                ?: preferences.getPrefBaseUrl()
+                ?: return@lazy preferences.prefBaseUrl
             val script = initClient.newCall(GET("https://ikigaimangas.com/build/$scriptUrl", headers)).execute().body.string()
             val domain = script.substringAfter("window.open(\"").substringBefore("\"")
             val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
             val newDomain = "https://$host"
-            preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
+            preferences.prefBaseUrl = newDomain
             newDomain
         } catch (e: Exception) {
-            preferences.getPrefBaseUrl()
+            preferences.prefBaseUrl
         }
     }
 
@@ -104,7 +104,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         val apiUrl = "$apiBaseUrl/api/swf/series/ranking-list".toHttpUrl().newBuilder()
             .addQueryParameter("type", "total_ranking")
             .addQueryParameter("series_type", "comic")
-            .addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
+            .addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
 
         return GET(apiUrl.build(), lazyHeaders)
     }
@@ -117,7 +117,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val apiUrl = "$apiBaseUrl/api/swf/new-chapters".toHttpUrl().newBuilder()
-            .addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
+            .addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
             .addQueryParameter("page", page.toString())
 
         return GET(apiUrl.build(), lazyHeaders)
@@ -138,7 +138,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
         apiUrl.addQueryParameter("page", page.toString())
         apiUrl.addQueryParameter("type", "comic")
-        apiUrl.addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
+        apiUrl.addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
 
         val genres = filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
             .filter(Genre::state)
@@ -165,7 +165,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return MangasPage(mangaList, result.hasNextPage())
     }
 
-    override fun getMangaUrl(manga: SManga) = preferences.getPrefBaseUrl() + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
+    override fun getMangaUrl(manga: SManga) = preferences.prefBaseUrl + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url
@@ -180,7 +180,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return result.series.toSMangaDetails()
     }
 
-    override fun getChapterUrl(chapter: SChapter) = preferences.getPrefBaseUrl() + chapter.url.substringBefore("#")
+    override fun getChapterUrl(chapter: SChapter) = preferences.prefBaseUrl + chapter.url.substringBefore("#")
 
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfter("/series/comic-").substringBefore("#")
@@ -301,9 +301,33 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         }.also { screen.addPreference(it) }
     }
 
-    private fun SharedPreferences.showNsfwPref() = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
-    private fun SharedPreferences.getPrefBaseUrl() = getString(BASE_URL_PREF, defaultBaseUrl)!!
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
+
+    private var _cachedBaseUrl: String? = null
+    private var SharedPreferences.prefBaseUrl: String
+        get() {
+            if (_cachedBaseUrl == null) {
+                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            }
+            return _cachedBaseUrl!!
+        }
+        set(value) {
+            _cachedBaseUrl = value
+            edit().putString(BASE_URL_PREF, value).apply()
+        }
+
+    private var _cachedNsfwPref: Boolean? = null
+    private var SharedPreferences.showNsfwPref: Boolean
+        get() {
+            if (_cachedNsfwPref == null) {
+                _cachedNsfwPref = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
+            }
+            return _cachedNsfwPref!!
+        }
+        set(value) {
+            _cachedNsfwPref = value
+            edit().putBoolean(SHOW_NSFW_PREF, value).apply()
+        }
 
     private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
         filterIsInstance<R>().firstOrNull()
