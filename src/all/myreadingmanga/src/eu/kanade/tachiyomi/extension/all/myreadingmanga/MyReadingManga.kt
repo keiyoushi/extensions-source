@@ -318,7 +318,16 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         Filter.Select<String>(displayName, vals.map { it }.toTypedArray(), defaultValue), UriFilter {
         override fun addToUri(uri: Uri.Builder, uriParam: String) {
             if (state != 0 || !firstIsUnspecified) {
-                uri.appendQueryParameter(uriParam, "$uriValuePrefix:${vals[state]}")
+                val splitFilter = vals[state].split(",")
+                when {
+                    splitFilter.size == 1 -> {
+                        val reversedFilter = splitFilter.reversed().joinToString(" | ").trim()
+                        uri.appendQueryParameter(uriParam, "$uriValuePrefix:$reversedFilter")
+                    }
+                    else -> {
+                        uri.appendQueryParameter(uriParam, "$uriValuePrefix:${vals[state]}")
+                    }
+                }
             }
         }
     }
