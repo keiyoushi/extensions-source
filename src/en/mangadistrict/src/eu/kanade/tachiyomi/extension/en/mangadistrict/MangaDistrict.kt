@@ -115,22 +115,27 @@ class MangaDistrict :
         }
     }
 
-    private var tagList: Set<Pair<String, String>> = emptySet()
+    private fun loadTagListFromPreferences(): Set<Pair<String, String>> {
+        return preferences.getStringSet(TAG_LIST_PREF, setOf("Manhwa|manhwa"))
+            ?.mapNotNull {
+                it.split('|')
+                    .let { splits ->
+                        if (splits.size == 2) {
+                            splits[0] to splits[1]
+                        } else {
+                            null
+                        }
+                    }
+            }
+            ?.toSet()
+            // Create at least 1 tag to avoid excessively reading preferences
+            ?: setOf("Manhwa" to "manhwa")
+    }
+
+    private var tagList: Set<Pair<String, String>> = loadTagListFromPreferences()
         get() {
             if (field.isEmpty()) {
-                field = preferences.getStringSet(TAG_LIST_PREF, emptySet())
-                    ?.mapNotNull {
-                        it.split('|')
-                            .let { splits ->
-                                if (splits.size == 2) {
-                                    splits[0] to splits[1]
-                                } else {
-                                    null
-                                }
-                            }
-                    }
-                    ?.toSet()
-                    ?: emptySet()
+                field = loadTagListFromPreferences()
             }
             return field
         }
@@ -145,7 +150,7 @@ class MangaDistrict :
         if (tagList.isNotEmpty()) {
             filters += Filter.Separator()
             filters += Filter.Header("Tag browse will ignore other filters")
-            filters += TagList("Tag browse", listOf(Pair("", "")) + tagList.toList())
+            filters += TagList("Tag browse", listOf(Pair("<Browse tag>", "")) + tagList.toList())
         }
         return FilterList(filters)
     }
