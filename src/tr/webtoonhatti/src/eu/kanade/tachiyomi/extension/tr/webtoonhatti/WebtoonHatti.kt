@@ -12,6 +12,8 @@ class WebtoonHatti : Madara(
 ) {
     override val useNewChapterEndpoint = false
 
+    override val mangaSubString = "webtoon"
+
     // Skip fake image
     // OK: <div class="page-break no-gaps">
     // NG: <div style="display:none" class="page-break no-gaps">
