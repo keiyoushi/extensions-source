@@ -37,7 +37,7 @@ import uy.kohesive.injekt.api.get
 abstract class Namicomi(final override val lang: String, private val extLang: String = lang) :
     ConfigurableSource, HttpSource() {
 
-    override val name = "Namicomi"
+    override val name = "NamiComi"
     override val baseUrl = NamicomiConstants.webUrl
     override val supportsLatest = true
 
