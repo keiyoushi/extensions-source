@@ -262,7 +262,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             .data?.attributes?.map ?: emptyMap()
 
         return chapterListResults.mapNotNull {
-            val isAccessible = accessibleChapterMap.getOrElse(it.id) { false }
+            val isAccessible = accessibleChapterMap[it.id]!!
             when {
                 // Chapter can be viewed
                 isAccessible -> helper.createChapter(it, extLang)
