@@ -8,10 +8,11 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Request
+import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class MintManga : GroupLe("MintManga", "https://1.mintmanga.com", "ru") {
+class MintManga : GroupLe("MintManga", "https://2.mintmanga.one", "ru") {
 
     override val id: Long = 6
 
@@ -19,6 +20,14 @@ class MintManga : GroupLe("MintManga", "https://1.mintmanga.com", "ru") {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     override val baseUrl by lazy { getPrefBaseUrl() }
+
+    override fun getChapterSearchParams(document: Document): String {
+        val scriptContent = document.selectFirst("script:containsData(user_hash)")?.data()
+
+        val userHash = scriptContent?.let { USER_HASH_REGEX.find(it)?.groupValues?.get(1) }
+
+        return userHash?.let { "?d=$it" } ?: ""
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = super.searchMangaRequest(page, query, filters).url.newBuilder()
@@ -201,5 +210,6 @@ class MintManga : GroupLe("MintManga", "https://1.mintmanga.com", "ru") {
         private const val DOMAIN_PREF = "Домен"
         private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
         private const val DOMAIN_TITLE = "Домен"
+        private val USER_HASH_REGEX = "user_hash.+'(.+)'".toRegex()
     }
 }

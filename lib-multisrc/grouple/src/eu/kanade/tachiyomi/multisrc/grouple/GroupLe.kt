@@ -177,9 +177,11 @@ abstract class GroupLe(
             "div#tab-description  .manga-description",
         ).text()
         manga.status = when {
-            document.html()
-                .contains("Запрещена публикация произведения по копирайту") || document.html()
-                .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!") -> SManga.LICENSED
+            (
+                document.html()
+                    .contains("Запрещена публикация произведения по копирайту") || document.html()
+                    .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!")
+                ) && document.select("div.chapters").isEmpty() -> SManga.LICENSED
             infoElement.html().contains("<b>Сингл") -> SManga.COMPLETED
             else ->
                 when (infoElement.selectFirst("span.badge:contains(выпуск)")?.text()) {
