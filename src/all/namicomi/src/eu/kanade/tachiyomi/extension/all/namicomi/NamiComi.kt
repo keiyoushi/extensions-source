@@ -313,16 +313,6 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             entryValues = NamiComiConstants.getCoverQualityPreferenceEntryValues()
             setDefaultValue(NamiComiConstants.getCoverQualityPreferenceDefaultValue())
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-
-                preferences.edit()
-                    .putString(NamiComiConstants.getCoverQualityPreferenceKey(extLang), entry)
-                    .commit()
-            }
         }
 
         val dataSaverPref = SwitchPreferenceCompat(screen.context).apply {
@@ -330,14 +320,6 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             title = helper.intl["data_saver"]
             summary = helper.intl["data_saver_summary"]
             setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(NamiComiConstants.getDataSaverPreferenceKey(extLang), checkValue)
-                    .commit()
-            }
         }
 
         val showLockedChaptersPref = SwitchPreferenceCompat(screen.context).apply {
@@ -345,14 +327,6 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             title = helper.intl["show_locked_chapters"]
             summary = helper.intl["show_locked_chapters_summary"]
             setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(NamiComiConstants.getShowLockedChaptersPreferenceKey(extLang), checkValue)
-                    .commit()
-            }
         }
 
         screen.addPreference(coverQualityPref)
