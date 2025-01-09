@@ -104,7 +104,7 @@ class ManhwaXXL : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val detailsDocument = response.asJsoup()
         val script = detailsDocument.selectFirst("script:containsData(post_id)")?.data()
-            ?: throw java.lang.Exception("Failed to get chapter id")
+            ?: throw Exception("Failed to get chapter id")
         val data = script.substringAfter("viewsCacheL10n = ").substringBefore(";")
             .let { json.parseToJsonElement(it).jsonObject }
 
@@ -157,6 +157,7 @@ class ManhwaXXL : ParsedHttpSource() {
     // If you want to add new genres just add the name and id. (eg. https://hentaitnt.net/genre/action) action is the id
     // You can search more here: https://hentaitnt.net/genres
     private fun getGenreList() = arrayOf(
+        Genre("All", ""),
         Genre("Action", "action"),
         Genre("Adult", "adult"),
         Genre("BL", "bl"),
