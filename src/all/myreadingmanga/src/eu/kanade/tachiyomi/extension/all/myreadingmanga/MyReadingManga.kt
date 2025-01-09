@@ -320,7 +320,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
             if (state != 0 || !firstIsUnspecified) {
                 val splitFilter = vals[state].split(",")
                 when {
-                    splitFilter.size == 1 -> {
+                    splitFilter.size == 2 -> {
                         val reversedFilter = splitFilter.reversed().joinToString(" | ").trim()
                         uri.appendQueryParameter(uriParam, "$uriValuePrefix:$reversedFilter")
                     }
