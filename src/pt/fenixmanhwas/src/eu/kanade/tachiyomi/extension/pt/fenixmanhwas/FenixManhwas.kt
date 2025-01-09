@@ -5,4 +5,6 @@ class FenixManhwas : Madara(
     "Fênix Manhwas",
     "https://fenixscan.xyz",
     "pt-BR",
-)
+) {
+    override val useNewChapterEndpoint = true
+}
