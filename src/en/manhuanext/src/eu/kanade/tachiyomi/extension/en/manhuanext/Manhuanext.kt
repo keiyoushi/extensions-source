@@ -6,4 +6,6 @@ class Manhuanext : Madara(
     "Manhuanext",
     "https://manhuanext.com",
     "en",
-)
+) {
+    override val useNewChapterEndpoint = true
+}
