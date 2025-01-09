@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.interceptors
+package eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -12,14 +12,14 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.annotation.RequiresApi
-import eu.kanade.tachiyomi.extension.all.snowmtl.Dialog
-import eu.kanade.tachiyomi.extension.all.snowmtl.Snowmtl.Companion.PAGE_REGEX
+import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
+import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
+import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
 import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import uy.kohesive.injekt.injectLazy
@@ -35,7 +35,7 @@ import kotlin.math.sqrt
 @RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
     baseUrl: String,
-    private val client: OkHttpClient,
+    val language: Language,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
@@ -61,13 +61,15 @@ class ComposedImageInterceptor(
             .url(url)
             .build()
 
+        // Load the fonts before opening the connection to load the image,
+        // so there aren't two open connections inside the interceptor.
+        loadAllFont(chain)
+
         val response = chain.proceed(imageRequest)
 
         if (response.isSuccessful.not()) {
             return response
         }
-
-        loadAllFont(chain)
 
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
             .copy(Bitmap.Config.ARGB_8888, true)
@@ -165,11 +167,17 @@ class ComposedImageInterceptor(
     private fun loadRemoteFont(fontUrl: String, chain: Interceptor.Chain): Typeface? {
         return try {
             val request = GET(fontUrl, chain.request().headers)
-            val response = client
-                .newCall(request).execute()
-                .takeIf(Response::isSuccessful) ?: return null
+            val response = chain.proceed(request)
+
+            if (response.isSuccessful.not()) {
+                response.close()
+                return null
+            }
+
             val fontName = request.url.pathSegments.last()
-            response.body.byteStream().toTypeface(fontName)
+            response.body.use {
+                it.byteStream().toTypeface(fontName)
+            }
         } catch (e: Exception) {
             null
         }
@@ -225,14 +233,17 @@ class ComposedImageInterceptor(
         return dialogBox
     }
 
-    private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint) =
-        StaticLayout.Builder.obtain(dialog.text, 0, dialog.text.length, textPaint, dialog.width.toInt()).apply {
+    private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint): StaticLayout {
+        val text = dialog.getTextBy(language)
+
+        return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
             setIncludePad(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
             }
         }.build()
+    }
 
     // Invert color in black dialog box.
     private fun TextPaint.adjustTextColor(dialog: Dialog, bitmap: Bitmap) {

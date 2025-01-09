@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.all.snowmtl.interceptors
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import eu.kanade.tachiyomi.extension.all.snowmtl.Dialog
-import eu.kanade.tachiyomi.extension.all.snowmtl.Snowmtl.Companion.PAGE_REGEX
-import eu.kanade.tachiyomi.extension.all.snowmtl.Source
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
+import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
+import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
+import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -15,7 +15,7 @@ import uy.kohesive.injekt.injectLazy
 
 @RequiresApi(Build.VERSION_CODES.O)
 class TranslationInterceptor(
-    private val source: Source,
+    private val source: Language,
     private val translator: TranslatorEngine,
 ) : Interceptor {
 
@@ -66,7 +66,11 @@ class TranslationInterceptor(
         val key = list.first()
         val text = list.last()
 
-        mapping[key]?.second?.dialog?.copy(text = text)
+        mapping[key]?.second?.dialog?.copy(
+            textByLanguage = mapOf(
+                "text" to text,
+            ),
+        )
     }
 
     /**
