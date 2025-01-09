@@ -278,6 +278,10 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             key = SHOW_NSFW_PREF
             title = SHOW_NSFW_PREF_TITLE
             setDefaultValue(SHOW_NSFW_PREF_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                _cachedNsfwPref = newValue as Boolean
+                true
+            }
         }.also { screen.addPreference(it) }
 
         SwitchPreferenceCompat(screen.context).apply {
