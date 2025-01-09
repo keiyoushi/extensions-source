@@ -58,6 +58,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             val response = chain.proceed(chain.request())
 
             if (response.code == 402) {
+                response.close()
                 throw IOException(helper.intl["error_payment_required"])
             }
 
