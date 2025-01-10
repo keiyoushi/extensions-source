@@ -44,7 +44,7 @@ jobs:
           python ./.github/scripts/generate-build-matrices.py origin/main Debug
 
   build:
-    name: Build extensions
+    name: Build extensions (${{ matrix.chunk.number }})
     needs: prepare
     runs-on: 'ubuntu-24.04'
     strategy:
@@ -64,6 +64,6 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Build extensions (${{ matrix.chunk.num }})
+      - name: Build extensions (${{ matrix.chunk.number }})
         run: |
           ./gradlew $(echo '${{ toJson(matrix.chunk.modules) }}'

@@ -10,6 +10,7 @@ from typing import NoReturn
 EXTENSION_REGEX = re.compile(r"^src/(?P<lang>\w+)/(?P<extension>\w+)")
 MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
+MODULE_REGEX = re.compile(r"^:src:(?P<lang>\w+):(?P<extension>\w+)$")
 
 def run_command(command: str) -> str:
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
@@ -41,7 +42,19 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
             if Path("lib", lib).is_dir():
                 libs.add(f":lib:{lib}:getDependents")
 
-    modules.update(run_command("./gradlew -q " + " ".join(libs)).splitlines())
+    def is_extension_module(module: str) -> bool:
+        if not (match := MODULE_REGEX.search(module)):
+            return False
+        lang = match.group("lang")
+        extension = match.group("extension")
+        deleted.add(f"{lang}.{extension}")
+        return True
+
+    modules.update([
+        module for module in
+        run_command("gradlew.bat -q " + " ".join(libs)).splitlines()
+        if is_extension_module(module)
+    ])
 
     return list(modules), list(deleted)
 
@@ -51,7 +64,7 @@ def main() -> NoReturn:
     modules = [f"{module}:assemble{build_type}" for module in modules]
     chunked = {
         "chunk": [
-            {"num": i, "modules": modules}
+            {"number": i + 1, "modules": modules}
             for i, modules in
             enumerate(itertools.batched(modules, int(os.getenv("CI_CHUNK_SIZE", 65))))
         ]
