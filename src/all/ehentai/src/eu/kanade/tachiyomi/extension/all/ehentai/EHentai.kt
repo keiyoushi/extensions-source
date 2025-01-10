@@ -48,6 +48,7 @@ abstract class EHentai(
     private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
     private val memberId: String by lazy { getMemberIdPref() }
     private val passHash: String by lazy { getPassHashPref() }
+    private val igneous: String by lazy { getIgneousPref() }
 
     override val baseUrl: String
         get() = when {
@@ -378,7 +379,7 @@ abstract class EHentai(
 
         cookies["ipb_pass_hash"] = passHash
 
-        cookies["igneous"] = ""
+        cookies["igneous"] = igneous
 
         buildCookies(cookies)
     }
@@ -561,6 +562,11 @@ abstract class EHentai(
         private const val PASS_HASH_PREF_TITLE = "ipb_pass_hash"
         private const val PASS_HASH_PREF_SUMMARY = "ipb_pass_hash value"
         private const val PASS_HASH_PREF_DEFAULT_VALUE = ""
+
+        private const val IGNEOUS_PREF_KEY = "IGNEOUS"
+        private const val IGNEOUS_PREF_TITLE = "igneous"
+        private const val IGNEOUS_PREF_SUMMARY = "igneous value override"
+        private const val IGNEOUS_PREF_DEFAULT_VALUE = ""
     }
 
     // Preferences
@@ -593,8 +599,18 @@ abstract class EHentai(
 
             setDefaultValue(PASS_HASH_PREF_DEFAULT_VALUE)
         }
+
+        val igneousPref = EditTextPreference(screen.context).apply {
+            key = IGNEOUS_PREF_KEY
+            title = IGNEOUS_PREF_TITLE
+            summary = IGNEOUS_PREF_SUMMARY
+
+            setDefaultValue(IGNEOUS_PREF_DEFAULT_VALUE)
+        }
+
         screen.addPreference(memberIdPref)
         screen.addPreference(passHashPref)
+        screen.addPreference(igneousPref)
         screen.addPreference(enforceLanguagePref)
     }
 
@@ -628,5 +644,9 @@ abstract class EHentai(
 
     private fun getMemberIdPref(): String {
         return getCookieValue(MEMBER_ID_PREF_TITLE, MEMBER_ID_PREF_DEFAULT_VALUE, MEMBER_ID_PREF_KEY)
+    }
+
+    private fun getIgneousPref(): String {
+        return getCookieValue(IGNEOUS_PREF_TITLE, IGNEOUS_PREF_DEFAULT_VALUE, IGNEOUS_PREF_KEY)
     }
 }
