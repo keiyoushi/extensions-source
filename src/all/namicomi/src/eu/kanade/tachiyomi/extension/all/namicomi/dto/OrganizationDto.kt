@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 @SerialName(NamiComiConstants.organization)
-data class OrganizationDto(override val attributes: OrganizationAttributesDto? = null) : EntityDto()
+class OrganizationDto(override val attributes: OrganizationAttributesDto? = null) : EntityDto()
 
 @Serializable
-data class OrganizationAttributesDto(val name: String) : AttributesDto
+class OrganizationAttributesDto(val name: String) : AttributesDto

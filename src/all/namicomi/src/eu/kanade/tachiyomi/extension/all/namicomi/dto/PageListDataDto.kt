@@ -8,7 +8,7 @@ typealias PageListDto = ResponseDto<PageListDataDto>
 
 @Serializable
 @SerialName(NamiComiConstants.imageData)
-data class PageListDataDto(
+class PageListDataDto(
     override val attributes: AttributesDto? = null,
     val baseUrl: String,
     val hash: String,
@@ -19,7 +19,7 @@ data class PageListDataDto(
 ) : EntityDto()
 
 @Serializable
-data class PageImageDto(
+class PageImageDto(
     val size: Int?,
     val filename: String,
     val resolution: String?,

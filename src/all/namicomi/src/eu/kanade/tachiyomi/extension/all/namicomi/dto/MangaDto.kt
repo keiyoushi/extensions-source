@@ -10,10 +10,10 @@ typealias MangaDto = ResponseDto<MangaDataDto>
 
 @Serializable
 @SerialName(NamiComiConstants.manga)
-data class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
+class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
 
 @Serializable
-data class MangaAttributesDto(
+class MangaAttributesDto(
     // Title and description are maps of language codes to localized strings
     val title: Map<String, String>,
     val description: Map<String, String>,

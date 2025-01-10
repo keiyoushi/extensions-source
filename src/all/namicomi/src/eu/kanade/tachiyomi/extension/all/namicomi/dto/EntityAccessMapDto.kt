@@ -8,23 +8,23 @@ typealias EntityAccessMapDto = ResponseDto<EntityAccessMapDataDto>
 
 @Serializable
 @SerialName(NamiComiConstants.entityAccessMap)
-data class EntityAccessMapDataDto(
+class EntityAccessMapDataDto(
     override val attributes: EntityAccessMapAttributesDto? = null,
 ) : EntityDto()
 
 @Serializable
-data class EntityAccessMapAttributesDto(
+class EntityAccessMapAttributesDto(
     // Map of entity IDs to whether the user has access to them
     val map: Map<String, Boolean>,
 ) : AttributesDto
 
 @Serializable
-data class EntityAccessRequestDto(
+class EntityAccessRequestDto(
     val entities: List<EntityAccessRequestItemDto>,
 )
 
 @Serializable
-data class EntityAccessRequestItemDto(
+class EntityAccessRequestItemDto(
     val entityId: String,
     val entityType: String,
 )

@@ -1,26 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.namicomi
 
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.AbstractTagDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.AttributesDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.ChapterAttributesDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ChapterDataDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ContentRatingDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.CoverArtAttributesDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.CoverArtDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityAccessMapAttributesDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityAccessMapDataDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaAttributesDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaDataDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.OrganizationAttributesDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.OrganizationDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.PageImageDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.PageListDataDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.PrimaryTagDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.SecondaryTagDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.StatusDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.TagAttributesDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.TagDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.UnknownEntity
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -29,7 +16,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
-import kotlinx.serialization.modules.subclass
 import java.util.Locale
 
 class NamiComiHelper(lang: String) {
