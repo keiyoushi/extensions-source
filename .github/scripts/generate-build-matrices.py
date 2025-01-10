@@ -52,7 +52,7 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
 
     modules.update([
         module for module in
-        run_command("gradlew.bat -q " + " ".join(libs)).splitlines()
+        run_command("./gradlew -q " + " ".join(libs)).splitlines()
         if is_extension_module(module)
     ])
 
