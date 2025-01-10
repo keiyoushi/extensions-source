@@ -110,7 +110,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             helper.createBasicManga(mangaDataDto, fileName, coverSuffix, extLang)
         }
 
-        return MangasPage(mangaList, mangaListDto.hasNextPage)
+        return MangasPage(mangaList, mangaListDto.meta.hasNextPage)
     }
 
     // Search manga section
@@ -235,20 +235,20 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
         val chapterListResponse = response.parseAs<ChapterListDto>()
         val chapterListResults = chapterListResponse.data.toMutableList()
-        var offset = chapterListResponse.offset
-        var hasNextPage = chapterListResponse.hasNextPage
+        var offset = chapterListResponse.meta.offset
+        var hasNextPage = chapterListResponse.meta.hasNextPage
 
         // Max results that can be returned is 500 so need to make more API
         // calls if the chapter list response has a next page.
         while (hasNextPage) {
-            offset += chapterListResponse.limit
+            offset += chapterListResponse.meta.limit
 
             val newRequest = paginatedChapterListRequest(mangaId, offset)
             val newResponse = client.newCall(newRequest).execute()
             val newChapterList = newResponse.parseAs<ChapterListDto>()
             chapterListResults.addAll(newChapterList.data)
 
-            hasNextPage = newChapterList.hasNextPage
+            hasNextPage = newChapterList.meta.hasNextPage
         }
 
         // If there are no chapters, don't attempt to check gating
