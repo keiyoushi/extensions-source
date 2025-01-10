@@ -30,8 +30,7 @@ data class MangaAttributesDto(
     val year: Int?,
     val contentRating: ContentRatingDto? = null,
     val publicationStatus: StatusDto? = null,
-    // val tags: List<TagDto>,
-) : AttributesDto()
+) : AttributesDto
 
 @Serializable
 enum class ContentRatingDto(val value: String) {
@@ -76,7 +75,7 @@ class PrimaryTagDto : AbstractTagDto()
 class SecondaryTagDto : AbstractTagDto()
 
 @Serializable
-class TagAttributesDto(val group: String) : AttributesDto()
+class TagAttributesDto(val group: String) : AttributesDto
 
 typealias LocalizedString = @Serializable(LocalizedStringSerializer::class)
 Map<String, String>

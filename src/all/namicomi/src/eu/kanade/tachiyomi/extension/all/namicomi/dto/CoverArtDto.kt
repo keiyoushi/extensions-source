@@ -12,4 +12,4 @@ data class CoverArtDto(override val attributes: CoverArtAttributesDto? = null) :
 data class CoverArtAttributesDto(
     val fileName: String? = null,
     val locale: String? = null,
-) : AttributesDto()
+) : AttributesDto

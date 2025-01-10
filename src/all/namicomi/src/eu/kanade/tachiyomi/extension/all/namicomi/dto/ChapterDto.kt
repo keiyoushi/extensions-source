@@ -17,4 +17,4 @@ data class ChapterAttributesDto(
     val chapter: String?,
     val pages: Int,
     val publishAt: String,
-) : AttributesDto()
+) : AttributesDto

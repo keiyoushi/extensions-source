@@ -9,4 +9,4 @@ import kotlinx.serialization.Serializable
 data class OrganizationDto(override val attributes: OrganizationAttributesDto? = null) : EntityDto()
 
 @Serializable
-data class OrganizationAttributesDto(val name: String) : AttributesDto()
+data class OrganizationAttributesDto(val name: String) : AttributesDto

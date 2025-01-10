@@ -16,7 +16,7 @@ data class EntityAccessMapDataDto(
 data class EntityAccessMapAttributesDto(
     // Map of entity IDs to whether the user has access to them
     val map: Map<String, Boolean>,
-) : AttributesDto()
+) : AttributesDto
 
 @Serializable
 data class EntityAccessRequestDto(
