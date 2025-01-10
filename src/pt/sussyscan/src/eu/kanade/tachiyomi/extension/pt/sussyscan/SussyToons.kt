@@ -2,14 +2,19 @@ package eu.kanade.tachiyomi.extension.pt.sussyscan
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -34,13 +39,9 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class SussyToons : HttpSource() {
+class SussyToons : HttpSource(), ConfigurableSource {
 
     override val name = "Sussy Toons"
-
-    override val baseUrl = "https://www.sussyscan.com"
-
-    private val apiUrl = "https://api-dev.sussytoons.site"
 
     override val lang = "pt-BR"
 
@@ -53,12 +54,49 @@ class SussyToons : HttpSource() {
 
     private val json: Json by injectLazy()
 
+    private val isCi = System.getenv("CI") == "true"
+
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
+    private val apiUrl: String get() = preferences.prefBaseUrl
+
+    override val baseUrl: String get() = when {
+        isCi -> defaultBaseUrl
+        else -> preferences.prefBaseUrl
+    }
+
+    private val SharedPreferences.prefBaseUrl: String get() = getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private val SharedPreferences.prefApiUrl: String get() = getString(API_BASE_URL_PREF, defaultApiUrl)!!
+
+    private val defaultBaseUrl: String = "https://www.sussytoons.site"
+    private val defaultApiUrl: String = "https://api-dev.sussytoons.site"
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .addInterceptor(::findChapterUrl)
         .addInterceptor(::chapterPages)
         .addInterceptor(::imageLocation)
         .build()
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
+            if (domain != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+        preferences.getString(API_DEFAULT_BASE_URL_PREF, null).let { domain ->
+            if (domain != defaultApiUrl) {
+                preferences.edit()
+                    .putString(API_BASE_URL_PREF, defaultApiUrl)
+                    .putString(API_DEFAULT_BASE_URL_PREF, defaultApiUrl)
+                    .apply()
+            }
+        }
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .set("scan-id", "1") // Required header for requests
@@ -202,7 +240,7 @@ class SussyToons : HttpSource() {
             ?: throw IOException("Não foi possivel encontrar a URL da página")
 
         return client.newCall(GET(scriptUrl, headers)).execute().use {
-            pageUrlRegex.find(it.body.string())?.groups?.get("pageUrl")?.value?.toPathSegment()
+            pageUrlRegex.find(it.body.string())?.groups?.get(1)?.value?.toPathSegment()
         } ?: throw IOException("Não foi possivel extrair a URL da página")
     }
 
@@ -242,7 +280,7 @@ class SussyToons : HttpSource() {
 
         chapterUrl = chain.proceed(GET(scriptUrl, headers)).use { response ->
             response.body.string().let {
-                chapterUrlRegex.find(it)?.groups?.get("chapterUrl")?.value?.toPathSegment()
+                chapterUrlRegex.find(it)?.groups?.get(1)?.value?.toPathSegment()
             } ?: throw IOException("Não foi possivel extrair a URL do capitulo")
         }
 
@@ -363,6 +401,47 @@ class SussyToons : HttpSource() {
         }
     }
 
+    // ============================= Settings ====================================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val fields = listOf(
+            EditTextPreference(screen.context).apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = URL_PREF_SUMMARY
+
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "URL padrão:\n$defaultBaseUrl"
+
+                setDefaultValue(defaultBaseUrl)
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                    true
+                }
+            },
+            EditTextPreference(screen.context).apply {
+                key = API_BASE_URL_PREF
+                title = API_BASE_URL_PREF_TITLE
+                summary = buildString {
+                    append("Se não souber como verificar a URL da API, ")
+                    append("busque suporte no Discord do repositório de extensões.")
+                    appendLine(URL_PREF_SUMMARY)
+                    append("\n⚠ A fonte não oferece suporte para essa extensão.")
+                }
+
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "URL da API padrão:\n$defaultApiUrl"
+
+                setDefaultValue(defaultApiUrl)
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                    true
+                }
+            },
+        )
+
+        fields.forEach(screen::addPreference)
+    }
+
     // ============================= Utilities ====================================
 
     private fun MangaDto.toSManga(): SManga {
@@ -406,8 +485,19 @@ class SussyToons : HttpSource() {
         const val chapterPagePrefix = "chapterPage:"
         const val pageImagePrefix = "pageImage:"
 
-        val chapterUrlRegex = """push\("(?<chapterUrl>[^"]*capitulo[^"]*)/?"\.concat""".toRegex()
-        val pageUrlRegex = """\.get\("(?<pageUrl>[^"]*capitulo[^(/?")]*)/?"\.concat""".toRegex()
+        private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
+
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_TITLE = "Editar URL da fonte"
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações"
+
+        private const val API_BASE_URL_PREF = "overrideApiUrl"
+        private const val API_BASE_URL_PREF_TITLE = "Editar URL da API da fonte"
+        private const val API_DEFAULT_BASE_URL_PREF = "defaultApiUrl"
+
+        val chapterUrlRegex = """push\("([^"]*capitulo[^"]*)/?"\.concat""".toRegex()
+        val pageUrlRegex = """\.get\("([^"]*capitulo[^(/?")]*)/?"\.concat""".toRegex()
 
         @SuppressLint("SimpleDateFormat")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
