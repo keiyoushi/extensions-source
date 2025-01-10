@@ -41,28 +41,8 @@ class NamiComiHelper(lang: String) {
         ignoreUnknownKeys = true
         serializersModule += SerializersModule {
             polymorphic(EntityDto::class) {
-                subclass(OrganizationDto::class)
-                subclass(ChapterDataDto::class)
-                subclass(CoverArtDto::class)
-                subclass(MangaDataDto::class)
-                subclass(PageListDataDto::class)
-                subclass(TagDto::class)
-                subclass(PrimaryTagDto::class)
-                subclass(SecondaryTagDto::class)
-                subclass(EntityAccessMapDataDto::class)
                 defaultDeserializer { UnknownEntity.serializer() }
             }
-
-            polymorphic(AttributesDto::class) {
-                subclass(OrganizationAttributesDto::class)
-                subclass(ChapterAttributesDto::class)
-                subclass(CoverArtAttributesDto::class)
-                subclass(MangaAttributesDto::class)
-                subclass(TagAttributesDto::class)
-                subclass(EntityAccessMapAttributesDto::class)
-            }
-
-            contextual(PageImageDto::class, PageImageDto.serializer())
         }
     }
 
