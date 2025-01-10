@@ -2,6 +2,7 @@ import itertools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -19,7 +20,7 @@ def run_command(command: str) -> str:
     return result.stdout.strip()
 
 def get_module_list(ref: str) -> tuple[list[str], list[str]]:
-    changed_files = run_command(f"{shutil.which("git")} diff --name-only {ref}").splitlines()
+    changed_files = run_command(f"{shutil.which('git')} diff --name-only {ref}").splitlines()
 
     modules = set()
     libs = set()
