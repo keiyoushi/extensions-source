@@ -108,29 +108,6 @@ class NamiComiHelper(lang: String) {
     }
 
     /**
-     * Create a [SManga] from the JSON element with only basic attributes filled.
-     */
-    fun createBasicManga(
-        mangaDataDto: MangaDataDto,
-        coverFileName: String?,
-        coverSuffix: String?,
-        lang: String,
-    ): SManga = SManga.create().apply {
-        url = "/title/${mangaDataDto.id}"
-
-        mangaDataDto.attributes!!.title.let { titleMap ->
-            title = titleMap[lang] ?: titleMap.values.first()
-        }
-
-        coverFileName?.let {
-            thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
-                true -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
-                else -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
-            }
-        }
-    }
-
-    /**
      * Create an [SManga] from the JSON element with all attributes filled.
      */
     fun createManga(
@@ -175,14 +152,26 @@ class NamiComiHelper(lang: String) {
         val desc = (attr.description[lang] ?: attr.description["en"])
             .orEmpty()
 
-        return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang).apply {
+        return SManga.create().apply {
+            initialized = true
+            url = "/title/${mangaDataDto.id}"
             description = desc
             author = organization.joinToString()
             status = getPublicationStatus(mangaDataDto)
             genre = genreList
                 .filter(String::isNotEmpty)
                 .joinToString()
-            initialized = true
+
+            mangaDataDto.attributes.title.let { titleMap ->
+                title = titleMap[lang] ?: titleMap.values.first()
+            }
+
+            coverFileName?.let {
+                thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
+                    true -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
+                    else -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
+                }
+            }
         }
     }
 

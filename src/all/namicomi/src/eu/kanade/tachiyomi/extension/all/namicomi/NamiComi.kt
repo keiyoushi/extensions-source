@@ -6,7 +6,6 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ChapterListDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.CoverArtDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityAccessMapDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityAccessRequestDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityAccessRequestItemDto
@@ -73,6 +72,9 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             .addQueryParameter("limit", NamiComiConstants.mangaLimit.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
             .addQueryParameter("includes[]", NamiComiConstants.coverArt)
+            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
+            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
+            .addQueryParameter("includes[]", NamiComiConstants.tag)
             .build()
 
         return GET(url, headers, CacheControl.FORCE_NETWORK)
@@ -100,14 +102,12 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         }
 
         val mangaListDto = response.parseAs<MangaListDto>()
-        val coverSuffix = preferences.coverQuality
-
         val mangaList = mangaListDto.data.map { mangaDataDto ->
-            val fileName = mangaDataDto.relationships
-                .firstInstanceOrNull<CoverArtDto>()
-                ?.attributes?.fileName
-
-            helper.createBasicManga(mangaDataDto, fileName, coverSuffix, extLang)
+            helper.createManga(
+                mangaDataDto,
+                extLang,
+                preferences.coverQuality,
+            )
         }
 
         return MangasPage(mangaList, mangaListDto.meta.hasNextPage)
@@ -341,9 +341,6 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     private inline fun <reified T> Response.parseAs(): T = use {
         helper.json.decodeFromString(body.string())
     }
-
-    private inline fun <reified T> List<*>.firstInstanceOrNull(): T? =
-        firstOrNull { it is T } as? T?
 
     private val SharedPreferences.coverQuality
         get() = getString(NamiComiConstants.getCoverQualityPreferenceKey(extLang), "")
