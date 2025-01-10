@@ -51,7 +51,7 @@ def main() -> NoReturn:
     modules = [f"{module}:assemble{build_type}" for module in modules]
     chunked = {
         "chunk": [
-            {"num": i + 1, "modules": modules}
+            {"num": i, "modules": modules}
             for i, modules in
             enumerate(itertools.batched(modules, int(os.getenv("CI_CHUNK_SIZE", 65))))
         ]
