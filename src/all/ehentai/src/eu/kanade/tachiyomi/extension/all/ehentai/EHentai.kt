@@ -415,6 +415,7 @@ abstract class EHentai(
     // Filters
     override fun getFilterList() = FilterList(
         EnforceLanguageFilter(getEnforceLanguagePref()),
+        Favorites(),
         Watched(),
         GenreGroup(),
         Filter.Header("Separate tags with commas (,)"),
@@ -432,6 +433,14 @@ abstract class EHentai(
         override fun addToUri(builder: Uri.Builder) {
             if (state) {
                 builder.appendPath("watched")
+            }
+        }
+    }
+
+    class Favorites : CheckBox("Favorites"), UriFilter {
+        override fun addToUri(builder: Uri.Builder) {
+            if (state) {
+                builder.appendPath("favorites.php")
             }
         }
     }
