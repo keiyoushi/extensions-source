@@ -27,13 +27,17 @@ import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.internal.http.HTTP_BAD_GATEWAY
 import org.jsoup.Jsoup
+import org.jsoup.select.Elements
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -59,7 +63,11 @@ class SussyToons : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    private val apiUrl: String get() = preferences.prefApiUrl
+    private var _apiUrlCache: String? = null
+
+    private var apiUrl: String
+        get() = _apiUrlCache ?: preferences.prefApiUrl.also { _apiUrlCache = it }
+        set(value) { _apiUrlCache = value }
 
     override val baseUrl: String get() = when {
         isCi -> defaultBaseUrl
@@ -68,12 +76,18 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     private val SharedPreferences.prefBaseUrl: String get() = getString(BASE_URL_PREF, defaultBaseUrl)!!
     private val SharedPreferences.prefApiUrl: String get() = getString(API_BASE_URL_PREF, defaultApiUrl)!!
+    private fun SharedPreferences.prefApiUrlUpSet(url: String): String {
+        edit().putString(API_BASE_URL_PREF, url)
+            .apply()
+        return url
+    }
 
     private val defaultBaseUrl: String = "https://www.sussytoons.site"
     private val defaultApiUrl: String = "https://api-dev.sussytoons.site"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .addInterceptor(::findApiUrl)
         .addInterceptor(::findChapterUrl)
         .addInterceptor(::chapterPages)
         .addInterceptor(::imageLocation)
@@ -259,6 +273,79 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     private var chapterUrl: String? = null
 
+    private fun findApiUrl(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response: Response = try {
+            chain.proceed(request)
+        } catch (ex: SocketTimeoutException) {
+            chain.createTimeoutResponse(request)
+        }
+
+        if (request.url.toString().contains(apiUrl).not()) {
+            return response
+        }
+
+        if (response.isSuccessful) {
+            return response
+        }
+
+        response.close()
+
+        fetchApiUrl(chain).forEach { urlCandidate ->
+            val url = request.url.toString()
+                .replace(apiUrl, urlCandidate)
+                .toHttpUrl()
+
+            val newRequest = request.newBuilder()
+                .url(url)
+                .build()
+
+            return chain.proceed(newRequest).takeIf(Response::isSuccessful).also {
+                apiUrl = preferences.prefApiUrlUpSet(urlCandidate)
+            } ?: return@forEach
+        }
+
+        throw IOException(
+            buildString {
+                append("Não foi possível encontrar a URL da API.")
+                append("Troque manualmente nas configurações da extensão")
+            },
+        )
+    }
+    private fun Interceptor.Chain.createTimeoutResponse(request: Request): Response {
+        return Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .message("")
+            .code(HTTP_BAD_GATEWAY)
+            .build()
+    }
+
+    private fun fetchApiUrl(chain: Interceptor.Chain): List<String> {
+        val scripts = chain.proceed(GET(baseUrl, headers)).asJsoup()
+            .select("script[src*=next]:not([nomodule]):not([src*=app])")
+
+        val script = getScriptBodyWithUrls(scripts, chain)
+            ?: throw Exception("Não foi possivel localizar a URL da API")
+
+        return apiUrlRegex.findAll(script)
+            .flatMap { stringsRegex.findAll(it.value).map { match -> match.groupValues[1] } }
+            .filter(urlRegex::containsMatchIn)
+            .toList()
+    }
+
+    private fun getScriptBodyWithUrls(scripts: Elements, chain: Interceptor.Chain): String? {
+        val elements = scripts.toList().reversed()
+        for (element in elements) {
+            val scriptUrl = element.absUrl("src")
+            val script = chain.proceed(GET(scriptUrl, headers)).body.string()
+            if (apiUrlRegex.containsMatchIn(script)) {
+                return script
+            }
+        }
+        return null
+    }
+
     /**
      * Get the “dynamic” path segment of the chapter list
      */
@@ -402,6 +489,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
     }
 
     // ============================= Settings ====================================
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val fields = listOf(
             EditTextPreference(screen.context).apply {
@@ -498,6 +586,10 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
         val chapterUrlRegex = """push\("([^"]*capitulo[^"]*)/?"\.concat""".toRegex()
         val pageUrlRegex = """\.get\("([^"]*capitulo[^(/?")]*)/?"\.concat""".toRegex()
+
+        val apiUrlRegex = """(?<=production",)(.*?)(?=;function)""".toRegex()
+        val urlRegex = """https?://[\w\-]+(\.[\w\-]+)+[/#?]?.*$""".toRegex()
+        val stringsRegex = """"(.*?)"""".toRegex()
 
         @SuppressLint("SimpleDateFormat")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
