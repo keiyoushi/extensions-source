@@ -2,8 +2,8 @@ ext {
     extName = 'Read Tokyo Ghoul Re & Tokyo Ghoul Manga Online'
     extClass = '.ReadTokyoGhoulReTokyoGhoulMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww8.tokyoghoulre.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://ww10.tokyoghoulre.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
