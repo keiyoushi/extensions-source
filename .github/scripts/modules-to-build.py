@@ -2,7 +2,6 @@ import itertools
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,14 +12,14 @@ MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
 
 def run_command(command: str) -> str:
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True, shell=True)
     if result.returncode != 0:
         print(result.stderr.strip())
         sys.exit(result.returncode)
     return result.stdout.strip()
 
 def get_module_list(ref: str) -> tuple[list[str], list[str]]:
-    changed_files = run_command(f"{shutil.which('git')} diff --name-only {ref}").splitlines()
+    changed_files = run_command(f"git diff --name-only {ref}").splitlines()
 
     modules = set()
     libs = set()
