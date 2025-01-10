@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl
+package eu.kanade.tachiyomi.multisrc.machinetranslations
 
 import eu.kanade.tachiyomi.source.model.Filter
 

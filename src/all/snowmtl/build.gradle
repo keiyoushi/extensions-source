@@ -1,7 +1,9 @@
 ext {
     extName = 'Snow Machine Translations'
     extClass = '.SnowmtlFactory'
-    extVersionCode = 6
+    themePkg = 'machinetranslations'
+    baseUrl = 'https://snowmtl.ru'
+    overrideVersionCode = 6
     isNsfw = true
 }
 
