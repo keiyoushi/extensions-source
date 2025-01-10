@@ -12,6 +12,8 @@ object NamiComiConstants {
     val dateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss+SSS", Locale.US)
         .apply { timeZone = TimeZone.getTimeZone("UTC") }
 
+    const val lockSymbol = "🔒"
+
     // Language codes used for translations
     const val english = "en"
 

@@ -269,7 +269,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
                 // Chapter cannot be viewed and user wants to see locked chapters
                 preferences.showLockedChapters -> {
                     helper.createChapter(it, extLang).apply {
-                        name = helper.intl.format("chapter_locked", name)
+                        name = "${NamiComiConstants.lockSymbol} $name"
                     }
                 }
                 // Ignore locked chapters otherwise
