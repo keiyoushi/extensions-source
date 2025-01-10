@@ -40,8 +40,6 @@ class NamiComiHelper(lang: String) {
     val json = Json {
         isLenient = true
         ignoreUnknownKeys = true
-        allowSpecialFloatingPointValues = true
-        prettyPrint = true
         serializersModule += SerializersModule {
             polymorphic(EntityDto::class) {
                 subclass(OrganizationDto::class)
