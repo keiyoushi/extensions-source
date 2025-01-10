@@ -61,7 +61,7 @@ enum class StatusDto(val value: String) {
 }
 
 @Serializable
-abstract class AbstractTagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
+sealed class AbstractTagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
 
 @Serializable
 @SerialName(NamiComiConstants.tag)
