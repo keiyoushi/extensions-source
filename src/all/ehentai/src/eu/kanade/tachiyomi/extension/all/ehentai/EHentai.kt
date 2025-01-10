@@ -171,18 +171,18 @@ abstract class EHentai(
             query.isBlank() -> languageTag(enforceLanguageFilter)
             else -> languageTag(enforceLanguageFilter).let { if (it.isNotEmpty()) "$query,$it" else query }
         }
-        filters.filterIsInstance<TextFilter>().forEach { it ->
-            if (it.state.isNotEmpty()) {
-                val splitted = it.state.split(",").filter(String::isNotBlank)
-                if (splitted.size < 2 && it.type != "tags") {
-                    modifiedQuery += " ${it.type}:\"${it.state.replace(" ", "+")}\""
+        filters.filterIsInstance<TextFilter>().forEach { filter ->
+            if (filter.state.isNotEmpty()) {
+                val splitted = filter.state.split(",").filter(String::isNotBlank)
+                if (splitted.size < 2 && filter.type != "tags") {
+                    modifiedQuery += " ${filter.type}:\"${filter.state.replace(" ", "+")}\""
                 } else {
                     splitted.forEach { tag ->
                         val trimmed = tag.trim().lowercase()
-                        if (trimmed.startsWith('-')) {
-                            modifiedQuery += " -${it.type}:\"${trimmed.removePrefix("-").replace(" ", "+")}\""
+                        modifiedQuery += if (trimmed.startsWith('-')) {
+                            " -${filter.type}:\"${trimmed.removePrefix("-").replace(" ", "+")}\""
                         } else {
-                            modifiedQuery += " ${it.type}:\"${trimmed.replace(" ", "+")}\""
+                            " ${filter.type}:\"${trimmed.replace(" ", "+")}\""
                         }
                     }
                 }
