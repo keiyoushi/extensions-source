@@ -212,6 +212,7 @@ class NamiComiHelper(lang: String) {
             genre = genreList
                 .filter(String::isNotEmpty)
                 .joinToString()
+            initialized = true
         }
     }
 
