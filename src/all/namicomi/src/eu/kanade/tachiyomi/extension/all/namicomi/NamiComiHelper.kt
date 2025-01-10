@@ -90,27 +90,6 @@ class NamiComiHelper(lang: String) {
      */
     fun getMangaListOffset(page: Int): String = (NamiComiConstants.mangaLimit * (page - 1)).toString()
 
-    /**
-     * Remove any HTML characters in manga or chapter name to actual
-     * characters. For example &hearts; will show ♥.
-     */
-    private fun String.removeEntities(): String {
-        return Parser.unescapeEntities(this, false)
-    }
-
-    /**
-     * Remove any HTML characters in description to actual characters.
-     * It also removes Markdown syntax for links, italic and bold.
-     */
-    private fun String.removeEntitiesAndMarkdown(): String {
-        return removeEntities()
-            .substringBefore("---")
-            .replace(markdownLinksRegex, "$1")
-            .replace(markdownItalicBoldRegex, "$1")
-            .replace(markdownItalicRegex, "$1")
-            .trim()
-    }
-
     private fun getPublicationStatus(mangaDataDto: MangaDataDto): Int {
         return when (mangaDataDto.attributes!!.publicationStatus) {
             StatusDto.ONGOING -> SManga.ONGOING
@@ -125,12 +104,7 @@ class NamiComiHelper(lang: String) {
         NamiComiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
 
     companion object {
-        val markdownLinksRegex = "\\[([^]]+)\\]\\(([^)]+)\\)".toRegex()
-        val markdownItalicBoldRegex = "\\*+\\s*([^\\*]*)\\s*\\*+".toRegex()
-        val markdownItalicRegex = "_+\\s*([^_]*)\\s*_+".toRegex()
-
         val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
-
         val trailingHyphenRegex = "-+$".toRegex()
     }
 
@@ -145,9 +119,9 @@ class NamiComiHelper(lang: String) {
     ): SManga = SManga.create().apply {
         url = "/title/${mangaDataDto.id}"
 
-        val titleMap = mangaDataDto.attributes!!.title
-        title = (titleMap[lang] ?: titleMap.values.first())
-            .removeEntities()
+        mangaDataDto.attributes!!.title.let { titleMap ->
+            title = titleMap[lang] ?: titleMap.values.first()
+        }
 
         coverFileName?.let {
             thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
@@ -200,7 +174,6 @@ class NamiComiHelper(lang: String) {
         val genreList = NamiComiConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
 
         val desc = (attr.description[lang] ?: attr.description["en"])
-            ?.removeEntitiesAndMarkdown()
             .orEmpty()
 
         return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang).apply {
@@ -244,7 +217,7 @@ class NamiComiHelper(lang: String) {
 
         return SChapter.create().apply {
             url = "/$extLang/chapter/${chapterDataDto.id}"
-            name = chapterName.joinToString(" ").removeEntities()
+            name = chapterName.joinToString(" ")
             date_upload = parseDate(attr.publishAt)
         }
     }
