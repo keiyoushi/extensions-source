@@ -206,16 +206,21 @@ abstract class Keyoapp(
     }
 
     // Details
+    protected open val descriptionSelector: String = "div:containsOwn(Synopsis) ~ div"
+    protected open val statusSelector: String = "div:has(span:containsOwn(Status)) ~ div"
+    protected open val authorSelector: String = "div:has(span:containsOwn(Author)) ~ div"
+    protected open val artistSelector: String = "div:has(span:containsOwn(Artist)) ~ div"
+    protected open val genreSelector: String = "div:has(span:containsOwn(Type)) ~ div"
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("div.grid > h1")!!.text()
         thumbnail_url = document.getImageUrl("div[class*=photoURL]")
-        description = document.selectFirst("div:containsOwn(Synopsis) ~ div")?.text()
-        status = document.selectFirst("div:has(span:containsOwn(Status)) ~ div").parseStatus()
-        author = document.selectFirst("div:has(span:containsOwn(Author)) ~ div")?.text()
-        artist = document.selectFirst("div:has(span:containsOwn(Artist)) ~ div")?.text()
+        description = document.selectFirst(descriptionSelector)?.text()
+        status = document.selectFirst(statusSelector).parseStatus()
+        author = document.selectFirst(authorSelector)?.text()
+        artist = document.selectFirst(artistSelector)?.text()
         genre = buildList {
-            document.selectFirst("div:has(span:containsOwn(Type)) ~ div")?.text()?.replaceFirstChar {
+            document.selectFirst(genreSelector)?.text()?.replaceFirstChar {
                 if (it.isLowerCase()) {
                     it.titlecase(
                         Locale.getDefault(),
