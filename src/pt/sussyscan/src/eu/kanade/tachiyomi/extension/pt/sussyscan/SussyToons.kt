@@ -59,7 +59,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    private val apiUrl: String get() = preferences.prefBaseUrl
+    private val apiUrl: String get() = preferences.prefApiUrl
 
     override val baseUrl: String get() = when {
         isCi -> defaultBaseUrl
