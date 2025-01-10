@@ -1,17 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.namicomi.dto
 
 import eu.kanade.tachiyomi.extension.all.namicomi.NamiComiConstants
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.buildClassSerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.serializer
 
 typealias MangaListDto = PaginatedResponseDto<MangaDataDto>
 
@@ -23,8 +14,9 @@ data class MangaDataDto(override val attributes: MangaAttributesDto? = null) : E
 
 @Serializable
 data class MangaAttributesDto(
-    val title: LocalizedString,
-    val description: LocalizedString,
+    // Title and description are maps of language codes to localized strings
+    val title: Map<String, String>,
+    val description: Map<String, String>,
     val slug: String,
     val originalLanguage: String?,
     val year: Int?,
@@ -76,25 +68,3 @@ class SecondaryTagDto : AbstractTagDto()
 
 @Serializable
 class TagAttributesDto(val group: String) : AttributesDto
-
-typealias LocalizedString = @Serializable(LocalizedStringSerializer::class)
-Map<String, String>
-
-/**
- * Titles and descriptions are dictionaries with language codes as keys and the text as values.
- */
-object LocalizedStringSerializer : KSerializer<Map<String, String>> {
-    override val descriptor = buildClassSerialDescriptor("LocalizedString")
-
-    override fun deserialize(decoder: Decoder): Map<String, String> {
-        require(decoder is JsonDecoder)
-
-        return (decoder.decodeJsonElement() as? JsonObject)
-            ?.mapValues { it.value.jsonPrimitive.contentOrNull ?: "" }
-            .orEmpty()
-    }
-
-    override fun serialize(encoder: Encoder, value: Map<String, String>) {
-        encoder.encodeSerializableValue(serializer(), value)
-    }
-}
