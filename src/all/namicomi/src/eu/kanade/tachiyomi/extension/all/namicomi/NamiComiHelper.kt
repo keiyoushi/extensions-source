@@ -30,7 +30,6 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
-import org.jsoup.parser.Parser
 import java.util.Locale
 
 class NamiComiHelper(lang: String) {
