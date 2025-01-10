@@ -73,7 +73,7 @@ class ReadMangas() : HttpSource() {
             )
         }
 
-        val url = "$baseUrl/api/trpc/manga.getAllManga?batch=1".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/deprecated/manga.getAllManga?batch=1".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
@@ -111,7 +111,7 @@ class ReadMangas() : HttpSource() {
             )
         }
 
-        val url = "$baseUrl/api/trpc/discover.updated".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/deprecated/discover.updated".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
@@ -127,7 +127,7 @@ class ReadMangas() : HttpSource() {
     // =========================== Search =================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/trpc/discover.search?batch=1"
+        val url = "$baseUrl/api/deprecated/discover.search?batch=1"
         val payload = buildJsonObject {
             put(
                 "0",
@@ -194,7 +194,7 @@ class ReadMangas() : HttpSource() {
             )
         }
 
-        val url = "$baseUrl/api/trpc/chapter.publicAllChapters".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/deprecated/chapter.publicAllChapters".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
