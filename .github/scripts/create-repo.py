@@ -1,4 +1,3 @@
-import html
 import json
 import os
 import re
@@ -11,10 +10,8 @@ VERSION_CODE_REGEX = re.compile(r"versionCode='([^']+)'")
 VERSION_NAME_REGEX = re.compile(r"versionName='([^']+)'")
 IS_NSFW_REGEX = re.compile(r"'tachiyomi.extension.nsfw' value='([^']+)'")
 APPLICATION_LABEL_REGEX = re.compile(r"^application-label:'([^']+)'", re.MULTILINE)
-APPLICATION_ICON_320_REGEX = re.compile(
-    r"^application-icon-320:'([^']+)'", re.MULTILINE
-)
-LANGUAGE_REGEX = re.compile(r"tachiyomi-([^\.]+)")
+APPLICATION_ICON_320_REGEX = re.compile(r"^application-icon-320:'([^']+)'", re.MULTILINE)
+LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
 
 *_, ANDROID_BUILD_TOOLS = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
 REPO_DIR = Path("repo")
@@ -40,7 +37,7 @@ for apk in REPO_APK_DIR.iterdir():
     ).decode()
 
     package_info = next(x for x in badging.splitlines() if x.startswith("package: "))
-    package_name = PACKAGE_NAME_REGEX.search(package_info).group(1)    
+    package_name = PACKAGE_NAME_REGEX.search(package_info).group(1)
     application_icon = APPLICATION_ICON_320_REGEX.search(badging).group(1)
 
     with ZipFile(apk) as z, z.open(application_icon) as i, (
@@ -87,5 +84,5 @@ for apk in REPO_APK_DIR.iterdir():
 
     index_min_data.append(min_data)
 
-with (REPO_DIR / "index.min.json").open("w", encoding="utf-8") as f:
-    json.dump(index_min_data, f, ensure_ascii=False, separators=(",", ":"))
+with (REPO_DIR / "index.min.json").open("w", encoding="utf-8") as index_file:
+    json.dump(index_min_data, index_file, ensure_ascii=False, separators=(",", ":"))
