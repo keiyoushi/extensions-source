@@ -117,7 +117,7 @@ class NamiComiHelper(lang: String) {
         return when (mangaDataDto.attributes!!.publicationStatus) {
             StatusDto.ONGOING -> SManga.ONGOING
             StatusDto.CANCELLED -> SManga.CANCELLED
-            StatusDto.COMPLETED -> SManga.PUBLISHING_FINISHED
+            StatusDto.COMPLETED -> SManga.COMPLETED
             StatusDto.HIATUS -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
