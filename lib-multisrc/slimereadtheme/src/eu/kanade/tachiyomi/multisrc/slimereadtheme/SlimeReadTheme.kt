@@ -25,6 +25,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlin.math.min
 
 abstract class SlimeReadTheme(
@@ -54,8 +56,8 @@ abstract class SlimeReadTheme(
         if (!scriptResponse.isSuccessful) throw Exception("HTTP error ${scriptResponse.code}")
         val script = scriptResponse.body.string()
         val apiUrl = FUNCTION_REGEX.find(script)?.let { result ->
-            val varBlock = result.groups["script"]?.value ?: return@let null
-            val varUrlInfix = result.groups["infix"]?.value ?: return@let null
+            val varBlock = result.groupValues[1]
+            val varUrlInfix = result.groupValues[2]
 
             val block = """${varBlock.replace(varUrlInfix, "\"$urlInfix\"")}.toString()"""
 
@@ -186,6 +188,7 @@ abstract class SlimeReadTheme(
         return items.map {
             SChapter.create().apply {
                 name = "Cap " + parseChapterNumber(it.number)
+                date_upload = parseChapterDate(it.updated_at)
                 chapter_number = it.number
                 scanlator = it.scan?.scan_name
                 url = "/book_cap_units?manga_id=$mangaId&cap=${it.number}"
@@ -199,6 +202,10 @@ abstract class SlimeReadTheme(
             .let { if (cap < 10F) "0$it" else it }
             .replace(",00", "")
             .replace(",", ".")
+    }
+
+    private fun parseChapterDate(date: String): Long {
+        return try { dateFormat.parse(date)!!.time } catch (_: Exception) { 0L }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -242,5 +249,6 @@ abstract class SlimeReadTheme(
     companion object {
         const val PREFIX_SEARCH = "id:"
         val FUNCTION_REGEX = """(?<script>\[""\.concat\("[^,]+,"\."\)\.concat\((?<infix>[^,]+),":\d+"\)\])""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
     }
 }

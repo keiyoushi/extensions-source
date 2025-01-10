@@ -25,6 +25,11 @@ class MangaThemesiaPaidChapterHelper(
             return baseChapterListSelector
         }
 
-        return ":is($baseChapterListSelector):not($lockedChapterSelector):not(:has($lockedChapterSelector))"
+        // Fragile
+        val selectors = baseChapterListSelector.split(", ")
+
+        return selectors
+            .map { "$it:not($lockedChapterSelector):not(:has($lockedChapterSelector))" }
+            .joinToString()
     }
 }

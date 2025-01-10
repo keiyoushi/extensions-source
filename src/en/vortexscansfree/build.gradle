@@ -1,0 +1,10 @@
+ext {
+    extName = 'Vortex Scans Free (unoriginal)'
+    extClass = '.VortexScansFree'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://vortexscansfree.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

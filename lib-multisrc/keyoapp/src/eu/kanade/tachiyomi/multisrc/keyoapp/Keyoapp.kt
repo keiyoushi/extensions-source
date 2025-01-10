@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -209,12 +210,12 @@ abstract class Keyoapp(
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("div.grid > h1")!!.text()
         thumbnail_url = document.getImageUrl("div[class*=photoURL]")
-        description = document.selectFirst("div.grid > div.overflow-hidden > p")?.text()
-        status = document.selectFirst("div[alt=Status]").parseStatus()
-        author = document.selectFirst("div[alt=Author]")?.text()
-        artist = document.selectFirst("div[alt=Artist]")?.text()
+        description = document.selectFirst("div:containsOwn(Synopsis) ~ div")?.text()
+        status = document.selectFirst("div:has(span:containsOwn(Status)) ~ div").parseStatus()
+        author = document.selectFirst("div:has(span:containsOwn(Author)) ~ div")?.text()
+        artist = document.selectFirst("div:has(span:containsOwn(Artist)) ~ div")?.text()
         genre = buildList {
-            document.selectFirst("div[alt='Series Type']")?.text()?.replaceFirstChar {
+            document.selectFirst("div:has(span:containsOwn(Type)) ~ div")?.text()?.replaceFirstChar {
                 if (it.isLowerCase()) {
                     it.titlecase(
                         Locale.getDefault(),
@@ -227,7 +228,7 @@ abstract class Keyoapp(
         }.joinToString()
     }
 
-    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+    protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "ongoing" -> SManga.ONGOING
         "dropped" -> SManga.CANCELLED
         "paused" -> SManga.ON_HIATUS
@@ -308,6 +309,12 @@ abstract class Keyoapp(
     protected open fun Element.getImageUrl(selector: String): String? {
         return this.selectFirst(selector)?.let { element ->
             IMG_REGEX.find(element.attr("style"))?.groups?.get("url")?.value
+                ?.toHttpUrlOrNull()?.let {
+                    it.newBuilder()
+                        .setQueryParameter("w", "480") // Keyoapp returns the dynamic size of the thumbnail to any size
+                        .build()
+                        .toString()
+                }
         }
     }
 
