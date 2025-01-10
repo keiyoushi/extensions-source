@@ -1,0 +1,9 @@
+ext {
+    extName = 'Temaki mangás'
+    extClass = '.TemakiMangas'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://temakimangas.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
