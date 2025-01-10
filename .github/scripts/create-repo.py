@@ -84,5 +84,5 @@ for apk in REPO_APK_DIR.iterdir():
 
     index_min_data.append(min_data)
 
-with (REPO_DIR / "index.min.json").open("w", encoding="utf-8") as index_file:
+with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as index_file:
     json.dump(index_min_data, index_file, ensure_ascii=False, separators=(",", ":"))

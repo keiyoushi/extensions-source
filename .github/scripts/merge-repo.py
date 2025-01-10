@@ -24,13 +24,13 @@ with REMOTE_REPO.joinpath("index.min.json").open() as remote_index_file:
     remote_index = json.load(remote_index_file)
 
 with LOCAL_REPO.joinpath("index.min.json").open() as local_index_file:
-    loca_index = json.load(local_index_file)
+    local_index = json.load(local_index_file)
 
 index = [
     item for item in remote_index
     if not any([item["pkg"].endswith(f".{module}") for module in to_delete])
 ]
-index.extend(loca_index)
+index.extend(local_index)
 index.sort(key=lambda x: x["pkg"])
 
 with REMOTE_REPO.joinpath("index.json").open("w", encoding="utf-8") as index_file:
