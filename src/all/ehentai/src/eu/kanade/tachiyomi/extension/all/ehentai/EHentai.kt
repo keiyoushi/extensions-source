@@ -49,10 +49,11 @@ abstract class EHentai(
     private val memberId: String by lazy { getMemberIdPref() }
     private val passHash: String by lazy { getPassHashPref() }
     private val igneous: String by lazy { getIgneousPref() }
+    private val forceEh: Boolean by lazy { getForceEhPref() }
 
     override val baseUrl: String
         get() = when {
-            System.getenv("CI") == "true" -> "https://e-hentai.org"
+            System.getenv("CI") == "true" || forceEh -> "https://e-hentai.org"
             memberId.isNotEmpty() && passHash.isNotEmpty() -> "https://exhentai.org"
             else -> "https://e-hentai.org"
         }
@@ -576,11 +577,28 @@ abstract class EHentai(
         private const val IGNEOUS_PREF_TITLE = "igneous"
         private const val IGNEOUS_PREF_SUMMARY = "igneous value override"
         private const val IGNEOUS_PREF_DEFAULT_VALUE = ""
+
+        private const val FORCE_EH = "FORCE_EH"
+        private const val FORCE_EH_TITLE = "Force e-hentai"
+        private const val FORCE_EH_SUMMARY = "Force e-hentai to avoid content on exhentai"
+        private const val FORCE_EH_DEFAULT_VALUE = false
     }
 
     // Preferences
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val forceEhPref = CheckBoxPreference(screen.context).apply {
+            key = FORCE_EH
+            title = FORCE_EH_TITLE
+            summary = FORCE_EH_SUMMARY
+            setDefaultValue(FORCE_EH_DEFAULT_VALUE)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+                preferences.edit().putBoolean(FORCE_EH, checkValue).commit()
+            }
+        }
+
         val enforceLanguagePref = CheckBoxPreference(screen.context).apply {
             key = "${ENFORCE_LANGUAGE_PREF_KEY}_$lang"
             title = ENFORCE_LANGUAGE_PREF_TITLE
@@ -617,6 +635,7 @@ abstract class EHentai(
             setDefaultValue(IGNEOUS_PREF_DEFAULT_VALUE)
         }
 
+        screen.addPreference(forceEhPref)
         screen.addPreference(memberIdPref)
         screen.addPreference(passHashPref)
         screen.addPreference(igneousPref)
@@ -657,5 +676,9 @@ abstract class EHentai(
 
     private fun getIgneousPref(): String {
         return getCookieValue(IGNEOUS_PREF_TITLE, IGNEOUS_PREF_DEFAULT_VALUE, IGNEOUS_PREF_KEY)
+    }
+
+    private fun getForceEhPref(): Boolean {
+        return preferences.getBoolean(FORCE_EH, FORCE_EH_DEFAULT_VALUE)
     }
 }
