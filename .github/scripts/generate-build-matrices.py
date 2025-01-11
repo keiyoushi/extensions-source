@@ -36,11 +36,11 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
         elif match := MULTISRC_LIB_REGEX.search(file):
             multisrc = match.group("multisrc")
             if Path("lib-multisrc", multisrc).is_dir():
-                libs.add(f":lib-multisrc:{multisrc}:getDependents")
+                libs.add(f":lib-multisrc:{multisrc}:printDependentExtensions")
         elif match := LIB_REGEX.search(file):
             lib = match.group("lib")
             if Path("lib", lib).is_dir():
-                libs.add(f":lib:{lib}:getDependents")
+                libs.add(f":lib:{lib}:printDependentExtensions")
 
     def is_extension_module(module: str) -> bool:
         if not (match := MODULE_REGEX.search(module)):

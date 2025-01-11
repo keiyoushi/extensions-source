@@ -52,12 +52,8 @@ tasks {
     }
 }
 
-tasks.register("getDependents") {
+tasks.register("printDependentExtensions") {
     doLast {
-        project.getDependents().forEach { project ->
-            if (project.path.startsWith(":src:")) {
-                println(project.path)
-            }
-        }
+        project.printDependentExtensions()
     }
 }
