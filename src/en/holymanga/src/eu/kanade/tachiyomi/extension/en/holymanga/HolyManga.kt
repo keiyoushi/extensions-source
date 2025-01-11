@@ -6,4 +6,6 @@ class HolyManga : FMReader(
     "HolyManga",
     "https://w34.holymanga.net",
     "en",
-)
+) {
+    override val versionId = 2
+}

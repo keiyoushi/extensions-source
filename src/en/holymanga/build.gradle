@@ -3,7 +3,7 @@ ext {
     extClass = '.HolyManga'
     themePkg = 'fmreader'
     baseUrl = 'https://w34.holymanga.net'
-    overrideVersionCode = 5
+    overrideVersionCode = 2
     isNsfw = true
 }
 
