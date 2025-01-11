@@ -66,7 +66,7 @@ def main() -> NoReturn:
         with Path.cwd().joinpath(".github/always_build.json").open() as always_build_file:
             always_build = json.load(always_build_file)
         for ext in always_build:
-            module = f":src:{ext.replace(".", ":")}"
+            module = f":src:{ext.replace('.', ':')}"
 
             if module not in modules and ext not in deleted:
                 modules.append(module)
