@@ -1,10 +1,10 @@
-package eu.kanade.tachiyomi.extension.en.rezoscans
+package eu.kanade.tachiyomi.extension.en.casacomic
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
-class RezoScans : Keyoapp(
-    "Rezo Scans",
-    "https://rezoscans.com",
+class CasaComic : Keyoapp(
+    "Casa Comic",
+    "https://casacomic.com",
     "en",
 ) {
     override val descriptionSelector: String = "div.grid > div.overflow-hidden > p"
