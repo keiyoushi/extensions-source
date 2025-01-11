@@ -1,11 +1,8 @@
 package eu.kanade.tachiyomi.extension.fr.phenixscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
