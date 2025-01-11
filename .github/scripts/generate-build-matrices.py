@@ -69,14 +69,16 @@ def main() -> NoReturn:
     _, ref, build_type = sys.argv
     modules, deleted = get_module_list(ref)
 
-    chunked = [
-        {"number": i + 1, "modules": modules}
-        for i, modules in
-        enumerate(itertools.batched(
-            map(lambda x: f"{x}:assemble{build_type}", modules),
-            int(os.getenv("CI_CHUNK_SIZE", 65))
-        ))
-    ]
+    chunked = {
+        "chunk": [
+            {"number": i + 1, "modules": modules}
+            for i, modules in
+            enumerate(itertools.batched(
+                map(lambda x: f"{x}:assemble{build_type}", modules),
+                int(os.getenv("CI_CHUNK_SIZE", 65))
+            ))
+        ]
+    }
 
     print(f"Module chunks to build:\n{json.dumps(chunked, indent=2)}\n\nModule to delete:\n{json.dumps(deleted, indent=2)}")
 
