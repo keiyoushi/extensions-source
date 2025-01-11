@@ -50,7 +50,6 @@ jobs:
     runs-on: 'ubuntu-24.04'
     strategy:
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
-    if: ${{ fromJson(needs.prepare.outputs.matrix).chunk != '[]' }}
     steps:
       - name: Checkout PR
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
