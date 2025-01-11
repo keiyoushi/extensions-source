@@ -120,7 +120,7 @@ class NamiComiHelper(lang: String) {
 
         return SManga.create().apply {
             initialized = true
-            url = "/title/${mangaDataDto.id}"
+            url = mangaDataDto.id
             description = desc
             author = organization.joinToString()
             status = getPublicationStatus(mangaDataDto)
@@ -170,7 +170,7 @@ class NamiComiHelper(lang: String) {
         }
 
         return SChapter.create().apply {
-            url = "/$extLang/chapter/${chapterDataDto.id}"
+            url = chapterDataDto.id
             name = chapterName.joinToString(" ")
             date_upload = parseDate(attr.publishAt)
         }
