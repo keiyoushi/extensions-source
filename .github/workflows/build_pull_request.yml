@@ -45,7 +45,7 @@ jobs:
           python ./.github/scripts/generate-build-matrices.py origin/main Debug
 
   build:
-    name: Build extensions${{ matrix.chunk.number && format(' ({0})', matrix.chunk.number) }}
+    name: Build extensions (${{ matrix.chunk.number }})
     needs: prepare
     runs-on: 'ubuntu-24.04'
     if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
