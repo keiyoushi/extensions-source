@@ -1,0 +1,10 @@
+ext {
+    extName = 'Casa Comic'
+    extClass = '.CasaComic'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://casacomic.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
