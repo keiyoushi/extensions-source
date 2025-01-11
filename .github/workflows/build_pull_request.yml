@@ -67,4 +67,4 @@ jobs:
 
       - name: Build extensions (${{ matrix.chunk.number }})
         run: |
-          ./gradlew $(echo '${{ toJson(matrix.chunk.modules) }}'
+          ./gradlew $(echo '${{ toJson(matrix.chunk.modules) }}' | jq -r 'join(" ")')
