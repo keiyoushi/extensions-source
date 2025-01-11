@@ -14,6 +14,7 @@ concurrency:
 
 env:
   CI_CHUNK_SIZE: 65
+  IS_PR_CHECK: true
 
 jobs:
   prepare:

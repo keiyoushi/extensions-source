@@ -61,6 +61,17 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
 def main() -> NoReturn:
     _, ref, build_type = sys.argv
     modules, deleted = get_module_list(ref)
+
+    if os.getenv("IS_PR_CHECK") != "true":
+        with Path.cwd().joinpath(".github/always_build.json").open() as always_build_file:
+            always_build = json.load(always_build_file)
+        for ext in always_build:
+            module = f":src:{ext.replace(".", ":")}"
+
+            if module not in modules and ext not in deleted:
+                modules.append(module)
+                deleted.append(ext)
+
     modules = [f"{module}:assemble{build_type}" for module in modules]
     chunked = {
         "chunk": [
