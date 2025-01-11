@@ -581,7 +581,7 @@ abstract class EHentai(
         private const val FORCE_EH = "FORCE_EH"
         private const val FORCE_EH_TITLE = "Force e-hentai"
         private const val FORCE_EH_SUMMARY = "Force e-hentai to avoid content on exhentai"
-        private const val FORCE_EH_DEFAULT_VALUE = false
+        private const val FORCE_EH_DEFAULT_VALUE = true
     }
 
     // Preferences
