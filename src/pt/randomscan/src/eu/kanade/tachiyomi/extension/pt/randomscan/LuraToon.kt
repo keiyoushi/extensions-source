@@ -144,7 +144,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
         val episode = response.parseAs<Episode>()
 
         return episode.caminhos.mapIndexed { i, url ->
-            Page(i, "", url)
+            Page(i, imageUrl = url)
         }
     }
 
