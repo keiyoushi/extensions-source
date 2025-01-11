@@ -3,7 +3,7 @@ ext {
     extClass = '.CasaComic'
     themePkg = 'keyoapp'
     baseUrl = 'https://casacomic.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = false
 }
 
