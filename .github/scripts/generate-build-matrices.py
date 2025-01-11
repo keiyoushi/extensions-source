@@ -56,30 +56,27 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
         if is_extension_module(module)
     ])
 
+    if os.getenv("IS_PR_CHECK") != "true":
+        with Path.cwd().joinpath(".github/always_build.json").open() as always_build_file:
+            always_build = json.load(always_build_file)
+        for extension in always_build:
+            modules.add(":src:" + extension.replace(".", ":"))
+            deleted.add(extension)
+
     return list(modules), list(deleted)
 
 def main() -> NoReturn:
     _, ref, build_type = sys.argv
     modules, deleted = get_module_list(ref)
 
-    if os.getenv("IS_PR_CHECK") != "true":
-        with Path.cwd().joinpath(".github/always_build.json").open() as always_build_file:
-            always_build = json.load(always_build_file)
-        for ext in always_build:
-            module = f":src:{ext.replace('.', ':')}"
-
-            if module not in modules and ext not in deleted:
-                modules.append(module)
-                deleted.append(ext)
-
-    modules = [f"{module}:assemble{build_type}" for module in modules]
-    chunked = {
-        "chunk": [
-            {"number": i + 1, "modules": modules}
-            for i, modules in
-            enumerate(itertools.batched(modules, int(os.getenv("CI_CHUNK_SIZE", 65))))
-        ]
-    }
+    chunked = [
+        {"number": i + 1, "modules": modules}
+        for i, modules in
+        enumerate(itertools.batched(
+            map(lambda x: f"{x}:assemble{build_type}", modules),
+            int(os.getenv("CI_CHUNK_SIZE", 65))
+        ))
+    ]
 
     print(f"Module chunks to build:\n{json.dumps(chunked, indent=2)}\n\nModule to delete:\n{json.dumps(deleted, indent=2)}")
 
