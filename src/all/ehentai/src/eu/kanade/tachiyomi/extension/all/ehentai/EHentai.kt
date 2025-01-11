@@ -53,8 +53,8 @@ abstract class EHentai(
 
     override val baseUrl: String
         get() = when {
-            System.getenv("CI") == "true" || forceEh -> "https://e-hentai.org"
-            memberId.isNotEmpty() && passHash.isNotEmpty() -> "https://exhentai.org"
+            System.getenv("CI") == "true" -> "https://e-hentai.org"
+            !forceEh && memberId.isNotEmpty() && passHash.isNotEmpty() -> "https://exhentai.org"
             else -> "https://e-hentai.org"
         }
 
@@ -592,11 +592,6 @@ abstract class EHentai(
             title = FORCE_EH_TITLE
             summary = FORCE_EH_SUMMARY
             setDefaultValue(FORCE_EH_DEFAULT_VALUE)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(FORCE_EH, checkValue).commit()
-            }
         }
 
         val enforceLanguagePref = CheckBoxPreference(screen.context).apply {
@@ -604,11 +599,6 @@ abstract class EHentai(
             title = ENFORCE_LANGUAGE_PREF_TITLE
             summary = ENFORCE_LANGUAGE_PREF_SUMMARY
             setDefaultValue(ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", checkValue).commit()
-            }
         }
 
         val memberIdPref = EditTextPreference(screen.context).apply {
