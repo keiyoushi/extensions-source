@@ -58,11 +58,6 @@ class NamiComiHelper(lang: String) {
     private fun parseDate(dateAsString: String): Long =
         NamiComiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
 
-    companion object {
-        val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
-        val trailingHyphenRegex = "-+$".toRegex()
-    }
-
     /**
      * Create an [SManga] from the JSON element with all attributes filled.
      */
@@ -179,4 +174,9 @@ class NamiComiHelper(lang: String) {
                 currentSlug
             }
         }
+
+    companion object {
+        val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
+        val trailingHyphenRegex = "-+$".toRegex()
+    }
 }
