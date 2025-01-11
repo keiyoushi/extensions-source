@@ -119,7 +119,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         if (query.startsWith(NamiComiConstants.prefixIdSearch)) {
             val mangaId = query.removePrefix(NamiComiConstants.prefixIdSearch)
 
-            if (!helper.containsId(mangaId)) {
+            if (mangaId.isEmpty()) {
                 throw Exception(helper.intl["invalid_manga_id"])
             }
 
@@ -156,13 +156,13 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     // Manga Details section
 
     override fun getMangaUrl(manga: SManga): String =
-        "$baseUrl/$extLang" + manga.url + "/${helper.titleToSlug(manga.title)}"
+        "$baseUrl/$extLang/title/${manga.url}/${helper.titleToSlug(manga.title)}"
 
     /**
      * Get the API endpoint URL for the entry details.
      */
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = (NamiComiConstants.apiUrl + manga.url).toHttpUrl().newBuilder()
+        val url = (NamiComiConstants.apiMangaUrl + manga.url).toHttpUrl().newBuilder()
             .addQueryParameter("includes[]", NamiComiConstants.coverArt)
             .addQueryParameter("includes[]", NamiComiConstants.organization)
             .addQueryParameter("includes[]", NamiComiConstants.tag)
@@ -189,7 +189,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
      * Get the API endpoint URL for the first page of chapter list.
      */
     override fun chapterListRequest(manga: SManga): Request {
-        return paginatedChapterListRequest(helper.getIdFromUrl(manga.url), 0)
+        return paginatedChapterListRequest(manga.url, 0)
     }
 
     /**
@@ -265,10 +265,10 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             val isAccessible = accessibleChapterMap[it.id]!!
             when {
                 // Chapter can be viewed
-                isAccessible -> helper.createChapter(it, extLang)
+                isAccessible -> helper.createChapter(it)
                 // Chapter cannot be viewed and user wants to see locked chapters
                 preferences.showLockedChapters -> {
-                    helper.createChapter(it, extLang).apply {
+                    helper.createChapter(it).apply {
                         name = "${NamiComiConstants.lockSymbol} $name"
                     }
                 }
@@ -278,10 +278,11 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String =
+        "$baseUrl/$extLang/chapter/${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfter("/chapter/")
+        val chapterId = chapter.url
         val url = "${NamiComiConstants.apiUrl}/images/chapter/$chapterId?newQualities=true"
         return GET(url, headers, CacheControl.FORCE_NETWORK)
     }

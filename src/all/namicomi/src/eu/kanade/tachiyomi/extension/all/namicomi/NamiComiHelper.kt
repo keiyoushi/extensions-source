@@ -41,16 +41,6 @@ class NamiComiHelper(lang: String) {
     )
 
     /**
-     * Gets the ID from the url
-     */
-    fun getIdFromUrl(url: String) = url.substringAfterLast("/")
-
-    /**
-     * Check if the manga url contains a valid id
-     */
-    fun containsId(url: String) = getIdFromUrl(url).run { isNotEmpty() }
-
-    /**
      * Get the manga offset pages are 1 based, so subtract 1
      */
     fun getMangaListOffset(page: Int): String = (NamiComiConstants.mangaLimit * (page - 1)).toString()
@@ -144,7 +134,7 @@ class NamiComiHelper(lang: String) {
     /**
      * Create the [SChapter] from the JSON element.
      */
-    fun createChapter(chapterDataDto: ChapterDataDto, extLang: String): SChapter {
+    fun createChapter(chapterDataDto: ChapterDataDto): SChapter {
         val attr = chapterDataDto.attributes!!
         val chapterName = mutableListOf<String>()
 
