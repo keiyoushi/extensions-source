@@ -48,7 +48,7 @@ jobs:
     name: Build extensions (${{ matrix.chunk.number }})
     needs: prepare
     runs-on: 'ubuntu-24.04'
-    if: ${{ fromJson(needs.prepare.outputs.matrix).chunk != '[]' }}
+    if: ${{ needs.prepare.outputs.matrix.chunk != '[]' }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
