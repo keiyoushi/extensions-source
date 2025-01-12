@@ -14,4 +14,3 @@ dependencies {
     implementation(libs.gradle.serialization)
     implementation(libs.gradle.kotlinter)
 }
- 
