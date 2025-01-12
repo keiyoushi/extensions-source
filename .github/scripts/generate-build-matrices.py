@@ -73,7 +73,7 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
 def get_all_modules() -> tuple[list[str], list[str]]:
     modules = []
     deleted = []
-    for lang in Path.cwd().joinpath("src").iterdir():
+    for lang in Path("src").iterdir():
         for extension in lang.iterdir():
             modules.append(f":src:{lang.name}:{extension.name}")
             deleted.append(f"{lang.name}.{extension.name}")
