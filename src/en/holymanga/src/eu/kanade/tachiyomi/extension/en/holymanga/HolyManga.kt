@@ -1,15 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.holymanga
 
-import eu.kanade.tachiyomi.multisrc.zbulu.Zbulu
-import eu.kanade.tachiyomi.network.GET
-import okhttp3.Request
+import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 
-class HolyManga : Zbulu(
+class HolyManga : FMReader(
     "HolyManga",
     "https://w34.holymanga.net",
     "en",
 ) {
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/popular-manga/page-$page/", headers)
-    }
+    override val versionId = 2
 }

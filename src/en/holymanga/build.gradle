@@ -1,9 +1,9 @@
 ext {
     extName = 'HolyManga'
     extClass = '.HolyManga'
-    themePkg = 'zbulu'
+    themePkg = 'fmreader'
     baseUrl = 'https://w34.holymanga.net'
-    overrideVersionCode = 4
+    overrideVersionCode = 2
     isNsfw = true
 }
 
