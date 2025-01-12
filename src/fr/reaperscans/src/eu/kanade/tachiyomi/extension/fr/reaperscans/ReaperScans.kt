@@ -9,6 +9,7 @@ class ReaperScans : Keyoapp(
     "https://reaper-scans.fr",
     "fr",
 ) {
+    override val DateSelector = ".text-xs.w-fit"
 
     override fun mangaDetailsParse(document: Document): SManga =
         super.mangaDetailsParse(document).apply {
