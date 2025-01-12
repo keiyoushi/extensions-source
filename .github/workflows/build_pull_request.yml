@@ -22,7 +22,7 @@ jobs:
     runs-on: 'ubuntu-24.04'
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
-      delete: ${{ steps.generate-matrices.outputs.deleted }}
+      delete: ${{ steps.generate-matrices.outputs.delete }}
     steps:
       - name: Checkout PR
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
