@@ -205,7 +205,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         val url = NamiComiConstants.apiChapterUrl.toHttpUrl().newBuilder()
             .addQueryParameter("titleId", mangaId)
             .addQueryParameter("includes[]", NamiComiConstants.organization)
-            .addQueryParameter("limit", "500")
+            .addQueryParameter("limit", "200")
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("translatedLanguages[]", extLang)
             .addQueryParameter("order[volume]", "desc")
@@ -244,7 +244,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         var offset = chapterListResponse.meta.offset
         var hasNextPage = chapterListResponse.meta.hasNextPage
 
-        // Max results that can be returned is 500 so need to make more API
+        // Max results that can be returned is 200 so need to make more API
         // calls if the chapter list response has a next page.
         while (hasNextPage) {
             offset += chapterListResponse.meta.limit
@@ -262,10 +262,16 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             return emptyList()
         }
 
-        val gatingCheckRequest = accessibleChapterListRequest(chapterListResults.map { it.id })
-        val gatingCheckResponse = client.newCall(gatingCheckRequest).execute()
-        val accessibleChapterMap = gatingCheckResponse.parseAs<EntityAccessMapDto>()
-            .data?.attributes?.map ?: emptyMap()
+        // Split chapter access checks into chunks of 200 chapters
+        val chapterListResultsChunks = chapterListResults.map { it.id }.chunked(200)
+        val accessibleChapterMap: MutableMap<String, Boolean> = mutableMapOf()
+
+        for (chapterIds in chapterListResultsChunks) {
+            val gatingCheckRequest = accessibleChapterListRequest(chapterIds)
+            val gatingCheckResponse = client.newCall(gatingCheckRequest).execute()
+            accessibleChapterMap += gatingCheckResponse.parseAs<EntityAccessMapDto>()
+                .data?.attributes?.map ?: emptyMap()
+        }
 
         return chapterListResults.mapNotNull {
             val isAccessible = accessibleChapterMap[it.id]!!
