@@ -914,10 +914,8 @@ abstract class Madara(
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
             }
-            WordSet("ago", "atrás", "önce", "قبل").endsWith(date) -> {
-                parseRelativeDate(date)
-            }
-            WordSet("hace").startsWith(date) -> {
+            // All other relative dates (including "1 jour", "2 days ago", etc.) are handled by parseRelativeDate
+            WordSet("ago", "atrás", "önce", "قبل", "jour", "hace").anyWordIn(date) -> {
                 parseRelativeDate(date)
             }
             date.contains(Regex("""\d(st|nd|rd|th)""")) -> {
