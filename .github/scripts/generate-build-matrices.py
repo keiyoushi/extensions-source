@@ -11,6 +11,9 @@ EXTENSION_REGEX = re.compile(r"^src/(?P<lang>\w+)/(?P<extension>\w+)")
 MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
 MODULE_REGEX = re.compile(r"^:src:(?P<lang>\w+):(?P<extension>\w+)$")
+CORE_FILES_REGEX = re.compile(
+    r"^(buildSrc/|core/|gradle/|build\.gradle\.kts|common\.gradle|gradle\.properties|settings\.gradle\.kts)"
+)
 
 def run_command(command: str) -> str:
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
@@ -27,6 +30,8 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     deleted = set()
 
     for file in map(lambda x: Path(x).as_posix(), changed_files):
+        if CORE_FILES_REGEX.search(file):
+            return get_all_modules()
         if match := EXTENSION_REGEX.search(file):
             lang = match.group("lang")
             extension = match.group("extension")
@@ -50,20 +55,30 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
         deleted.add(f"{lang}.{extension}")
         return True
 
-    modules.update([
-        module for module in
-        run_command("./gradlew -q " + " ".join(libs)).splitlines()
-        if is_extension_module(module)
-    ])
+    if len(libs) != 0:
+        modules.update([
+            module for module in
+            run_command("./gradlew -q " + " ".join(libs)).splitlines()
+            if is_extension_module(module)
+        ])
 
     if os.getenv("IS_PR_CHECK") != "true":
-        with Path.cwd().joinpath(".github/always_build.json").open() as always_build_file:
+        with Path(".github/always_build.json").open() as always_build_file:
             always_build = json.load(always_build_file)
         for extension in always_build:
             modules.add(":src:" + extension.replace(".", ":"))
             deleted.add(extension)
 
     return list(modules), list(deleted)
+
+def get_all_modules() -> tuple[list[str], list[str]]:
+    modules = []
+    deleted = []
+    for lang in Path("src").iterdir():
+        for extension in lang.iterdir():
+            modules.append(f":src:{lang.name}:{extension.name}")
+            deleted.append(f"{lang.name}.{extension.name}")
+    return modules, deleted
 
 def main() -> NoReturn:
     _, ref, build_type = sys.argv
