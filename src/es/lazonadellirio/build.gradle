@@ -1,0 +1,10 @@
+ext {
+    extName = 'La Zona del Lirio'
+    extClass = '.LaZonadelLirio'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://lazonadellirio.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
