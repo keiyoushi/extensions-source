@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaSee'
-    extClass = '.MangaSee'
-    themePkg = 'nepnep'
-    baseUrl = 'https://mangasee123.com'
-    overrideVersionCode = 24
-}
-
-apply from: "$rootDir/common.gradle"
