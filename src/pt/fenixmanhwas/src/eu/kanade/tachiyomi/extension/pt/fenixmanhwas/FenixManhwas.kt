@@ -6,5 +6,6 @@ class FenixManhwas : Madara(
     "https://fenixscan.xyz",
     "pt-BR",
 ) {
+    override val versionId = 2
     override val useNewChapterEndpoint = true
 }
