@@ -127,6 +127,9 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             val url = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("ids[]", query.removePrefix(NamiComiConstants.prefixIdSearch))
                 .addQueryParameter("includes[]", NamiComiConstants.coverArt)
+                .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
+                .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
+                .addQueryParameter("includes[]", NamiComiConstants.tag)
                 .build()
 
             return GET(url, headers, CacheControl.FORCE_NETWORK)
@@ -136,6 +139,9 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             .addQueryParameter("limit", NamiComiConstants.mangaLimit.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
             .addQueryParameter("includes[]", NamiComiConstants.coverArt)
+            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
+            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
+            .addQueryParameter("includes[]", NamiComiConstants.tag)
 
         val actualQuery = query.replace(NamiComiConstants.whitespaceRegex, " ")
         if (actualQuery.isNotBlank()) {
