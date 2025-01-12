@@ -235,9 +235,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             return emptyList()
         }
 
-        val mangaId = response.request.url.toString()
-            .substringBefore("/chapter")
-            .substringAfter("${NamiComiConstants.apiMangaUrl}/")
+        val mangaId = response.request.url.queryParameter("titleId")!!
 
         val chapterListResponse = response.parseAs<ChapterListDto>()
         val chapterListResults = chapterListResponse.data.toMutableList()
