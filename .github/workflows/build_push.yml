@@ -138,5 +138,5 @@ jobs:
       - name: Merge and deploy repo
         run: |
           cd repo
-          python ../main/.github/scripts/merge-repo.py '${{ needs.prepare.outputs.delete }}''
+          python ../main/.github/scripts/merge-repo.py '${{ needs.prepare.outputs.delete }}'
           ../main/.github/scripts/commit-repo.sh
