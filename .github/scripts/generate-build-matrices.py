@@ -55,14 +55,15 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
         deleted.add(f"{lang}.{extension}")
         return True
 
-    modules.update([
-        module for module in
-        run_command("./gradlew -q " + " ".join(libs)).splitlines()
-        if is_extension_module(module)
-    ])
+    if len(libs) != 0:
+        modules.update([
+            module for module in
+            run_command("./gradlew -q " + " ".join(libs)).splitlines()
+            if is_extension_module(module)
+        ])
 
     if os.getenv("IS_PR_CHECK") != "true":
-        with Path.cwd().joinpath(".github/always_build.json").open() as always_build_file:
+        with Path(".github/always_build.json").open() as always_build_file:
             always_build = json.load(always_build_file)
         for extension in always_build:
             modules.add(":src:" + extension.replace(".", ":"))
