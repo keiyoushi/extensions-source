@@ -254,7 +254,7 @@ abstract class Keyoapp(
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("href"))
         name = element.selectFirst(".text-sm")!!.text()
-        element.selectFirst(DateSelector)?.run {
+        element.selectFirst(dateSelector)?.run {
             date_upload = text().trim().parseDate()
         }
         if (element.select("img[src*=Coin.svg]").isNotEmpty()) {
