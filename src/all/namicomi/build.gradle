@@ -1,0 +1,12 @@
+ext {
+    extName = 'NamiComi'
+    extClass = '.NamiComiFactory'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:i18n"))
+}
