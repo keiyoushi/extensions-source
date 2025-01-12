@@ -6,7 +6,7 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class PhenixScans : MangaThemesia("PhenixScans", "https://phenixscans.fr", "fr", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.FRENCH)) {
+class PhenixScans : MangaThemesia("PhenixScans", "https://phenixscans.fr", "fr", dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)) {
     override val seriesAuthorSelector = ".imptdt:contains(Auteur) i, .fmed b:contains(Auteur)+span"
     override val seriesStatusSelector = ".imptdt:contains(Statut) i"
 
