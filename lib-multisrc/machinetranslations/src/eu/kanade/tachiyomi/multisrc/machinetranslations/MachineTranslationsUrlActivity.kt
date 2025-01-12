@@ -1,13 +1,15 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl
+package eu.kanade.tachiyomi.multisrc.machinetranslations
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import androidx.annotation.RequiresApi
 import kotlin.system.exitProcess
-
-class SnowmtlUrlActivity : Activity() {
+@RequiresApi(Build.VERSION_CODES.O)
+class MachineTranslationsUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -18,7 +20,7 @@ class SnowmtlUrlActivity : Activity() {
             val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Snowmtl.PREFIX_SEARCH}$item")
+                putExtra("query", "${MachineTranslations.PREFIX_SEARCH}$item")
                 putExtra("filter", packageName)
             }
 
