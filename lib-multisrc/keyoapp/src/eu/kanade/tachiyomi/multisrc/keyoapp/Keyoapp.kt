@@ -211,7 +211,7 @@ abstract class Keyoapp(
     protected open val authorSelector: String = "div:has(span:containsOwn(Author)) ~ div"
     protected open val artistSelector: String = "div:has(span:containsOwn(Artist)) ~ div"
     protected open val genreSelector: String = "div:has(span:containsOwn(Type)) ~ div"
-    protected open val DateSelector: String = ".text-xs"
+    protected open val dateSelector: String = ".text-xs"
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("div.grid > h1")!!.text()
