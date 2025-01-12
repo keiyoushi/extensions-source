@@ -3,7 +3,7 @@ ext {
     extClass = '.StarboundScans'
     themePkg = 'keyoapp'
     baseUrl = 'https://starboundscans.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
 }
 
 apply from: "$rootDir/common.gradle"
