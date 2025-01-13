@@ -25,6 +25,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import okhttp3.CacheControl
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -71,10 +72,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             .addQueryParameter("availableTranslatedLanguages[]", extLang)
             .addQueryParameter("limit", NamiComiConstants.mangaLimit.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
-            .addQueryParameter("includes[]", NamiComiConstants.coverArt)
-            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
-            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
-            .addQueryParameter("includes[]", NamiComiConstants.tag)
+            .addCommonIncludeParameters()
             .build()
 
         return GET(url, headers, CacheControl.FORCE_NETWORK)
@@ -126,10 +124,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             // If the query is an ID, return the manga directly
             val url = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("ids[]", query.removePrefix(NamiComiConstants.prefixIdSearch))
-                .addQueryParameter("includes[]", NamiComiConstants.coverArt)
-                .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
-                .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
-                .addQueryParameter("includes[]", NamiComiConstants.tag)
+                .addCommonIncludeParameters()
                 .build()
 
             return GET(url, headers, CacheControl.FORCE_NETWORK)
@@ -138,10 +133,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         val tempUrl = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
             .addQueryParameter("limit", NamiComiConstants.mangaLimit.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
-            .addQueryParameter("includes[]", NamiComiConstants.coverArt)
-            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
-            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
-            .addQueryParameter("includes[]", NamiComiConstants.tag)
+            .addCommonIncludeParameters()
 
         val actualQuery = query.replace(NamiComiConstants.whitespaceRegex, " ")
         if (actualQuery.isNotBlank()) {
@@ -169,11 +161,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
      */
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = (NamiComiConstants.apiMangaUrl + manga.url).toHttpUrl().newBuilder()
-            .addQueryParameter("includes[]", NamiComiConstants.coverArt)
-            .addQueryParameter("includes[]", NamiComiConstants.organization)
-            .addQueryParameter("includes[]", NamiComiConstants.tag)
-            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
-            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
+
             .build()
 
         return GET(url, headers, CacheControl.FORCE_NETWORK)
@@ -348,6 +336,13 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
     override fun getFilterList(): FilterList =
         helper.filters.getFilterList(helper.intl)
+
+    private fun HttpUrl.Builder.addCommonIncludeParameters() =
+        this.addQueryParameter("includes[]", NamiComiConstants.coverArt)
+            .addQueryParameter("includes[]", NamiComiConstants.organization)
+            .addQueryParameter("includes[]", NamiComiConstants.tag)
+            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
+            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
 
     private inline fun <reified T> Response.parseAs(): T = use {
         helper.json.decodeFromString(body.string())
