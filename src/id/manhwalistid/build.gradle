@@ -2,7 +2,7 @@ ext {
     extName = 'Manhwa List'
     extClass = '.ManhwaList'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://manhwalist.in'
+    baseUrl = 'https://manhwalist.xyz'
     overrideVersionCode = 3
 }
 
