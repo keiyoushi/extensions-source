@@ -1,9 +1,9 @@
 ext {
     extName = 'Fênix Manhwas'
     extClass = '.FenixManhwas'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://fenixleitura.blogspot.com'
-    overrideVersionCode = 1
+    themePkg = 'madara'
+    baseUrl = 'https://fenixscan.xyz'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
