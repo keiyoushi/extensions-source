@@ -13,12 +13,14 @@ for module in to_delete:
     apk_name = f"tachiyomi-{module}-v*.*.*.apk"
     icon_name = f"eu.kanade.tachiyomi.extension.{module}.png"
     for file in REMOTE_REPO.joinpath("apk").glob(apk_name):
-        file.unlink()
+        print(file.name)
+        file.unlink(missing_ok=True)
     for file in REMOTE_REPO.joinpath("icon").glob(icon_name):
-        file.unlink()
+        print(file.name)
+        file.unlink(missing_ok=True)
 
-shutil.copytree(src=LOCAL_REPO.joinpath("apk"), dst=REMOTE_REPO.joinpath("apk"))
-shutil.copytree(src=LOCAL_REPO.joinpath("icon"), dst=REMOTE_REPO.joinpath("icon"))
+shutil.copytree(src=LOCAL_REPO.joinpath("apk"), dst=REMOTE_REPO.joinpath("apk"), dirs_exist_ok = True)
+shutil.copytree(src=LOCAL_REPO.joinpath("icon"), dst=REMOTE_REPO.joinpath("icon"), dirs_exist_ok = True)
 
 with REMOTE_REPO.joinpath("index.min.json").open() as remote_index_file:
     remote_index = json.load(remote_index_file)
