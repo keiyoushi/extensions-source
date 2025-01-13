@@ -33,6 +33,7 @@ abstract class SlimeReadTheme(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
+    private val scanId: String = "",
 ) : HttpSource() {
 
     protected open val apiUrl: String by lazy { getApiUrlFromPage() }
@@ -72,35 +73,19 @@ abstract class SlimeReadTheme(
     }
 
     // ============================== Popular ===============================
-    private var currentSlice = 0
     private var popularMangeCache: MangasPage? = null
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$apiUrl/book_search?order=1&status=0", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$apiUrl/book_search?order=1&status=0".toHttpUrl().newBuilder()
+            .addIfNotBlank("scan_id", scanId)
+            .build()
+        return GET(url, headers)
+    }
 
-    // Returns a large JSON, so the app can't handle the list without pagination
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        if (page == 1 || popularMangeCache == null) {
-            popularMangeCache = super.fetchPopularManga(page)
-                .toBlocking()
-                .last()
-        }
-
-        // Handling a large manga list
-        return Observable.just(popularMangeCache!!)
-            .map { mangaPage ->
-                val mangas = mangaPage.mangas
-                val pageSize = 15
-
-                currentSlice = (page - 1) * pageSize
-
-                val startIndex = min(mangas.size - 1, currentSlice)
-                val endIndex = min(mangas.size, currentSlice + pageSize)
-
-                val slice = mangas.subList(startIndex, endIndex)
-
-                MangasPage(slice, slice.isNotEmpty())
-            }
+        popularMangeCache = popularMangeCache?.takeIf { page != 1 }
+            ?: super.fetchPopularManga(page).toBlocking().last()
+        return pageableOf(page, popularMangeCache!!)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -110,7 +95,13 @@ abstract class SlimeReadTheme(
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/books?page=$page", headers)
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/books?page=$page".toHttpUrl().newBuilder()
+            .addIfNotBlank("scan_id", scanId)
+            .build()
+        return GET(url, headers)
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<LatestResponseDto>()
@@ -120,6 +111,9 @@ abstract class SlimeReadTheme(
     }
 
     // =============================== Search ===============================
+
+    private var searchMangaCache: MangasPage? = null
+
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
             val id = query.removePrefix(PREFIX_SEARCH)
@@ -127,7 +121,9 @@ abstract class SlimeReadTheme(
                 .asObservableSuccess()
                 .map(::searchMangaByIdParse)
         } else {
-            super.fetchSearchManga(page, query, filters)
+            searchMangaCache = searchMangaCache?.takeIf { page != 1 }
+                ?: super.fetchSearchManga(page, query, filters).toBlocking().last()
+            pageableOf(page, searchMangaCache!!)
         }
     }
 
@@ -146,6 +142,7 @@ abstract class SlimeReadTheme(
             .addIfNotBlank("genre[]", params.genre)
             .addIfNotBlank("status", params.status)
             .addIfNotBlank("searchMethod", params.searchMethod)
+            .addIfNotBlank("scan_id", scanId)
             .apply {
                 params.categories.forEach {
                     addQueryParameter("categories[]", it)
@@ -237,6 +234,28 @@ abstract class SlimeReadTheme(
     }
 
     // ============================= Utilities ==============================
+
+    /**
+     * Handles a large manga list and returns a paginated response.
+     * The app can't handle the large JSON list without pagination.
+     *
+     * @param page The page number to retrieve.
+     * @param cache The cached manga page containing the full list of mangas.
+     */
+    private fun pageableOf(page: Int, cache: MangasPage) = Observable.just(cache).map { mangaPage ->
+        val mangas = mangaPage.mangas
+        val pageSize = 15
+
+        val currentSlice = (page - 1) * pageSize
+
+        val startIndex = min(mangas.size, currentSlice)
+        val endIndex = min(mangas.size, currentSlice + pageSize)
+
+        val slice = mangas.subList(startIndex, endIndex)
+
+        MangasPage(slice, hasNextPage = endIndex < mangas.size)
+    }
+
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream(it.body.byteStream())
     }
