@@ -225,8 +225,14 @@ class FlameComics : HttpSource() {
                 date_upload = chapter.release_date * 1000
                 name = buildString {
                     append("Chapter ${chapter.chapter.toString().removeSuffix(".0")}")
+<<<<<<< HEAD
                     if (!chapter.title.isNullOrBlank()) {
                         append(" - ${chapter.title}")
+=======
+                    chapter.title?.let { 
+                        append(" - ")
+                        append(it) 
+>>>>>>> 2c1384180d03dcf86792bfbc814660e3ff309cf8
                     }
                 }
             }
