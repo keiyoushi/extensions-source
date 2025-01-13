@@ -160,8 +160,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
      * Get the API endpoint URL for the entry details.
      */
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = (NamiComiConstants.apiMangaUrl + manga.url).toHttpUrl().newBuilder()
-
+        val url = ("${NamiComiConstants.apiMangaUrl}/${manga.url}").toHttpUrl().newBuilder()
             .build()
 
         return GET(url, headers, CacheControl.FORCE_NETWORK)
