@@ -421,7 +421,7 @@ class YuriNeko : HttpSource(), ConfigurableSource {
     }
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
-            key = BASE_DOMAIN_PREF.removePrefix("https://")
+            key = BASE_DOMAIN_PREF
             title = BASE_DOMAIN_PREF_TITLE
             summary = BASE_DOMAIN_PREF_SUMMARY
             setDefaultValue(defaultDomain)
