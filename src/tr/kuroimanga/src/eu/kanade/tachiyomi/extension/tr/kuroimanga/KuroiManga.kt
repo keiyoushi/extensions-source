@@ -30,22 +30,8 @@ class KuroiManga : Madara(
     }
 
     override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-
-        with(element) {
-            selectFirst(chapterUrlSelector)!!.let { urlElement ->
-                chapter.url = urlElement.attr("abs:href").let {
-                    it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
-                }
-            }
-            chapter.name = selectFirst("li > a")!!.text()
-            // Dates can be part of a "new" graphic or plain text
-            // Added "title" alternative
-            chapter.date_upload = selectFirst("img:not(.thumb)")?.attr("alt")?.let { parseRelativeDate(it) }
-                ?: selectFirst("span a")?.attr("title")?.let { parseRelativeDate(it) }
-                ?: parseChapterDate(selectFirst(chapterDateSelector())?.text())
+        return super.chapterFromElement(element).apply {
+            name = element.selectFirst("li > a")!!.text()
         }
-
-        return chapter
     }
 }
