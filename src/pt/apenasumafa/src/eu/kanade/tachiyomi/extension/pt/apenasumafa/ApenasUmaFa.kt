@@ -13,7 +13,7 @@ class ApenasUmaFa : ZeistManga(
 ) {
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int) = super.fetchLatestUpdates(page)
+    override fun fetchPopularManga(page: Int) = fetchLatestUpdates(page)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
