@@ -920,6 +920,10 @@ abstract class Madara(
             WordSet("hace").startsWith(date) -> {
                 parseRelativeDate(date)
             }
+            // Handle "jour" with a number before it
+            date.contains(Regex("""\b\d+ jour""")) -> {
+                parseRelativeDate(date)
+            }
             date.contains(Regex("""\d(st|nd|rd|th)""")) -> {
                 // Clean date (e.g. 5th December 2019 to 5 December 2019) before parsing it
                 date.split(" ").map {
