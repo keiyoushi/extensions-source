@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.extension.tr.kuroimanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -25,5 +27,11 @@ class KuroiManga : Madara(
             throw Exception("Bu seriyi okumak için abone olmalısınız")
         }
         return pageList
+    }
+
+    override fun chapterFromElement(element: Element): SChapter {
+        return super.chapterFromElement(element).apply {
+            name = element.selectFirst("li > a")!!.text()
+        }
     }
 }
