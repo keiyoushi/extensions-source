@@ -8,4 +8,6 @@ class HolyManga : FMReader(
     "en",
 ) {
     override val versionId = 2
+
+    override val chapterUrlSelector = ""
 }
