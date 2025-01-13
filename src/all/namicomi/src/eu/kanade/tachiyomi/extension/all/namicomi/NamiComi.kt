@@ -161,6 +161,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
      */
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = ("${NamiComiConstants.apiMangaUrl}/${manga.url}").toHttpUrl().newBuilder()
+            .addCommonIncludeParameters()
             .build()
 
         return GET(url, headers, CacheControl.FORCE_NETWORK)
