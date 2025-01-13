@@ -219,7 +219,7 @@ class FlameComics : HttpSource() {
                         addPathSegment("series")
                         addPathSegment(chapter.series_id.toString())
                         addPathSegment(chapter.token)
-                    }.build().toString()
+                    }.build().toString(),
                 )
                 chapter_number = chapter.chapter.toFloat()
                 date_upload = chapter.release_date * 1000
