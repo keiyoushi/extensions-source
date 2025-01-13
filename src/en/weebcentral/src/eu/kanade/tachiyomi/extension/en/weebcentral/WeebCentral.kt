@@ -35,6 +35,8 @@ class WeebCentral : ParsedHttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
+    private val excludedSearchCharacters = "[!#:()]".toRegex()
+
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
@@ -64,11 +66,10 @@ class WeebCentral : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String = searchMangaNextPageSelector()
 
     // =============================== Search ===============================
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.ifEmpty { getFilterList() }
         val url = "$baseUrl/search/data".toHttpUrl().newBuilder().apply {
-            addQueryParameter("text", query)
+            addQueryParameter("text", query.replace(excludedSearchCharacters, " ").trim())
             filterList.filterIsInstance<UriFilter>().forEach {
                 it.addToUri(this)
             }
