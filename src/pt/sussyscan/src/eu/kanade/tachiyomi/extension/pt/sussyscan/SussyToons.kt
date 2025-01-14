@@ -232,14 +232,22 @@ class SussyToons : HttpSource(), ConfigurableSource {
             .build()
 
         val res = client.newCall(GET(url, headers)).execute()
-
         val dto = res.parseAs<WrapperDto<ChapterPageDto>>().results
+
         return dto.pages.mapIndexed { index, image ->
-            val imageUrl = CDN_URL.toHttpUrl().newBuilder()
-                .addPathSegments("wp-content/uploads/WP-manga/data")
-                .addPathSegments(image.src.toPathSegment())
-                .build().toString()
-            Page(index, imageUrl = imageUrl)
+            val imageUrl = when {
+                image.isWordPressContent() -> {
+                    CDN_URL.toHttpUrl().newBuilder()
+                        .addPathSegments("wp-content/uploads/WP-manga/data")
+                        .addPathSegments(image.src.toPathSegment())
+                        .build()
+                }
+                else -> {
+                    "$CDN_URL/scans/${dto.manga.scanId}/obras/${dto.manga.id}/capitulos/${dto.chapterNumber}/${image.src}"
+                        .toHttpUrl()
+                }
+            }
+            Page(index, imageUrl = imageUrl.toString())
         }
     }
 
@@ -550,7 +558,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
         return sManga
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
+    private inline fun <reified T> Response.parseAs(): T = use {
         return json.decodeFromStream(body.byteStream())
     }
 

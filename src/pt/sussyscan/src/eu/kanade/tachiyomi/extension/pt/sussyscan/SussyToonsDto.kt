@@ -72,9 +72,25 @@ class WrapperChapterDto(
 class ChapterPageDto(
     @SerialName("cap_paginas")
     val pages: List<PageDto>,
-)
+    @SerialName("obra")
+    val manga: MangaReferenceDto,
+    @SerialName("cap_numero")
+    val chapterNumber: Int,
+) {
+    @Serializable
+    class MangaReferenceDto(
+        @SerialName("obr_id")
+        val id: Int,
+        @SerialName("scan_id")
+        val scanId: Int,
+    )
+}
 
 @Serializable
 class PageDto(
     val src: String,
-)
+    @SerialName("numero")
+    val number: Int? = null,
+) {
+    fun isWordPressContent(): Boolean = number == null
+}
