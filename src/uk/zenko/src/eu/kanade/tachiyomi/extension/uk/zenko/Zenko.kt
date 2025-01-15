@@ -16,6 +16,7 @@ import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.injectLazy
 
 class Zenko : HttpSource() {
     override val name = "Zenko"
@@ -24,10 +25,10 @@ class Zenko : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", baseUrl)
+        .add("Origin", "$baseUrl/")
+        .add("Referer", "$baseUrl/")
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(API_URL.toHttpUrl(), 10)
         .build()
 
@@ -72,11 +73,11 @@ class Zenko : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val mangaDto = response.asClass<MangaDetailsResponse>()
+        val mangaDto = response.parseAs<MangaDetailsResponse>()
         title = mangaDto.engName ?: mangaDto.name
         thumbnail_url =
             "$IMAGE_STORAGE_URL/${mangaDto.coverImg}?optimizer=image&width=560&quality=70&height=auto"
-        url = "$baseUrl/titles/${mangaDto.id}"
+        url = "/titles/${mangaDto.id}"
         description = "${mangaDto.name}\n${mangaDto.description}"
         genre = mangaDto.genres!!.joinToString { it.name }
         author = mangaDto.author!!.username
@@ -91,13 +92,13 @@ class Zenko : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.asClass<List<ChapterResponseItem>>()
+        val result = response.parseAs<List<ChapterResponseItem>>()
         return result.sortedByDescending { item ->
             val id = StringProcessor.generateId(item.name)
             if (id > 0) id else item.id.toDouble()
         }.map { chapterResponseItem ->
             SChapter.create().apply {
-                url = "$baseUrl/titles/${chapterResponseItem.titleId}/${chapterResponseItem.id}"
+                url = "/titles/${chapterResponseItem.titleId}/${chapterResponseItem.id}"
                 name = StringProcessor.format(chapterResponseItem.name)
                 date_upload = chapterResponseItem.createdAt!!.secToMs()
                 scanlator = chapterResponseItem.publisher!!.name
@@ -113,9 +114,9 @@ class Zenko : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.asClass<ChapterResponseItem>()
+        val data = response.parseAs<ChapterResponseItem>()
         return data.pages!!.map { page ->
-            Page(page.id, "", "$IMAGE_STORAGE_URL/${page.imgUrl}")
+            Page(page.id, imageUrl = "$IMAGE_STORAGE_URL/${page.imgUrl}")
         }
     }
 
@@ -123,20 +124,16 @@ class Zenko : HttpSource() {
 
     // ============================= Utilities ==============================
     private fun parseAsMangaResponseDto(response: Response): MangasPage {
-        val zenkoMangaListResponse = response.asClass<ZenkoMangaListResponse>()
+        val zenkoMangaListResponse = response.parseAs<ZenkoMangaListResponse>()
         return makeMangasPage(zenkoMangaListResponse.data, zenkoMangaListResponse.meta.hasNextPage)
     }
 
     private fun offsetCounter(page: Int): Int {
-        var currentOfsset = 0
-        val offset = if (page == 1) {
-            currentOfsset = 0 // for page 1 offset must be 0
-            currentOfsset
+        return if (page == 1) {
+            0 // for page 1 offset must be 0
         } else {
-            currentOfsset = (page - 1) * 15 // calculate offset for other pages
-            currentOfsset
+            (page - 1) * 15 // calculate offset for other pages
         }
-        return offset
     }
 
     private fun makeZenkoMangaRequest(offset: Int, sortBy: String): Request {
@@ -150,11 +147,11 @@ class Zenko : HttpSource() {
     }
 
     private fun makeMangasPage(
-        mangaList: List<MangaDetailsResponse>?,
+        mangaList: List<MangaDetailsResponse>,
         hasNextPage: Boolean = false,
     ): MangasPage {
         return MangasPage(
-            mangaList!!.map(::makeSManga),
+            mangaList.map(::makeSManga),
             hasNextPage,
         )
     }
@@ -163,7 +160,7 @@ class Zenko : HttpSource() {
         title = mangaDto.engName ?: mangaDto.name
         thumbnail_url =
             "$IMAGE_STORAGE_URL/${mangaDto.coverImg}?optimizer=image&width=560&quality=70&height=auto"
-        url = "$baseUrl/titles/${mangaDto.id}"
+        url = "/titles/${mangaDto.id}"
         status = mangaDto.status.toStatus()
     }
 
@@ -183,17 +180,14 @@ class Zenko : HttpSource() {
             )
     }
 
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
+
     companion object {
         private const val API_URL = "https://zenko-api.onrender.com"
         private const val IMAGE_STORAGE_URL = "https://zenko.b-cdn.net"
 
-        private val json = Json {
-            ignoreUnknownKeys = true
-            coerceInputValues = true
-        }
-
-        private inline fun <reified T> Response.asClass(): T = use {
-            json.decodeFromStream(it.body.byteStream())
-        }
+        private val json: Json by injectLazy()
     }
 }

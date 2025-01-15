@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.uk.zenko
 import android.util.Log
 
 object StringProcessor {
-    private const val separator = "@#%&;№%#&**#!@"
+    private const val SEPARATOR = "@#%&;№%#&**#!@"
 
     data class ParsedResult(
         val part: String = "",
@@ -11,12 +11,12 @@ object StringProcessor {
         val name: String = "",
     )
 
-    fun parse(input: String?): ParsedResult {
+    private fun parse(input: String?): ParsedResult {
         if (input.isNullOrEmpty()) {
             return ParsedResult()
         }
 
-        val parts = input.split(separator)
+        val parts = input.split(SEPARATOR)
         return when (parts.size) {
             3 -> {
                 val (part, chapter, name) = parts
@@ -35,12 +35,6 @@ object StringProcessor {
 
             else -> ParsedResult()
         }
-    }
-
-    fun assemble(parsed: ParsedResult): String {
-        return listOf(parsed.part, parsed.chapter, parsed.name)
-            .filter { it.isNotEmpty() }
-            .joinToString(separator)
     }
 
     // gen ID by rule: part + chapter
