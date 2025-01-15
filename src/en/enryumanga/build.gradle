@@ -2,8 +2,8 @@ ext {
     extName = 'EnryuManga'
     extClass = '.EnryuManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://enryumanga.net'
-    overrideVersionCode = 1
+    baseUrl = 'https://enryucomics.com'
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
