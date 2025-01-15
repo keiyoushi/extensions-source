@@ -13,12 +13,15 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class TopTruyen : WPComics(
     "Top Truyen",
-    "https://www.toptruyen28.net",
+    "https://www.toptruyentv.net",
     "vi",
-    dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()),
+    dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    },
     gmtOffset = null,
 ) {
     override val client = super.client.newBuilder()
