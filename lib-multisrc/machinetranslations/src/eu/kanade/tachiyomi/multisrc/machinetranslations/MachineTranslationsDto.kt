@@ -13,7 +13,9 @@ import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.io.IOException
 
 @Serializable
 class PageDto(
@@ -76,42 +78,44 @@ private object DialogListSerializer :
                     put("y2", coordinates[3])
                     put("textByLanguage", textByLanguage)
 
-                    try {
-                        val obj = jsonElement.jsonObject
+                    if (jsonElement.isArray) {
+                        return@buildJsonObject
+                    }
+
+                    jsonElement.jsonObject.let { obj ->
                         obj["fg_color"]?.let { put("fbColor", it) }
                         obj["bg_color"]?.let { put("bgColor", it) }
                         obj["angle"]?.let { put("angle", it) }
                         obj["type"]?.let { put("type", it) }
                         obj["is_bold"]?.let { put("isBold", it) }
                         put("isNewApi", true)
-                    } catch (_: Exception) { }
+                    }
                 }
             },
         )
     }
 
     private fun getCoordinates(element: JsonElement): JsonArray {
-        return try {
-            element.jsonArray[0].jsonArray
-        } catch (_: Exception) {
-            element.jsonObject["bbox"]!!.jsonArray
+        return when (element) {
+            is JsonArray -> element.jsonArray[0].jsonArray
+            else -> element.jsonObject["bbox"]?.jsonArray
+                ?: throw IOException("Dialog box position not found")
         }
     }
     private fun getDialogs(element: JsonElement): JsonObject {
-        return try {
-            buildJsonObject {
-                put("text", element.jsonArray[1])
-            }
-        } catch (_: Exception) {
-            buildJsonObject {
-                // There is a problem when the "angle" is processed
-                element.jsonObject.entries.forEach {
-                    if (it.key in listOf("angle", "bbox")) {
-                        return@forEach
-                    }
-                    put(it.key, it.value)
+        return buildJsonObject {
+            when (element) {
+                is JsonArray -> put("text", element.jsonArray[1])
+                else -> {
+                    element.jsonObject.entries
+                        .filter { it.value.isString }
+                        .forEach { put(it.key, it.value) }
                 }
             }
         }
     }
+
+    private val JsonElement.isArray get() = this is JsonArray
+    private val JsonElement.isObject get() = this is JsonObject
+    private val JsonElement.isString get() = this.isObject.not() && this.isArray.not() && this.jsonPrimitive.isString
 }
