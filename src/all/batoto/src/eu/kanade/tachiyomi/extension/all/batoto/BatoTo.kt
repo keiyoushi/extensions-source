@@ -349,7 +349,8 @@ open class BatoTo(
                 append("\n\nExtra Info:\n${it.text()}")
             }
             document.selectFirst("div.pb-2.alias-set.line-b-f")?.also {
-                append("\n\nAlternative Titles:\n${it.text()}")
+                append("\n\nAlternative Titles:\n")
+                append(it.text().split('/').joinToString("\n") { "• ${it.trim()}" })
             }
         }
 
