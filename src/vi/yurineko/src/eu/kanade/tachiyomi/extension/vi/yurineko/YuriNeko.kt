@@ -1,5 +1,10 @@
 package eu.kanade.tachiyomi.extension.vi.yurineko
 
+import android.app.Application
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.vi.yurineko.dto.ErrorResponseDto
 import eu.kanade.tachiyomi.extension.vi.yurineko.dto.MangaDto
 import eu.kanade.tachiyomi.extension.vi.yurineko.dto.MangaListDto
@@ -8,6 +13,7 @@ import eu.kanade.tachiyomi.extension.vi.yurineko.dto.UserDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,21 +30,25 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 
-class YuriNeko : HttpSource() {
+class YuriNeko : HttpSource(), ConfigurableSource {
 
     override val name = "YuriNeko"
 
-    override val baseUrl = "https://yurineko.my"
+    private val defaultDomain = "yurineko.click"
+
+    override val baseUrl by lazy { "https://${getPrefDomain()}" }
 
     override val lang = "vi"
 
     override val supportsLatest = false
 
-    private val apiUrl = "https://api.yurineko.my"
+    private val apiUrl by lazy { "https://api.${getPrefDomain()}" }
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
@@ -396,6 +406,36 @@ class YuriNeko : HttpSource() {
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromString(body.string())
     }
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
+    init {
+        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
+            if (prefDefaultDomain != defaultDomain) {
+                preferences.edit()
+                    .putString(BASE_DOMAIN_PREF, defaultDomain)
+                    .putString(DEFAULT_DOMAIN_PREF, defaultDomain)
+                    .apply()
+            }
+        }
+    }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = BASE_DOMAIN_PREF
+            title = BASE_DOMAIN_PREF_TITLE
+            summary = BASE_DOMAIN_PREF_SUMMARY
+            setDefaultValue(defaultDomain)
+            dialogTitle = BASE_DOMAIN_PREF_TITLE
+            dialogMessage = "Default: $defaultDomain"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
+    private fun getPrefDomain(): String = preferences.getString(BASE_DOMAIN_PREF, defaultDomain)!!
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
@@ -404,5 +444,11 @@ class YuriNeko : HttpSource() {
         const val PREFIX_AUTHOR_SEARCH = "author:"
         const val PREFIX_DOUJIN_SEARCH = "origin:"
         const val PREFIX_COUPLE_SEARCH = "couple:"
+        private const val DEFAULT_DOMAIN_PREF = "defaultDomain"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val BASE_DOMAIN_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_DOMAIN_PREF = "overrideDomain"
+        private const val BASE_DOMAIN_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
     }
 }
