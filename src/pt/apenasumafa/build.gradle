@@ -1,0 +1,9 @@
+ext {
+    extName = 'Apenas Uma Fã'
+    extClass = '.ApenasUmaFa'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://apenasuma-fa.blogspot.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
