@@ -174,7 +174,7 @@ class HoneyManga : HttpSource() {
 
         private const val SEARCH_API_URL = "https://search.api.honey-manga.com.ua"
 
-        private const val IMAGE_STORAGE_URL = "https://manga-storage.fra1.digitaloceanspaces.com/public-resources"
+        private const val IMAGE_STORAGE_URL = "https://hmvolumestorage.b-cdn.net/public-resources"
 
         private const val DEFAULT_PAGE_SIZE = 30
 
