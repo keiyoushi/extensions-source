@@ -26,6 +26,9 @@ abstract class Etoshore(
 
     override val client = network.cloudflareClient
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     // ============================== Popular ==============================
 
     open val popularFilter = FilterList(
@@ -172,7 +175,7 @@ abstract class Etoshore(
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select(".chapter-images .chapter-item > img").mapIndexed { index, element ->
-            Page(index, imageUrl = imageFromElement(element))
+            Page(index, document.location(), imageFromElement(element))
         }
     }
 
