@@ -467,52 +467,22 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun fetchChapterPagesHeaders(baseRequest: Request, originRequest: Request): Request {
-        val latch = CountDownLatch(1)
-        val headers = originRequest.headers.newBuilder()
-        var webView: WebView? = null
-        val looper = Handler(Looper.getMainLooper())
-        looper.post {
-            webView = WebView(Injekt.get<Application>())
-            webView?.let {
-                with(it.settings) {
-                    javaScriptEnabled = true
-                    blockNetworkImage = true
+        fun WebResourceRequest.isOriginRequest() =
+            originRequest.url.toString().equals(this.url.toString(), ignoreCase = true)
+
+        chapterPageHeaders = handlingWithWebResourceRequest(
+            baseRequest,
+            initial = headersBuilder(),
+            conditionStop = { _, _, resource ->
+                resource.isOriginRequest() && resource.method.equals("GET", true)
+            },
+            fold = { headers, _, resource ->
+                if (resource.isOriginRequest() && resource.method.equals("GET", true)) {
+                    headers.fill(resource.requestHeaders)
                 }
-            }
-            webView?.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(
-                    view: WebView?,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    val ignore = listOf(".css", "google", "fonts", "ads")
-                    val url = request.url.toString()
-                    if (ignore.any { url.contains(it, ignoreCase = true) }) {
-                        return emptyResource()
-                    }
-                    if (request.isOriginRequest() && request.method.equals("GET", true)) {
-                        headers.fill(request.requestHeaders)
-                        latch.countDown()
-                    }
-                    return super.shouldInterceptRequest(view, request)
-                }
-                private fun WebResourceRequest.isOriginRequest() =
-                    originRequest.url.toString().equals(this.url.toString(), ignoreCase = true)
-
-                private fun emptyResource() = WebResourceResponse(null, null, null)
-            }
-            webView?.loadUrl(baseRequest.url.toString(), headers.build().toMap())
-        }
-
-        latch.await(client.readTimeoutMillis.toLong(), TimeUnit.MILLISECONDS)
-
-        looper.post {
-            webView?.run {
-                stopLoading()
-                destroy()
-            }
-        }
-
-        chapterPageHeaders = headers.build()
+                headers
+            },
+        ).build()
 
         return originRequest.newBuilder()
             .headers(chapterPageHeaders!!)
@@ -521,11 +491,40 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun fetchAllNextJsScriptUrls(baseRequest: Request): List<Pair<String, Headers>> {
-        val latch = CountDownLatch(1)
+        fun WebResourceRequest.isNextJSUrl() = this.url.toString().contains("_next", ignoreCase = true) &&
+            this.url.toString().contains(".js", ignoreCase = true)
 
+        return handlingWithWebResourceRequest(
+            baseRequest,
+            initial = mutableListOf(),
+            conditionStop = { urls, base, resource ->
+                val minUrlsAvailable = 24
+                urls.size > minUrlsAvailable
+            },
+            fold = { urls, base, resource ->
+                val headers = base.headers.newBuilder()
+                headers.fill(resource.requestHeaders)
+                urls.apply {
+                    if (resource.isNextJSUrl().not()) {
+                        return@apply
+                    }
+                    add(resource.url.toString() to headers.build())
+                }
+            },
+        )
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun <T> handlingWithWebResourceRequest(
+        baseRequest: Request,
+        initial: T,
+        conditionStop: (T, Request, WebResourceRequest) -> Boolean,
+        fold: (T, Request, WebResourceRequest) -> T,
+    ): T {
+        val latch = CountDownLatch(1)
         var webView: WebView? = null
         val looper = Handler(Looper.getMainLooper())
-        val urls = mutableListOf<Pair<String, Headers>>()
+        var state = initial
         looper.post {
             webView = WebView(Injekt.get<Application>())
             webView?.let {
@@ -542,21 +541,12 @@ class SussyToons : HttpSource(), ConfigurableSource {
                     view: WebView?,
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
-                    if (request.isNextJSUrl() && request.method.equals("GET", true)) {
-                        val headers = baseRequest.headers.newBuilder()
-                        headers.fill(request.requestHeaders)
-                        urls += request.url.toString() to headers.build()
-                    }
-
-                    val minUrlsAvailable = 24
-                    if (urls.size > minUrlsAvailable) {
+                    state = fold(state, baseRequest, request)
+                    if (conditionStop(state, baseRequest, request)) {
                         latch.countDown()
                     }
-
                     return super.shouldInterceptRequest(view, request)
                 }
-                private fun WebResourceRequest.isNextJSUrl() =
-                    this.url.toString().contains("_next", ignoreCase = true) && this.url.toString().contains(".js", ignoreCase = true)
             }
             webView?.loadUrl(baseRequest.url.toString(), baseRequest.headers.toMap())
         }
@@ -569,7 +559,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
                 destroy()
             }
         }
-        return urls
+        return state
     }
 
     private fun Headers.Builder.fill(from: Map<String, String>): Headers.Builder {
