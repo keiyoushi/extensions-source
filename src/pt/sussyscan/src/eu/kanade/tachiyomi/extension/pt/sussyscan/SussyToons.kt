@@ -268,7 +268,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
         pageScriptUrl = script.url
 
         return pageUrlRegex.find(script.body)?.groups?.get(2)?.value?.toPathSegment()
-            ?: throw IOException("Não foi possivel extrair a URL da página")
+            ?: throw IOException("Não foi encontrar o caminho das páginas")
     }
 
     override fun imageUrlParse(response: Response): String = ""
