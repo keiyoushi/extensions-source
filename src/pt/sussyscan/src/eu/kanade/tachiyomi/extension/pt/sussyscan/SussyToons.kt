@@ -392,10 +392,6 @@ class SussyToons : HttpSource(), ConfigurableSource {
         return chain.proceed(request)
     }
 
-    interface NetworkClient {
-        fun call(request: Request): Response
-    }
-
     private fun loadJsScript(
         urls: List<Pair<String, Headers>>,
         doRequest: (request: Request) -> Response,
@@ -410,8 +406,8 @@ class SussyToons : HttpSource(), ConfigurableSource {
             )
         }.firstOrNull { pattern.containsMatchIn(it.body) }
 
-        return script ?: fallback?.let {
-            loadJsScript(it.invoke(), doRequest = doRequest, pattern = pattern)
+        return script ?: fallback?.let { urlList ->
+            loadJsScript(urlList(), doRequest = doRequest, pattern = pattern)
         } ?: throw IOException("Não foi possivel encontrar a URL do capitulo")
     }
 
