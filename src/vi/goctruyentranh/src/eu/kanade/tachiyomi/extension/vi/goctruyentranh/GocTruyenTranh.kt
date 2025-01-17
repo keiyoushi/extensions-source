@@ -55,8 +55,8 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     )
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        title = element.select("a.text-white").text()
+        setUrlWithoutDomain(element.selectFirst("a.line-clamp-2")!!.absUrl("href"))
+        title = element.select("a.line-clamp-2").text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
