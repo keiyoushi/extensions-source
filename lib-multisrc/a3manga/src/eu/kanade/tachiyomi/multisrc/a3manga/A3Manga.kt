@@ -89,8 +89,7 @@ open class A3Manga(
     ): Request = POST(
         "$baseUrl/wp-admin/admin-ajax.php",
         headers,
-        FormBody
-            .Builder()
+        FormBody.Builder()
             .add("action", "searchtax")
             .add("keyword", query)
             .build(),

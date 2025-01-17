@@ -16,6 +16,7 @@ ij_kotlin_name_count_to_use_star_import = 2147483647
 ij_kotlin_name_count_to_use_star_import_for_members = 2147483647
 ktlint_function_signature_body_expression_wrapping = default
 ktlint_standard_no-empty-first-line-in-class-body = disabled
+ktlint_standard_chain-method-continuation = disabled
 
 [*.properties]
 charset = utf-8
