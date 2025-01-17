@@ -102,8 +102,12 @@ class MuitoHentai : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga =
         SManga.create().apply {
             author = document.selectFirst("div:has(strong:contains(Autor))")?.ownText()
-            genre = document.select("a.genero_btn").joinToString { it.text()
-                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(LOCALE) else it.toString() } }
+            genre =
+                document.select("a.genero_btn").joinToString {
+                    it
+                        .text()
+                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(LOCALE) else it.toString() }
+                }
             description = document.selectFirst("div.backgroundpost:contains(Sinopse)")?.ownText()
             thumbnail_url = document.selectFirst("#capaAnime img")?.attr("src")
         }

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.henchan
 
-import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
@@ -279,8 +278,10 @@ class HenChan :
 
     private class Genre(
         val id: String,
-        name: String = id.replace('_', ' ')
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+        name: String =
+            id
+                .replace('_', ' ')
+                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
     ) : Filter.TriState(name)
 
     private class GenreList(

@@ -259,8 +259,11 @@ abstract class Senkuro(
                         getFormatList().filter { formats.orEmpty().contains(it.slug) }.joinToString { it.name } + ", " +
                         genres?.joinToString { git -> git.titles.find { it.lang == "RU" }!!.content } + ", " +
                         tags?.joinToString { tit -> tit.titles.find { it.lang == "RU" }!!.content }
-                ).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim()
-                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() } }
+                ).split(", ").filter { it.isNotEmpty() }.joinToString {
+                    it
+                        .trim()
+                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+                }
         }
     }
 

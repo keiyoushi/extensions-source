@@ -221,11 +221,12 @@ class ComicsKingdom(
                                     addQueryParameter("slug", it.link.substringAfter(baseUrl))
                                 }.toString(),
                         )
-                        date_upload = try {
-                            dateFormat.parse(it.date)!!.time
-                        } catch (_: ParseException) {
-                            0L
-                        }
+                        date_upload =
+                            try {
+                                dateFormat.parse(it.date)!!.time
+                            } catch (_: ParseException) {
+                                0L
+                            }
                         name = it.date.substringBefore("T")
                     }
                 }
