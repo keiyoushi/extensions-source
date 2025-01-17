@@ -384,6 +384,8 @@ class SussyToons : HttpSource(), ConfigurableSource {
             fallback = { fetchAllNextJsScriptUrls(GET(mangaUrl, headers)) },
         )
 
+        chapterScriptUrl = script.url
+
         chapterUrl = chapterUrlRegex.find(script.body)?.groups?.get(1)?.value?.toPathSegment()
             ?: throw IOException("Não foi possivel extrair a URL do capitulo")
 
