@@ -335,14 +335,25 @@ open class BatoTo(
         Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|\\/Official|\\/ Official", RegexOption.IGNORE_CASE)
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div#mainer div.container-fluid")
+        val infoElement = document.selectFirst("div#mainer div.container-fluid")!!
         val manga = SManga.create()
         val workStatus = infoElement.select("div.attr-item:contains(original work) span").text()
         val uploadStatus = infoElement.select("div.attr-item:contains(upload status) span").text()
         val originalTitle = infoElement.select("h3").text().removeEntities()
-        val alternativeTitles = document.select("div.pb-2.alias-set.line-b-f").text()
-        val description = infoElement.select("div.limit-html").text() + "\n" +
-            infoElement.select(".episode-list > .alert-warning").text().trim()
+        val description = buildString {
+            append(infoElement.select("div.limit-html").text())
+            infoElement.selectFirst(".episode-list > .alert-warning")?.also {
+                append("\n\n${it.text()}")
+            }
+            infoElement.selectFirst("h5:containsOwn(Extra Info:) + div")?.also {
+                append("\n\nExtra Info:\n${it.text()}")
+            }
+            document.selectFirst("div.pb-2.alias-set.line-b-f")?.also {
+                append("\n\nAlternative Titles:\n")
+                append(it.text().split('/').joinToString("\n") { "• ${it.trim()}" })
+            }
+        }
+
         val cleanedTitle = if (isRemoveTitleVersion()) {
             originalTitle.replace(titleRegex, "").trim()
         } else {
@@ -354,8 +365,7 @@ open class BatoTo(
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
-        manga.description = description +
-            if (alternativeTitles.isNotBlank()) "\n\nAlternative Titles:\n$alternativeTitles" else ""
+        manga.description = description
         manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
         return manga
     }
