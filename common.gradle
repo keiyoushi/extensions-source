@@ -18,6 +18,13 @@ android {
     sourceSets {
         main {
             manifest.srcFile "AndroidManifest.xml"
+
+            if (!manifest.srcFile.exists()) {
+                def build = layout.buildDirectory.get().asFile
+                def tempManifest = new File(build, "tempAndroidManifest.xml").path
+                manifest.srcFile tempManifest
+            }
+
             java.srcDirs = ['src']
             res.srcDirs = ['res']
             assets.srcDirs = ['assets']
@@ -81,21 +88,13 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
         freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
-    }
-
-    kotlinter {
-        experimentalRules = true
-        disabledRules = [
-            "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
-            "experimental:comment-wrapping",
-        ]
     }
 }
 
@@ -107,6 +106,7 @@ dependencies {
 
 tasks.register("writeManifestFile") {
     doLast {
+
         def manifest = android.sourceSets.getByName("main").manifest
         if (!manifest.srcFile.exists()) {
             File tempFile = layout.buildDirectory.get().file("tempAndroidManifest.xml").getAsFile()
@@ -121,6 +121,7 @@ tasks.register("writeManifestFile") {
 }
 
 preBuild.dependsOn(writeManifestFile, lintKotlin)
+
 if (System.getenv("CI") != "true") {
     lintKotlin.dependsOn(formatKotlin)
 }
