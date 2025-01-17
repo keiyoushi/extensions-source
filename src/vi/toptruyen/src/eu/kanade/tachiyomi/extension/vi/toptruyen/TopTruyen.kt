@@ -13,48 +13,43 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
-class TopTruyen :
-    WPComics(
-        "Top Truyen",
-        "https://www.toptruyen28.net",
-        "vi",
-        dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()),
-        gmtOffset = null,
-    ) {
-    override val client =
-        super.client
-            .newBuilder()
-            .rateLimit(3)
-            .build()
+class TopTruyen : WPComics(
+    "Top Truyen",
+    "https://www.toptruyentv.net",
+    "vi",
+    dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    },
+    gmtOffset = null,
+) {
+    override val client = super.client.newBuilder()
+        .rateLimit(3)
+        .build()
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(".page-chapter img")
+    override fun pageListParse(document: Document): List<Page> {
+        return document.select(".page-chapter img")
             .mapNotNull(::imageOrNull)
             .distinct()
             .mapIndexed { i, image -> Page(i, imageUrl = image) }
+    }
 
     override fun popularMangaSelector() = "div.item-manga div.item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.select("h3 a").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("abs:href"))
-            }
-            thumbnail_url = imageOrNull(element.selectFirst("img")!!)
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.select("h3 a").let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("abs:href"))
         }
+        thumbnail_url = imageOrNull(element.selectFirst("img")!!)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaRequest(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Request {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
 
         filters.forEach { filter ->
@@ -73,21 +68,21 @@ class TopTruyen :
         return GET(url.toString(), headers)
     }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1.title-manga")!!.text()
-            description = document.selectFirst("p.detail-summary")?.text()
-            status = document.selectFirst("li.status p.detail-info span")?.text().toStatus()
-            genre = document.select("li.category p.detail-info a")?.joinToString { it.text() }
-            thumbnail_url = imageOrNull(document.selectFirst("img.image-comic")!!)
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1.title-manga")!!.text()
+        description = document.selectFirst("p.detail-summary")?.text()
+        status = document.selectFirst("li.status p.detail-info span")?.text().toStatus()
+        genre = document.select("li.category p.detail-info a")?.joinToString { it.text() }
+        thumbnail_url = imageOrNull(document.selectFirst("img.image-comic")!!)
+    }
 
     override fun chapterListSelector() = "div.list-chapter li.row:not(.heading):not([style])"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
+    override fun chapterFromElement(element: Element): SChapter {
+        return super.chapterFromElement(element).apply {
             date_upload = element.select(".chapters + div").text().toDate()
         }
+    }
 
     override val genresSelector = ".categories-detail ul.nav li:not(.active) a"
 }

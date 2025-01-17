@@ -24,9 +24,9 @@ class MangaDto(
     @SerialName("obr_id")
     val id: Int,
     @SerialName("obr_descricao")
-    val description: String,
+    val description: String?,
     @SerialName("obr_imagem")
-    val thumbnail: String,
+    val thumbnail: String?,
     @SerialName("obr_nome")
     val name: String,
     @SerialName("obr_slug")
@@ -37,15 +37,16 @@ class MangaDto(
     @Serializable
     class MangaStatus(
         @SerialName("stt_nome")
-        val value: String,
+        val value: String?,
     ) {
-        fun toStatus(): Int =
-            when (value.lowercase()) {
+        fun toStatus(): Int {
+            return when (value?.lowercase()) {
                 "em andamento" -> SManga.ONGOING
                 "completo" -> SManga.COMPLETED
                 "hiato" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
+        }
     }
 }
 
