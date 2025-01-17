@@ -20,7 +20,9 @@ android {
             manifest.srcFile "AndroidManifest.xml"
 
             if (!manifest.srcFile.exists()) {
-                File tempFile = layout.buildDirectory.get().file("tempAndroidManifest.xml").getAsFile()
+                def buildDir = layout.buildDirectory.get()
+                mkdir(buildDir)
+                File tempFile = File(buildDir, "tempAndroidManifest.xml")
                 if (!tempFile.exists()) {
                     tempFile.withWriter {
                         it.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
