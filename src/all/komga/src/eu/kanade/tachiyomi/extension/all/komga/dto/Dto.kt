@@ -33,7 +33,10 @@ class SeriesDto(
             thumbnail_url = "$url/thumbnail"
             status =
                 when {
-                    metadata.status == "ENDED" && metadata.totalBookCount != null && booksCount < metadata.totalBookCount -> SManga.PUBLISHING_FINISHED
+                    metadata.status == "ENDED" &&
+                        metadata.totalBookCount != null &&
+                        booksCount < metadata.totalBookCount
+                    -> SManga.PUBLISHING_FINISHED
                     metadata.status == "ENDED" -> SManga.COMPLETED
                     metadata.status == "ONGOING" -> SManga.ONGOING
                     metadata.status == "ABANDONED" -> SManga.CANCELLED

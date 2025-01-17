@@ -17,7 +17,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -379,16 +378,16 @@ class OlympusScanlation :
             }.also { screen.addPreference(it) }
     }
 
-    private var _cachedBaseUrl: String? = null
+    private var cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
         get() {
-            if (_cachedBaseUrl == null) {
-                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            if (cachedBaseUrl == null) {
+                cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
             }
-            return _cachedBaseUrl!!
+            return cachedBaseUrl!!
         }
         set(value) {
-            _cachedBaseUrl = value
+            cachedBaseUrl = value
             edit().putString(BASE_URL_PREF, value).apply()
         }
 

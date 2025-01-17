@@ -12,13 +12,13 @@ class Senkognito : Senkuro("Senkognito", "https://senkognito.com", "ru") {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private var domain: String? = if (preferences.getBoolean(redirect_PREF, true)) "https://senkognito.com" else "https://senkuro.com"
+    private var domain: String? = if (preferences.getBoolean(REDIRECT_PREF, true)) "https://senkognito.com" else "https://senkuro.com"
     override val baseUrl: String = domain.toString()
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val domainRedirect =
             androidx.preference.CheckBoxPreference(screen.context).apply {
-                key = redirect_PREF
+                key = REDIRECT_PREF
                 title = "Домен Senkognito"
                 summary = "Отключите если домен Senkognito недоступен в браузере/WebView."
                 setDefaultValue(true)
@@ -32,6 +32,6 @@ class Senkognito : Senkuro("Senkognito", "https://senkognito.com", "ru") {
     }
 
     companion object {
-        private const val redirect_PREF = "domainRedirect"
+        private const val REDIRECT_PREF = "domainRedirect"
     }
 }

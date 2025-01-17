@@ -47,11 +47,15 @@ class TheLibraryOfOhara(
                     "#categories-7 ul li.cat-item-139757, " + // SBS
                     "#categories-7 ul li.cat-item-22695, " + // Timeline
                     "#categories-7 ul li.cat-item-648324575" // Vivre Card Databook
-            "id" -> "#categories-7 ul li.cat-item-702404482, #categories-7 ul li.cat-item-699200615" // Chapter Secrets Bahasa Indonesia, Return to the Reverie
+            "id" ->
+                "#categories-7 ul li.cat-item-702404482," +
+                    " #categories-7 ul li.cat-item-699200615" // Chapter Secrets Bahasa Indonesia, Return to the Reverie
             "fr" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
             "ar" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
             "it" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
-            else -> "#categories-7 ul li.cat-item-693784776, #categories-7 ul li.cat-item-699200615" // Chapter Secrets (multilingual), Return to the Reverie
+            else ->
+                "#categories-7 ul li.cat-item-693784776," +
+                    " #categories-7 ul li.cat-item-699200615" // Chapter Secrets (multilingual), Return to the Reverie
         }
 
     override fun popularMangaFromElement(element: Element): SManga {

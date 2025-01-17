@@ -112,10 +112,8 @@ private fun genresRequest(
     headers: okhttp3.Headers,
 ) = GET("$baseUrl/search", headers)
 
-private const val genresSelector = ".check-genre div div:has(.checkbox-genre)"
-
 private fun parseGenres(document: Document): List<Genre> {
-    val items = document.select(genresSelector)
+    val items = document.select(".check-genre div div:has(.checkbox-genre)")
     return buildList(items.size) {
         items.mapTo(this) {
             Genre(

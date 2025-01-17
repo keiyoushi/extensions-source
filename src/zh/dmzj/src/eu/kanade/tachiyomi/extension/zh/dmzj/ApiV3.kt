@@ -10,24 +10,24 @@ import okhttp3.Response
 import org.jsoup.parser.Parser
 
 object ApiV3 {
-    private const val v3apiUrl = "https://v3api.idmzj.com"
-    private const val apiUrl = "https://api.dmzj.com"
+    private const val API_URL_V3 = "https://v3api.idmzj.com"
+    private const val API_URL = "https://api.dmzj.com"
 
-    fun popularMangaUrl(page: Int) = "$v3apiUrl/classify/0/0/${page - 1}.json"
+    fun popularMangaUrl(page: Int) = "$API_URL_V3/classify/0/0/${page - 1}.json"
 
-    fun latestUpdatesUrl(page: Int) = "$v3apiUrl/classify/0/1/${page - 1}.json"
+    fun latestUpdatesUrl(page: Int) = "$API_URL_V3/classify/0/1/${page - 1}.json"
 
     fun pageUrl(
         page: Int,
         filters: FilterList,
-    ) = "$v3apiUrl/classify/${parseFilters(filters)}/${page - 1}.json"
+    ) = "$API_URL_V3/classify/${parseFilters(filters)}/${page - 1}.json"
 
     fun parsePage(response: Response): MangasPage {
         val data: List<MangaDto> = response.parseAs()
         return MangasPage(data.map { it.toSManga() }, data.isNotEmpty())
     }
 
-    fun mangaInfoUrlV1(id: String) = "$apiUrl/dynamic/comicinfo/$id.json"
+    fun mangaInfoUrlV1(id: String) = "$API_URL/dynamic/comicinfo/$id.json"
 
     private fun parseMangaInfoV1(response: Response): ResponseDto =
         try {
@@ -54,7 +54,7 @@ object ApiV3 {
 
     fun parseChapterImagesV1(response: Response) = response.parseAs<ChapterImagesDto>().toPageList()
 
-    fun chapterCommentsUrl(path: String) = "$v3apiUrl/viewPoint/0/$path.json"
+    fun chapterCommentsUrl(path: String) = "$API_URL_V3/viewPoint/0/$path.json"
 
     fun parseChapterComments(
         response: Response,

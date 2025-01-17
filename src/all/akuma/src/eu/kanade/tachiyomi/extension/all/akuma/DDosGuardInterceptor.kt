@@ -56,7 +56,7 @@ class DDosGuardInterceptor(
     private fun getNewCookie(url: HttpUrl): Cookie? {
         val wellKnown =
             client
-                .newCall(GET(wellKnownUrl))
+                .newCall(GET("https://check.ddos-guard.net/check.js"))
                 .execute()
                 .body
                 .string()
@@ -70,7 +70,6 @@ class DDosGuardInterceptor(
     }
 
     companion object {
-        private const val wellKnownUrl = "https://check.ddos-guard.net/check.js"
         private val ERROR_CODES = listOf(403)
         private val SERVER_CHECK = listOf("ddos-guard")
     }

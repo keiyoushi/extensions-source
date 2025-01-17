@@ -41,7 +41,7 @@ class MangaToshokanZ : HttpSource() {
         getKeys()
     }
 
-    private val _serial by lazy {
+    private val serial by lazy {
         getSerial()
     }
 
@@ -292,7 +292,7 @@ class MangaToshokanZ : HttpSource() {
         val body =
             FormBody
                 .Builder()
-                .add("__serial", _serial)
+                .add("__serial", serial)
                 .add("__ticket", ticket)
                 .add("pub", pem)
                 .build()

@@ -528,7 +528,6 @@ class Tapastic :
      * If an entry is selected it is appended as a query parameter onto the end of the URI.
      * If `firstIsUnspecified` is set to true, if the first entry is selected, nothing will be appended on the the URI.
      */
-    // vals: <name, display>
     private open class UriSelectFilter(
         displayName: String,
         override val isMature: Boolean,

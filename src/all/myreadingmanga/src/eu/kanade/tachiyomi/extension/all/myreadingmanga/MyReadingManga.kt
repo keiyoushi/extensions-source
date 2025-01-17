@@ -57,7 +57,11 @@ open class MyReadingManga(
 
     // Popular - Random
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/search/?wpsolr_sort=sort_by_random&wpsolr_page=$page&wpsolr_fq[0]=lang_str:$siteLang", headers) // Random Manga as returned by search
+        // Random Manga as returned by search
+        return GET(
+            "$baseUrl/search/?wpsolr_sort=sort_by_random&wpsolr_page=$page&wpsolr_fq[0]=lang_str:$siteLang",
+            headers,
+        )
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -448,7 +452,9 @@ open class MyReadingManga(
     }
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
     }
 
     private fun randomString(length: Int): String {

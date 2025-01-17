@@ -29,8 +29,6 @@ class MangaRawClub : ParsedHttpSource() {
             .build()
 
     companion object {
-        private const val altName = "Alternative Name:"
-
         private val DATE_FORMATTER by lazy { SimpleDateFormat("MMMMM dd, yyyy, h:mm a", Locale.ENGLISH) }
         private val DATE_FORMATTER_2 by lazy { SimpleDateFormat("MMMMM dd, yyyy, h a", Locale.ENGLISH) }
     }
@@ -155,7 +153,7 @@ class MangaRawClub : ParsedHttpSource() {
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() && it.lowercase() != "updating" }
                         ?.let {
-                            append("\n\n$altName ${it.trim()}")
+                            append("\n\nAlternative Name: ${it.trim()}")
                         }
                 }
 

@@ -9,8 +9,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -39,7 +37,7 @@ class PandaChaika(
     override val client =
         network.cloudflareClient
             .newBuilder()
-            .addInterceptor(::Intercept)
+            .addInterceptor(::intercept)
             .build()
 
     private val json: Json by injectLazy()
@@ -338,7 +336,7 @@ class PandaChaika(
         return (if (contentLength > Int.MAX_VALUE.toBigInteger()) "zip64" else "zip") to contentLength
     }
 
-    private fun Intercept(chain: Interceptor.Chain): Response {
+    private fun intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url.toString()
         return if (url.startsWith("https://127.0.0.1/#")) {
             val fragment = url.toHttpUrl().fragment!!

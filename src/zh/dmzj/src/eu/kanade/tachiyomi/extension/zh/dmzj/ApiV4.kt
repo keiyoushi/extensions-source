@@ -15,9 +15,9 @@ import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 
 object ApiV4 {
-    private const val v4apiUrl = "https://nnv4api.dmzj.com"
+    private const val API_URL_V4 = "https://nnv4api.dmzj.com"
 
-    fun mangaInfoUrl(id: String) = "$v4apiUrl/comic/detail/$id?uid=2665531"
+    fun mangaInfoUrl(id: String) = "$API_URL_V4/comic/detail/$id?uid=2665531"
 
     fun parseMangaInfo(response: Response): MangaDto? {
         val result: ResponseDto<MangaDto> = response.decrypt()
@@ -25,7 +25,7 @@ object ApiV4 {
     }
 
     // path = "mangaId/chapterId"
-    fun chapterImagesUrl(path: String) = "$v4apiUrl/comic/chapter/$path"
+    fun chapterImagesUrl(path: String) = "$API_URL_V4/comic/chapter/$path"
 
     fun parseChapterImages(
         response: Response,
@@ -38,7 +38,7 @@ object ApiV4 {
     fun rankingUrl(
         page: Int,
         filters: RankingGroup,
-    ) = "$v4apiUrl/comic/rank/list?${filters.parse()}&uid=2665531&page=$page"
+    ) = "$API_URL_V4/comic/rank/list?${filters.parse()}&uid=2665531&page=$page"
 
     fun parseRanking(response: Response): MangasPage {
         val result: ResponseDto<List<RankingItemDto>> = response.decrypt()

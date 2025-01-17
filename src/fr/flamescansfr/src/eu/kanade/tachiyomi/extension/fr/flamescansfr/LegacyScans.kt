@@ -28,6 +28,8 @@ class LegacyScans : HttpSource() {
 
     override val baseUrl: String = "https://legacy-scans.com"
 
+    private val apiUrl = "https://api.legacy-scans.com"
+
     override val supportsLatest: Boolean = true
 
     override val versionId: Int = 2
@@ -222,7 +224,6 @@ class LegacyScans : HttpSource() {
         }
 
     companion object {
-        const val apiUrl = "https://api.legacy-scans.com"
         const val URL_SEARCH_PREFIX = "slug:"
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.FRENCH)
     }

@@ -7,7 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 object MangaFunUtils {
-    private const val cdnUrl = "https://mimg.bid"
+    private const val CDN_URL = "https://mimg.bid"
 
     private val notAlnumRegex = Regex("""[^0-9A-Za-z\s]""")
 
@@ -36,7 +36,7 @@ object MangaFunUtils {
             return null
         }
 
-        return "$cdnUrl/${hash.substring(0, 2)}/${hash.substring(2, 5)}/${hash.substring(5)}.webp"
+        return "$CDN_URL/${hash.substring(0, 2)}/${hash.substring(2, 5)}/${hash.substring(5)}.webp"
     }
 
     fun MinifiedMangaDto.toSManga() =

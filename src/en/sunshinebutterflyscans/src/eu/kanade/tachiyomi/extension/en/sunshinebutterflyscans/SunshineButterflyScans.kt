@@ -289,7 +289,9 @@ class SunshineButterflyScans : HttpSource() {
 
     companion object {
         private const val GOOGLE_DRIVE_FIRST = "https://www.googleapis.com/drive/v3/files?q=\""
-        private const val GOOGLE_DRIVE_SECOND = "\"+in+parents&key=AIzaSyDDWjOHN1UPcafkwyJLO7fX1gmVyntIozs&orderBy=name_natural&fields=files(id,name,imageMediaMetadata)&pageSize=250"
+        private const val GOOGLE_DRIVE_SECOND =
+            "\"+in+parents&key=AIzaSyDDWjOHN1UPcafkwyJLO7fX1gmVyntIozs" +
+                "&orderBy=name_natural&fields=files(id,name,imageMediaMetadata)&pageSize=250"
         private const val IMGUR_FIRST = "https://api.imgur.com/3/album/"
         private const val IMGUR_SECOND = "/images"
         private val IMGUR_BEARER = "84155230e6a2d98eaea1cee48d97e6ecff0f6c12"

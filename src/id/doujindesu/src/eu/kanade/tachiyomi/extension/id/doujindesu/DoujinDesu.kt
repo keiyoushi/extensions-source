@@ -45,7 +45,7 @@ class DoujinDesu :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private val DATE_FORMAT by lazy {
+    private val dateFormat by lazy {
         SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id"))
     }
 
@@ -307,7 +307,7 @@ class DoujinDesu :
     private fun getNumberFromString(epsStr: String?): Float = epsStr?.substringBefore(" ")?.toFloatOrNull() ?: -1f
 
     private fun reconstructDate(dateStr: String): Long =
-        runCatching { DATE_FORMAT.parse(dateStr)?.time }
+        runCatching { dateFormat.parse(dateStr)?.time }
             .getOrNull() ?: 0L
 
     // Popular

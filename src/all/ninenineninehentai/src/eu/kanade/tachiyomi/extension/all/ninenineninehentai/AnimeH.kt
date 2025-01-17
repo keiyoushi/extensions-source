@@ -19,8 +19,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -87,7 +85,7 @@ open class AnimeH(
     override fun popularMangaRequest(page: Int): Request {
         val payload =
             GraphQL(
-                PopularVariables(size, page, 1, siteLang),
+                PopularVariables(SIZE, page, 1, siteLang),
                 POPULAR_QUERY,
             ).toJsonRequestBody()
 
@@ -123,7 +121,7 @@ open class AnimeH(
         val payload =
             GraphQL(
                 SearchVariables(
-                    size = size,
+                    size = SIZE,
                     page = page,
                     search =
                         SearchPayload(
@@ -294,7 +292,7 @@ open class AnimeH(
                 manga.toSManga(useShortTitle)
             }
         preference.dateMap = dateMap
-        val hasNextPage = mangas.size == size
+        val hasNextPage = mangas.size == SIZE
 
         return MangasPage(entries, hasNextPage)
     }
@@ -349,7 +347,7 @@ open class AnimeH(
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
-        private const val size = 20
+        private const val SIZE = 20
         const val SEARCH_PREFIX = "id:"
 
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()

@@ -4,10 +4,6 @@ import kotlin.math.ln
 import kotlin.math.pow
 
 /**
- * Various utility methods used in the E-Hentai source
- */
-
-/**
  * Return null if String is blank, otherwise returns the original String
  * @returns null if the String is blank, otherwise returns the original String
  */

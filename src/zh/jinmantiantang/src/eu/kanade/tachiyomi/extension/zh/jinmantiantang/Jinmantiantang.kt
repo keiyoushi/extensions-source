@@ -434,7 +434,6 @@ class Jinmantiantang :
      *如果选择了一个条目，它将作为查询参数附加到URI的末尾。
      *如果将firstIsUnspecified设置为true，则如果选择了第一个条目，则URI不会附加任何内容。
      */
-    // vals: <name, display>
     private open class UriPartFilter(
         displayName: String,
         val vals: Array<Pair<String, String>>,

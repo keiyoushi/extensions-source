@@ -14,7 +14,7 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class manga1s : ParsedHttpSource() {
+class Manga1s : ParsedHttpSource() {
     override val name = "Manga1s"
 
     override val baseUrl = "https://manga1s.com"

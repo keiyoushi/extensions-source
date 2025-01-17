@@ -41,7 +41,9 @@ open class MangaOni :
 
     override fun popularMangaRequest(page: Int) =
         GET(
-            url = "$baseUrl/directorio?genero=false&estado=false&filtro=visitas&tipo=false&adulto=${if (hideNSFWContent()) "0" else "false"}&orden=desc&p=$page",
+            url =
+                "$baseUrl/directorio?genero=false&estado=false&filtro=visitas&tipo=false" +
+                    "&adulto=${if (hideNSFWContent()) "0" else "false"}&orden=desc&p=$page",
             headers = headers,
         )
 
@@ -387,7 +389,9 @@ open class MangaOni :
     companion object {
         private const val CONTENT_PREF = "showNSFWContent"
         private const val CONTENT_PREF_TITLE = "Ocultar contenido +18"
-        private const val CONTENT_PREF_SUMMARY = "Ocultar el contenido erótico en mangas populares y filtros, no funciona en los mangas recientes ni búsquedas textuales."
+        private const val CONTENT_PREF_SUMMARY =
+            "Ocultar el contenido erótico en mangas populares y filtros," +
+                " no funciona en los mangas recientes ni búsquedas textuales."
         private const val CONTENT_PREF_DEFAULT_VALUE = false
     }
 }

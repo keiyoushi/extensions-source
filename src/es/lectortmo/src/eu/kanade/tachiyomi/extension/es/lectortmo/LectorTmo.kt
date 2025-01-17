@@ -149,7 +149,12 @@ abstract class LectorTmo(
 
     // Marks erotic content as false and excludes: Ecchi(6), GirlsLove(17), BoysLove(18), Harem(19), Trap(94) genders
     private fun getSFWUrlPart(): String =
-        if (getSFWModePref()) "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false" else ""
+        if (getSFWModePref()) {
+            "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18" +
+                "&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false"
+        } else {
+            ""
+        }
 
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/library?order_item=likes_count&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
@@ -718,26 +723,45 @@ abstract class LectorTmo(
 
         private const val SFW_MODE_PREF = "SFWModePref"
         private const val SFW_MODE_PREF_TITLE = "Ocultar contenido NSFW"
-        private const val SFW_MODE_PREF_SUMMARY = "Ocultar el contenido erótico (puede que aún activandolo se sigan mostrando portadas o series NSFW). Ten en cuenta que al activarlo se ignoran filtros al explorar y buscar.\nLos filtros ignorados son: Filtrar por tipo de contenido (Erotico) y el Filtrar por generos: Ecchi, Boys Love, Girls Love, Harem y Trap."
+        private const val SFW_MODE_PREF_SUMMARY =
+            "Ocultar el contenido erótico " +
+                "(puede que aún activandolo se sigan mostrando portadas o series NSFW)." +
+                " Ten en cuenta que al activarlo se ignoran filtros al explorar y buscar.\n" +
+                "Los filtros ignorados son: Filtrar por tipo de contenido (Erotico)" +
+                " y el Filtrar por generos: Ecchi, Boys Love, Girls Love, Harem y Trap."
         private const val SFW_MODE_PREF_DEFAULT_VALUE = false
         private val SFW_MODE_PREF_EXCLUDE_GENDERS = listOf("6", "17", "18", "19")
 
         private const val WEB_RATELIMIT_PREF = "webRatelimitPreference"
         private const val WEB_RATELIMIT_PREF_TITLE = "Ratelimit por minuto para el sitio web"
-        private const val WEB_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red a la URL de TMO. Reducir este valor puede disminuir la posibilidad de obtener un error HTTP 429, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. \nValor actual: %s"
+        private const val WEB_RATELIMIT_PREF_SUMMARY =
+            "Este valor afecta la cantidad de solicitudes " +
+                "de red a la URL de TMO. Reducir este valor puede disminuir la posibilidad de obtener " +
+                "un error HTTP 429, pero la velocidad de descarga será más lenta. Se requiere reiniciar " +
+                "la app. \nValor actual: %s"
         private const val WEB_RATELIMIT_PREF_DEFAULT_VALUE = "8"
 
         private const val IMAGE_CDN_RATELIMIT_PREF = "imgCDNRatelimitPreference"
         private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "Ratelimit por minuto para descarga de imágenes"
-        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red para descargar imágenes. Reducir este valor puede disminuir errores al cargar imagenes, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. \nValor actual: %s"
+        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY =
+            "Este valor afecta la cantidad de solicitudes " +
+                "de red para descargar imágenes. Reducir este valor puede disminuir errores al cargar " +
+                "imagenes, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. " +
+                "\nValor actual: %s"
         private const val IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE = "50"
 
         private const val SAVE_LAST_CF_URL_PREF = "saveLastCFUrlPreference"
         private const val SAVE_LAST_CF_URL_PREF_TITLE = "Guardar la última URL con error de Cloudflare"
-        private const val SAVE_LAST_CF_URL_PREF_SUMMARY = "Guarda la última URL con error de Cloudflare para que se pueda acceder a ella al abrir la serie en WebView."
+        private const val SAVE_LAST_CF_URL_PREF_SUMMARY =
+            "Guarda la última URL con error de Cloudflare " +
+                "para que se pueda acceder a ella al abrir la serie en WebView."
         private const val SAVE_LAST_CF_URL_PREF_DEFAULT_VALUE = true
 
-        private val ENTRIES_ARRAY = listOf(1, 2, 3, 5, 6, 7, 8, 9, 10, 15, 20, 30, 40, 50, 100).map { i -> i.toString() }.toTypedArray()
+        private val ENTRIES_ARRAY =
+            listOf(1, 2, 3, 5, 6, 7, 8, 9, 10, 15, 20, 30, 40, 50, 100)
+                .map { i ->
+                    i.toString()
+                }.toTypedArray()
 
         const val PREFIX_LIBRARY = "library"
         const val PREFIX_SLUG_SEARCH = "slug:"

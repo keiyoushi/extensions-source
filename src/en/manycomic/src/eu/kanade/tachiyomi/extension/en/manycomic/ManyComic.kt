@@ -75,7 +75,7 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun getFilterList(): FilterList {
-        launchIO { fetchGenres_() }
+        launchIO { fetchGenresManyComic() }
 
         val filters: MutableList<Filter<out Any>> =
             mutableListOf(
@@ -121,7 +121,7 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
     private var genresList: List<Genre> = emptyList()
     private var fetchGenresAttempts: Int = 0
 
-    private fun fetchGenres_() {
+    private fun fetchGenresManyComic() {
         if (fetchGenres && fetchGenresAttempts < 3 && genresList.isEmpty()) {
             try {
                 genresList = listOf(Genre("<All>", "")) +

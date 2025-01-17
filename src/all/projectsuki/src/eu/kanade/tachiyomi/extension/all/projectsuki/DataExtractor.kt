@@ -626,7 +626,6 @@ class DataExtractor(
         abstract fun isRepresentedBy(from: String): Boolean
 
         /** Represents the chapter's title, which also normally includes the chapter number. */
-        // data
         object Chapter : ChaptersTableColumnDataType(required = true) {
             private val chapterHeaderRegex = """chapters?""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -634,7 +633,6 @@ class DataExtractor(
         }
 
         /** Represents the chapter's scan group. */
-        // data
         object Group : ChaptersTableColumnDataType(required = true) {
             private val groupHeaderRegex = """groups?""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -642,7 +640,6 @@ class DataExtractor(
         }
 
         /** Represents the chapter's release date (when it was added to the site). */
-        // data
         object Added : ChaptersTableColumnDataType(required = true) {
             private val dateHeaderRegex = """added|date""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -650,7 +647,6 @@ class DataExtractor(
         }
 
         /** Represents the chapter's language. */
-        // data
         object Language : ChaptersTableColumnDataType(required = false) {
             private val languageHeaderRegex = """language""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -658,7 +654,6 @@ class DataExtractor(
         }
 
         /** Represents the chapter's view count. */
-        // data
         object Views : ChaptersTableColumnDataType(required = false) {
             @Suppress("RegExpUnnecessaryNonCapturingGroup")
             private val languageHeaderRegex = """views?(?:\s*count)?""".toRegex(RegexOption.IGNORE_CASE)
@@ -909,7 +904,7 @@ class DataExtractor(
                 reportErrorToUser { "No chapter numbers could be inferred!" }
             }
 
-            switchingPoints.isEmpty() /* && first().chapterNumber != null */ -> {
+            switchingPoints.isEmpty() -> {
                 // all are known
                 return this
             }

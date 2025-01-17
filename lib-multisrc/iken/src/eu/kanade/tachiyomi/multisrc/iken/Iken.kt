@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -79,7 +78,7 @@ abstract class Iken(
                 .newBuilder()
                 .apply {
                     addQueryParameter("page", page.toString())
-                    addQueryParameter("perPage", perPage.toString())
+                    addQueryParameter("perPage", PER_PAGE.toString())
                     addQueryParameter("searchTerm", query.trim())
                     filters.filterIsInstance<UrlPartFilter>().forEach {
                         it.addUrlParameter(this)
@@ -101,7 +100,7 @@ abstract class Iken(
                 .filterNot { it.isNovel }
                 .map { it.toSManga() }
 
-        val hasNextPage = data.totalCount > (page * perPage)
+        val hasNextPage = data.totalCount > (page * PER_PAGE)
 
         return MangasPage(entries, hasNextPage)
     }
@@ -159,4 +158,4 @@ abstract class Iken(
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }
 
-private const val perPage = 18
+private const val PER_PAGE = 18

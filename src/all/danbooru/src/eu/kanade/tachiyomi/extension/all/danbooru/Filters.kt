@@ -25,7 +25,7 @@ internal class FilterOrder : Filter.Sort("Order", values, Selection(0, false)) {
     val selected: String? get() = state?.let { keys[it.index] }
 }
 
-internal fun FilterOrder(
+internal fun filterOrder(
     key: String?,
     ascending: Boolean = false,
 ) = FilterOrder().apply {

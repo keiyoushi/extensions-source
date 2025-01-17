@@ -13,6 +13,8 @@ class HadesNoFansub :
     ) {
     override val useNewChapterEndpoint = true
 
-    override val mangaDetailsSelectorStatus = "div.summary_content > div.post-content div.post-content_item:has(div.summary-heading:contains(Status)) div.summary-content"
+    override val mangaDetailsSelectorStatus =
+        "div.summary_content > div.post-content " +
+            "div.post-content_item:has(div.summary-heading:contains(Status)) div.summary-content"
     override val mangaDetailsSelectorTag = "div.tags-content a.notUsed" // Site uses this for the scanlator
 }

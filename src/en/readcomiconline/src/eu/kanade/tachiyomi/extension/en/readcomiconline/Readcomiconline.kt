@@ -300,7 +300,9 @@ class Readcomiconline :
                         if (consoleMessage == null) {
                             return false
                         }
-                        val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
+                        val logContent =
+                            "wv: ${consoleMessage.message()}" +
+                                " (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
                         when (consoleMessage.messageLevel()) {
                             ConsoleMessage.MessageLevel.DEBUG -> Log.d("RCO", logContent)
                             ConsoleMessage.MessageLevel.ERROR -> Log.e("RCO", logContent)

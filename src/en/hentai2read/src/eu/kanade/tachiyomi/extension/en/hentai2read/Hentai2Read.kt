@@ -33,7 +33,7 @@ class Hentai2Read : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     companion object {
-        const val imageBaseUrl = "https://static.hentaicdn.com/hentai"
+        const val IMAGE_BASE_URL = "https://static.hentaicdn.com/hentai"
 
         const val PREFIX_ID_SEARCH = "id:"
 
@@ -314,7 +314,16 @@ class Hentai2Read : ParsedHttpSource() {
         var i = 0
         while (m.find()) {
             m.group(1)?.split(",")?.forEach {
-                pages.add(Page(i++, "", imageBaseUrl + it.trim('"').replace("""\/""", "/")))
+                pages.add(
+                    Page(
+                        index = i++,
+                        imageUrl =
+                            IMAGE_BASE_URL +
+                                it
+                                    .trim('"')
+                                    .replace("""\/""", "/"),
+                    ),
+                )
             }
         }
         return pages

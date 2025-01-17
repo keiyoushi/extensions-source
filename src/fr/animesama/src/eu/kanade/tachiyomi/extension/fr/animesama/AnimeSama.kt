@@ -268,15 +268,15 @@ class AnimeSama : ParsedHttpSource() {
                 .substringBefore("]")
                 .split(",")
 
-        val image_list = mutableListOf<Page>()
+        val imageList = mutableListOf<Page>()
 
         for (index in 1 until chapterImageListParsed.size) {
-            image_list.add(
+            imageList.add(
                 Page(index, imageUrl = "$cdn$title/$chapter/$index.jpg"),
             )
         }
 
-        return image_list
+        return imageList
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()

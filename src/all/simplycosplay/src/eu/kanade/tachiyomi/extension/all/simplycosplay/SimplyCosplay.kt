@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -135,7 +134,7 @@ class SimplyCosplay :
         apiUrl.newBuilder().apply {
             addPathSegment(endPoint)
             addQueryParameter("sort", sort)
-            addQueryParameter("limit", limit.toString())
+            addQueryParameter("limit", LIMIT.toString())
             addQueryParameter("page", page.toString())
         }
 
@@ -151,7 +150,7 @@ class SimplyCosplay :
         val result = response.parseAs<browseResponse>()
 
         val entries = result.data.map(BrowseItem::toSManga)
-        val hasNextPage = result.data.size >= limit
+        val hasNextPage = result.data.size >= LIMIT
 
         return MangasPage(entries, hasNextPage)
     }
@@ -396,7 +395,7 @@ class SimplyCosplay :
             .getOrDefault(0L)
 
     companion object {
-        private const val limit = 20
+        private const val LIMIT = 20
         const val SEARCH_PREFIX = "url:"
 
         private const val DEFAULT_TOKEN_PREF = "default_token_pref"

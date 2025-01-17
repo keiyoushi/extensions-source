@@ -773,25 +773,56 @@ class Manhuagui(
 
     companion object {
         private const val SHOW_R18_PREF = "showR18Default"
-        private const val SHOW_R18_PREF_TITLE = "显示R18作品" // "Show R18 contents"
-        private const val SHOW_R18_PREF_SUMMARY = "请确认您的IP不在漫画柜的屏蔽列表内，例如中国大陆IP。需要重启软件以生效。\n开启后如需关闭，需要到Tachiyomi高级设置内清除Cookies后才能生效。" // "Please make sure your IP is not in Manhuagui's ban list, e.g., China mainland IP. Tachiyomi restart required. If you want to close this switch after enabled it, you need to clear cookies in Tachiyomi advanced setting too.
+
+        // "Show R18 contents"
+        private const val SHOW_R18_PREF_TITLE = "显示R18作品"
+
+        // "Please make sure your IP is not in Manhuagui's ban list, e.g.,
+        // China mainland IP. Tachiyomi restart required.
+        // If you want to close this switch after enabled it,
+        // you need to clear cookies in Tachiyomi advanced setting too.
+        private const val SHOW_R18_PREF_SUMMARY =
+            "请确认您的IP不在漫画柜的屏蔽列表内，例如中国大陆IP。需要重启软件以生效。\n" +
+                "开启后如需关闭，需要到Tachiyomi高级设置内清除Cookies后才能生效。"
 
         private const val SHOW_ZH_HANT_WEBSITE_PREF = "showZhHantWebsite"
-        private const val SHOW_ZH_HANT_WEBSITE_PREF_TITLE = "使用繁体版网站" // "Use traditional chinese version website"
-        private const val SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY = "需要重启软件以生效。" // "You need to restart Tachiyomi"
+
+        // "Use traditional chinese version website"
+        private const val SHOW_ZH_HANT_WEBSITE_PREF_TITLE = "使用繁体版网站"
+
+        // "You need to restart Tachiyomi"
+        private const val SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY = "需要重启软件以生效。"
 
         private const val USE_MIRROR_URL_PREF = "useMirrorWebsitePreference"
         private const val USE_MIRROR_URL_PREF_TITLE = "使用镜像网址"
-        private const val USE_MIRROR_URL_PREF_SUMMARY = "使用镜像网址: mhgui.com，部分漫画可能无法观看。" // "Use mirror url. Some manga may be hidden."
+
+        // "Use mirror url. Some manga may be hidden."
+        private const val USE_MIRROR_URL_PREF_SUMMARY = "使用镜像网址: mhgui.com，部分漫画可能无法观看。"
 
         private const val MAINSITE_RATELIMIT_PREF = "mainSiteRatelimitPreference"
-        private const val MAINSITE_RATELIMIT_PREF_TITLE = "主站每十秒连接数限制" // "Ratelimit permits per 10 seconds for main website"
-        private const val MAINSITE_RATELIMIT_PREF_SUMMARY = "此值影响更新书架时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s" // "This value affects network request amount for updating library. Lower this value may reduce the chance to get IP Ban, but loading speed will be slower too. Tachiyomi restart required."
+
+        // "Ratelimit permits per 10 seconds for main website"
+        private const val MAINSITE_RATELIMIT_PREF_TITLE = "主站每十秒连接数限制"
+
+        // "This value affects network request amount for updating library.
+        // Lower this value may reduce the chance to get IP Ban,
+        // but loading speed will be slower too. Tachiyomi restart required."
+        private const val MAINSITE_RATELIMIT_PREF_SUMMARY =
+            "此值影响更新书架时发起连接请求的数量。" +
+                "调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s"
         private const val MAINSITE_RATELIMIT_DEFAULT_VALUE = "10"
 
         private const val IMAGE_CDN_RATELIMIT_PREF = "imgCDNRatelimitPreference"
-        private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "图片CDN每秒连接数限制" // "Ratelimit permits per second for image CDN"
-        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "此值影响加载图片时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s" // "This value affects network request amount for loading image. Lower this value may reduce the chance to get IP Ban, but loading speed will be slower too. Tachiyomi restart required."
+
+        // "Ratelimit permits per second for image CDN"
+        private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "图片CDN每秒连接数限制"
+
+        // "This value affects network request amount for loading image.
+        // Lower this value may reduce the chance to get IP Ban, but loading speed will be slower too.
+        // Tachiyomi restart required."
+        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY =
+            "此值影响加载图片时发起连接请求的数量。" +
+                "调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s"
         private const val IMAGE_CDN_RATELIMIT_DEFAULT_VALUE = "4"
 
         private val ENTRIES_ARRAY = (1..10).map { i -> i.toString() }.toTypedArray()

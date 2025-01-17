@@ -53,11 +53,10 @@ class Zip(
         path: String,
         client: OkHttpClient,
     ): ByteArray {
+        val maxLocalFileHeaderSize = 256 + 32 + 30 + 100
         val file =
             centralDirectoryRecords.find { it.filename == path }
                 ?: throw Exception("File not found in  ZIP: $path")
-
-        val MAX_LOCAL_FILE_HEADER_SIZE = 256 + 32 + 30 + 100
 
         val headersBuilder =
             Headers
@@ -67,7 +66,7 @@ class Zip(
                     "bytes=${file.localFileHeaderRelativeOffset}-${
                         file.localFileHeaderRelativeOffset +
                             file.compressedSize +
-                            MAX_LOCAL_FILE_HEADER_SIZE
+                            maxLocalFileHeaderSize
                     }",
                 ).build()
 
@@ -110,8 +109,8 @@ class ZipHandler(
         zipByteLength: BigInteger,
         zipType: String,
     ): EndOfCentralDirectory {
-        val EOCD_MAX_BYTES = 128.toBigInteger()
-        val eocdInitialOffset = maxOf(0.toBigInteger(), zipByteLength - EOCD_MAX_BYTES)
+        val eocdMaxBytes = 128.toBigInteger()
+        val eocdInitialOffset = maxOf(0.toBigInteger(), zipByteLength - eocdMaxBytes)
 
         val headers =
             additionalHeaders
@@ -183,11 +182,11 @@ object ZipParser {
         return cds
     }
 
-    fun parseCD(buffer: ByteArray): CentralDirectoryRecord? {
-        val MIN_CD_LENGTH = 46
+    private fun parseCD(buffer: ByteArray): CentralDirectoryRecord? {
+        val minCdLength = 46
         val view = ByteBuffer.wrap(buffer).order(LITTLE_ENDIAN)
 
-        for (i in 0..buffer.size - MIN_CD_LENGTH) {
+        for (i in 0..buffer.size - minCdLength) {
             if (view.getInt(i) == CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE) {
                 val filenameLength = view.getShort(i + 28).toInt()
                 val extraFieldLength = view.getShort(i + 30).toInt()
@@ -205,10 +204,10 @@ object ZipParser {
     }
 
     fun parseEOCD(buffer: ByteArray): EndOfCentralDirectory? {
-        val MIN_EOCD_LENGTH = 22
+        val minEocdLength = 22
         val view = ByteBuffer.wrap(buffer).order(LITTLE_ENDIAN)
 
-        for (i in 0 until buffer.size - MIN_EOCD_LENGTH + 1) {
+        for (i in 0 until buffer.size - minEocdLength + 1) {
             if (view.getInt(i) == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
                 return EndOfCentralDirectory(
                     centralDirectoryByteSize = view.getInt(i + 12).toBigInteger(),
@@ -220,10 +219,10 @@ object ZipParser {
     }
 
     fun parseEOCD64(buffer: ByteArray): EndOfCentralDirectory? {
-        val MIN_EOCD_LENGTH = 56
+        val minEocdLength = 56
         val view = ByteBuffer.wrap(buffer).order(LITTLE_ENDIAN)
 
-        for (i in 0 until buffer.size - MIN_EOCD_LENGTH + 1) {
+        for (i in 0 until buffer.size - minEocdLength + 1) {
             if (view.getInt(i) == END_OF_CENTRAL_DIRECTORY_64_SIGNATURE) {
                 return EndOfCentralDirectory(
                     centralDirectoryByteSize = view.getLong(i + 40).toBigInteger(),
@@ -238,11 +237,10 @@ object ZipParser {
         buffer: ByteArray,
         compressedSizeOverride: Int = 0,
     ): LocalFileHeader? {
-        val MIN_LOCAL_FILE_LENGTH = 30
-
+        val minLocalFileLength = 30
         val view = ByteBuffer.wrap(buffer).order(LITTLE_ENDIAN)
 
-        for (i in 0..buffer.size - MIN_LOCAL_FILE_LENGTH) {
+        for (i in 0..buffer.size - minLocalFileLength) {
             if (view.getInt(i) == LOCAL_FILE_HEADER_SIGNATURE) {
                 val filenameLength = view.getShort(i + 26).toInt() and 0xFFFF
                 val extraFieldLength = view.getShort(i + 28).toInt() and 0xFFFF

@@ -70,7 +70,9 @@ class Japscan :
         val dateFormat by lazy {
             SimpleDateFormat("dd MMM yyyy", Locale.US)
         }
-        private const val SHOW_SPOILER_CHAPTERS_Title = "Les chapitres en Anglais ou non traduit sont upload en tant que \" Spoilers \" sur Japscan"
+        private const val SHOW_SPOILER_CHAPTERS_TITLE =
+            "Les chapitres en Anglais ou non traduit " +
+                "sont upload en tant que \" Spoilers \" sur Japscan"
         private const val SHOW_SPOILER_CHAPTERS = "JAPSCAN_SPOILER_CHAPTERS"
         private val prefsEntries = arrayOf("Montrer uniquement les chapitres traduit en Français", "Montrer les chapitres spoiler")
         private val prefsEntryValues = arrayOf("hide", "show")
@@ -344,8 +346,8 @@ class Japscan :
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val chapterListPref =
             androidx.preference.ListPreference(screen.context).apply {
-                key = SHOW_SPOILER_CHAPTERS_Title
-                title = SHOW_SPOILER_CHAPTERS_Title
+                key = SHOW_SPOILER_CHAPTERS_TITLE
+                title = SHOW_SPOILER_CHAPTERS_TITLE
                 entries = prefsEntries
                 entryValues = prefsEntryValues
                 summary = "%s"

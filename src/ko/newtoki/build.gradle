@@ -1,7 +1,7 @@
 ext {
     extName = 'NewToki / ManaToki'
     extClass = '.TokiFactory'
-    extVersionCode = 32
+    extVersionCode = 33
     isNsfw = true
 }
 
@@ -20,7 +20,7 @@ task updateDomainNumber {
         domainNumberFile.withPrintWriter {
             it.println("// THIS FILE IS AUTO-GENERATED, DO NOT COMMIT")
             it.println("package eu.kanade.tachiyomi.extension.ko.newtoki")
-            it.println("const val fallbackDomainNumber = \"$number\"")
+            it.println("const val FALLBACK_DOMAIN_NUMBER = \"$number\"")
         }
     }
 }

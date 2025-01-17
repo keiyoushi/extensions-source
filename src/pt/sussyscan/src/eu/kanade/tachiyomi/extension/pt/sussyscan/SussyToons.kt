@@ -64,12 +64,12 @@ class SussyToons :
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    private var _apiUrlCache: String? = null
+    private var apiUrlCache: String? = null
 
     private var apiUrl: String
-        get() = _apiUrlCache ?: preferences.prefApiUrl.also { _apiUrlCache = it }
+        get() = apiUrlCache ?: preferences.prefApiUrl.also { apiUrlCache = it }
         set(value) {
-            _apiUrlCache = value
+            apiUrlCache = value
         }
 
     override val baseUrl: String get() =
@@ -186,7 +186,7 @@ class SussyToons :
                 .toHttpUrl()
                 .newBuilder()
                 .addPathSegment(manga.id)
-                .fragment("$mangaPagePrefix${getMangaUrl(manga)}")
+                .fragment("$MANGA_PAGE_PREFIX${getMangaUrl(manga)}")
                 .build()
         return GET(url, headers)
     }
@@ -237,7 +237,7 @@ class SussyToons :
             val url =
                 request.url
                     .newBuilder()
-                    .fragment("$pageImagePrefix${chapter.url}")
+                    .fragment("$PAGE_IMAGE_PREFIX${chapter.url}")
                     .build()
 
             request
@@ -256,7 +256,7 @@ class SussyToons :
 
         val chapterUrl =
             response.request.url.fragment
-                ?.substringAfter(pageImagePrefix)
+                ?.substringAfter(PAGE_IMAGE_PREFIX)
                 ?: throw Exception("Não foi possivel carregar as páginas")
 
         val url =
@@ -266,7 +266,7 @@ class SussyToons :
                 .addEncodedPathSegments(pageUrl!!)
                 .addPathSegment(chapterPageId)
                 .fragment(
-                    "$chapterPagePrefix${"$baseUrl$chapterUrl"}",
+                    "$CHAPTER_PAGE_PREFIX${"$baseUrl$chapterUrl"}",
                 ).build()
 
         val res = client.newCall(GET(url, headers)).execute()
@@ -431,8 +431,8 @@ class SussyToons :
         val mangaUrl =
             request.url.fragment
                 ?.takeIf {
-                    it.contains(mangaPagePrefix, ignoreCase = true) && chapterUrl.isNullOrBlank()
-                }?.substringAfter(mangaPagePrefix)
+                    it.contains(MANGA_PAGE_PREFIX, ignoreCase = true) && chapterUrl.isNullOrBlank()
+                }?.substringAfter(MANGA_PAGE_PREFIX)
                 ?: return chain.proceed(request)
 
         val document = chain.proceed(GET(mangaUrl, headers)).asJsoup()
@@ -488,8 +488,8 @@ class SussyToons :
         val request = chain.request()
         val chapterUrl =
             request.url.fragment
-                ?.takeIf { it.contains(chapterPagePrefix) }
-                ?.substringAfter(chapterPagePrefix)
+                ?.takeIf { it.contains(CHAPTER_PAGE_PREFIX) }
+                ?.substringAfter(CHAPTER_PAGE_PREFIX)
                 ?.toHttpUrl()
                 ?.newBuilder()
                 ?.fragment(null)
@@ -685,9 +685,9 @@ class SussyToons :
     companion object {
         const val CDN_URL = "https://cdn.sussytoons.site"
         const val OLDI_URL = "https://oldi.sussytoons.site"
-        const val mangaPagePrefix = "mangaPage:"
-        const val chapterPagePrefix = "chapterPage:"
-        const val pageImagePrefix = "pageImage:"
+        const val MANGA_PAGE_PREFIX = "mangaPage:"
+        const val CHAPTER_PAGE_PREFIX = "chapterPage:"
+        const val PAGE_IMAGE_PREFIX = "pageImage:"
 
         private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
 

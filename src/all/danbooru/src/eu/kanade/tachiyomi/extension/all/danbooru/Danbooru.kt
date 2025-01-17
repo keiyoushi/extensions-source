@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -110,7 +109,7 @@ class Danbooru : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String = "a.paginator-next"
 
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(FilterOrder("created_at")))
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(filterOrder("created_at")))
 
     override fun latestUpdatesSelector(): String = searchMangaSelector()
 

@@ -24,7 +24,7 @@ fun String.parseThumbnailUrl(): String =
     if (this.matches(AllManga.urlRegex)) {
         this
     } else {
-        "$thumbnail_cdn$this?w=250"
+        "https://wp.youtube-anime.com/aln.youtube-anime.com/$this?w=250"
     }
 
 fun String?.parseStatus(): Int {
@@ -66,7 +66,6 @@ inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
         .encodeToString(this)
         .toRequestBody(JSON_MEDIA_TYPE)
 
-private const val thumbnail_cdn = "https://wp.youtube-anime.com/aln.youtube-anime.com/"
 private val titleSpecialCharactersRegex = Regex("[^a-z\\d]+")
 private val dateFormat by lazy {
     SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)

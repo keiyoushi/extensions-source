@@ -17,8 +17,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -458,13 +456,13 @@ open class NovelCool(
     ): Request {
         val payload =
             NovelCoolBrowsePayload(
-                appId = appId,
+                appId = APP_ID,
                 lang = siteLang,
                 query = query,
                 type = "manga",
                 page = page.toString(),
-                size = size.toString(),
-                secret = appSecret,
+                size = SIZE.toString(),
+                secret = APP_SECRET,
             )
 
         val body =
@@ -486,7 +484,7 @@ open class NovelCool(
 
         val browse = json.decodeFromString<NovelCoolBrowseResponse>(response.body.string())
 
-        val hasNextPage = browse.list?.size == size
+        val hasNextPage = browse.list?.size == SIZE
 
         return browse.list
             ?.map {
@@ -499,9 +497,9 @@ open class NovelCool(
     }
 
     companion object {
-        private const val appId = "202201290625004"
-        private const val appSecret = "c73a8590641781f203660afca1d37ada"
-        private const val size = 20
+        private const val APP_ID = "202201290625004"
+        private const val APP_SECRET = "c73a8590641781f203660afca1d37ada"
+        private const val SIZE = 20
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
         private val DATE_FORMATTER by lazy {
             SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)

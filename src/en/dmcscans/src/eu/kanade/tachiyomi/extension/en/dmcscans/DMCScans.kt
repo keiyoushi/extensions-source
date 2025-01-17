@@ -48,7 +48,7 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
 
         return apiUrl(chapterCategory)
             .addPathSegments(feed)
-            .addQueryParameter("max-results", maxChapterResults.toString())
+            .addQueryParameter("max-results", MAX_CHAPTER_RESULTS.toString())
             .build()
             .toString()
     }

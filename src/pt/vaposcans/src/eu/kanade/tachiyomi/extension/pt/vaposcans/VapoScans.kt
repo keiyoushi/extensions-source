@@ -27,6 +27,8 @@ class VapoScans : HttpSource() {
 
     override val baseUrl = "https://vaposcans.site"
 
+    private val apiUrl = "https://api.vaposcans.site"
+
     override val lang = "pt-BR"
 
     override val supportsLatest = true
@@ -216,7 +218,6 @@ class VapoScans : HttpSource() {
     }
 
     companion object {
-        const val apiUrl = "https://api.vaposcans.site"
         const val URL_SEARCH_PREFIX = "slug:"
         val JSON_MEDIA_TYPE = "application/json".toMediaTypeOrNull()
         val RELATIVE_DATE_REGEX = """(\d+)""".toRegex()

@@ -232,12 +232,11 @@ class Komiic : HttpSource() {
         return entries
     }
 
-    /**
-     * 檢查 API 是否達到上限
-     * Check if the API has reached its limit.
-     *
-     * (Idk how to throw an exception in reading page)
-     */
+    // 檢查 API 是否達到上限
+    // Check if the API has reached its limit.
+    //
+    // (Idk how to throw an exception in reading page)
+    //
     // private fun fetchAPILimit(): Boolean {
     //    val payload = Payload("getImageLimit", "", QUERY_API_LIMIT).toJsonRequestBody()
     //    val response = client.newCall(POST(queryAPIUrl, headers, payload)).execute()
@@ -245,7 +244,6 @@ class Komiic : HttpSource() {
     //    return limit.limit <= limit.usage
     // }
 
-    // Page list
     override fun pageListRequest(chapter: SChapter): Request {
         val payload =
             Payload(

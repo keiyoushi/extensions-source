@@ -287,7 +287,9 @@ class Komiku : ParsedHttpSource() {
             thumbnail_url = document.select("div.ims > img").attr("abs:src")
 
             // add series type(manga/manhwa/manhua/other) thinggy to genre
-            val seriesTypeSelector = "table.inftable tr:contains(Jenis) a, table.inftable tr:has(a[href*=category\\/]) a, a[href*=category\\/]"
+            val seriesTypeSelector =
+                "table.inftable tr:contains(Jenis) a," +
+                    " table.inftable tr:has(a[href*=category\\/]) a, a[href*=category\\/]"
             document.select(seriesTypeSelector).firstOrNull()?.text()?.let {
                 if (it.isEmpty().not() && genre!!.contains(it, true).not()) {
                     genre += if (genre!!.isEmpty()) it else ", $it"

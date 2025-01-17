@@ -13,7 +13,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-open class vinnieVeritas(
+open class VinnieVeritas(
     override val lang: String = "en",
 ) : ParsedHttpSource() {
     override val name = "Vinnie Veritas - CCC"
@@ -47,7 +47,7 @@ En este lapso de tiempo tuve mucho trabajo de animación e ilustración que no m
 
 CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la abreviación de algo, CCC: La ciudad de las oportunidades narra la historia de Lucio Vasalle y sus desventuras en CCC como recién llegado, el comic, los dibujos sueltos y las animaciones están relacionados, todos cuentan pequeños pedazos de  los personajes y de sus pasados, eres bienvenido a explorar todo esto y sacar tus propias conclusiones, si te fijas bien puede que encuentres algo que alguien no haya notado (:			"""
             }
-        manga.thumbnail_url = thumbnailUrl
+        manga.thumbnail_url = "https://i1.wp.com/vinnieveritas.com/wp-content/uploads/2016/02/CCC000.jpg"
         manga.genre = "webcomic"
 
         return Observable.just(MangasPage(arrayListOf(manga), false))
@@ -78,10 +78,6 @@ CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la ab
 
     override fun pageListParse(document: Document): List<Page> =
         document.select(".webcomic-image img").mapIndexed { i, image -> Page(i, "", image.attr("src")) }
-
-    companion object {
-        private const val thumbnailUrl = "https://i1.wp.com/vinnieveritas.com/wp-content/uploads/2016/02/CCC000.jpg"
-    }
 
     // unused
     override fun fetchSearchManga(

@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -187,15 +186,15 @@ class DisasterScans : HttpSource() {
 
     private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
 
-    private fun SharedPreferences.getCdnUrl(): String = getString(cdnPref, fallbackCdnUrl) ?: fallbackCdnUrl
+    private fun SharedPreferences.getCdnUrl(): String = getString(CDN_PREF, FALLBACK_CDN) ?: FALLBACK_CDN
 
     private fun SharedPreferences.putCdnUrl(url: String) {
-        edit().putString(cdnPref, url).commit()
+        edit().putString(CDN_PREF, url).commit()
     }
 
     companion object {
-        private const val fallbackCdnUrl = "https://f005.backblazeb2.com/b2api/v1/b2_download_file_by_id?fileId="
-        private const val cdnPref = "cdn_pref"
+        private const val FALLBACK_CDN = "https://f005.backblazeb2.com/b2api/v1/b2_download_file_by_id?fileId="
+        private const val CDN_PREF = "cdn_pref"
         val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
         val trailingHyphenRegex = "-+$".toRegex()
         val dateFormat by lazy {

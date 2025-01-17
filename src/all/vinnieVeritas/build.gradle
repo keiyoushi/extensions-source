@@ -1,6 +1,6 @@
 ext {
     extName = 'Vinne Veritas - CCC'
-    extClass = '.vinnieVeritasFactory'
+    extClass = '.VinnieVeritasFactory'
     extVersionCode = 2
 }
 

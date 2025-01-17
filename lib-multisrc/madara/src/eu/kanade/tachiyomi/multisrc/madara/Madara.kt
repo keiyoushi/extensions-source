@@ -881,7 +881,9 @@ abstract class Madara(
     open val mangaDetailsSelectorAuthor = "div.author-content > a"
     open val mangaDetailsSelectorArtist = "div.artist-content > a"
     open val mangaDetailsSelectorStatus = "div.summary-content"
-    open val mangaDetailsSelectorDescription = "div.description-summary div.summary__content, div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"
+    open val mangaDetailsSelectorDescription =
+        "div.description-summary div.summary__content, " +
+            "div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"
     open val mangaDetailsSelectorThumbnail = "div.summary_image img"
     open val mangaDetailsSelectorGenre = "div.genres-content a"
     open val mangaDetailsSelectorTag = "div.tags-content a"
@@ -1111,7 +1113,9 @@ abstract class Madara(
         return super.pageListRequest(chapter)
     }
 
-    open val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
+    open val pageListParseSelector =
+        "div.page-break, li.blocks-gallery-item," +
+            " .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
 
     open val chapterProtectorSelector = "#chapter-protector-data"
 

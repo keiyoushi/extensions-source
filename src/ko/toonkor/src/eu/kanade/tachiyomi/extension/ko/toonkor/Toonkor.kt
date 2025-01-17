@@ -29,7 +29,7 @@ class Toonkor :
 
     private val defaultBaseUrl = "https://tkor.dog"
 
-    private val BASE_URL_PREF = "overrideBaseUrl_v${AppInfo.getVersionName()}"
+    private val baseUrlPref = "overrideBaseUrl_v${AppInfo.getVersionName()}"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -213,7 +213,7 @@ class Toonkor :
 
                 setOnPreferenceChangeListener { _, newValue ->
                     try {
-                        val res = preferences.edit().putString(BASE_URL_PREF, newValue as String).commit()
+                        val res = preferences.edit().putString(baseUrlPref, newValue as String).commit()
                         res
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -225,7 +225,7 @@ class Toonkor :
         screen.addPreference(baseUrlPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private fun getPrefBaseUrl(): String = preferences.getString(baseUrlPref, defaultBaseUrl)!!
 
     companion object {
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"

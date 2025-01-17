@@ -213,4 +213,6 @@ class AComics : ParsedHttpSource() {
         )
 }
 
-private const val DEFAULT_COMIC_QUERIES = "categories=&ratings[]=1&ratings[]=2&ratings[]=3&ratings[]=4&ratings[]=5&ratings[]=6&type=0&updatable=0&issue_count=2"
+private const val DEFAULT_COMIC_QUERIES =
+    "categories=&ratings[]=1&ratings[]=2&ratings[]=3" +
+        "&ratings[]=4&ratings[]=5&ratings[]=6&type=0&updatable=0&issue_count=2"

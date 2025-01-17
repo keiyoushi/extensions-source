@@ -296,7 +296,11 @@ class AsuraScans :
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListSelector() =
-        if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
+        if (preferences.hidePremiumChapters()) {
+            "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))"
+        } else {
+            "div.scrollbar-thumb-themecolor > div.group"
+        }
 
     override fun chapterFromElement(element: Element) =
         SChapter.create().apply {

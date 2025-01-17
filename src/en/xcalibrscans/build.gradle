@@ -1,6 +1,6 @@
 ext {
     extName = 'xCaliBR Scans'
-    extClass = '.xCaliBRScans'
+    extClass = '.XCaliBRScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://xcalibrscans.com'
     overrideVersionCode = 5

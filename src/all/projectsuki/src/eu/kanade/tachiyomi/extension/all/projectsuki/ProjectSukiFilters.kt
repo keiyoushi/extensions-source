@@ -168,7 +168,7 @@ object ProjectSukiFilters {
         Filter.Select<StatusValue>("Status", StatusValue.values()),
         ProjectSukiFilter {
         override fun HttpUrl.Builder.applyFilter() {
-            when (val state = StatusValue[state /* ordinal */]) {
+            when (val state = StatusValue[state]) {
                 StatusValue.ANY -> {} // default, do nothing
                 else -> ensureAdv().addQueryParameter("status", state.query)
             }
@@ -179,7 +179,7 @@ object ProjectSukiFilters {
         Filter.Select<OriginValue>("Origin", OriginValue.values()),
         ProjectSukiFilter {
         override fun HttpUrl.Builder.applyFilter() {
-            when (val state = OriginValue[state /* ordinal */]) {
+            when (val state = OriginValue[state]) {
                 OriginValue.ANY -> {} // default, do nothing
                 else -> ensureAdv().addQueryParameter("origin", state.query)
             }

@@ -17,7 +17,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class wnacg :
+class WNACG :
     ParsedHttpSource(),
     ConfigurableSource {
     override val name = "紳士漫畫"

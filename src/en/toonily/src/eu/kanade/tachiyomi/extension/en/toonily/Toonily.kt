@@ -10,19 +10,19 @@ import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val domain = "toonily.com"
+private const val DOMAIN = "toonily.com"
 
 class Toonily :
     Madara(
         "Toonily",
-        "https://$domain",
+        "https://$DOMAIN",
         "en",
         SimpleDateFormat("MMM d, yy", Locale.US),
     ) {
     override val client: OkHttpClient =
         super.client
             .newBuilder()
-            .addNetworkInterceptor(CookieInterceptor(domain, "toonily-mature" to "1"))
+            .addNetworkInterceptor(CookieInterceptor(DOMAIN, "toonily-mature" to "1"))
             .build()
 
     override val mangaSubString = "webtoon"

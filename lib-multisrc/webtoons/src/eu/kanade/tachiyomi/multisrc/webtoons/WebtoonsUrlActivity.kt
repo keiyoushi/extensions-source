@@ -20,8 +20,8 @@ class WebtoonsUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
-        val title_no = intent?.data?.getQueryParameter("title_no")
-        if (pathSegments != null && pathSegments.size >= 3 && title_no != null) {
+        val titleNo = intent?.data?.getQueryParameter("title_no")
+        if (pathSegments != null && pathSegments.size >= 3 && titleNo != null) {
             val mainIntent =
                 Intent().apply {
                     action = "eu.kanade.tachiyomi.SEARCH"

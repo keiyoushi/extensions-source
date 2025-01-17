@@ -480,7 +480,9 @@ class Multporn : ParsedHttpSource() {
         const val POPULAR_REQUEST_TYPE = "Popular"
         const val SEARCH_REQUEST_TYPE = "Search"
 
-        const val HEADER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
+        const val HEADER_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" +
+                " (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
         const val HEADER_CONTENT_TYPE = "application/x-www-form-urlencoded; charset=UTF-8"
     }
 }

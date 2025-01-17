@@ -176,13 +176,13 @@ open class Webtoons(
             }
 
         return query.substringAfter(URL_SEARCH_PREFIX).toHttpUrlOrNull()?.let { url ->
-            val title_no = url.queryParameter("title_no")
-            val couldBeWebtoonOrEpisode = title_no != null && (url.pathSegments.size >= 3 && url.pathSegments.last().isNotEmpty())
+            val titleNo = url.queryParameter("title_no")
+            val couldBeWebtoonOrEpisode = titleNo != null && (url.pathSegments.size >= 3 && url.pathSegments.last().isNotEmpty())
             val isThisLang = "$url".startsWith("$baseUrl/$langCode")
             if (!(couldBeWebtoonOrEpisode && isThisLang)) {
                 emptyResult
             } else {
-                val potentialUrl = "${webtoonPath(url)}?title_no=$title_no"
+                val potentialUrl = "${webtoonPath(url)}?title_no=$titleNo"
                 fetchMangaDetails(SManga.create().apply { this.url = potentialUrl }).map {
                     it.url = potentialUrl
                     MangasPage(listOf(it), false)

@@ -719,6 +719,8 @@ class HentaiVN :
 
         const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
         const val TITLE_CUSTOM_UA = "Chuỗi đại diện người dùng tuỳ chỉnh"
-        const val SUMMARY_CUSTOM_UA = "Để trống để dùng chuỗi đại diện người dùng mặc định của ứng dụng. Cài đặt này bị vô hiệu nếu chuỗi đại diện người dùng ngẫu nhiên được bật."
+        const val SUMMARY_CUSTOM_UA =
+            "Để trống để dùng chuỗi đại diện người dùng mặc định của ứng dụng." +
+                " Cài đặt này bị vô hiệu nếu chuỗi đại diện người dùng ngẫu nhiên được bật."
     }
 }

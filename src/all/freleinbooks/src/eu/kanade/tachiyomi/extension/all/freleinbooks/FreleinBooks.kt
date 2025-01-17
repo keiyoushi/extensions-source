@@ -131,7 +131,6 @@ class FreleinBooks : ParsedHttpSource() {
         val pages = mutableListOf<Page>()
         document.select("noscript").remove()
         document.select(".gallerybox a > img").forEachIndexed { i, it ->
-            // format new img/b/
             if (it.imgSrc.contains("img/b/")) {
                 if (it.imgSrc.contains("/w768-rw/")) {
                     val itUrl = it.imgSrc.replace("/w768-rw/", "/s0/")
@@ -141,9 +140,7 @@ class FreleinBooks : ParsedHttpSource() {
                     val itUrl = it.imgSrc.replace("/w480-rw/", "/s0/")
                     pages.add(Page(i, itUrl, itUrl))
                 }
-            }
-            // format new img/b/
-            else {
+            } else {
                 if (it.imgSrc.contains("=w768-rw")) {
                     val itUrl = it.imgSrc.replace("=w768-rw", "")
                     pages.add(Page(i, itUrl, itUrl))

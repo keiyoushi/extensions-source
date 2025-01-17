@@ -150,14 +150,13 @@ data class Url(
     val absUrl get() = url.toAbsUrl()
 
     companion object {
-        fun String.toAbsUrl(baseUrl: String = loUrl): String =
+        fun String.toAbsUrl(baseUrl: String = "https://127.0.0.1/"): String =
             if (this.matches(urlRegex)) {
                 this
             } else {
                 baseUrl + this
             }
 
-        private const val loUrl = "https://127.0.0.1/"
         private val urlRegex = Regex("^https?://.*")
     }
 }

@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
@@ -241,9 +240,9 @@ class Taadd : HttpSource() {
                                         rawTitle[idx].equals('v', true) ||
                                         rawTitle[idx].equals('s', true)
                                     ) {
-                                        val _idx = rawTitle.indexOf('c', idx, true)
-                                        if (_idx != -1) {
-                                            idx = _idx
+                                        val tempIdx = rawTitle.indexOf('c', idx, true)
+                                        if (tempIdx != -1) {
+                                            idx = tempIdx
                                         } else {
                                             idx++
                                         }

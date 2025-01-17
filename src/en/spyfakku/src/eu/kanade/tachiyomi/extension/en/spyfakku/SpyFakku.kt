@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
@@ -139,8 +138,8 @@ class SpyFakku : HttpSource() {
         val thumbnail = data[hentaiIndexes.thumbnail].jsonPrimitive.int
 
         val description = data[hentaiIndexes.description].jsonPrimitive.contentOrNull
-        val released_at = data[hentaiIndexes.released_at].jsonPrimitive.content
-        val created_at = data[hentaiIndexes.created_at].jsonPrimitive.content
+        val releasedAt = data[hentaiIndexes.released_at].jsonPrimitive.content
+        val createdAt = data[hentaiIndexes.created_at].jsonPrimitive.content
         val size = data[hentaiIndexes.size].jsonPrimitive.long
         val pages = data[hentaiIndexes.pages].jsonPrimitive.int
 
@@ -149,8 +148,8 @@ class SpyFakku : HttpSource() {
             hash = hash,
             thumbnail = thumbnail,
             description = description,
-            released_at = released_at,
-            created_at = created_at,
+            released_at = releasedAt,
+            created_at = createdAt,
             tags = tags,
             size = size,
             pages = pages,
@@ -313,7 +312,7 @@ class SpyFakku : HttpSource() {
                     url = manga.url
                     date_upload =
                         try {
-                            releasedAtFormat.parse(add.released_at)!!.time
+                            add.released_at?.let { releasedAtFormat.parse(it) }!!.time
                         } catch (e: Exception) {
                             0L
                         }

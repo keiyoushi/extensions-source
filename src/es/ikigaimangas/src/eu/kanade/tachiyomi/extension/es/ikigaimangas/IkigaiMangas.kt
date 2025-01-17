@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -319,7 +318,7 @@ class IkigaiMangas :
                 title = SHOW_NSFW_PREF_TITLE
                 setDefaultValue(SHOW_NSFW_PREF_DEFAULT)
                 setOnPreferenceChangeListener { _, newValue ->
-                    _cachedNsfwPref = newValue as Boolean
+                    cachedNsfwPref = newValue as Boolean
                     true
                 }
             }.also { screen.addPreference(it) }
@@ -349,29 +348,29 @@ class IkigaiMangas :
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
 
-    private var _cachedBaseUrl: String? = null
+    private var cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
         get() {
-            if (_cachedBaseUrl == null) {
-                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            if (cachedBaseUrl == null) {
+                cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
             }
-            return _cachedBaseUrl!!
+            return cachedBaseUrl!!
         }
         set(value) {
-            _cachedBaseUrl = value
+            cachedBaseUrl = value
             edit().putString(BASE_URL_PREF, value).apply()
         }
 
-    private var _cachedNsfwPref: Boolean? = null
+    private var cachedNsfwPref: Boolean? = null
     private var SharedPreferences.showNsfwPref: Boolean
         get() {
-            if (_cachedNsfwPref == null) {
-                _cachedNsfwPref = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
+            if (cachedNsfwPref == null) {
+                cachedNsfwPref = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
             }
-            return _cachedNsfwPref!!
+            return cachedNsfwPref!!
         }
         set(value) {
-            _cachedNsfwPref = value
+            cachedNsfwPref = value
             edit().putBoolean(SHOW_NSFW_PREF, value).apply()
         }
 

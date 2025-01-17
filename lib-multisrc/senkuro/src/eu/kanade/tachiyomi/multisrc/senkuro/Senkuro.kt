@@ -11,8 +11,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -58,7 +56,7 @@ abstract class Senkuro(
             GraphQL(
                 SEARCH_QUERY,
                 SearchVariables(
-                    offset = offsetCount * (page - 1),
+                    offset = OFFSET_COUNT * (page - 1),
                     genre =
                         SearchVariables.FiltersDto(
                             // Senkuro eternal built-in exclude 18+ filter
@@ -177,7 +175,7 @@ abstract class Senkuro(
                 SEARCH_QUERY,
                 SearchVariables(
                     query = query,
-                    offset = offsetCount * (page - 1),
+                    offset = OFFSET_COUNT * (page - 1),
                     genre =
                         SearchVariables.FiltersDto(
                             includeGenres,
@@ -522,7 +520,7 @@ abstract class Senkuro(
         )
 
     companion object {
-        private const val offsetCount = 20
+        private const val OFFSET_COUNT = 20
         private const val API_URL = "https://api.senkuro.com/graphql"
         private val senkuroExcludeGenres = listOf("hentai", "yaoi", "yuri", "shoujo_ai", "shounen_ai")
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()

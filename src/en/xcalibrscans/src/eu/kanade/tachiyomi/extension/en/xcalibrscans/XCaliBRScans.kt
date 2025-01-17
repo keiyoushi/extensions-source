@@ -9,7 +9,7 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class xCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", "en") {
+class XCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", "en") {
     override val client: OkHttpClient =
         super.client
             .newBuilder()

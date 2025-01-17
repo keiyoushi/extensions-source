@@ -241,7 +241,7 @@ abstract class Guya(
 
                 setOnPreferenceChangeListener { _, newValue ->
                     val selected = newValue.toString()
-                    preferences.edit().putString(scanlatorPreference, selected).commit()
+                    preferences.edit().putString(SCANLATOR_PREFERENCE, selected).commit()
                 }
             }
 
@@ -396,7 +396,7 @@ abstract class Guya(
         json: JSONObject,
         sort: JSONArray,
     ): String {
-        val preferred = preferences.getString(scanlatorPreference, null)
+        val preferred = preferences.getString(SCANLATOR_PREFERENCE, null)
 
         if (preferred != null && json.has(preferred)) {
             return preferred
@@ -503,6 +503,6 @@ abstract class Guya(
 
     companion object {
         const val SLUG_PREFIX = "slug:"
-        private const val scanlatorPreference = "SCANLATOR_PREFERENCE"
+        private const val SCANLATOR_PREFERENCE = "SCANLATOR_PREFERENCE"
     }
 }

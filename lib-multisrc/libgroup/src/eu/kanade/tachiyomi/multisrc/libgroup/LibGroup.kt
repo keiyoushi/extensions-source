@@ -28,8 +28,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -118,12 +116,12 @@ abstract class LibGroup(
                 add("Referer", baseUrl)
             }.build()
 
-    private var _constants: Constants? = null
+    private var constants: Constants? = null
 
     private fun getConstants(): Constants? {
-        if (_constants == null) {
+        if (constants == null) {
             try {
-                _constants =
+                constants =
                     client
                         .newCall(
                             GET(
@@ -133,12 +131,12 @@ abstract class LibGroup(
                         ).execute()
                         .parseAs<Data<Constants>>()
                         .data
-                return _constants
+                return constants
             } catch (ex: Exception) {
                 Log.d("LibGroup", "Error getting constants: $ex")
             }
         }
-        return _constants
+        return constants
     }
 
     private fun checkForToken(chain: Interceptor.Chain): Response {
@@ -376,8 +374,11 @@ abstract class LibGroup(
 
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
         val defaultBranchId =
-            if (chaptersData.data.getBranchCount() > 1) { // excess request if branchesCount is only alone = slow update library witch rateLimitHost(apiDomain.toHttpUrl(), 1)
-                runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
+            // excess request if branchesCount is only alone = slow update library witch rateLimitHost(apiDomain.toHttpUrl(), 1)
+            if (chaptersData.data.getBranchCount() > 1) {
+                runCatching {
+                    getDefaultBranch(slugUrl.substringBefore("-")).first().id
+                }.getOrNull()
             } else {
                 null
             }
@@ -386,13 +387,15 @@ abstract class LibGroup(
         for (it in chaptersData.data.withIndex()) {
             if (it.value.branchesCount > 1) {
                 for (currentBranch in it.value.branches.withIndex()) {
-                    if (currentBranch.value.branchId == defaultBranchId && sortingList == "ms_mixing") { // ms_mixing with default branch from api
+                    if (currentBranch.value.branchId == defaultBranchId && sortingList == "ms_mixing") {
+                        // ms_mixing with default branch from api
                         chapters.add(it.value.toSChapter(slugUrl, defaultBranchId, isScanUser()))
-                    } else if (defaultBranchId == null && sortingList == "ms_mixing") { // ms_mixing with first branch in chapter
+                    } else if (defaultBranchId == null && sortingList == "ms_mixing") {
+                        // ms_mixing with first branch in chapter
                         if (chapters.any { chpIt -> chpIt.chapter_number == it.value.number.toFloat() }) {
                             chapters.add(it.value.toSChapter(slugUrl, currentBranch.value.branchId, isScanUser()))
                         }
-                    } else if (sortingList == "ms_combining") { // ms_combining
+                    } else if (sortingList == "ms_combining") {
                         chapters.add(it.value.toSChapter(slugUrl, currentBranch.value.branchId, isScanUser()))
                     }
                 }
@@ -644,7 +647,7 @@ abstract class LibGroup(
             )
 
         filters +=
-            if (_constants != null) {
+            if (constants != null) {
                 listOf(
                     CategoryList(getConstants()!!.getCategories(siteId).map { CheckFilter(it.label, it.id.toString()) }),
                     FormatList(getConstants()!!.getFormats(siteId).map { SearchFilter(it.name, it.id.toString()) }),
@@ -796,7 +799,9 @@ abstract class LibGroup(
                 summary = "%s"
                 setDefaultValue("eng")
                 setOnPreferenceChangeListener { _, _ ->
-                    val warning = "Если язык обложки не изменился очистите базу данных в приложении (Настройки -> Дополнительно -> Очистить базу данных)"
+                    val warning =
+                        "Если язык обложки не изменился очистите базу данных в приложении " +
+                            "(Настройки -> Дополнительно -> Очистить базу данных)"
                     Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                     true
                 }

@@ -77,11 +77,11 @@ class ScanManga : ParsedHttpSource() {
         SManga.create().apply {
             title = element.select("a.nom_manga").text()
             setUrlWithoutDomain(element.select("a.nom_manga").attr("href"))
-            /*thumbnail_url = element.select(".logo_manga img").let {
-                if (it.hasAttr("data-original"))
-                    it.attr("data-original") else it.attr("src")
-            }*/
             // Better not use it, width is too large, which results in terrible image
+            // thumbnail_url = element.select(".logo_manga img").let {
+            //    if (it.hasAttr("data-original"))
+            //        it.attr("data-original") else it.attr("src")
+            // }
         }
 
     override fun latestUpdatesNextPageSelector(): String? = null

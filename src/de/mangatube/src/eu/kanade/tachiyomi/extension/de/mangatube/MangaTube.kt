@@ -62,7 +62,9 @@ class MangaTube : ParsedHttpSource() {
             }
 
     override fun popularMangaRequest(page: Int): Request {
-        val rbodyContent = "action=load_series_list_entries&parameter%5Bpage%5D=$page&parameter%5Bletter%5D=&parameter%5Bsortby%5D=popularity&parameter%5Border%5D=asc"
+        val rbodyContent =
+            "action=load_series_list_entries&parameter%5Bpage%5D=$page" +
+                "&parameter%5Bletter%5D=&parameter%5Bsortby%5D=popularity&parameter%5Border%5D=asc"
         return POST("$baseUrl/ajax", xhrHeaders, rbodyContent.toRequestBody(null))
     }
 

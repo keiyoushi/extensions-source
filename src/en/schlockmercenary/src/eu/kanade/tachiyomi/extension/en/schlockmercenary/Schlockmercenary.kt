@@ -15,6 +15,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.lang.UnsupportedOperationException
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -34,7 +35,7 @@ class Schlockmercenary : ParsedHttpSource() {
 
     // Books
 
-    override fun popularMangaRequest(page: Int): Request = GET("${baseUrl}$archiveUrl")
+    override fun popularMangaRequest(page: Int): Request = GET("${baseUrl}$ARCHIVE_URL")
 
     override fun popularMangaSelector(): String = "div.archive-book"
 
@@ -44,7 +45,7 @@ class Schlockmercenary : ParsedHttpSource() {
             (
                 baseUrl + (
                     element.select("img").first()?.attr("src")
-                        ?: defaultThumbnailUrl
+                        ?: DEFAULT_THUMBNAIL
                 )
             ).substringBefore("?")
         return SManga.create().apply {
@@ -64,7 +65,7 @@ class Schlockmercenary : ParsedHttpSource() {
     override fun chapterListSelector() = "ul.chapters > li:not(ul > li > ul > li) > a"
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val requestUrl = "${baseUrl}$archiveUrl"
+        val requestUrl = "${baseUrl}$ARCHIVE_URL"
         return client
             .newCall(GET(requestUrl))
             .asObservableSuccess()
@@ -92,16 +93,14 @@ class Schlockmercenary : ParsedHttpSource() {
         chapter.name = element.text()
         chapter.chapter_number = chapterCount++.toFloat()
         chapter.date_upload =
-            chapter.url.takeLast(10).let {
-                SimpleDateFormat(dateFormat, Locale.getDefault()).parse(it)!!.time
-            }
+            chapter.url.takeLast(10).let { parseDate(it) }
         return chapter
     }
 
     // Pages
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val requestUrl = "${baseUrl}$archiveUrl"
+        val requestUrl = "${baseUrl}$ARCHIVE_URL"
         return client
             .newCall(GET(requestUrl))
             .asObservableSuccess()
@@ -139,7 +138,7 @@ class Schlockmercenary : ParsedHttpSource() {
             nextChapter =
                 currentChapter
                     .parents()[2]
-                    ?.nextElementSibling()
+                    .nextElementSibling()
                     ?.select(chapterListSelector())
                     ?.first()
         }
@@ -161,8 +160,7 @@ class Schlockmercenary : ParsedHttpSource() {
 
         while (calendar.time.before(Date(end))) {
             val result = calendar.time
-            val formatter = SimpleDateFormat(dateFormat, Locale.getDefault())
-            val today = formatter.format(result)
+            val today = dateFormat.format(result)
             getImageUrlsForDay(today).forEach { pages.add(Page(pages.size, "", it)) }
             calendar.add(Calendar.DATE, 1)
         }
@@ -212,9 +210,17 @@ class Schlockmercenary : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+    private fun parseDate(date: String): Long =
+        try {
+            dateFormat.parse(date)!!.time
+        } catch (_: ParseException) {
+            0L
+        }
+
     companion object {
-        const val defaultThumbnailUrl = "/static/img/logo.b6dacbb8.jpg"
-        const val archiveUrl = "/archives/"
-        const val dateFormat = "yyyy-MM-dd"
+        const val DEFAULT_THUMBNAIL = "/static/img/logo.b6dacbb8.jpg"
+        const val ARCHIVE_URL = "/archives/"
     }
 }

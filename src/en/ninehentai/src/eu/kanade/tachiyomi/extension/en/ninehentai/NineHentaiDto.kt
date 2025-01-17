@@ -29,15 +29,14 @@ The basic search request JSON object looks like this:
     }
   }
 }
-*/
 
-/*
+where sort is:
  Sort = 0, Newest
  Sort = 1, Popular right now
  Sort = 2, Most Fapped
  Sort = 3, Most Viewed
  Sort = 4, By title
- */
+*/
 
 @Serializable
 data class SearchRequest(

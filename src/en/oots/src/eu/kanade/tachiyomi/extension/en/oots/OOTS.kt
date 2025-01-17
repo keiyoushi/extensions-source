@@ -15,7 +15,7 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class oots : ParsedHttpSource() {
+class OOTS : ParsedHttpSource() {
     override val name = "The Order Of The Stick (OOTS)"
 
     override val baseUrl = "https://www.giantitp.com"

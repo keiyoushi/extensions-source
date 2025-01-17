@@ -5,6 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
+@Suppress("ktlint:standard:property-naming")
 object NamiComiConstants {
     const val mangaLimit = 20
 

@@ -6,6 +6,7 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.time.Duration.Companion.minutes
 
+@Suppress("ktlint:standard:property-naming")
 object MDConstants {
     val uuidRegex =
         Regex("[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")

@@ -26,7 +26,7 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         val comicObj = document.selectFirst("script:containsData(comicObj)")!!.data()
         val id = comicObj.filter { it.isDigit() }
         val name = comicObj.substringBefore(":").substringAfter("{").trim()
-        val ajax_url =
+        val ajaxUrl =
             document
                 .selectFirst("script:containsData(ajax)")!!
                 .data()
@@ -39,7 +39,7 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
                 .add(name, id)
                 .add("action", "ajax_chap")
                 .build()
-        val doc = client.newCall(POST(ajax_url, headers, body)).execute().asJsoup()
+        val doc = client.newCall(POST(ajaxUrl, headers, body)).execute().asJsoup()
         val chapterElements = doc.select(chapterListSelector())
 
         return chapterElements.map(::chapterFromElement)

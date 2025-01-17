@@ -304,22 +304,22 @@ open class Comikey(
 
             // Somewhat useful if you need to debug WebView issues. Don't delete.
             //
-            /*innerWv.webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                    if (consoleMessage == null) { return false }
-                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
-                    when (consoleMessage.messageLevel()) {
-                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("comikey", logContent)
-                        ConsoleMessage.MessageLevel.ERROR -> Log.e("comikey", logContent)
-                        ConsoleMessage.MessageLevel.LOG -> Log.i("comikey", logContent)
-                        ConsoleMessage.MessageLevel.TIP -> Log.i("comikey", logContent)
-                        ConsoleMessage.MessageLevel.WARNING -> Log.w("comikey", logContent)
-                        else -> Log.d("comikey", logContent)
-                    }
-
-                    return true
-                }
-            }*/
+            // innerWv.webChromeClient = object : WebChromeClient() {
+            //    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+            //        if (consoleMessage == null) { return false }
+            //        val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
+            //        when (consoleMessage.messageLevel()) {
+            //            ConsoleMessage.MessageLevel.DEBUG -> Log.d("comikey", logContent)
+            //            ConsoleMessage.MessageLevel.ERROR -> Log.e("comikey", logContent)
+            //            ConsoleMessage.MessageLevel.LOG -> Log.i("comikey", logContent)
+            //            ConsoleMessage.MessageLevel.TIP -> Log.i("comikey", logContent)
+            //            ConsoleMessage.MessageLevel.WARNING -> Log.w("comikey", logContent)
+            //            else -> Log.d("comikey", logContent)
+            //        }
+            //
+            //        return true
+            //    }
+            // }
 
             innerWv.webViewClient =
                 object : WebViewClient() {

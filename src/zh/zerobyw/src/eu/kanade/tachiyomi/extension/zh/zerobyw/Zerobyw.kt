@@ -230,7 +230,6 @@ class Zerobyw :
      * Class that creates a select filter. Each entry in the dropdown has a name and a display name.
      * If an entry is selected it is appended as a query parameter onto the end of the URI.
      */
-    // vals: <name, display>
     private open class UriSelectFilterPath(
         val key: String,
         displayName: String,

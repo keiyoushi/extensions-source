@@ -55,7 +55,7 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     private var imgList = InternalList(ArrayList(), "")
 
-    private var _valid: Validate = Validate(false, -1)
+    private var valid: Validate = Validate(false, -1)
 
     private val json: Json by injectLazy()
 
@@ -190,7 +190,7 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
-        _valid = getValid(manga)
+        valid = getValid(manga)
         return manga
     }
 

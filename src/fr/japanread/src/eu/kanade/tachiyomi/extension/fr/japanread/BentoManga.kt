@@ -168,16 +168,19 @@ class BentoManga :
                 document
                     .select("div.manga div.manga-infos div.component-manga-categories a")
                     .joinToString(" , ") { it.text() }
-            status = document.select("div.datas div.datas_more div.datas_more-status div.datas_more-status-data")?.first()?.text()?.let {
-                when {
-                    it.contains("En cours") -> SManga.ONGOING
-                    it.contains("Terminé") -> SManga.COMPLETED
-                    it.contains("En pause") -> SManga.ON_HIATUS
-                    it.contains("Licencié") -> SManga.LICENSED
-                    it.contains("Abandonné") -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-            } ?: SManga.UNKNOWN
+            status = document
+                .selectFirst("div.datas div.datas_more div.datas_more-status div.datas_more-status-data")
+                ?.text()
+                ?.let {
+                    when {
+                        it.contains("En cours") -> SManga.ONGOING
+                        it.contains("Terminé") -> SManga.COMPLETED
+                        it.contains("En pause") -> SManga.ON_HIATUS
+                        it.contains("Licencié") -> SManga.LICENSED
+                        it.contains("Abandonné") -> SManga.CANCELLED
+                        else -> SManga.UNKNOWN
+                    }
+                } ?: SManga.UNKNOWN
 
             thumbnail_url = document.select("img[alt=couverture manga]").attr("src")
         }
@@ -226,7 +229,7 @@ class BentoManga :
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val requestUrl =
             if (manga.url.startsWith("http")) {
-                "${manga.url}"
+                manga.url
             } else {
                 "$baseUrl${manga.url}"
             }
@@ -249,8 +252,7 @@ class BentoManga :
         val pagemax =
             if (!document.select(".paginator button:contains(>>)").isNullOrEmpty()) {
                 document
-                    .select(".paginator button:contains(>>)")
-                    ?.first()
+                    .selectFirst(".paginator button:contains(>>)")
                     ?.attr("data-limit")
                     ?.toInt()
                     ?.plus(1)
@@ -274,49 +276,50 @@ class BentoManga :
     // Alternative way through API in case jSoup doesn't work anymore
     // It gives precise timestamp, but we are not using it
     // since the API wrongly returns null for the scanlation group
-    /*private fun getChapterName(jsonElement: JsonElement): String {
-        var name = ""
-
-        if (jsonElement["volume"].asString != "") {
-            name += "Tome " + jsonElement["volume"].asString + " "
-        }
-        if (jsonElement["chapter"].asString != "") {
-            name += "Ch " + jsonElement["chapter"].asString + " "
-        }
-
-        if (jsonElement["title"].asString != "") {
-            if (name != "") {
-                name += " - "
-            }
-            name += jsonElement["title"].asString
-        }
-
-        return name
-    }
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val mangaId = document.select("div[data-avg]").attr("data-avg")
-
-        client.newCall(GET(baseUrl + document.select("#chapters div[data-row=chapter]").first()!!.select("div.col-lg-5 a").attr("href"), headers)).execute()
-
-        val apiResponse = client.newCall(GET("$baseUrl/api/?id=$mangaId&type=manga", apiHeaders())).execute()
-
-        val jsonData = apiResponse.body.string()
-        val json = JsonParser().parse(jsonData).asJsonObject
-
-        return json["chapter"].obj.entrySet()
-            .map {
-                SChapter.create().apply {
-                    name = getChapterName(it.value.obj)
-                    url = "$baseUrl/api/?id=${it.key}&type=chapter"
-                    date_upload = it.value.obj["timestamp"].asLong * 1000
-                    // scanlator = element.select(".chapter-list-group a").joinToString { it.text() }
-                }
-            }
-            .sortedByDescending { it.date_upload }
-    }
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()*/
+    //
+    // private fun getChapterName(jsonElement: JsonElement): String {
+    //    var name = ""
+    //
+    //    if (jsonElement["volume"].asString != "") {
+    //        name += "Tome " + jsonElement["volume"].asString + " "
+    //    }
+    //    if (jsonElement["chapter"].asString != "") {
+    //        name += "Ch " + jsonElement["chapter"].asString + " "
+    //    }
+    //
+    //    if (jsonElement["title"].asString != "") {
+    //        if (name != "") {
+    //            name += " - "
+    //        }
+    //        name += jsonElement["title"].asString
+    //    }
+    //
+    //    return name
+    // }
+    // override fun chapterListParse(response: Response): List<SChapter> {
+    //    val document = response.asJsoup()
+    //    val mangaId = document.select("div[data-avg]").attr("data-avg")
+    //
+    //    client.newCall(GET(baseUrl + document.select("#chapters div[data-row=chapter]").first()!!.select("div.col-lg-5 a").attr("href"), headers)).execute()
+    //
+    //    val apiResponse = client.newCall(GET("$baseUrl/api/?id=$mangaId&type=manga", apiHeaders())).execute()
+    //
+    //    val jsonData = apiResponse.body.string()
+    //    val json = JsonParser().parse(jsonData).asJsonObject
+    //
+    //    return json["chapter"].obj.entrySet()
+    //        .map {
+    //            SChapter.create().apply {
+    //                name = getChapterName(it.value.obj)
+    //                url = "$baseUrl/api/?id=${it.key}&type=chapter"
+    //                date_upload = it.value.obj["timestamp"].asLong * 1000
+    //                // scanlator = element.select(".chapter-list-group a").joinToString { it.text() }
+    //            }
+    //        }
+    //        .sortedByDescending { it.date_upload }
+    // }
+    // override fun chapterListSelector() = throw UnsupportedOperationException()
+    // override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
@@ -459,7 +462,6 @@ class BentoManga :
      * If an entry is selected it is appended as a query parameter onto the end of the URI.
      * If `firstIsUnspecified` is set to true, if the first entry is selected, nothing will be appended on the the URI.
      */
-    // vals: <name, display>
     private open class UriSelectFilter(
         displayName: String,
         val uriParam: String,
@@ -517,6 +519,8 @@ class BentoManga :
         private const val RESTART_APP_STRING = "Restart Tachiyomi to apply new setting."
         private const val ERROR_USER_AGENT_SETUP = "Invalid User-Agent :"
         private const val TITLE_RANDOM_UA = "Set custom User-Agent"
-        private const val DEFAULT_UA = "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 (KHTML, like Gecko) Brave/107.0.0.0 Mobile Safari/537.36"
+        private const val DEFAULT_UA =
+            "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Brave/107.0.0.0 Mobile Safari/537.36"
     }
 }

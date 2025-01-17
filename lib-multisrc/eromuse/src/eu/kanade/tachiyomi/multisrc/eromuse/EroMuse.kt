@@ -36,7 +36,6 @@ open class EroMuse(
      * if page 2 is path_to/2, nothing special needs to be done.
      */
 
-    // the stack - shouldn't need to touch these except for visibility
     protected data class StackItem(
         val url: String,
         val pageType: Int,

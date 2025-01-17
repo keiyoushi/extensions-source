@@ -412,7 +412,9 @@ class Desu :
                 summary = "%s"
                 setDefaultValue("eng")
                 setOnPreferenceChangeListener { _, newValue ->
-                    val warning = "Если язык обложки не изменился очистите базу данных в приложении (Настройки -> Дополнительно -> Очистить базу данных)"
+                    val warning =
+                        "Если язык обложки не изменился очистите базу данных в приложении " +
+                            "(Настройки -> Дополнительно -> Очистить базу данных)"
                     Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                     true
                 }

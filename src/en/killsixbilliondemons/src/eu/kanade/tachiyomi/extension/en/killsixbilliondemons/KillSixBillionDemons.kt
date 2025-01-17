@@ -28,17 +28,25 @@ class KillSixBillionDemons : HttpSource() {
     private val pagesOrder = "?order=ASC"
     private val urlDateFormat = SimpleDateFormat("yyyy/MM", Locale.US)
     private val descriptionKSBD =
-        "Q: What is this all about?\nThis is a webcomic! It’s graphic novel style, meaning it’s meant to be read in large chunks, but you can subject yourself to the agony of reading it a couple pages a week!\n" +
+        "Q: What is this all about?\nThis is a webcomic! It’s graphic novel style, meaning it’s meant" +
+            " to be read in large chunks, but you can subject yourself to the agony of reading it a couple pages a week!\n" +
             "\nQ: Do you have a twitter/tumble machine? Just who the hell draws this thing anyway?\n" +
-            "A mysterious comics goblin named Abbadon draws this mess. My twitter is @orbitaldropkick, my tumblr is orbitaldropkick.tumblr.com. If you’re feeling dangerous, you can e-mail me at ksbdabbadon@gmail.com\n" +
+            "A mysterious comics goblin named Abbadon draws this mess. My twitter is @orbitaldropkick," +
+            " my tumblr is orbitaldropkick.tumblr.com. If you’re feeling dangerous, you can e-mail me at ksbdabbadon@gmail.com\n" +
             "\nQ: A webcomic, eh? When does it update?\n" +
             "Tuesday and Friday evenings (and occasionally weekends). Sometimes it will be up quite late on those days.\n" +
             "\nQ: Who’s this YISUN guy that keeps getting talked about?\n" +
             "Someone has not read their Psalms and Spasms recently!\n" +
             "\nQ: What’s this about suggestions?\n" +
-            "KSBD will periodically take suggestions, mostly on characters to stick in the background. You can also stick fanart, character ideas, concepts, and literature in the ‘Submit’ section up above. You need tumblr for this. If you want to suggest directly, the best way to do it is through the comments section below the comic! A huge chunk of minor characters have been named and inspired by reader comments so far.\n" +
+            "KSBD will periodically take suggestions, mostly on characters to stick in the background. " +
+            "You can also stick fanart, character ideas, concepts, and literature in the ‘Submit’ section up above." +
+            " You need tumblr for this. If you want to suggest directly, the best way to do it is through the " +
+            "comments section below the comic! A huge chunk of minor characters have been named and" +
+            " inspired by reader comments so far.\n" +
             "\nQ: Can I buy this book in a more traditional format?\n" +
-            "You absolutely can. You can get your hands on a print copy of the first and second books from Image comics in your local comics shop or anywhere else you can get comics. It looks fantastic in print and if you don’t like reading stuff online I highly recommend it."
+            "You absolutely can. You can get your hands on a print copy of the first and second books " +
+            "from Image comics in your local comics shop or anywhere else you can get comics." +
+            " It looks fantastic in print and if you don’t like reading stuff online I highly recommend it."
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 

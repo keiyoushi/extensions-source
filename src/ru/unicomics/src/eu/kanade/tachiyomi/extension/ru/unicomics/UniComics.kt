@@ -59,13 +59,13 @@ class UniComics : ParsedHttpSource() {
             when (filter) {
                 is GetEventsList -> {
                     if (filter.state > 0) {
-                        return GET("$baseDefaultUrl$PATH_events", headers)
+                        return GET("$baseDefaultUrl$PATH_EVENTS", headers)
                     }
                 }
                 is Publishers -> {
                     if (filter.state > 0) {
                         val publisherName = getPublishersList()[filter.state].url
-                        return GET("$baseDefaultUrl$PATH_publishers/$publisherName/page/$page", headers)
+                        return GET("$baseDefaultUrl$PATH_PUBLISHER/$publisherName/page/$page", headers)
                     }
                 }
                 else -> {}
@@ -81,7 +81,7 @@ class UniComics : ParsedHttpSource() {
     }
 
     override fun searchMangaSelector() =
-        ".b-serp-item__content:has(.b-serp-url__item:contains(/comics/):not(:contains($PATH_events)):not(:contains($PATH_publishers)):not(:contains(/page/))):has(.b-serp-item__title-link:not(:contains(Комиксы читать онлайн бесплатно)))"
+        ".b-serp-item__content:has(.b-serp-url__item:contains(/comics/):not(:contains($PATH_EVENTS)):not(:contains($PATH_PUBLISHER)):not(:contains(/page/))):has(.b-serp-item__title-link:not(:contains(Комиксы читать онлайн бесплатно)))"
 
     override fun searchMangaNextPageSelector() = ".b-pager__next"
 
@@ -93,7 +93,7 @@ class UniComics : ParsedHttpSource() {
                     "/characters$|/creators$".toRegex().replace(
                         "/page$".toRegex().replace(
                             "/[0-9]+/?$".toRegex().replace(
-                                originUrl.replace(PATH_online, PATH_URL).replace(PATH_issue, PATH_URL),
+                                originUrl.replace(PATH_ONLINE, PATH_URL).replace(PATH_ISSUE, PATH_URL),
                                 "",
                             ),
                             "",
@@ -102,7 +102,7 @@ class UniComics : ParsedHttpSource() {
                     )
                 val issueNumber = "-[0-9]+/?$".toRegex()
                 setUrlWithoutDomain(
-                    if (issueNumber.containsMatchIn(urlString) && (originUrl.contains(PATH_online) || originUrl.contains(PATH_issue))) {
+                    if (issueNumber.containsMatchIn(urlString) && (originUrl.contains(PATH_ONLINE) || originUrl.contains(PATH_ISSUE))) {
                         issueNumber.replace(urlString, "")
                     } else {
                         urlString
@@ -116,7 +116,7 @@ class UniComics : ParsedHttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        if (document.location().contains("$baseDefaultUrl$PATH_events")) {
+        if (document.location().contains("$baseDefaultUrl$PATH_EVENTS")) {
             val mangas =
                 document.select(".list_events").map { element ->
                     SManga.create().apply {
@@ -388,9 +388,9 @@ class UniComics : ParsedHttpSource() {
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
         private const val PATH_URL = "/comics/series/"
-        private const val PATH_online = "/comics/online/"
-        private const val PATH_issue = "/comics/issue/"
-        private const val PATH_publishers = "/comics/publishers"
-        private const val PATH_events = "/comics/events"
+        private const val PATH_ONLINE = "/comics/online/"
+        private const val PATH_ISSUE = "/comics/issue/"
+        private const val PATH_PUBLISHER = "/comics/publishers"
+        private const val PATH_EVENTS = "/comics/events"
     }
 }

@@ -8,8 +8,8 @@ class WebtoonsTranslateFactory : SourceFactory {
     override fun createSources(): List<Source> =
         listOf(
             WebtoonsTranslateEN(),
-            WebtoonsTranslateZH_CMN(),
-            WebtoonsTranslateZH_CMY(),
+            WebtoonsTranslateZHCMN(),
+            WebtoonsTranslateZHCMY(),
             WebtoonsTranslateTH(),
             WebtoonsTranslateID(),
             WebtoonsTranslateFR(),
@@ -21,11 +21,11 @@ class WebtoonsTranslateFactory : SourceFactory {
             WebtoonsTranslateHI(),
             WebtoonsTranslateIT(),
             WebtoonsTranslateJA(),
-            WebtoonsTranslatePT_POR(),
+            WebtoonsTranslatePTPOR(),
             WebtoonsTranslateTR(),
             WebtoonsTranslateMS(),
             WebtoonsTranslatePL(),
-            WebtoonsTranslatePT_POT(),
+            WebtoonsTranslatePTPOT(),
             WebtoonsTranslateBG(),
             WebtoonsTranslateDA(),
             WebtoonsTranslateNL(),
@@ -44,11 +44,11 @@ class WebtoonsTranslateFactory : SourceFactory {
 
 class WebtoonsTranslateEN : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "en", "ENG")
 
-class WebtoonsTranslateZH_CMN : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "zh-Hans", "CMN") {
+class WebtoonsTranslateZHCMN : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "zh-Hans", "CMN") {
     override val id: Long = 5196522547754842244
 }
 
-class WebtoonsTranslateZH_CMY : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "zh-Hant", "CMT") {
+class WebtoonsTranslateZHCMY : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "zh-Hant", "CMT") {
     override val id: Long = 1016181401146312893
 }
 
@@ -74,7 +74,7 @@ class WebtoonsTranslateIT : WebtoonsTranslate("Webtoons.com Translations", "http
 
 class WebtoonsTranslateJA : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "ja", "JPN")
 
-class WebtoonsTranslatePT_POR : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "pt-BR", "POR") {
+class WebtoonsTranslatePTPOR : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "pt-BR", "POR") {
     // Hardcode the id because the language code was wrong.
     override val id: Long = 275670196689829558
 }
@@ -85,7 +85,7 @@ class WebtoonsTranslateMS : WebtoonsTranslate("Webtoons.com Translations", "http
 
 class WebtoonsTranslatePL : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "pl", "POL")
 
-class WebtoonsTranslatePT_POT : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "pt", "POT") {
+class WebtoonsTranslatePTPOT : WebtoonsTranslate("Webtoons.com Translations", "https://translate.webtoons.com", "pt", "POT") {
     override val id: Long = 9219933036054791613
 }
 

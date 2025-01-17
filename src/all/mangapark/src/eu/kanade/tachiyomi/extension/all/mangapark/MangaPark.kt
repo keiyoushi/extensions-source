@@ -21,8 +21,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -90,7 +88,7 @@ class MangaPark(
                 SearchVariables(
                     SearchPayload(
                         page = page,
-                        size = size,
+                        size = SIZE,
                         query = query.takeUnless(String::isEmpty),
                         incGenres = filters.firstInstanceOrNull<GenreFilter>()?.included,
                         excGenres = filters.firstInstanceOrNull<GenreFilter>()?.excluded,
@@ -114,7 +112,7 @@ class MangaPark(
         val entries =
             result.data.searchComics.items
                 .map { it.data.toSManga() }
-        val hasNextPage = entries.size == size
+        val hasNextPage = entries.size == SIZE
 
         return MangasPage(entries, hasNextPage)
     }
@@ -307,7 +305,7 @@ class MangaPark(
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
-        private const val size = 24
+        private const val SIZE = 24
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
 
         private const val MIRROR_PREF_KEY = "pref_mirror"

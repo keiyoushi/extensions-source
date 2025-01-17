@@ -9,16 +9,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
 
 class XAsiatAlbums : ParsedHttpSource() {
     override val baseUrl = "https://www.xasiat.com/albums"
@@ -27,8 +25,6 @@ class XAsiatAlbums : ParsedHttpSource() {
     override val supportsLatest = true
 
     private val mainUrl = "https://www.xasiat.com"
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder() =
         super
