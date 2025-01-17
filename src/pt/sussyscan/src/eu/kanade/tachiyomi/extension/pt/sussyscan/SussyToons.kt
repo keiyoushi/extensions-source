@@ -473,14 +473,16 @@ class SussyToons : HttpSource(), ConfigurableSource {
         chapterPageHeaders = handlingWithWebResourceRequest(
             baseRequest,
             initial = headersBuilder(),
-            conditionStop = { _, _, resource ->
+            stopCondition = { _, _, resource ->
                 resource.isOriginRequest() && resource.method.equals("GET", true)
             },
             fold = { headers, _, resource ->
-                if (resource.isOriginRequest() && resource.method.equals("GET", true)) {
-                    headers.fill(resource.requestHeaders)
+                headers.apply {
+                    if (resource.isOriginRequest().not() || resource.method.equals("GET", true).not()) {
+                        return@apply
+                    }
+                    fill(resource.requestHeaders)
                 }
-                headers
             },
         ).build()
 
@@ -497,16 +499,17 @@ class SussyToons : HttpSource(), ConfigurableSource {
         return handlingWithWebResourceRequest(
             baseRequest,
             initial = mutableListOf(),
-            conditionStop = { urls, base, resource ->
+            stopCondition = { urls, _, _ ->
                 val minUrlsAvailable = 24
                 urls.size > minUrlsAvailable
             },
             fold = { urls, base, resource ->
-                val headers = base.headers.newBuilder()
-                headers.fill(resource.requestHeaders)
                 urls.apply {
                     if (resource.isNextJSUrl().not()) {
                         return@apply
+                    }
+                    val headers = base.headers.newBuilder().apply {
+                        fill(resource.requestHeaders)
                     }
                     add(resource.url.toString() to headers.build())
                 }
@@ -518,7 +521,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
     private fun <T> handlingWithWebResourceRequest(
         baseRequest: Request,
         initial: T,
-        conditionStop: (T, Request, WebResourceRequest) -> Boolean,
+        stopCondition: (T, Request, WebResourceRequest) -> Boolean,
         fold: (T, Request, WebResourceRequest) -> T,
     ): T {
         val latch = CountDownLatch(1)
@@ -542,7 +545,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
                     state = fold(state, baseRequest, request)
-                    if (conditionStop(state, baseRequest, request)) {
+                    if (stopCondition(state, baseRequest, request)) {
                         latch.countDown()
                     }
                     return super.shouldInterceptRequest(view, request)
