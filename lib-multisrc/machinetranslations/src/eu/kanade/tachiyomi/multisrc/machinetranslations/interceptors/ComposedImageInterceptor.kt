@@ -157,14 +157,13 @@ class ComposedImageInterceptor(
      *   val typeface: TypeFace? = loadFont("filename.ttf")
      * }</pre>
      */
-    private fun loadFont(fontName: String): Typeface? =
-        try {
-            this::class.java.classLoader!!
-                .getResourceAsStream("assets/fonts/$fontName")
-                .toTypeface(fontName)
-        } catch (e: Exception) {
-            null
-        }
+    private fun loadFont(fontName: String): Typeface? = try {
+        this::class.java.classLoader!!
+            .getResourceAsStream("assets/fonts/$fontName")
+            .toTypeface(fontName)
+    } catch (e: Exception) {
+        null
+    }
 
     /**
      * Loads a remote font and converts it into a usable font object.

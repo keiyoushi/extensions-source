@@ -44,10 +44,9 @@ class Zip(
     private val url: String,
     private val centralDirectoryRecords: List<CentralDirectoryRecord>,
 ) {
-    fun files(): List<String> =
-        centralDirectoryRecords.map {
-            it.filename
-        }
+    fun files(): List<String> = centralDirectoryRecords.map {
+        it.filename
+    }
 
     fun fetch(
         path: String,

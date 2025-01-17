@@ -80,11 +80,10 @@ abstract class HeanCms(
 
     protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ", Locale.US)
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     private fun authHeaders(): Headers {
         val builder = headersBuilder()
@@ -406,23 +405,21 @@ abstract class HeanCms(
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    protected open fun getStatusList(): List<Status> =
-        listOf(
-            Status(intl["status_all"], "All"),
-            Status(intl["status_ongoing"], "Ongoing"),
-            Status(intl["status_onhiatus"], "Hiatus"),
-            Status(intl["status_dropped"], "Dropped"),
-            Status(intl["status_completed"], "Completed"),
-            Status(intl["status_canceled"], "Canceled"),
-        )
+    protected open fun getStatusList(): List<Status> = listOf(
+        Status(intl["status_all"], "All"),
+        Status(intl["status_ongoing"], "Ongoing"),
+        Status(intl["status_onhiatus"], "Hiatus"),
+        Status(intl["status_dropped"], "Dropped"),
+        Status(intl["status_completed"], "Completed"),
+        Status(intl["status_canceled"], "Canceled"),
+    )
 
-    protected open fun getSortProperties(): List<SortProperty> =
-        listOf(
-            SortProperty(intl["sort_by_title"], "title"),
-            SortProperty(intl["sort_by_views"], "total_views"),
-            SortProperty(intl["sort_by_latest"], "latest"),
-            SortProperty(intl["sort_by_created_at"], "created_at"),
-        )
+    protected open fun getSortProperties(): List<SortProperty> = listOf(
+        SortProperty(intl["sort_by_title"], "title"),
+        SortProperty(intl["sort_by_views"], "total_views"),
+        SortProperty(intl["sort_by_latest"], "latest"),
+        SortProperty(intl["sort_by_created_at"], "created_at"),
+    )
 
     private var genresList: List<Genre> = emptyList()
     private var fetchFiltersAttempts = 0
@@ -510,10 +507,9 @@ abstract class HeanCms(
         }
     }
 
-    protected inline fun <reified T> Response.parseAs(): T =
-        use {
-            it.body.string().parseAs()
-        }
+    protected inline fun <reified T> Response.parseAs(): T = use {
+        it.body.string().parseAs()
+    }
 
     protected inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 

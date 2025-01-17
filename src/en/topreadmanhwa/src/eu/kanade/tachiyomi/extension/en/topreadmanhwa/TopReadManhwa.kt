@@ -35,24 +35,23 @@ class TopReadManhwa :
 
     override val mangaDetailsSelectorDescription = "$descriptionSelector, ${super.mangaDetailsSelectorDescription}"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            document.selectFirst(descriptionSelector)?.run {
-                description = "${text().trim()}\n\n$description"
-            }
-
-            // Attempt to filter out things that aren't part of the series description
-            description =
-                description?.run {
-                    split("\n\n")
-                        .filterNot { block ->
-                            block.contains("topreadmanhwa", true) ||
-                                block.contains("topreadmanwha", true) ||
-                                block.contains("Please share your thoughts", true) ||
-                                block.contains("If you're a fan of", true) ||
-                                block.contains("Happy reading", true)
-                        }.distinct() // Edge case where the element in `descriptionSelector` can contain <p> tags
-                        .joinToString("\n\n")
-                }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        document.selectFirst(descriptionSelector)?.run {
+            description = "${text().trim()}\n\n$description"
         }
+
+        // Attempt to filter out things that aren't part of the series description
+        description =
+            description?.run {
+                split("\n\n")
+                    .filterNot { block ->
+                        block.contains("topreadmanhwa", true) ||
+                            block.contains("topreadmanwha", true) ||
+                            block.contains("Please share your thoughts", true) ||
+                            block.contains("If you're a fan of", true) ||
+                            block.contains("Happy reading", true)
+                    }.distinct() // Edge case where the element in `descriptionSelector` can contain <p> tags
+                    .joinToString("\n\n")
+            }
+    }
 }

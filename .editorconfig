@@ -14,6 +14,8 @@ ij_kotlin_allow_trailing_comma = true
 ij_kotlin_allow_trailing_comma_on_call_site = true
 ij_kotlin_name_count_to_use_star_import = 2147483647
 ij_kotlin_name_count_to_use_star_import_for_members = 2147483647
+ktlint_function_signature_body_expression_wrapping = default
+ktlint_standard_no-empty-first-line-in-class-body = disabled
 
 [*.properties]
 charset = utf-8

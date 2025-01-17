@@ -111,11 +111,10 @@ class Tapastic :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", "https://m.tapas.io")
-            .set("User-Agent", USER_AGENT)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", "https://m.tapas.io")
+        .set("User-Agent", USER_AGENT)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val chapterVisibilityPref =
@@ -176,12 +175,11 @@ class Tapastic :
 
     override fun popularMangaSelector() = "li.js-list-item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            url = element.select(".item__thumb a").attr("href")
-            title = toTitle(element.select(".item__thumb img").attr("alt"))
-            thumbnail_url = element.select(".item__thumb img").attr("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        url = element.select(".item__thumb a").attr("href")
+        title = toTitle(element.select(".item__thumb img").attr("alt"))
+        thumbnail_url = element.select(".item__thumb img").attr("src")
+    }
 
     private class Genre {
         companion object {
@@ -277,49 +275,46 @@ class Tapastic :
 
     override fun searchMangaSelector() = "${popularMangaSelector()}, .search-item-wrap"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            url = element.select(".item__thumb a, .title-section .title a").attr("href")
-            title =
-                toTitle(element.select(".item__thumb img").firstOrNull()?.attr("alt") ?: element.select(".title-section .title a").text())
-            thumbnail_url = element.select(".item__thumb img, .thumb-wrap img").attr("src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        url = element.select(".item__thumb a, .title-section .title a").attr("href")
+        title =
+            toTitle(element.select(".item__thumb img").firstOrNull()?.attr("alt") ?: element.select(".title-section .title a").text())
+        thumbnail_url = element.select(".item__thumb img, .thumb-wrap img").attr("src")
+    }
 
     // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "${manga.url}/info", headers)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            genre = document.select("div.info-detail__row a.genre-btn").joinToString { it.text() }
-            title = document.select("div.title-wrapper a.title").text()
-            thumbnail_url = document.select("div.thumb-wrapper img").attr("abs:src")
-            author = document.select("ul.creator-section a.name").joinToString { it.text() }
-            artist = author
-            status = document.select("div.schedule span.schedule-label").text().toStatus()
-            val announcementName: String? = document.select("div.series-announcement div.announcement__text p").text()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        genre = document.select("div.info-detail__row a.genre-btn").joinToString { it.text() }
+        title = document.select("div.title-wrapper a.title").text()
+        thumbnail_url = document.select("div.thumb-wrapper img").attr("abs:src")
+        author = document.select("ul.creator-section a.name").joinToString { it.text() }
+        artist = author
+        status = document.select("div.schedule span.schedule-label").text().toStatus()
+        val announcementName: String? = document.select("div.series-announcement div.announcement__text p").text()
 
-            if (announcementName!!.contains("Hiatus")) {
-                status = SManga.ON_HIATUS
-                description = document.select("div.row-body span.description__body").text()
-            } else {
-                val announcementText: String? = document.select("div.announcement__body p.js-announcement-text").text()
-                description =
-                    if (announcementName.isNullOrEmpty() || announcementText.isNullOrEmpty()) {
+        if (announcementName!!.contains("Hiatus")) {
+            status = SManga.ON_HIATUS
+            description = document.select("div.row-body span.description__body").text()
+        } else {
+            val announcementText: String? = document.select("div.announcement__body p.js-announcement-text").text()
+            description =
+                if (announcementName.isNullOrEmpty() || announcementText.isNullOrEmpty()) {
+                    document.select("div.row-body span.description__body").text()
+                } else {
+                    announcementName.plus("\n") + announcementText.plus("\n\n") +
                         document.select("div.row-body span.description__body").text()
-                    } else {
-                        announcementName.plus("\n") + announcementText.plus("\n\n") +
-                            document.select("div.row-body span.description__body").text()
-                    }
-            }
+                }
         }
+    }
 
-    private fun String.toStatus() =
-        when {
-            this.contains("Updates", ignoreCase = true) -> SManga.ONGOING
-            this.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toStatus() = when {
+        this.contains("Updates", ignoreCase = true) -> SManga.ONGOING
+        this.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
 
@@ -363,14 +358,13 @@ class Tapastic :
 
     private val datePattern = Regex("""\w\w\w \d\d, \d\d\d\d""")
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val episode = element.select("p.scene").text()
-            val chName = element.select("span.title__body").text()
-            name = (if (element.isLockedChapter()) "\uD83D\uDD12 " else "") + "$episode | $chName"
-            setUrlWithoutDomain(element.attr("href"))
-            date_upload = datePattern.find(element.select("p.additional").text())?.value.toDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val episode = element.select("p.scene").text()
+        val chName = element.select("span.title__body").text()
+        name = (if (element.isLockedChapter()) "\uD83D\uDD12 " else "") + "$episode | $chName"
+        setUrlWithoutDomain(element.attr("href"))
+        date_upload = datePattern.find(element.select("p.additional").text())?.value.toDate()
+    }
 
     private fun String?.toDate(): Long {
         this ?: return 0L
@@ -406,23 +400,22 @@ class Tapastic :
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            // Tapastic does not support genre filtering and text search at the same time
-            Filter.Header("NOTE: All filters ignored if using text search!"),
-            Filter.Separator(),
-            Filter.Header("Sort: Only applied when category is All"),
-            SortFilter(),
-            Filter.Separator(),
-            CategoryFilter(),
-            GenreFilter(),
-            StatusFilter(),
-            Filter.Separator(),
-            Filter.Header("Mature filters"),
-            MatureFilter("Show Mature Results Only"),
-            MatureCategoryFilter(),
-            MatureGenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        // Tapastic does not support genre filtering and text search at the same time
+        Filter.Header("NOTE: All filters ignored if using text search!"),
+        Filter.Separator(),
+        Filter.Header("Sort: Only applied when category is All"),
+        SortFilter(),
+        Filter.Separator(),
+        CategoryFilter(),
+        GenreFilter(),
+        StatusFilter(),
+        Filter.Separator(),
+        Filter.Header("Mature filters"),
+        MatureFilter("Show Mature Results Only"),
+        MatureCategoryFilter(),
+        MatureGenreFilter(),
+    )
 
     private class CategoryFilter :
         UriSelectFilter(

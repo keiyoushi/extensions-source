@@ -30,8 +30,7 @@ class YuraManga :
                 response
             }.build()
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.reader-area img.lazyload").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:data-src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img.lazyload").mapIndexed { i, img ->
+        Page(i, "", img.attr("abs:data-src"))
+    }
 }

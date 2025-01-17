@@ -67,10 +67,9 @@ class Baozi :
             .addNetworkInterceptor(RedirectDomainInterceptor(domain))
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "https://$domain/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "https://$domain/")
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
@@ -103,20 +102,18 @@ class Baozi :
         }
     }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href").trim())
-            name = element.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href").trim())
+        name = element.text()
+    }
 
     override fun popularMangaSelector(): String = "div.pure-g div a.comics-card__poster"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href").trim())
-            title = element.attr("title").trim()
-            thumbnail_url = element.select("> amp-img").attr("src").trim()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href").trim())
+        title = element.attr("title").trim()
+        thumbnail_url = element.select("> amp-img").attr("src").trim()
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -135,47 +132,45 @@ class Baozi :
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list/new", headers)
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select("h1.comics-detail__title").text()
-            thumbnail_url = document.select("div.pure-g div > amp-img").attr("src").trim()
-            author = document.select("h2.comics-detail__author").text()
-            description = document.select("p.comics-detail__desc").text()
-            status =
-                when (document.selectFirst("div.tag-list > span.tag")!!.text()) {
-                    "连载中", "連載中" -> SManga.ONGOING
-                    "已完结", "已完結" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        Observable.fromCallable {
-            val pathToUrl = LinkedHashMap<String, String>()
-            var request =
-                GET(baseUrl + chapter.url, headers)
-                    .newBuilder()
-                    .tag(RedirectDomainInterceptor.Tag::class, RedirectDomainInterceptor.Tag())
-                    .build()
-            while (true) {
-                val document = client.newCall(request).execute().asJsoup()
-                for (element in document.select(".comic-contain amp-img")) {
-                    val imageUrl = element.attr("data-src")
-                    val path = imageUrl.substring(imageUrl.indexOf('/', startIndex = 8)) // Skip "https://"
-                    pathToUrl[path] = imageUrl
-                }
-                val url =
-                    document
-                        .selectFirst(Evaluator.Id("next-chapter"))
-                        ?.takeIf {
-                            val text = it.text()
-                            text == "下一页" || text == "下一頁"
-                        }?.attr("href")
-                        ?: break
-                request = GET(url, headers)
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("h1.comics-detail__title").text()
+        thumbnail_url = document.select("div.pure-g div > amp-img").attr("src").trim()
+        author = document.select("h2.comics-detail__author").text()
+        description = document.select("p.comics-detail__desc").text()
+        status =
+            when (document.selectFirst("div.tag-list > span.tag")!!.text()) {
+                "连载中", "連載中" -> SManga.ONGOING
+                "已完结", "已完結" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
             }
-            pathToUrl.values.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+    }
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val pathToUrl = LinkedHashMap<String, String>()
+        var request =
+            GET(baseUrl + chapter.url, headers)
+                .newBuilder()
+                .tag(RedirectDomainInterceptor.Tag::class, RedirectDomainInterceptor.Tag())
+                .build()
+        while (true) {
+            val document = client.newCall(request).execute().asJsoup()
+            for (element in document.select(".comic-contain amp-img")) {
+                val imageUrl = element.attr("data-src")
+                val path = imageUrl.substring(imageUrl.indexOf('/', startIndex = 8)) // Skip "https://"
+                pathToUrl[path] = imageUrl
+            }
+            val url =
+                document
+                    .selectFirst(Evaluator.Id("next-chapter"))
+                    ?.takeIf {
+                        val text = it.text()
+                        text == "下一页" || text == "下一頁"
+                    }?.attr("href")
+                    ?: break
+            request = GET(url, headers)
         }
+        pathToUrl.values.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+    }
 
     override fun imageRequest(page: Page): Request {
         val url = page.imageUrl!!.replace(".baozicdn.com", ".baozimh.com")
@@ -196,16 +191,15 @@ class Baozi :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(ID_SEARCH_PREFIX)) {
-            val id = query.removePrefix(ID_SEARCH_PREFIX)
-            client
-                .newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(ID_SEARCH_PREFIX)) {
+        val id = query.removePrefix(ID_SEARCH_PREFIX)
+        client
+            .newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/comic/$id", headers)
 

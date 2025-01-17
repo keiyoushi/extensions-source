@@ -40,10 +40,9 @@ abstract class Liliana(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
 
@@ -51,14 +50,13 @@ abstract class Liliana(
 
     override fun popularMangaSelector(): String = "div#main div.grid > div"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
-            with(element.selectFirst(".text-center a")!!) {
-                title = text()
-                setUrlWithoutDomain(attr("abs:href"))
-            }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
+        with(element.selectFirst(".text-center a")!!) {
+            title = text()
+            setUrlWithoutDomain(attr("abs:href"))
         }
+    }
 
     override fun popularMangaNextPageSelector(): String = ".blog-pager > span.pagecurrent + span"
 
@@ -214,10 +212,9 @@ abstract class Liliana(
 
     private fun Document.getSelectName(selectorClass: String): String = this.selectFirst(".select-div > label.$selectorClass")?.text() ?: ""
 
-    private fun Document.getSelectData(selectorId: String): List<Pair<String, String>> =
-        this.select("#$selectorId > option").map {
-            it.text() to it.attr("value")
-        }
+    private fun Document.getSelectData(selectorId: String): List<Pair<String, String>> = this.select("#$selectorId > option").map {
+        it.text() to it.attr("value")
+    }
 
     override fun getFilterList(): FilterList {
         launchIO { fetchFilters() }
@@ -255,42 +252,39 @@ abstract class Liliana(
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            description = document.selectFirst("div#syn-target")?.text()
-            thumbnail_url = document.selectFirst(".a1 > figure img")?.imgAttr()
-            title = document.selectFirst(".a2 header h1")!!.text()
-            genre = document.select(".a2 div > a[rel='tag'].label").joinToString { it.text() }
-            author =
-                document.selectFirst("div.y6x11p i.fas.fa-user + span.dt")?.text()?.takeUnless {
-                    it.equals("updating", true)
-                }
-            status = document.selectFirst("div.y6x11p i.fas.fa-rss + span.dt").parseStatus()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        description = document.selectFirst("div#syn-target")?.text()
+        thumbnail_url = document.selectFirst(".a1 > figure img")?.imgAttr()
+        title = document.selectFirst(".a2 header h1")!!.text()
+        genre = document.select(".a2 div > a[rel='tag'].label").joinToString { it.text() }
+        author =
+            document.selectFirst("div.y6x11p i.fas.fa-user + span.dt")?.text()?.takeUnless {
+                it.equals("updating", true)
+            }
+        status = document.selectFirst("div.y6x11p i.fas.fa-rss + span.dt").parseStatus()
+    }
 
-    private fun Element?.parseStatus(): Int =
-        when (this?.text()?.lowercase()) {
-            "ongoing", "đang tiến hành", "進行中" -> SManga.ONGOING
-            "completed", "hoàn thành", "完了" -> SManga.COMPLETED
-            "on-hold", "tạm ngưng", "保留" -> SManga.ON_HIATUS
-            "canceled", "đã huỷ", "キャンセル" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+        "ongoing", "đang tiến hành", "進行中" -> SManga.ONGOING
+        "completed", "hoàn thành", "完了" -> SManga.COMPLETED
+        "on-hold", "tạm ngưng", "保留" -> SManga.ON_HIATUS
+        "canceled", "đã huỷ", "キャンセル" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ==============================
 
     override fun chapterListSelector() = "ul > li.chapter"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            element.selectFirst("time[datetime]")?.also {
-                date_upload = it.attr("datetime").toLongOrNull()?.let { it * 1000L } ?: 0L
-            }
-            with(element.selectFirst("a")!!) {
-                name = text()
-                setUrlWithoutDomain(attr("abs:href"))
-            }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.selectFirst("time[datetime]")?.also {
+            date_upload = it.attr("datetime").toLongOrNull()?.let { it * 1000L } ?: 0L
         }
+        with(element.selectFirst("a")!!) {
+            name = text()
+            setUrlWithoutDomain(attr("abs:href"))
+        }
+    }
 
     // =============================== Pages ================================
 
@@ -338,21 +332,20 @@ abstract class Liliana(
         )
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        if (document.selectFirst("div.separator[data-index]") == null) {
-            document.select("div.separator").mapIndexed { i, page ->
-                val url = page.selectFirst("a")!!.attr("abs:href")
-                Page(i, document.location(), url)
-            }
-        } else {
-            document
-                .select("div.separator[data-index]")
-                .map { page ->
-                    val index = page.attr("data-index").toInt()
-                    val url = page.selectFirst("a")!!.attr("abs:href")
-                    Page(index, document.location(), url)
-                }.sortedBy { it.index }
+    override fun pageListParse(document: Document): List<Page> = if (document.selectFirst("div.separator[data-index]") == null) {
+        document.select("div.separator").mapIndexed { i, page ->
+            val url = page.selectFirst("a")!!.attr("abs:href")
+            Page(i, document.location(), url)
         }
+    } else {
+        document
+            .select("div.separator[data-index]")
+            .map { page ->
+                val index = page.attr("data-index").toInt()
+                val url = page.selectFirst("a")!!.attr("abs:href")
+                Page(index, document.location(), url)
+            }.sortedBy { it.index }
+    }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -370,12 +363,11 @@ abstract class Liliana(
     // ============================= Utilities ==============================
 
     // From mangathemesia
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        else -> attr("abs:src")
+    }
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

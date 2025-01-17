@@ -44,17 +44,16 @@ class MangaKawaii : ParsedHttpSource() {
     private val userAgentRandomizer2 = "${Random.nextInt(10, 99).absoluteValue}"
     private val userAgentRandomizer3 = "${Random.nextInt(100, 999).absoluteValue}"
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                    "Chrome/8$userAgentRandomizer1.0.4$userAgentRandomizer3.1$userAgentRandomizer2 Safari/537.36",
-            ).add(
-                "Accept-Language",
-                lang,
-            )
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/8$userAgentRandomizer1.0.4$userAgentRandomizer3.1$userAgentRandomizer2 Safari/537.36",
+        ).add(
+            "Accept-Language",
+            lang,
+        )
 
     // Popular
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
@@ -63,17 +62,16 @@ class MangaKawaii : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title =
-                element
-                    .select("div.hot-manga__item-caption")
-                    .select("div.hot-manga__item-name")
-                    .text()
-                    .trim()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = "$cdnUrl/uploads" + element.select("a").attr("href") + "/cover/cover_250x350.jpg"
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title =
+            element
+                .select("div.hot-manga__item-caption")
+                .select("div.hot-manga__item-name")
+                .text()
+                .trim()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = "$cdnUrl/uploads" + element.select("a").attr("href") + "/cover/cover_250x350.jpg"
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
@@ -82,12 +80,11 @@ class MangaKawaii : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("a").attr("title")
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = "$cdnUrl/uploads" + element.select("a").attr("href") + "/cover/cover_250x350.jpg"
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("a").attr("title")
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = "$cdnUrl/uploads" + element.select("a").attr("href") + "/cover/cover_250x350.jpg"
+    }
 
     // Search
     override fun searchMangaRequest(
@@ -109,39 +106,37 @@ class MangaKawaii : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String = "ul.pagination a[rel*=next]"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("a").text().trim()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = "$cdnUrl/uploads" + element.select("a").attr("href") + "/cover/cover_250x350.jpg"
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("a").text().trim()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = "$cdnUrl/uploads" + element.select("a").attr("href") + "/cover/cover_250x350.jpg"
+    }
 
     // Manga details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            thumbnail_url = document.select("div.manga-view__header-image").select("img").attr("abs:src")
-            description = document.select("dd.text-justify.text-break").text()
-            author = document.select("a[href*=author]").text()
-            artist = document.select("a[href*=artist]").text()
-            genre = document.select("a[href*=category]").joinToString { it.text() }
-            status =
-                when (document.select("span.badge.bg-success.text-uppercase").text()) {
-                    "En Cours" -> SManga.ONGOING
-                    "Terminé" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = document.select("div.manga-view__header-image").select("img").attr("abs:src")
+        description = document.select("dd.text-justify.text-break").text()
+        author = document.select("a[href*=author]").text()
+        artist = document.select("a[href*=artist]").text()
+        genre = document.select("a[href*=category]").joinToString { it.text() }
+        status =
+            when (document.select("span.badge.bg-success.text-uppercase").text()) {
+                "En Cours" -> SManga.ONGOING
+                "Terminé" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
 
-            // add alternative name to manga description
-            document.select("span[itemprop=name alternativeHeadline]").joinToString { it.ownText() }.let {
-                if (it.isNotBlank()) {
-                    description =
-                        when {
-                            description.isNullOrBlank() -> "Alternative Names: $it"
-                            else -> "$description\n\nAlternative Names: $it"
-                        }
-                }
+        // add alternative name to manga description
+        document.select("span[itemprop=name alternativeHeadline]").joinToString { it.ownText() }.let {
+            if (it.isNotBlank()) {
+                description =
+                    when {
+                        description.isNullOrBlank() -> "Alternative Names: $it"
+                        else -> "$description\n\nAlternative Names: $it"
+                    }
             }
         }
+    }
 
     // Chapter list
     override fun chapterListSelector() = throw UnsupportedOperationException()

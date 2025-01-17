@@ -38,11 +38,10 @@ class NineAnime : ParsedHttpSource() {
     }
 
     // not necessary for normal usage but added in an attempt to fix usage with VPN (see #3476)
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) Gecko/20100101 Firefox/77")
-            .add("Accept-Language", "en-US,en;q=0.5")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) Gecko/20100101 Firefox/77")
+        .add("Accept-Language", "en-US,en;q=0.5")
 
     // Popular
 
@@ -50,14 +49,13 @@ class NineAnime : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.post"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("p.title a").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("p.title a").let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector() = "a.next"
 
@@ -77,19 +75,18 @@ class NineAnime : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotBlank()) {
-            GET("$baseUrl/search/?name=$query&page=$page.html", headers)
-        } else {
-            var url = "$baseUrl/category/"
-            for (filter in if (filters.isEmpty()) getFilterList() else filters) {
-                when (filter) {
-                    is GenreFilter -> url += filter.toUriPart() + "_$page.html"
-                    else -> {}
-                }
+    ): Request = if (query.isNotBlank()) {
+        GET("$baseUrl/search/?name=$query&page=$page.html", headers)
+    } else {
+        var url = "$baseUrl/category/"
+        for (filter in if (filters.isEmpty()) getFilterList() else filters) {
+            when (filter) {
+                is GenreFilter -> url += filter.toUriPart() + "_$page.html"
+                else -> {}
             }
-            GET(url, headers)
         }
+        GET(url, headers)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -99,24 +96,23 @@ class NineAnime : ParsedHttpSource() {
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            with(document.select("div.manga-detailtop")) {
-                thumbnail_url = select("img.detail-cover").attr("abs:src")
-                author = select("span:contains(Author) + a").joinToString { it.text() }
-                artist = select("span:contains(Artist) + a").joinToString { it.text() }
-                status =
-                    when (select("p:has(span:contains(Status))").firstOrNull()?.ownText()) {
-                        "Ongoing" -> SManga.ONGOING
-                        "Completed" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-            }
-            with(document.select("div.manga-detailmiddle")) {
-                genre = select("p:has(span:contains(Genre)) a").joinToString { it.text() }
-                description = select("p.mobile-none").text()
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        with(document.select("div.manga-detailtop")) {
+            thumbnail_url = select("img.detail-cover").attr("abs:src")
+            author = select("span:contains(Author) + a").joinToString { it.text() }
+            artist = select("span:contains(Artist) + a").joinToString { it.text() }
+            status =
+                when (select("p:has(span:contains(Status))").firstOrNull()?.ownText()) {
+                    "Ongoing" -> SManga.ONGOING
+                    "Completed" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
+        with(document.select("div.manga-detailmiddle")) {
+            genre = select("p:has(span:contains(Genre)) a").joinToString { it.text() }
+            description = select("p.mobile-none").text()
+        }
+    }
 
     // Chapters
 
@@ -126,31 +122,29 @@ class NineAnime : ParsedHttpSource() {
 
     override fun chapterListSelector() = "ul.detail-chlist li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            element.select("a").let {
-                name = it.select("span").firstOrNull()?.text() ?: it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            date_upload = element.select("span.time").text().toDate()
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.select("a").let {
+            name = it.select("span").firstOrNull()?.text() ?: it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        date_upload = element.select("span.time").text().toDate()
+    }
 
-    private fun String.toDate(): Long =
-        try {
-            if (this.contains("ago")) {
-                val split = this.split(" ")
-                val cal = Calendar.getInstance()
-                when {
-                    split[1].contains("minute") -> cal.apply { add(Calendar.MINUTE, split[0].toInt()) }.timeInMillis
-                    split[1].contains("hour") -> cal.apply { add(Calendar.HOUR, split[0].toInt()) }.timeInMillis
-                    else -> 0
-                }
-            } else {
-                SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH).parse(this)?.time ?: 0L
+    private fun String.toDate(): Long = try {
+        if (this.contains("ago")) {
+            val split = this.split(" ")
+            val cal = Calendar.getInstance()
+            when {
+                split[1].contains("minute") -> cal.apply { add(Calendar.MINUTE, split[0].toInt()) }.timeInMillis
+                split[1].contains("hour") -> cal.apply { add(Calendar.HOUR, split[0].toInt()) }.timeInMillis
+                else -> 0
             }
-        } catch (_: ParseException) {
-            0
+        } else {
+            SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH).parse(this)?.time ?: 0L
         }
+    } catch (_: ParseException) {
+        0
+    }
 
     // Pages
 
@@ -187,12 +181,11 @@ class NineAnime : ParsedHttpSource() {
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Note: ignored if using text search!"),
-            Filter.Separator("-----------------"),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Note: ignored if using text search!"),
+        Filter.Separator("-----------------"),
+        GenreFilter(),
+    )
 
     private class GenreFilter :
         UriPartFilter(

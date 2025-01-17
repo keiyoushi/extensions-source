@@ -82,14 +82,13 @@ class MangaFox : ParsedHttpSource() {
 
     override fun popularMangaSelector(): String = "ul.manga-list-1-list li"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("a").first()!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.attr("title")
-                thumbnail_url = it.select("img").attr("abs:src")
-            }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("a").first()!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.attr("title")
+            thumbnail_url = it.select("img").attr("abs:src")
         }
+    }
 
     override fun popularMangaNextPageSelector(): String = ".pager-list-left a.active + a + a"
 
@@ -158,66 +157,63 @@ class MangaFox : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            document.select(".detail-info-right").first()!!.let {
-                author = it.select(".detail-info-right-say a").joinToString(", ") { it.text() }
-                genre = it.select(".detail-info-right-tag-list a").joinToString(", ") { it.text() }
-                description = it.select("p.fullcontent").first()?.text()
-                status =
-                    it
-                        .select(".detail-info-right-title-tip")
-                        .first()
-                        ?.text()
-                        .orEmpty()
-                        .let { parseStatus(it) }
-                thumbnail_url = document.select(".detail-info-cover-img").first()?.attr("abs:src")
-            }
-        }
-
-    override fun chapterListSelector() = "ul.detail-main-list li a"
-
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name =
-                element
-                    .select(".detail-main-list-main p")
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.select(".detail-info-right").first()!!.let {
+            author = it.select(".detail-info-right-say a").joinToString(", ") { it.text() }
+            genre = it.select(".detail-info-right-tag-list a").joinToString(", ") { it.text() }
+            description = it.select("p.fullcontent").first()?.text()
+            status =
+                it
+                    .select(".detail-info-right-title-tip")
                     .first()
                     ?.text()
                     .orEmpty()
-            date_upload = element
-                .select(".detail-main-list-main p")
-                .last()
-                ?.text()
-                ?.let { parseChapterDate(it) } ?: 0
+                    .let { parseStatus(it) }
+            thumbnail_url = document.select(".detail-info-cover-img").first()?.attr("abs:src")
         }
+    }
 
-    private fun parseChapterDate(date: String): Long =
-        if ("Today" in date || " ago" in date) {
-            Calendar
-                .getInstance()
-                .apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-        } else if ("Yesterday" in date) {
-            Calendar
-                .getInstance()
-                .apply {
-                    add(Calendar.DATE, -1)
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-        } else {
-            runCatching {
-                SimpleDateFormat("MMM d,yyyy", Locale.ENGLISH).parse(date)?.time
-            }.getOrNull() ?: 0L
-        }
+    override fun chapterListSelector() = "ul.detail-main-list li a"
+
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name =
+            element
+                .select(".detail-main-list-main p")
+                .first()
+                ?.text()
+                .orEmpty()
+        date_upload = element
+            .select(".detail-main-list-main p")
+            .last()
+            ?.text()
+            ?.let { parseChapterDate(it) } ?: 0
+    }
+
+    private fun parseChapterDate(date: String): Long = if ("Today" in date || " ago" in date) {
+        Calendar
+            .getInstance()
+            .apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+    } else if ("Yesterday" in date) {
+        Calendar
+            .getInstance()
+            .apply {
+                add(Calendar.DATE, -1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+    } else {
+        runCatching {
+            SimpleDateFormat("MMM d,yyyy", Locale.ENGLISH).parse(date)?.time
+        }.getOrNull() ?: 0L
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val mobilePath = chapter.url.replace("/manga/", "/roll_manga/")
@@ -227,31 +223,28 @@ class MangaFox : ParsedHttpSource() {
         return GET("$mobileUrl$mobilePath", headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("#viewer img").mapIndexed { idx, it ->
-            Page(idx, imageUrl = it.attr("abs:data-original"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#viewer img").mapIndexed { idx, it ->
+        Page(idx, imageUrl = it.attr("abs:data-original"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("Ongoing") -> SManga.ONGOING
-            status.contains("Completed") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("Ongoing") -> SManga.ONGOING
+        status.contains("Completed") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            NameFilter(),
-            EntryTypeFilter(),
-            CompletedFilter(),
-            AuthorFilter(),
-            ArtistFilter(),
-            RatingFilter(),
-            YearFilter(),
-            GenreFilter(getGenreList()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        NameFilter(),
+        EntryTypeFilter(),
+        CompletedFilter(),
+        AuthorFilter(),
+        ArtistFilter(),
+        RatingFilter(),
+        YearFilter(),
+        GenreFilter(getGenreList()),
+    )
 
     open class UriPartFilter(
         name: String,
@@ -371,44 +364,43 @@ class MangaFox : ParsedHttpSource() {
     ) : Filter.Group<Genre>("Genre", genres)
 
     // console.log([...document.querySelectorAll(".tag-box a")].map(e => `Genre("${e.innerHTML}", ${e.dataset.val})`).join(",\n"))
-    private fun getGenreList() =
-        listOf(
-            Genre("Action", 1),
-            Genre("Adventure", 2),
-            Genre("Comedy", 3),
-            Genre("Drama", 4),
-            Genre("Fantasy", 5),
-            Genre("Martial Arts", 6),
-            Genre("Shounen", 7),
-            Genre("Horror", 8),
-            Genre("Supernatural", 9),
-            Genre("Harem", 10),
-            Genre("Psychological", 11),
-            Genre("Romance", 12),
-            Genre("School Life", 13),
-            Genre("Shoujo", 14),
-            Genre("Mystery", 15),
-            Genre("Sci-fi", 16),
-            Genre("Seinen", 17),
-            Genre("Tragedy", 18),
-            Genre("Ecchi", 19),
-            Genre("Sports", 20),
-            Genre("Slice of Life", 21),
-            Genre("Mature", 22),
-            Genre("Shoujo Ai", 23),
-            Genre("Webtoons", 24),
-            Genre("Doujinshi", 25),
-            Genre("One Shot", 26),
-            Genre("Smut", 27),
-            Genre("Yaoi", 28),
-            Genre("Josei", 29),
-            Genre("Historical", 30),
-            Genre("Shounen Ai", 31),
-            Genre("Gender Bender", 32),
-            Genre("Adult", 33),
-            Genre("Yuri", 34),
-            Genre("Mecha", 35),
-            Genre("Lolicon", 36),
-            Genre("Shotacon", 37),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Action", 1),
+        Genre("Adventure", 2),
+        Genre("Comedy", 3),
+        Genre("Drama", 4),
+        Genre("Fantasy", 5),
+        Genre("Martial Arts", 6),
+        Genre("Shounen", 7),
+        Genre("Horror", 8),
+        Genre("Supernatural", 9),
+        Genre("Harem", 10),
+        Genre("Psychological", 11),
+        Genre("Romance", 12),
+        Genre("School Life", 13),
+        Genre("Shoujo", 14),
+        Genre("Mystery", 15),
+        Genre("Sci-fi", 16),
+        Genre("Seinen", 17),
+        Genre("Tragedy", 18),
+        Genre("Ecchi", 19),
+        Genre("Sports", 20),
+        Genre("Slice of Life", 21),
+        Genre("Mature", 22),
+        Genre("Shoujo Ai", 23),
+        Genre("Webtoons", 24),
+        Genre("Doujinshi", 25),
+        Genre("One Shot", 26),
+        Genre("Smut", 27),
+        Genre("Yaoi", 28),
+        Genre("Josei", 29),
+        Genre("Historical", 30),
+        Genre("Shounen Ai", 31),
+        Genre("Gender Bender", 32),
+        Genre("Adult", 33),
+        Genre("Yuri", 34),
+        Genre("Mecha", 35),
+        Genre("Lolicon", 36),
+        Genre("Shotacon", 37),
+    )
 }

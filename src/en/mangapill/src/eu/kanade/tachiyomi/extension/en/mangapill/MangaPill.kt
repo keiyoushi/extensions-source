@@ -35,19 +35,17 @@ class MangaPill : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga = latestUpdatesFromElement(element)
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")!!.attr("data-src")
-            setUrlWithoutDomain(element.selectFirst("a[href^='/manga/']")!!.attr("href"))
-            title = element.selectFirst("a:not(:first-child) > div")?.text() ?: ""
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")!!.attr("data-src")
+        setUrlWithoutDomain(element.selectFirst("a[href^='/manga/']")!!.attr("href"))
+        title = element.selectFirst("a:not(:first-child) > div")?.text() ?: ""
+    }
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")!!.attr("data-src")
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            title = element.selectFirst("div[class] > a")?.text() ?: ""
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")!!.attr("data-src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.selectFirst("div[class] > a")?.text() ?: ""
+    }
 
     override fun popularMangaNextPageSelector() = null
 
@@ -75,12 +73,11 @@ class MangaPill : ParsedHttpSource() {
         return manga
     }
 
-    private fun parseStatus(element: String): Int =
-        when {
-            element.lowercase(Locale.ENGLISH).contains("publishing") -> SManga.ONGOING
-            element.lowercase(Locale.ENGLISH).contains("finished") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(element: String): Int = when {
+        element.lowercase(Locale.ENGLISH).contains("publishing") -> SManga.ONGOING
+        element.lowercase(Locale.ENGLISH).contains("finished") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = "#chapters > div > a"
 
@@ -175,61 +172,59 @@ class MangaPill : ParsedHttpSource() {
             ),
         )
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            Status(),
-            Type(),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        Status(),
+        Type(),
+        GenreList(getGenreList()),
+    )
 
-    private fun getGenreList() =
-        listOf(
-            Genre("Action"),
-            Genre("Adventure"),
-            Genre("Cars"),
-            Genre("Comedy"),
-            Genre("Dementia"),
-            Genre("Demons"),
-            Genre("Drama"),
-            Genre("Ecchi"),
-            Genre("Fantasy"),
-            Genre("Game"),
-            Genre("Harem"),
-            Genre("Hentai"),
-            Genre("Historical"),
-            Genre("Horror"),
-            Genre("Josei"),
-            Genre("Kids"),
-            Genre("Magic"),
-            Genre("Martial Arts"),
-            Genre("Mecha"),
-            Genre("Military"),
-            Genre("Music"),
-            Genre("Mystery"),
-            Genre("Parody"),
-            Genre("Police"),
-            Genre("Psychological"),
-            Genre("Romance"),
-            Genre("Samurai"),
-            Genre("School"),
-            Genre("Sci-Fi"),
-            Genre("Seinen"),
-            Genre("Shoujo"),
-            Genre("Shoujo Ai"),
-            Genre("Shounen"),
-            Genre("Shounen Ai"),
-            Genre("Slice of Life"),
-            Genre("Space"),
-            Genre("Sports"),
-            Genre("Super Power"),
-            Genre("Supernatural"),
-            Genre("Thriller"),
-            Genre("Vampire"),
-            Genre("Yaoi"),
-            Genre("Yuri"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Action"),
+        Genre("Adventure"),
+        Genre("Cars"),
+        Genre("Comedy"),
+        Genre("Dementia"),
+        Genre("Demons"),
+        Genre("Drama"),
+        Genre("Ecchi"),
+        Genre("Fantasy"),
+        Genre("Game"),
+        Genre("Harem"),
+        Genre("Hentai"),
+        Genre("Historical"),
+        Genre("Horror"),
+        Genre("Josei"),
+        Genre("Kids"),
+        Genre("Magic"),
+        Genre("Martial Arts"),
+        Genre("Mecha"),
+        Genre("Military"),
+        Genre("Music"),
+        Genre("Mystery"),
+        Genre("Parody"),
+        Genre("Police"),
+        Genre("Psychological"),
+        Genre("Romance"),
+        Genre("Samurai"),
+        Genre("School"),
+        Genre("Sci-Fi"),
+        Genre("Seinen"),
+        Genre("Shoujo"),
+        Genre("Shoujo Ai"),
+        Genre("Shounen"),
+        Genre("Shounen Ai"),
+        Genre("Slice of Life"),
+        Genre("Space"),
+        Genre("Sports"),
+        Genre("Super Power"),
+        Genre("Supernatural"),
+        Genre("Thriller"),
+        Genre("Vampire"),
+        Genre("Yaoi"),
+        Genre("Yuri"),
+    )
 
     private open class UriPartFilter(
         displayName: String,

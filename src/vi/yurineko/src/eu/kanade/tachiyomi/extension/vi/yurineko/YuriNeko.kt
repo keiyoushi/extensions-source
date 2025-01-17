@@ -96,19 +96,18 @@ class YuriNeko :
         return response
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET(
-            url =
-                apiUrl
-                    .toHttpUrl()
-                    .newBuilder()
-                    .apply {
-                        addPathSegment("lastest2")
-                        addQueryParameter("page", page.toString())
-                    }.build()
-                    .toString(),
-            cache = CacheControl.FORCE_NETWORK,
-        )
+    override fun popularMangaRequest(page: Int): Request = GET(
+        url =
+            apiUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addPathSegment("lastest2")
+                    addQueryParameter("page", page.toString())
+                }.build()
+                .toString(),
+        cache = CacheControl.FORCE_NETWORK,
+    )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaListDto = response.parseAs<MangaListDto>()
@@ -127,21 +126,20 @@ class YuriNeko :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val id = query.removePrefix(PREFIX_ID_SEARCH).trim()
-                if (id.toIntOrNull() == null) {
-                    throw Exception("ID tìm kiếm không hợp lệ (phải là một số).")
-                }
-                fetchMangaDetails(
-                    SManga.create().apply {
-                        url = "/manga/$id"
-                    },
-                ).map { MangasPage(listOf(it), false) }
+    ): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val id = query.removePrefix(PREFIX_ID_SEARCH).trim()
+            if (id.toIntOrNull() == null) {
+                throw Exception("ID tìm kiếm không hợp lệ (phải là một số).")
             }
-            else -> super.fetchSearchManga(page, query, filters)
+            fetchMangaDetails(
+                SManga.create().apply {
+                    url = "/manga/$id"
+                },
+            ).map { MangasPage(listOf(it), false) }
         }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -217,11 +215,10 @@ class YuriNeko :
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(GET("$apiUrl${manga.url}"))
-            .asObservableSuccess()
-            .map { mangaDetailsParse(it) }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(GET("$apiUrl${manga.url}"))
+        .asObservableSuccess()
+        .map { mangaDetailsParse(it) }
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}")
 
@@ -248,194 +245,192 @@ class YuriNeko :
         fun toUriPart() = vals[state].second
     }
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Lưu ý rằng không thể vừa tìm kiếm vừa lọc bằng tag."),
-            Filter.Header("Tìm kiếm sẽ được ưu tiên."),
-            UriPartFilter("Tag", getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Lưu ý rằng không thể vừa tìm kiếm vừa lọc bằng tag."),
+        Filter.Header("Tìm kiếm sẽ được ưu tiên."),
+        UriPartFilter("Tag", getGenreList()),
+    )
 
-    private fun getGenreList() =
-        arrayOf(
-            Pair("Sao cũng được", "0"),
-            Pair("4-koma", "149"),
-            Pair(">", "306"),
-            Pair("Action", "113"),
-            Pair("Adventure", "114"),
-            Pair("Adult Life", "143"),
-            Pair("Animal Ears", "175"),
-            Pair("Age Gap", "179"),
-            Pair("Anal", "209"),
-            Pair("Ahegao", "211"),
-            Pair("Anime", "214"),
-            Pair("Amnesia", "242"),
-            Pair("Autobiographical", "255"),
-            Pair("Alien", "262"),
-            Pair("Amputee", "277"),
-            Pair("Assassin", "283"),
-            Pair("Angel", "298"),
-            Pair("Abuse", "300"),
-            Pair("Anilingus", "308"),
-            Pair("Blushing", "157"),
-            Pair("Body Swap", "158"),
-            Pair("Bisexual", "176"),
-            Pair("Birthday", "194"),
-            Pair("Big Breasts", "195"),
-            Pair("Butts", "196"),
-            Pair("BDSM", "199"),
-            Pair("Boob Sex", "210"),
-            Pair("Bath", "226"),
-            Pair("Bullying", "241"),
-            Pair("Biting", "270"),
-            Pair("Blackmail", "280"),
-            Pair("Biographical", "285"),
-            Pair("Beach", "289"),
-            Pair("BHTT", "304"),
-            Pair("Comedy", "115"),
-            Pair("College", "145"),
-            Pair("Co-worker", "180"),
-            Pair("Childhood Friends", "182"),
-            Pair("Christmas", "189"),
-            Pair("Creepy", "220"),
-            Pair("Childification", "239"),
-            Pair("Cheating", "267"),
-            Pair("Clones", "271"),
-            Pair("Cross-dressing", "288"),
-            Pair("Chibi", "307"),
-            Pair("Demon", "116"),
-            Pair("Drama", "117"),
-            Pair("Dark Skin", "208"),
-            Pair("Drunk", "219"),
-            Pair("Drugs", "236"),
-            Pair("Disability", "252"),
-            Pair("Delinquent", "258"),
-            Pair("Deity", "265"),
-            Pair("Depressing as fuck", "290"),
-            Pair("Ecchi", "118"),
-            Pair("Excuse me WTF?", "161"),
-            Pair("Exhibitionism", "245"),
-            Pair("Fantasy", "119"),
-            Pair("Full Color", "148"),
-            Pair("FBI Warning!!", "163"),
-            Pair("Futanari", "201"),
-            Pair("Food", "232"),
-            Pair("Feet", "256"),
-            Pair("Furry", "303"),
-            Pair("Game", "120"),
-            Pair("Gender Bender", "121"),
-            Pair("Glasses", "156"),
-            Pair("Guro", "206"),
-            Pair("Ghost", "244"),
-            Pair("Gyaru", "246"),
-            Pair("Harem", "122"),
-            Pair("Historical", "123"),
-            Pair("Horror", "124"),
-            Pair("Hints", "152"),
-            Pair("Het", "160"),
-            Pair("Halloween", "190"),
-            Pair("Hypnosis", "254"),
-            Pair("Height Gap", "281"),
-            Pair("Hardcore", "292"),
-            Pair("Isekai", "144"),
-            Pair("Idol", "169"),
-            Pair("Incest", "187"),
-            Pair("Idiot Couple", "282"),
-            Pair("Introspective", "286"),
-            Pair("Insane Amounts of Sex", "296"),
-            Pair("Kuudere", "235"),
-            Pair("Lỗi: không tìm thấy trai", "153"),
-            Pair("Love Triangle", "183"),
-            Pair("Loli", "197"),
-            Pair("Light Novel", "216"),
-            Pair("Lactation", "260"),
-            Pair("Lots of sex", "269"),
-            Pair("Martial Arts", "125"),
-            Pair("Mecha", "126"),
-            Pair("Military", "127"),
-            Pair("Music", "128"),
-            Pair("Mystery", "129"),
-            Pair("Manhua", "146"),
-            Pair("Manhwa", "147"),
-            Pair("Moe Paradise", "164"),
-            Pair("Mahou Shoujo", "168"),
-            Pair("Maid", "172"),
-            Pair("Monster Girl", "173"),
-            Pair("Marriage", "188"),
-            Pair("Massage", "204"),
-            Pair("Masturbation", "205"),
-            Pair("Mangaka", "227"),
-            Pair("Mermaid", "234"),
-            Pair("Moderate amounts of sex", "268"),
-            Pair("Miko", "301"),
-            Pair("No Text", "150"),
-            Pair("New Year's", "191"),
-            Pair("Netorare", "198"),
-            Pair("NSFW", "229"),
-            Pair("Ninja", "287"),
-            Pair("Non-moe art", "302"),
-            Pair("Office Lady", "174"),
-            Pair("Oneshot", "218"),
-            Pair("Official", "222"),
-            Pair("Orgy", "261"),
-            Pair("Omegaverse", "276"),
-            Pair("Parody", "130"),
-            Pair("Psychological", "131"),
-            Pair("Pay for Gay", "162"),
-            Pair("Polyamory", "185"),
-            Pair("Pocky Game", "212"),
-            Pair("Prostitution", "240"),
-            Pair("Player", "257"),
-            Pair("Prequel", "272"),
-            Pair("Post-Apocalyptic", "273"),
-            Pair("Philosophical", "274"),
-            Pair("R18", "1"),
-            Pair("Romance", "132"),
-            Pair("Reversal", "159"),
-            Pair("Roommates", "181"),
-            Pair("Rape", "203"),
-            Pair("Robot", "264"),
-            Pair("School Life", "133"),
-            Pair("Sci-Fi", "134"),
-            Pair("Slice of  Life", "137"),
-            Pair("Sports", "138"),
-            Pair("Supernatural", "139"),
-            Pair("Science Babies", "165"),
-            Pair("Student x Teacher", "166"),
-            Pair("Siscon", "167"),
-            Pair("School Girl", "215"),
-            Pair("Spin-off", "223"),
-            Pair("Subtext", "231"),
-            Pair("Sleeping", "249"),
-            Pair("Sequel", "251"),
-            Pair("Swimsuits", "263"),
-            Pair("Stalking", "266"),
-            Pair("Space", "291"),
-            Pair("Spanking", "299"),
-            Pair("Tragedy", "142"),
-            Pair("Tomboy", "170"),
-            Pair("Tsundere", "177"),
-            Pair("Threesome", "184"),
-            Pair("Twins", "186"),
-            Pair("Thất Tịch", "193"),
-            Pair("Toys", "200"),
-            Pair("Tentacles", "202"),
-            Pair("Tailsex", "237"),
-            Pair("Time Travel", "243"),
-            Pair("Transgender", "284"),
-            Pair("Vampire", "140"),
-            Pair("Violence", "141"),
-            Pair("Valentine", "192"),
-            Pair("Watersports", "278"),
-            Pair("Wholesome", "279"),
-            Pair("Witch", "293"),
-            Pair("Web Novel", "305"),
-            Pair("Yuri", "151"),
-            Pair("Yankee", "171"),
-            Pair("Yandere", "178"),
-            Pair("Yuri Crush", "228"),
-            Pair("Yaoi", "230"),
-            Pair("Zombies", "238"),
-        )
+    private fun getGenreList() = arrayOf(
+        Pair("Sao cũng được", "0"),
+        Pair("4-koma", "149"),
+        Pair(">", "306"),
+        Pair("Action", "113"),
+        Pair("Adventure", "114"),
+        Pair("Adult Life", "143"),
+        Pair("Animal Ears", "175"),
+        Pair("Age Gap", "179"),
+        Pair("Anal", "209"),
+        Pair("Ahegao", "211"),
+        Pair("Anime", "214"),
+        Pair("Amnesia", "242"),
+        Pair("Autobiographical", "255"),
+        Pair("Alien", "262"),
+        Pair("Amputee", "277"),
+        Pair("Assassin", "283"),
+        Pair("Angel", "298"),
+        Pair("Abuse", "300"),
+        Pair("Anilingus", "308"),
+        Pair("Blushing", "157"),
+        Pair("Body Swap", "158"),
+        Pair("Bisexual", "176"),
+        Pair("Birthday", "194"),
+        Pair("Big Breasts", "195"),
+        Pair("Butts", "196"),
+        Pair("BDSM", "199"),
+        Pair("Boob Sex", "210"),
+        Pair("Bath", "226"),
+        Pair("Bullying", "241"),
+        Pair("Biting", "270"),
+        Pair("Blackmail", "280"),
+        Pair("Biographical", "285"),
+        Pair("Beach", "289"),
+        Pair("BHTT", "304"),
+        Pair("Comedy", "115"),
+        Pair("College", "145"),
+        Pair("Co-worker", "180"),
+        Pair("Childhood Friends", "182"),
+        Pair("Christmas", "189"),
+        Pair("Creepy", "220"),
+        Pair("Childification", "239"),
+        Pair("Cheating", "267"),
+        Pair("Clones", "271"),
+        Pair("Cross-dressing", "288"),
+        Pair("Chibi", "307"),
+        Pair("Demon", "116"),
+        Pair("Drama", "117"),
+        Pair("Dark Skin", "208"),
+        Pair("Drunk", "219"),
+        Pair("Drugs", "236"),
+        Pair("Disability", "252"),
+        Pair("Delinquent", "258"),
+        Pair("Deity", "265"),
+        Pair("Depressing as fuck", "290"),
+        Pair("Ecchi", "118"),
+        Pair("Excuse me WTF?", "161"),
+        Pair("Exhibitionism", "245"),
+        Pair("Fantasy", "119"),
+        Pair("Full Color", "148"),
+        Pair("FBI Warning!!", "163"),
+        Pair("Futanari", "201"),
+        Pair("Food", "232"),
+        Pair("Feet", "256"),
+        Pair("Furry", "303"),
+        Pair("Game", "120"),
+        Pair("Gender Bender", "121"),
+        Pair("Glasses", "156"),
+        Pair("Guro", "206"),
+        Pair("Ghost", "244"),
+        Pair("Gyaru", "246"),
+        Pair("Harem", "122"),
+        Pair("Historical", "123"),
+        Pair("Horror", "124"),
+        Pair("Hints", "152"),
+        Pair("Het", "160"),
+        Pair("Halloween", "190"),
+        Pair("Hypnosis", "254"),
+        Pair("Height Gap", "281"),
+        Pair("Hardcore", "292"),
+        Pair("Isekai", "144"),
+        Pair("Idol", "169"),
+        Pair("Incest", "187"),
+        Pair("Idiot Couple", "282"),
+        Pair("Introspective", "286"),
+        Pair("Insane Amounts of Sex", "296"),
+        Pair("Kuudere", "235"),
+        Pair("Lỗi: không tìm thấy trai", "153"),
+        Pair("Love Triangle", "183"),
+        Pair("Loli", "197"),
+        Pair("Light Novel", "216"),
+        Pair("Lactation", "260"),
+        Pair("Lots of sex", "269"),
+        Pair("Martial Arts", "125"),
+        Pair("Mecha", "126"),
+        Pair("Military", "127"),
+        Pair("Music", "128"),
+        Pair("Mystery", "129"),
+        Pair("Manhua", "146"),
+        Pair("Manhwa", "147"),
+        Pair("Moe Paradise", "164"),
+        Pair("Mahou Shoujo", "168"),
+        Pair("Maid", "172"),
+        Pair("Monster Girl", "173"),
+        Pair("Marriage", "188"),
+        Pair("Massage", "204"),
+        Pair("Masturbation", "205"),
+        Pair("Mangaka", "227"),
+        Pair("Mermaid", "234"),
+        Pair("Moderate amounts of sex", "268"),
+        Pair("Miko", "301"),
+        Pair("No Text", "150"),
+        Pair("New Year's", "191"),
+        Pair("Netorare", "198"),
+        Pair("NSFW", "229"),
+        Pair("Ninja", "287"),
+        Pair("Non-moe art", "302"),
+        Pair("Office Lady", "174"),
+        Pair("Oneshot", "218"),
+        Pair("Official", "222"),
+        Pair("Orgy", "261"),
+        Pair("Omegaverse", "276"),
+        Pair("Parody", "130"),
+        Pair("Psychological", "131"),
+        Pair("Pay for Gay", "162"),
+        Pair("Polyamory", "185"),
+        Pair("Pocky Game", "212"),
+        Pair("Prostitution", "240"),
+        Pair("Player", "257"),
+        Pair("Prequel", "272"),
+        Pair("Post-Apocalyptic", "273"),
+        Pair("Philosophical", "274"),
+        Pair("R18", "1"),
+        Pair("Romance", "132"),
+        Pair("Reversal", "159"),
+        Pair("Roommates", "181"),
+        Pair("Rape", "203"),
+        Pair("Robot", "264"),
+        Pair("School Life", "133"),
+        Pair("Sci-Fi", "134"),
+        Pair("Slice of  Life", "137"),
+        Pair("Sports", "138"),
+        Pair("Supernatural", "139"),
+        Pair("Science Babies", "165"),
+        Pair("Student x Teacher", "166"),
+        Pair("Siscon", "167"),
+        Pair("School Girl", "215"),
+        Pair("Spin-off", "223"),
+        Pair("Subtext", "231"),
+        Pair("Sleeping", "249"),
+        Pair("Sequel", "251"),
+        Pair("Swimsuits", "263"),
+        Pair("Stalking", "266"),
+        Pair("Space", "291"),
+        Pair("Spanking", "299"),
+        Pair("Tragedy", "142"),
+        Pair("Tomboy", "170"),
+        Pair("Tsundere", "177"),
+        Pair("Threesome", "184"),
+        Pair("Twins", "186"),
+        Pair("Thất Tịch", "193"),
+        Pair("Toys", "200"),
+        Pair("Tentacles", "202"),
+        Pair("Tailsex", "237"),
+        Pair("Time Travel", "243"),
+        Pair("Transgender", "284"),
+        Pair("Vampire", "140"),
+        Pair("Violence", "141"),
+        Pair("Valentine", "192"),
+        Pair("Watersports", "278"),
+        Pair("Wholesome", "279"),
+        Pair("Witch", "293"),
+        Pair("Web Novel", "305"),
+        Pair("Yuri", "151"),
+        Pair("Yankee", "171"),
+        Pair("Yandere", "178"),
+        Pair("Yuri Crush", "228"),
+        Pair("Yaoi", "230"),
+        Pair("Zombies", "238"),
+    )
 
     private val json =
         Json {
@@ -444,10 +439,9 @@ class YuriNeko :
             prettyPrint = true
         }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(body.string())
+    }
 
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)

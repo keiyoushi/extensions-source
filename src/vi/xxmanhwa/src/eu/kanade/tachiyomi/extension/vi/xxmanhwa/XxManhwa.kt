@@ -40,10 +40,9 @@ class XxManhwa :
 
     override val supportsLatest = false
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -55,14 +54,13 @@ class XxManhwa :
 
     override fun popularMangaSelector() = "div[data-type=story]"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            val a = element.selectFirst("a")!!
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        val a = element.selectFirst("a")!!
 
-            setUrlWithoutDomain(a.attr("abs:href"))
-            title = a.attr("title")
-            thumbnail_url = element.selectFirst("div.posts-list-avt")?.attr("abs:data-img")
-        }
+        setUrlWithoutDomain(a.attr("abs:href"))
+        title = a.attr("title")
+        thumbnail_url = element.selectFirst("div.posts-list-avt")?.attr("abs:data-img")
+    }
 
     override fun popularMangaNextPageSelector() = "div.public-part-page span.current:not(:last-child)"
 
@@ -103,25 +101,24 @@ class XxManhwa :
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            description = document.selectFirst(".summary__content")?.text()
-            thumbnail_url = document.selectFirst("div.col-inner.img-max-width img")?.attr("abs:src")
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        description = document.selectFirst(".summary__content")?.text()
+        thumbnail_url = document.selectFirst("div.col-inner.img-max-width img")?.attr("abs:src")
 
-            val html = document.html()
-            val genreMap =
-                "[${html.substringAfter("'cat_story': [").substringBefore("],")}]"
-                    .parseAs<List<CategoryDto>>()
-                    .associate { it.termId to it.name }
-                    .toMap()
-            genre =
-                document
-                    .selectFirst("div.each-to-taxonomy")
-                    ?.attr("data-id")
-                    ?.split(",")
-                    ?.joinToString { genreMap[it] ?: "Unknown" }
-        }
+        val html = document.html()
+        val genreMap =
+            "[${html.substringAfter("'cat_story': [").substringBefore("],")}]"
+                .parseAs<List<CategoryDto>>()
+                .associate { it.termId to it.name }
+                .toMap()
+        genre =
+            document
+                .selectFirst("div.each-to-taxonomy")
+                ?.attr("data-id")
+                ?.split(",")
+                ?.joinToString { genreMap[it] ?: "Unknown" }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val html = response.body.string()

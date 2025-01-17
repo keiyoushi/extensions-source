@@ -5,12 +5,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 class OtakuSanctuaryHelper(
     private val lang: String,
 ) {
-    fun otakusanLang() =
-        when (lang) {
-            "vi" -> "vn"
-            "en" -> "us"
-            else -> lang
-        }
+    fun otakusanLang() = when (lang) {
+        "vi" -> "vn"
+        "en" -> "us"
+        else -> lang
+    }
 
     fun processUrl(
         url: String,

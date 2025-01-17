@@ -94,15 +94,14 @@ class TranslationInterceptor(
      * @param dialogues List of Dialog objects to be mapped.
      * @return Map where the key is the dialog identifier and the value is a pair containing the identifier and the associated dialog.
      */
-    private fun buildMap(dialogues: List<Dialog>): Map<String, Pair<String, AssociatedDialog>> =
-        dialogues
-            .map {
-                val payload =
-                    json
-                        .encodeToString<List<String>>(listOf(it.hashCode().toString(), it.text))
-                        .encode()
-                it.hashCode().toString() to AssociatedDialog(it, payload)
-            }.associateBy { it.first }
+    private fun buildMap(dialogues: List<Dialog>): Map<String, Pair<String, AssociatedDialog>> = dialogues
+        .map {
+            val payload =
+                json
+                    .encodeToString<List<String>>(listOf(it.hashCode().toString(), it.text))
+                    .encode()
+            it.hashCode().toString() to AssociatedDialog(it, payload)
+        }.associateBy { it.first }
 
     // Prevents the translator's response from removing quotation marks from some texts
     private fun String.encode() = "\"${this}\""

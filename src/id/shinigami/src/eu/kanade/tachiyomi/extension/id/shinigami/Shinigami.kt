@@ -67,14 +67,13 @@ class Shinigami :
         }
     }
 
-    override fun headersBuilder() =
-        super.headersBuilder().apply {
-            add("Sec-Fetch-Dest", "document")
-            add("Sec-Fetch-Mode", "navigate")
-            add("Sec-Fetch-Site", "same-origin")
-            add("Upgrade-Insecure-Requests", "1")
-            add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
-        }
+    override fun headersBuilder() = super.headersBuilder().apply {
+        add("Sec-Fetch-Dest", "document")
+        add("Sec-Fetch-Mode", "navigate")
+        add("Sec-Fetch-Site", "same-origin")
+        add("Upgrade-Insecure-Requests", "1")
+        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
+    }
 
     override val client =
         network.cloudflareClient
@@ -97,22 +96,21 @@ class Shinigami :
 
     override val chapterUrlSelector = "div.chapter-link:not([style~=display:\\snone]) a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val urlElement = element.selectFirst(chapterUrlSelector)!!
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val urlElement = element.selectFirst(chapterUrlSelector)!!
 
-            name = urlElement.selectFirst("p.chapter-manhwa-title")?.text()
-                ?: urlElement.ownText()
-            date_upload =
-                urlElement
-                    .selectFirst("span.chapter-release-date > i")
-                    ?.text()
-                    .let { parseChapterDate(it) }
+        name = urlElement.selectFirst("p.chapter-manhwa-title")?.text()
+            ?: urlElement.ownText()
+        date_upload =
+            urlElement
+                .selectFirst("span.chapter-release-date > i")
+                ?.text()
+                .let { parseChapterDate(it) }
 
-            val fixedUrl = urlElement.attr("abs:href")
+        val fixedUrl = urlElement.attr("abs:href")
 
-            setUrlWithoutDomain(fixedUrl)
-        }
+        setUrlWithoutDomain(fixedUrl)
+    }
 
     // Page list
     @Serializable

@@ -26,12 +26,11 @@ class MangaPlusCreators(
 
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Origin", baseUrl.substringBeforeLast("/"))
-            .add("Referer", baseUrl)
-            .add("User-Agent", USER_AGENT)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Origin", baseUrl.substringBeforeLast("/"))
+        .add("Referer", baseUrl)
+        .add("User-Agent", USER_AGENT)
 
     private val json: Json by injectLazy()
 
@@ -231,10 +230,9 @@ class MangaPlusCreators(
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private fun Response.asMpcResponse(): MpcResponse =
-        use {
-            json.decodeFromString(body.string())
-        }
+    private fun Response.asMpcResponse(): MpcResponse = use {
+        json.decodeFromString(body.string())
+    }
 
     companion object {
         private const val API_URL = "https://medibang.com/api/mpc"

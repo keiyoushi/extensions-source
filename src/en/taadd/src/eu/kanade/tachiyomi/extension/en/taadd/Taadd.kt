@@ -69,10 +69,9 @@ class Taadd : HttpSource() {
 
     private val json by injectLazy<Json>()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("referer", "$baseUrl/")
 
     private val ajaxHeaders =
         headersBuilder()
@@ -181,36 +180,35 @@ class Taadd : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup()
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
 
-            thumbnail_url = document.selectFirst("img.detail-cover")?.absUrl("src")
-            description =
-                buildString {
-                    document.selectFirst(".manga-summary")?.text()?.let {
-                        if (it.trim() != "N/A") {
-                            append(it)
-                        }
-                    }
-
-                    document.selectFirst(".detail-info > p:contains(Alternative)")?.text()?.let {
-                        if (isNotBlank()) {
-                            append("\n\n")
-                        }
+        thumbnail_url = document.selectFirst("img.detail-cover")?.absUrl("src")
+        description =
+            buildString {
+                document.selectFirst(".manga-summary")?.text()?.let {
+                    if (it.trim() != "N/A") {
                         append(it)
                     }
                 }
-            genre = document.select(".manga-genres a").eachText().joinToString()
-            status =
-                when (document.selectFirst(".detail-info > p:contains(status) > a")?.text()) {
-                    "Ongoing" -> SManga.ONGOING
-                    "Completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
+
+                document.selectFirst(".detail-info > p:contains(Alternative)")?.text()?.let {
+                    if (isNotBlank()) {
+                        append("\n\n")
+                    }
+                    append(it)
                 }
-            author = document.select(".detail-info > p:contains(author) > a").text()
-            artist = author
-        }
+            }
+        genre = document.select(".manga-genres a").eachText().joinToString()
+        status =
+            when (document.selectFirst(".detail-info > p:contains(status) > a")?.text()) {
+                "Ongoing" -> SManga.ONGOING
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        author = document.select(".detail-info > p:contains(author) > a").text()
+        artist = author
+    }
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}?waring=1#desktop", headers)
 
@@ -287,11 +285,10 @@ class Taadd : HttpSource() {
         }
     }
 
-    private fun String.simplify(): String =
-        lowercase()
-            .replace(specialChar) {
-                " ".repeat(it.value.length)
-            }
+    private fun String.simplify(): String = lowercase()
+        .replace(specialChar) {
+            " ".repeat(it.value.length)
+        }
 
     private val specialChar = Regex("""[^a-z0-9]+""")
     private val dateFormat = SimpleDateFormat("EEEE, MMMM dd, yyyy", Locale.ENGLISH)

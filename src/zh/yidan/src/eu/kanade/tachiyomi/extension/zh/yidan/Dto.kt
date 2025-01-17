@@ -15,26 +15,25 @@ class MangaDto(
     private val coverPic: String?,
     private val id: Int,
 ) {
-    fun toSManga(baseUrl: String) =
-        SManga.create().apply {
-            url = id.toString()
-            title = this@MangaDto.title
-            author = this@MangaDto.author
-            description = summary?.trim()
-            genre =
-                when {
-                    cateids.isNullOrEmpty() -> null
-                    else -> cateids.split(",").joinToString { GENRES[it.toInt()] }
-                }
-            status =
-                when {
-                    mhcate.isNullOrEmpty() -> SManga.ONGOING
-                    "5" in mhcate.split(",") -> SManga.COMPLETED
-                    else -> SManga.ONGOING
-                }
-            thumbnail_url = if (coverPic?.startsWith("http") == true) coverPic else baseUrl + coverPic
-            initialized = true
-        }
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        url = id.toString()
+        title = this@MangaDto.title
+        author = this@MangaDto.author
+        description = summary?.trim()
+        genre =
+            when {
+                cateids.isNullOrEmpty() -> null
+                else -> cateids.split(",").joinToString { GENRES[it.toInt()] }
+            }
+        status =
+            when {
+                mhcate.isNullOrEmpty() -> SManga.ONGOING
+                "5" in mhcate.split(",") -> SManga.COMPLETED
+                else -> SManga.ONGOING
+            }
+        thumbnail_url = if (coverPic?.startsWith("http") == true) coverPic else baseUrl + coverPic
+        initialized = true
+    }
 }
 
 @Serializable
@@ -44,12 +43,11 @@ class ChapterDto(
     private val title: String,
     private val jiNo: Int,
 ) {
-    fun toSChapter() =
-        SChapter.create().apply {
-            url = "$mhid/$jiNo"
-            name = Entities.unescape(title)
-            date_upload = createTime * 1000L
-        }
+    fun toSChapter() = SChapter.create().apply {
+        url = "$mhid/$jiNo"
+        name = Entities.unescape(title)
+        date_upload = createTime * 1000L
+    }
 }
 
 @Serializable

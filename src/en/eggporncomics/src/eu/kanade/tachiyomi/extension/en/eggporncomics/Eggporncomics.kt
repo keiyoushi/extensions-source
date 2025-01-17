@@ -37,14 +37,13 @@ class Eggporncomics : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.preview:has(div.name)"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("a:has(img)").let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-                thumbnail_url = it.select("img").attr("abs:src")
-            }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("a:has(img)").let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
+            thumbnail_url = it.select("img").attr("abs:src")
         }
+    }
 
     override fun popularMangaNextPageSelector() = "ul.ne-pe li.next:not(.disabled)"
 
@@ -64,28 +63,27 @@ class Eggporncomics : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        client
-            .newCall(searchMangaRequest(page, query, filters))
-            .asObservable()
-            .doOnNext { response ->
-                if (!response.isSuccessful) {
-                    // when combining a category filter and comics filter, if there are no results the source
-                    // issues a 404, override that so as not to confuse users
-                    if (response.request.url
-                            .toString()
-                            .contains("category-tag") &&
-                        response.code == 404
-                    ) {
-                        Observable.just(MangasPage(emptyList(), false))
-                    } else {
-                        response.close()
-                        throw Exception("HTTP error ${response.code}")
-                    }
+    ): Observable<MangasPage> = client
+        .newCall(searchMangaRequest(page, query, filters))
+        .asObservable()
+        .doOnNext { response ->
+            if (!response.isSuccessful) {
+                // when combining a category filter and comics filter, if there are no results the source
+                // issues a 404, override that so as not to confuse users
+                if (response.request.url
+                        .toString()
+                        .contains("category-tag") &&
+                    response.code == 404
+                ) {
+                    Observable.just(MangasPage(emptyList(), false))
+                } else {
+                    response.close()
+                    throw Exception("HTTP error ${response.code}")
                 }
-            }.map { response ->
-                searchMangaParse(response)
             }
+        }.map { response ->
+            searchMangaParse(response)
+        }
 
     private val queryRegex = Regex("""[\s']""")
 
@@ -93,31 +91,30 @@ class Eggporncomics : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotBlank()) {
-            GET("$baseUrl/search/${query.replace(queryRegex, "-")}?page=$page", headers)
-        } else {
-            val url = baseUrl.toHttpUrl().newBuilder()
-            val filterList = if (filters.isEmpty()) getFilterList() else filters
-            val category = filterList.find { it is CategoryFilter } as UriPartFilter
-            val comics = filterList.find { it is ComicsFilter } as UriPartFilter
+    ): Request = if (query.isNotBlank()) {
+        GET("$baseUrl/search/${query.replace(queryRegex, "-")}?page=$page", headers)
+    } else {
+        val url = baseUrl.toHttpUrl().newBuilder()
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        val category = filterList.find { it is CategoryFilter } as UriPartFilter
+        val comics = filterList.find { it is ComicsFilter } as UriPartFilter
 
-            when {
-                category.isNotNull() && comics.isNotNull() -> {
-                    url.addPathSegments("category-tag/${category.toUriPart()}/${comics.toUriPart()}")
-                }
-                category.isNotNull() -> {
-                    url.addPathSegments("category/${category.toUriPart()}")
-                }
-                comics.isNotNull() -> {
-                    url.addPathSegments("comics-tag/${comics.toUriPart()}")
-                }
+        when {
+            category.isNotNull() && comics.isNotNull() -> {
+                url.addPathSegments("category-tag/${category.toUriPart()}/${comics.toUriPart()}")
             }
-
-            url.addQueryParameter("page", page.toString())
-
-            GET(url.build(), headers)
+            category.isNotNull() -> {
+                url.addPathSegments("category/${category.toUriPart()}")
+            }
+            comics.isNotNull() -> {
+                url.addPathSegments("comics-tag/${comics.toUriPart()}")
+            }
         }
+
+        url.addQueryParameter("page", page.toString())
+
+        GET(url.build(), headers)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -129,41 +126,39 @@ class Eggporncomics : ParsedHttpSource() {
 
     private val descriptionPrefixRegex = Regex(""":.*""")
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            thumbnail_url = document.select(pageListSelector).first()!!.toFullSizeImage()
-            description =
-                document.select("div.links ul").joinToString("\n") { element ->
-                    element
-                        .select("a")
-                        .joinToString(prefix = element.select("span").text().replace(descriptionPrefixRegex, ": ")) { it.text() }
-                }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = document.select(pageListSelector).first()!!.toFullSizeImage()
+        description =
+            document.select("div.links ul").joinToString("\n") { element ->
+                element
+                    .select("a")
+                    .joinToString(prefix = element.select("span").text().replace(descriptionPrefixRegex, ": ")) { it.text() }
+            }
+    }
 
     // Chapters
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        listOf(
-            SChapter.create().apply {
-                setUrlWithoutDomain(response.request.url.toString())
-                name = "Chapter"
-                date_upload = response
-                    .asJsoup()
-                    .select("div.info > div.meta li:contains(days ago)")
-                    .firstOrNull()
-                    ?.let {
-                        Calendar
-                            .getInstance()
-                            .apply {
-                                add(
-                                    Calendar.DAY_OF_YEAR,
-                                    -(it.text().substringBefore(" ").toIntOrNull() ?: 0),
-                                )
-                            }.timeInMillis
-                    }
-                    ?: 0
-            },
-        )
+    override fun chapterListParse(response: Response): List<SChapter> = listOf(
+        SChapter.create().apply {
+            setUrlWithoutDomain(response.request.url.toString())
+            name = "Chapter"
+            date_upload = response
+                .asJsoup()
+                .select("div.info > div.meta li:contains(days ago)")
+                .firstOrNull()
+                ?.let {
+                    Calendar
+                        .getInstance()
+                        .apply {
+                            add(
+                                Calendar.DAY_OF_YEAR,
+                                -(it.text().substringBefore(" ").toIntOrNull() ?: 0),
+                            )
+                        }.timeInMillis
+                }
+                ?: 0
+        },
+    )
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
@@ -175,22 +170,20 @@ class Eggporncomics : ParsedHttpSource() {
 
     private val pageListSelector = "div.grid div.image img"
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(pageListSelector).mapIndexed { i, img ->
-            Page(i, "", img.toFullSizeImage())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector).mapIndexed { i, img ->
+        Page(i, "", img.toFullSizeImage())
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Leave query blank to use filters"),
-            Filter.Separator(),
-            CategoryFilter("Category", getCategoryList),
-            ComicsFilter("Comics", getComicsList),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Leave query blank to use filters"),
+        Filter.Separator(),
+        CategoryFilter("Category", getCategoryList),
+        ComicsFilter("Comics", getComicsList),
+    )
 
     private class CategoryFilter(
         name: String,

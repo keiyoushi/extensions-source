@@ -52,10 +52,9 @@ class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
             arrayOf("По популярности", "Популярно сейчас", "По году", "По имени", "Новинки", "По дате обновления", "По рейтингу"),
         )
 
-    override fun getFilterList() =
-        FilterList(
-            OrderBy(),
-        )
+    override fun getFilterList() = FilterList(
+        OrderBy(),
+    )
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         super.setupPreferenceScreen(screen)

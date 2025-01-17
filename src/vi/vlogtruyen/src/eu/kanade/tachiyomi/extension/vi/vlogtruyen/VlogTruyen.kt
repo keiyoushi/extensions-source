@@ -58,20 +58,18 @@ class VlogTruyen :
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("X-Requested-With", "XMLHttpRequest")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("X-Requested-With", "XMLHttpRequest")
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/the-loai/moi-cap-nhap/?page=$page", headers)
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            title = element.select("h3.title-commic-tab").text()
-            thumbnail_url = element.selectFirst(".image-commic-tab img.lazyload")?.attr("data-src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.select("h3.title-commic-tab").text()
+        thumbnail_url = element.selectFirst(".image-commic-tab img.lazyload")?.attr("data-src")
+    }
 
     override fun latestUpdatesNextPageSelector() = ".pagination > li.active + li"
 
@@ -85,24 +83,22 @@ class VlogTruyen :
 
     override fun popularMangaSelector() = latestUpdatesSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select("h1.title-commic-detail").text()
-            genre = document.select(".categories-list-detail-commic > li > a").joinToString { it.text().trim(',', ' ') }
-            description = document.select("div.top-detail-manga > div.top-detail-manga-content > span.desc-commic-detail").text()
-            thumbnail_url = document.select("div.image-commic-detail > a > img").attr("data-src")
-            status = parseStatus(document.selectFirst("div.top-detail-manga > div.top-detail-manga-avatar > div.manga-status > p")?.text())
-            author = document.select(".h5-drawer:contains(Tác Giả) + ul li a").joinToString { it.text() }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("h1.title-commic-detail").text()
+        genre = document.select(".categories-list-detail-commic > li > a").joinToString { it.text().trim(',', ' ') }
+        description = document.select("div.top-detail-manga > div.top-detail-manga-content > span.desc-commic-detail").text()
+        thumbnail_url = document.select("div.image-commic-detail > a > img").attr("data-src")
+        status = parseStatus(document.selectFirst("div.top-detail-manga > div.top-detail-manga-avatar > div.manga-status > p")?.text())
+        author = document.select(".h5-drawer:contains(Tác Giả) + ul li a").joinToString { it.text() }
+    }
 
-    private fun parseStatus(status: String?) =
-        when {
-            status == null -> SManga.UNKNOWN
-            status.contains("Đang tiến hành") -> SManga.ONGOING
-            status.contains("Đã hoàn thành") -> SManga.COMPLETED
-            status.contains("Tạm ngưng") -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("Đang tiến hành") -> SManga.ONGOING
+        status.contains("Đã hoàn thành") -> SManga.COMPLETED
+        status.contains("Tạm ngưng") -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val json = json.decodeFromString<ChapterDTO>(response.body.string().replace("\\n", ""))
@@ -141,10 +137,9 @@ class VlogTruyen :
             }
     }
 
-    private fun parseDate(date: String): Long =
-        runCatching {
-            dateFormat.parse(date)?.time
-        }.getOrNull() ?: 0L
+    private fun parseDate(date: String): Long = runCatching {
+        dateFormat.parse(date)?.time
+    }.getOrNull() ?: 0L
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val url = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()

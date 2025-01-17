@@ -25,24 +25,22 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/truyen-de-xuat" + if (page > 1) "/page/$page" else "", headers)
 
     override fun popularMangaSelector() = "div.row > div[class^=item-] > div.card"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("a.item-title")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-
-            thumbnail_url = element.selectFirst("a.item-cover img")?.absUrl("data-src")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("a.item-title")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+
+        thumbnail_url = element.selectFirst("a.item-cover img")?.absUrl("data-src")
+    }
 
     override fun popularMangaNextPageSelector() = "ul.pagination li.page-item.active:not(:last-child)"
 
@@ -58,16 +56,15 @@ class TruyenHentai18 : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
-            val url = "/$slug"
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+        val url = "/$slug"
 
-            fetchMangaDetails(SManga.create().apply { this.url = url })
-                .map { MangasPage(listOf(it.apply { this.url = url }), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+        fetchMangaDetails(SManga.create().apply { this.url = url })
+            .map { MangasPage(listOf(it.apply { this.url = url }), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -96,43 +93,40 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val statusClassName = document.selectFirst("em.eflag.item-flag")!!.className()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val statusClassName = document.selectFirst("em.eflag.item-flag")!!.className()
 
-            title = document.selectFirst("span[itemprop=name]")!!.text()
-            author = document.select("div.attr-item b:contains(Tác giả) ~ span a, span[itemprop=author]").joinToString { it.text() }
-            description = document.selectFirst("div[itemprop=about]")?.text()
-            genre = document.select("ul.post-categories li a").joinToString { it.text() }
-            thumbnail_url = document.selectFirst("div.attr-cover img")?.absUrl("src")
-            status =
-                when {
-                    statusClassName.contains("flag-completed") -> SManga.COMPLETED
-                    statusClassName.contains("flag-ongoing") -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
-        }
+        title = document.selectFirst("span[itemprop=name]")!!.text()
+        author = document.select("div.attr-item b:contains(Tác giả) ~ span a, span[itemprop=author]").joinToString { it.text() }
+        description = document.selectFirst("div[itemprop=about]")?.text()
+        genre = document.select("ul.post-categories li a").joinToString { it.text() }
+        thumbnail_url = document.selectFirst("div.attr-cover img")?.absUrl("src")
+        status =
+            when {
+                statusClassName.contains("flag-completed") -> SManga.COMPLETED
+                statusClassName.contains("flag-ongoing") -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
+    }
 
     override fun chapterListSelector() = "#chaptersbox > div"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            element.selectFirst("a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                name = it.selectFirst("b")!!.text()
-            }
-
-            date_upload = element
-                .selectFirst("div.extra > i.ps-3")
-                ?.text()
-                ?.let { parseRelativeDate(it) }
-                ?: 0L
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst("a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            name = it.selectFirst("b")!!.text()
         }
 
-    override fun pageListParse(document: Document) =
-        document.select("#viewer img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("src"))
-        }
+        date_upload = element
+            .selectFirst("div.extra > i.ps-3")
+            ?.text()
+            ?.let { parseRelativeDate(it) }
+            ?: 0L
+    }
+
+    override fun pageListParse(document: Document) = document.select("#viewer img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.absUrl("src"))
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 

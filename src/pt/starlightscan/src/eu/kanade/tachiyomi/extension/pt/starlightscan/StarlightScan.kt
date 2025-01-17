@@ -47,12 +47,11 @@ class StarlightScan :
 
     override fun latestUpdatesSelector() = "div.mostRecentMangaCard__listContainer article.mostRecentMangaCard"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("a.mostRecentMangaCard__title")!!.text()
-            thumbnail_url = element.selectFirst("img.mostRecentMangaCard__cover")!!.imgAttr()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("a.mostRecentMangaCard__title")!!.text()
+        thumbnail_url = element.selectFirst("img.mostRecentMangaCard__cover")!!.imgAttr()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -73,12 +72,11 @@ class StarlightScan :
 
     override fun searchMangaSelector() = "div.bulkMangaList article.bulkMangaCard"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("a.bulkMangaCard__title")!!.text()
-            thumbnail_url = element.selectFirst("img.bulkMangaCard__cover")!!.imgAttr()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("a.bulkMangaCard__title")!!.text()
+        thumbnail_url = element.selectFirst("img.bulkMangaCard__cover")!!.imgAttr()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun searchMangaNextPageSelector() = "footer.base__horizontalList a:contains(Próxima):not([disabled])"
 
@@ -90,27 +88,24 @@ class StarlightScan :
     override val seriesStatusSelector = "span.base__horizontalList[title^=Status]"
     override val seriesThumbnailSelector = "img.mangaDetails__cover"
 
-    override fun String?.parseStatus(): Int =
-        when (this) {
-            "Publicação Finalizada" -> SManga.COMPLETED
-            else -> SManga.ONGOING
-        }
+    override fun String?.parseStatus(): Int = when (this) {
+        "Publicação Finalizada" -> SManga.COMPLETED
+        else -> SManga.ONGOING
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response
-            .asJsoup()
-            .select(chapterListSelector())
-            .map(::chapterFromElement)
-            .filter { it.name.isNotEmpty() }
+    override fun chapterListParse(response: Response): List<SChapter> = response
+        .asJsoup()
+        .select(chapterListSelector())
+        .map(::chapterFromElement)
+        .filter { it.name.isNotEmpty() }
 
     override fun chapterListSelector() = "div.mangaDetails__episodesContainer div.mangaDetails__episode"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.selectFirst("a.mangaDetails__episodeTitle")!!.text()
-            date_upload = element.selectFirst("span.mangaDetails__episodeReleaseDate")?.text().parseChapterDate()
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.selectFirst("a.mangaDetails__episodeTitle")!!.text()
+        date_upload = element.selectFirst("span.mangaDetails__episodeReleaseDate")?.text().parseChapterDate()
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    }
 
     override val pageSelector = "div.scanImagesContainer img.scanImage"
 

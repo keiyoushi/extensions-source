@@ -16,13 +16,11 @@ class BegaTranslation :
     override val useNewChapterEndpoint = true
     override val mangaSubString = "series"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        super.popularMangaFromElement(element).apply {
-            thumbnail_url = thumbnail_url?.replaceFirst("-175x238", "")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        thumbnail_url = thumbnail_url?.replaceFirst("-175x238", "")
+    }
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        super.searchMangaFromElement(element).apply {
-            thumbnail_url = thumbnail_url?.replaceFirst("-193x278", "")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
+        thumbnail_url = thumbnail_url?.replaceFirst("-193x278", "")
+    }
 }

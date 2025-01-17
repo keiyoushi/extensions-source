@@ -58,11 +58,10 @@ class WarForRayuba : HttpSource() {
                 )
             }.build()
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:86.0) Gecko/20100101 Firefox/86.0 ")
-            add("Referer", baseUrl)
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:86.0) Gecko/20100101 Firefox/86.0 ")
+        add("Referer", baseUrl)
+    }
 
     override fun popularMangaRequest(page: Int) = GET("https://github.com/xrabohrok/WarMap/tree/main/tools", headers)
 
@@ -92,29 +91,27 @@ class WarForRayuba : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(apiMangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(apiMangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
     private fun apiMangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl, headers)
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val githubData: RoundDto = json.decodeFromString(response.body.string())
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val githubData: RoundDto = json.decodeFromString(response.body.string())
 
-            thumbnail_url = githubData.cover
-            status = SManga.UNKNOWN
-            author = githubData.author
-            artist = githubData.artist
-            title = githubData.title
-            description = githubData.description
-        }
+        thumbnail_url = githubData.cover
+        status = SManga.UNKNOWN
+        author = githubData.author
+        artist = githubData.artist
+        title = githubData.title
+        description = githubData.description
+    }
 
     override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
 

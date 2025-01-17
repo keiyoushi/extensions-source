@@ -29,10 +29,9 @@ class Mangatown : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", baseUrl)
 
     override fun popularMangaSelector() = "li:has(a.manga_cover)"
 
@@ -42,14 +41,13 @@ class Mangatown : ParsedHttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest/$page.htm")
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("p.title a").first()!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("p.title a").first()!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
@@ -88,37 +86,34 @@ class Mangatown : ParsedHttpSource() {
         }
     }
 
-    private fun parseStatus(status: String?) =
-        when {
-            status == null -> SManga.UNKNOWN
-            status.contains("Ongoing", ignoreCase = true) -> SManga.ONGOING
-            status.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("Ongoing", ignoreCase = true) -> SManga.ONGOING
+        status.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = "ul.chapter_list li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            element.select("a").let { urlElement ->
-                setUrlWithoutDomain(urlElement.attr("href"))
-                name = "${urlElement.text()} ${element.select("span:not(span.time,span.new)").joinToString(" ") { it.text() }}"
-            }
-            date_upload = parseDate(element.select("span.time").text())
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.select("a").let { urlElement ->
+            setUrlWithoutDomain(urlElement.attr("href"))
+            name = "${urlElement.text()} ${element.select("span:not(span.time,span.new)").joinToString(" ") { it.text() }}"
         }
+        date_upload = parseDate(element.select("span.time").text())
+    }
 
-    private fun parseDate(date: String): Long =
-        when {
-            date.contains("Today") -> Calendar.getInstance().apply {}.timeInMillis
-            date.contains("Yesterday") -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
-            else -> {
-                try {
-                    SimpleDateFormat("MMM dd,yyyy", Locale.US).parse(date)?.time ?: 0L
-                } catch (e: Exception) {
-                    0L
-                }
+    private fun parseDate(date: String): Long = when {
+        date.contains("Today") -> Calendar.getInstance().apply {}.timeInMillis
+        date.contains("Yesterday") -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
+        else -> {
+            try {
+                SimpleDateFormat("MMM dd,yyyy", Locale.US).parse(date)?.time ?: 0L
+            } catch (e: Exception) {
+                0L
             }
         }
+    }
 
     // check for paged first, then try longstrip
     override fun pageListParse(document: Document): List<Page> =

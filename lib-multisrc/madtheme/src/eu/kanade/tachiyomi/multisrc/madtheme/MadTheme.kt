@@ -54,10 +54,9 @@ abstract class MadTheme(
             .rateLimit(1, 12, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("Referer", "$baseUrl/")
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("Referer", "$baseUrl/")
+    }
 
     private val json: Json by injectLazy()
 
@@ -124,18 +123,17 @@ abstract class MadTheme(
 
     override fun searchMangaSelector(): String = ".book-detailed-item"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst("a")!!.attr("title")
-            element.selectFirst(".summary")?.text()?.let { description = it }
-            element
-                .select(".genres > *")
-                .joinToString { it.text() }
-                .takeIf { it.isNotEmpty() }
-                ?.let { genre = it }
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:data-src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("a")!!.attr("title")
+        element.selectFirst(".summary")?.text()?.let { description = it }
+        element
+            .select(".genres > *")
+            .joinToString { it.text() }
+            .takeIf { it.isNotEmpty() }
+            ?.let { genre = it }
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:data-src")
+    }
 
     /*
      * Only some sites use the next/previous buttons, so instead we check for the next link
@@ -144,34 +142,33 @@ abstract class MadTheme(
     override fun searchMangaNextPageSelector(): String? = ".paginator > a.active + a:not([rel=next])"
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.selectFirst(".detail h1")!!.text()
-            author = document.select(".detail .meta > p > strong:contains(Authors) ~ a").joinToString { it.text().trim(',', ' ') }
-            genre = document.select(".detail .meta > p > strong:contains(Genres) ~ a").joinToString { it.text().trim(',', ' ') }
-            thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src")
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst(".detail h1")!!.text()
+        author = document.select(".detail .meta > p > strong:contains(Authors) ~ a").joinToString { it.text().trim(',', ' ') }
+        genre = document.select(".detail .meta > p > strong:contains(Genres) ~ a").joinToString { it.text().trim(',', ' ') }
+        thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src")
 
-            val altNames =
-                document
-                    .selectFirst(".detail h2")
-                    ?.text()
-                    ?.split(',', ';')
-                    ?.mapNotNull { it.trim().takeIf { it != title } }
-                    ?: listOf()
+        val altNames =
+            document
+                .selectFirst(".detail h2")
+                ?.text()
+                ?.split(',', ';')
+                ?.mapNotNull { it.trim().takeIf { it != title } }
+                ?: listOf()
 
-            description = document.select(".summary .content, .summary .content ~ p").text() +
-                (altNames.takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): ${it.joinToString()}" } ?: "")
+        description = document.select(".summary .content, .summary .content ~ p").text() +
+            (altNames.takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): ${it.joinToString()}" } ?: "")
 
-            val statusText = document.selectFirst(".detail .meta > p > strong:contains(Status) ~ a")!!.text()
-            status =
-                when (statusText.lowercase(Locale.ENGLISH)) {
-                    "ongoing" -> SManga.ONGOING
-                    "completed" -> SManga.COMPLETED
-                    "on-hold" -> SManga.ON_HIATUS
-                    "canceled" -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-        }
+        val statusText = document.selectFirst(".detail .meta > p > strong:contains(Status) ~ a")!!.text()
+        status =
+            when (statusText.lowercase(Locale.ENGLISH)) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                "on-hold" -> SManga.ON_HIATUS
+                "canceled" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     // Chapters
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -205,18 +202,17 @@ abstract class MadTheme(
         throw Exception("HTTP error ${response.code}")
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)?.let { mangaId ->
-            val url =
-                "$baseUrl/service/backend/chaplist/"
-                    .toHttpUrl()
-                    .newBuilder()
-                    .addQueryParameter("manga_id", mangaId)
-                    .addQueryParameter("manga_name", manga.title)
-                    .build()
+    override fun chapterListRequest(manga: SManga): Request = MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)?.let { mangaId ->
+        val url =
+            "$baseUrl/service/backend/chaplist/"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("manga_id", mangaId)
+                .addQueryParameter("manga_name", manga.title)
+                .build()
 
-            GET(url, headers)
-        } ?: GET("$baseUrl/api/manga${manga.url}/chapters?source=detail", headers)
+        GET(url, headers)
+    } ?: GET("$baseUrl/api/manga${manga.url}/chapters?source=detail", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (genresList == null) {
@@ -227,18 +223,17 @@ abstract class MadTheme(
 
     override fun chapterListSelector(): String = "#chapter-list > li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            // Not using setUrlWithoutDomain() to support external chapters
-            url =
-                element
-                    .selectFirst("a")!!
-                    .absUrl("href")
-                    .removePrefix(baseUrl)
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        // Not using setUrlWithoutDomain() to support external chapters
+        url =
+            element
+                .selectFirst("a")!!
+                .absUrl("href")
+                .removePrefix(baseUrl)
 
-            name = element.selectFirst(".chapter-title")!!.text()
-            date_upload = parseChapterDate(element.selectFirst(".chapter-update")?.text())
-        }
+        name = element.selectFirst(".chapter-title")!!.text()
+        date_upload = parseChapterDate(element.selectFirst(".chapter-update")?.text())
+    }
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {
@@ -316,13 +311,12 @@ abstract class MadTheme(
     }
 
     // Image
-    override fun pageListRequest(chapter: SChapter): Request =
-        if (chapter.url.toHttpUrlOrNull() != null) {
-            // External chapter
-            GET(chapter.url, headers)
-        } else {
-            super.pageListRequest(chapter)
-        }
+    override fun pageListRequest(chapter: SChapter): Request = if (chapter.url.toHttpUrlOrNull() != null) {
+        // External chapter
+        GET(chapter.url, headers)
+    } else {
+        super.pageListRequest(chapter)
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -330,12 +324,11 @@ abstract class MadTheme(
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0
 
-        fun SimpleDateFormat.tryParse(string: String): Long =
-            try {
-                parse(string)?.time ?: 0
-            } catch (_: ParseException) {
-                0
-            }
+        fun SimpleDateFormat.tryParse(string: String): Long = try {
+            parse(string)?.time ?: 0
+        } catch (_: ParseException) {
+            0
+        }
 
         return when {
             " ago" in date -> {
@@ -379,17 +372,16 @@ abstract class MadTheme(
         }
 
     // Filters
-    override fun getFilterList() =
-        FilterList(
-            // TODO: Filters for sites that support it:
-            // excluded genres
-            // genre inclusion mode
-            // bookmarks
-            // author
-            GenreFilter(getGenreList()),
-            StatusFilter(),
-            OrderFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        // TODO: Filters for sites that support it:
+        // excluded genres
+        // genre inclusion mode
+        // bookmarks
+        // author
+        GenreFilter(getGenreList()),
+        StatusFilter(),
+        OrderFilter(),
+    )
 
     private class GenreFilter(
         genres: List<Genre>,

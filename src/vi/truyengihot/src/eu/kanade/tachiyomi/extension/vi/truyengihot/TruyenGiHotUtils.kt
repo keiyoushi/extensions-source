@@ -44,28 +44,24 @@ object TruyenGiHotUtils {
         return calendar.timeInMillis
     }
 
-    internal fun parseThemes(element: Element): List<Genre> =
-        element.select("span[data-val]").map {
-            Genre(it.text(), it.attr("data-val"))
-        }
+    internal fun parseThemes(element: Element): List<Genre> = element.select("span[data-val]").map {
+        Genre(it.text(), it.attr("data-val"))
+    }
 
-    internal fun parseOptions(element: Element): List<Pair<String, String>> =
-        element.select("span[data-val]").map {
-            Pair(it.text(), it.attr("data-val"))
-        }
+    internal fun parseOptions(element: Element): List<Pair<String, String>> = element.select("span[data-val]").map {
+        Pair(it.text(), it.attr("data-val"))
+    }
 
-    internal fun Element.imgAttr() =
-        when {
-            hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
-            hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-            hasAttr("data-src") -> absUrl("data-src")
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            else -> absUrl("src")
-        }
+    internal fun Element.imgAttr() = when {
+        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
+        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
+        hasAttr("data-src") -> absUrl("data-src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        else -> absUrl("src")
+    }
 
-    internal fun Elements.textWithNewlines() =
-        run {
-            select("p, br").prepend("\\n")
-            text().replace("\\n", "\n").replace("\n ", "\n")
-        }
+    internal fun Elements.textWithNewlines() = run {
+        select("p, br").prepend("\\n")
+        text().replace("\\n", "\n").replace("\n ", "\n")
+    }
 }

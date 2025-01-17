@@ -38,10 +38,9 @@ abstract class Yanmaga(
             .addInterceptor(SpeedBinbInterceptor(json))
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun searchMangaRequest(
         page: Int,
@@ -69,12 +68,11 @@ abstract class Yanmaga(
 
     override fun searchMangaSelector() = "ul.search-list > li.search-item:has(.$searchCategoryClass)"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            title = element.selectFirst(".search-item-title")!!.text()
-            thumbnail_url = element.selectFirst(".search-item-thumbnail-image img")?.absUrl("src")
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.selectFirst(".search-item-title")!!.text()
+        thumbnail_url = element.selectFirst(".search-item-thumbnail-image img")?.absUrl("src")
+    }
 
     override fun searchMangaNextPageSelector() = "ul.pagination > li.page-item > a.page-next"
 
@@ -161,22 +159,21 @@ abstract class Yanmaga(
 
     override fun chapterListSelector() = "ul.mod-episode-list > li.mod-episode-item"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            // The first chapter sometimes is a fake one. However, this still count towards the total
-            // chapter count, so we can't filter this out yet.
-            url = ""
-            element.selectFirst("a.mod-episode-link")?.attr("href")?.let {
-                setUrlWithoutDomain(it)
-            }
-            name = element.selectFirst(".mod-episode-title")!!.text()
-            date_upload =
-                try {
-                    dateFormat.parse(element.selectFirst(".mod-episode-date")!!.text())!!.time
-                } catch (_: Exception) {
-                    0L
-                }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        // The first chapter sometimes is a fake one. However, this still count towards the total
+        // chapter count, so we can't filter this out yet.
+        url = ""
+        element.selectFirst("a.mod-episode-link")?.attr("href")?.let {
+            setUrlWithoutDomain(it)
         }
+        name = element.selectFirst(".mod-episode-title")!!.text()
+        date_upload =
+            try {
+                dateFormat.parse(element.selectFirst(".mod-episode-date")!!.text())!!.time
+            } catch (_: Exception) {
+                0L
+            }
+    }
 
     private val reader by lazy { SpeedBinbReader(client, headers, json, highQualityImages) }
 

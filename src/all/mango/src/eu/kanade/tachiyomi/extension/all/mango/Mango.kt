@@ -83,13 +83,12 @@ class Mango :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        client
-            .newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
+    ): Observable<MangasPage> = client
+        .newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map { response ->
+            searchMangaParse(response, query)
+        }
 
     // Here the best we can do is just match manga based on their titles
     private fun searchMangaParse(
@@ -229,10 +228,9 @@ class Mango :
     private val password by lazy { getPrefPassword() }
     private var apiCookies: String = ""
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", "Tachiyomi Mango v${AppInfo.getVersionName()}")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", "Tachiyomi Mango v${AppInfo.getVersionName()}")
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -307,32 +305,31 @@ class Mango :
         default: String,
         summary: String,
         isPassword: Boolean = false,
-    ): androidx.preference.EditTextPreference =
-        androidx.preference.EditTextPreference(context).apply {
-            key = title
-            this.title = title
-            val input = preferences.getString(title, null)
-            this.summary = if (input == null || input.isEmpty()) summary else input
-            this.setDefaultValue(default)
-            dialogTitle = title
+    ): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        key = title
+        this.title = title
+        val input = preferences.getString(title, null)
+        this.summary = if (input == null || input.isEmpty()) summary else input
+        this.setDefaultValue(default)
+        dialogTitle = title
 
-            if (isPassword) {
-                setOnBindEditTextListener {
-                    it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                }
-            }
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(title, newValue as String).commit()
-                    Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                    apiCookies = ""
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+        if (isPassword) {
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
         }
+        setOnPreferenceChangeListener { _, newValue ->
+            try {
+                val res = preferences.edit().putString(title, newValue as String).commit()
+                Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                apiCookies = ""
+                res
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
 
     // We strip the last slash since we will append it above
     private fun getPrefBaseUrl(): String {

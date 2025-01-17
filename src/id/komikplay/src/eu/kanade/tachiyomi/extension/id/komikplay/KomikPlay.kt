@@ -18,12 +18,11 @@ class KomikPlay : ZManga("KomikPlay", "https://komikplay.com", "id", SimpleDateF
 
     override fun latestUpdatesSelector() = "h2:contains(New) + .flexbox3 .flexbox3-item"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("div.flexbox3-content a").attr("href"))
-            title = element.select("div.flexbox3-content a").attr("title")
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("div.flexbox3-content a").attr("href"))
+        title = element.select("div.flexbox3-content a").attr("title")
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -46,12 +45,11 @@ class KomikPlay : ZManga("KomikPlay", "https://komikplay.com", "id", SimpleDateF
         return GET(url.build(), headers)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("NOTE: cant be used with other filter!"),
-            Filter.Header("$name Project List page"),
-            ProjectFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: cant be used with other filter!"),
+        Filter.Header("$name Project List page"),
+        ProjectFilter(),
+    )
 
     override val hasProjectPage = true
 }

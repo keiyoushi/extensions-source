@@ -29,28 +29,25 @@ class SeriesDto(
     private val authors: List<SeriesAuthorDto>? = emptyList(),
     val chapters: List<SeriesChapterDto>? = emptyList(),
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            title = this@SeriesDto.title
-            thumbnail_url = imageUrl
-            url = slug
-        }
+    fun toSManga() = SManga.create().apply {
+        title = this@SeriesDto.title
+        thumbnail_url = imageUrl
+        url = slug
+    }
 
-    fun toSMangaDetails() =
-        toSManga().apply {
-            status = parseStatus(this@SeriesDto.status)
-            description = this@SeriesDto.description
-            title = this@SeriesDto.title
-            author = authors?.joinToString { it.name }
-        }
+    fun toSMangaDetails() = toSManga().apply {
+        status = parseStatus(this@SeriesDto.status)
+        description = this@SeriesDto.description
+        title = this@SeriesDto.title
+        author = authors?.joinToString { it.name }
+    }
 
-    private fun parseStatus(status: String?) =
-        when (status) {
-            "ongoing" -> SManga.ONGOING
-            "hiatus" -> SManga.ON_HIATUS
-            "finished" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?) = when (status) {
+        "ongoing" -> SManga.ONGOING
+        "hiatus" -> SManga.ON_HIATUS
+        "finished" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 }
 
 @Serializable
@@ -66,17 +63,16 @@ class SeriesChapterDto(
     private val number: Float,
     private val createdAt: String,
 ) {
-    fun toSChapter(seriesSlug: String) =
-        SChapter.create().apply {
-            name = "Capítulo ${number.toString().removeSuffix(".0")} - $title"
-            date_upload =
-                try {
-                    dateFormat.parse(createdAt)?.time ?: 0L
-                } catch (_: ParseException) {
-                    0L
-                }
-            url = "$seriesSlug/$number"
-        }
+    fun toSChapter(seriesSlug: String) = SChapter.create().apply {
+        name = "Capítulo ${number.toString().removeSuffix(".0")} - $title"
+        date_upload =
+            try {
+                dateFormat.parse(createdAt)?.time ?: 0L
+            } catch (_: ParseException) {
+                0L
+            }
+        url = "$seriesSlug/$number"
+    }
 }
 
 @Serializable

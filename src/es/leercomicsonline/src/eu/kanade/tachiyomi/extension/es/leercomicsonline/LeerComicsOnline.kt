@@ -25,36 +25,34 @@ class LeerComicsOnline : HttpSource() {
 
     private val comicsPerPage = 20
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET(
-            baseUrl
-                .toHttpUrl()
-                .newBuilder()
-                .apply {
-                    addPathSegment("api")
-                    addPathSegments("series")
-                    addQueryParameter("page", page.toString())
-                }.build(),
-            headers,
-        )
+    override fun popularMangaRequest(page: Int): Request = GET(
+        baseUrl
+            .toHttpUrl()
+            .newBuilder()
+            .apply {
+                addPathSegment("api")
+                addPathSegments("series")
+                addQueryParameter("page", page.toString())
+            }.build(),
+        headers,
+    )
 
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        GET(
-            baseUrl
-                .toHttpUrl()
-                .newBuilder()
-                .apply {
-                    addPathSegment("api")
-                    addPathSegments("series")
-                    addQueryParameter("page", page.toString())
-                    addQueryParameter("search", query)
-                }.build(),
-            headers,
-        )
+    ): Request = GET(
+        baseUrl
+            .toHttpUrl()
+            .newBuilder()
+            .apply {
+                addPathSegment("api")
+                addPathSegments("series")
+                addQueryParameter("page", page.toString())
+                addQueryParameter("search", query)
+            }.build(),
+        headers,
+    )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val page =
@@ -108,15 +106,14 @@ class LeerComicsOnline : HttpSource() {
         )
     }
 
-    override fun getMangaUrl(manga: SManga): String =
-        baseUrl
-            .toHttpUrl()
-            .newBuilder()
-            .apply {
-                addPathSegment("categorias")
-                addPathSegment((baseUrl + manga.url).toHttpUrl().queryParameter("slug").toString())
-            }.build()
-            .toString()
+    override fun getMangaUrl(manga: SManga): String = baseUrl
+        .toHttpUrl()
+        .newBuilder()
+        .apply {
+            addPathSegment("categorias")
+            addPathSegment((baseUrl + manga.url).toHttpUrl().queryParameter("slug").toString())
+        }.build()
+        .toString()
 
     override fun chapterListParse(response: Response): List<SChapter> =
         json.decodeFromString<List<Comic>>(response.body.string()).reversed().map {
@@ -141,24 +138,22 @@ class LeerComicsOnline : HttpSource() {
             }
         }
 
-    override fun getChapterUrl(chapter: SChapter): String =
-        baseUrl
-            .toHttpUrl()
-            .newBuilder()
-            .apply {
-                addPathSegment((baseUrl + chapter.url).toHttpUrl().queryParameter("slug").toString())
-            }.build()
-            .toString()
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl
+        .toHttpUrl()
+        .newBuilder()
+        .apply {
+            addPathSegment((baseUrl + chapter.url).toHttpUrl().queryParameter("slug").toString())
+        }.build()
+        .toString()
 
-    override fun pageListParse(response: Response): List<Page> =
-        try {
-            // some chapters are just empty
-            json.decodeFromString<List<String>>(response.body.string()).mapIndexed { index, url ->
-                Page(index, imageUrl = url)
-            }
-        } catch (exception: Exception) {
-            emptyList()
+    override fun pageListParse(response: Response): List<Page> = try {
+        // some chapters are just empty
+        json.decodeFromString<List<String>>(response.body.string()).mapIndexed { index, url ->
+            Page(index, imageUrl = url)
         }
+    } catch (exception: Exception) {
+        emptyList()
+    }
 
     @Serializable
     class Comic(

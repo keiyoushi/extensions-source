@@ -15,48 +15,46 @@ class Manhwa18Net : MyMangaCMS("Manhwa18.net", "https://manhwa18.net", "en") {
     override val parseStatusOnHoldStringLowerCase = "on hold"
     override val parseStatusCompletedStringLowerCase = "completed"
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Author("Author"),
-            Status(
-                "Status",
-                "All",
-                "Ongoing",
-                "On hold",
-                "Completed",
-            ),
-            Sort(
-                "Order",
-                "A-Z",
-                "Z-A",
-                "Latest update",
-                "New manhwa",
-                "Most view",
-                "Most like",
-            ),
-            GenreList(getGenreList(), "Genre"),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Author("Author"),
+        Status(
+            "Status",
+            "All",
+            "Ongoing",
+            "On hold",
+            "Completed",
+        ),
+        Sort(
+            "Order",
+            "A-Z",
+            "Z-A",
+            "Latest update",
+            "New manhwa",
+            "Most view",
+            "Most like",
+        ),
+        GenreList(getGenreList(), "Genre"),
+    )
 
     // To populate this list:
     // console.log([...document.querySelectorAll("div.search-gerne_item")].map(elem => `Genre("${elem.textContent.trim()}", ${elem.querySelector("label").getAttribute("data-genre-id")}),`).join("\n"))
-    override fun getGenreList() =
-        listOf(
-            Genre("Adult", 4),
-            Genre("Doujinshi", 9),
-            Genre("Harem", 17),
-            Genre("Manga", 24),
-            Genre("Manhwa", 26),
-            Genre("Mature", 28),
-            Genre("NTR", 33),
-            Genre("Romance", 36),
-            Genre("Webtoon", 57),
-            Genre("Action", 59),
-            Genre("Comedy", 60),
-            Genre("BL", 61),
-            Genre("Horror", 62),
-            Genre("Raw", 63),
-            Genre("Uncensore", 64),
-        )
+    override fun getGenreList() = listOf(
+        Genre("Adult", 4),
+        Genre("Doujinshi", 9),
+        Genre("Harem", 17),
+        Genre("Manga", 24),
+        Genre("Manhwa", 26),
+        Genre("Mature", 28),
+        Genre("NTR", 33),
+        Genre("Romance", 36),
+        Genre("Webtoon", 57),
+        Genre("Action", 59),
+        Genre("Comedy", 60),
+        Genre("BL", 61),
+        Genre("Horror", 62),
+        Genre("Raw", 63),
+        Genre("Uncensore", 64),
+    )
 
     override fun dateUpdatedParser(date: String): Long =
         runCatching { dateFormatter.parse(date.substringAfter(" - "))?.time }.getOrNull() ?: 0L

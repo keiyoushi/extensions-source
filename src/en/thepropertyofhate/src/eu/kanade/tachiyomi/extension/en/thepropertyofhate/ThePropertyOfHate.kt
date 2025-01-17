@@ -72,11 +72,10 @@ class ThePropertyOfHate : HttpSource() {
         return chapters.reversed()
     }
 
-    override fun pageListParse(response: Response) =
-        response
-            .asJsoup()
-            .select("select > optgroup > option")
-            .mapIndexed { num, opt -> Page(num, opt.absUrl("value")) }
+    override fun pageListParse(response: Response) = response
+        .asJsoup()
+        .select("select > optgroup > option")
+        .mapIndexed { num, opt -> Page(num, opt.absUrl("value")) }
 
     override fun imageUrlParse(response: Response): String = response.asJsoup().selectFirst(".comic_comic > img")!!.absUrl("src")
 

@@ -112,10 +112,9 @@ class ComX : ParsedHttpSource() {
                 response
             }.build()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Referer", baseUrl)
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList())
@@ -357,18 +356,17 @@ class ComX : ParsedHttpSource() {
         return manga
     }
 
-    private fun parseStatus(element: String): Int =
-        when {
-            element.contains("Продолжается") ||
-                element.contains(" из ") ||
-                element.contains("Онгоинг") -> SManga.ONGOING
-            element.contains("Заверш") ||
-                element.contains("Лимитка") ||
-                element.contains("Ван шот") ||
-                element.contains("Графический роман") -> SManga.COMPLETED
+    private fun parseStatus(element: String): Int = when {
+        element.contains("Продолжается") ||
+            element.contains(" из ") ||
+            element.contains("Онгоинг") -> SManga.ONGOING
+        element.contains("Заверш") ||
+            element.contains("Лимитка") ||
+            element.contains("Ван шот") ||
+            element.contains("Графический роман") -> SManga.COMPLETED
 
-            else -> SManga.UNKNOWN
-        }
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
     override fun chapterListSelector() = throw NotImplementedError("Unused")
@@ -444,21 +442,20 @@ class ComX : ParsedHttpSource() {
         return pages
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client
-            .newCall(pageListRequest(chapter))
-            .asObservable()
-            .doOnNext { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 404 && response.asJsoup().toString().contains("Выпуск был удален по требованию правообладателя")) {
-                        throw Exception("Лицензировано. Возможно может помочь авторизация через WebView")
-                    } else {
-                        throw Exception("HTTP error ${response.code}")
-                    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client
+        .newCall(pageListRequest(chapter))
+        .asObservable()
+        .doOnNext { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 404 && response.asJsoup().toString().contains("Выпуск был удален по требованию правообладателя")) {
+                    throw Exception("Лицензировано. Возможно может помочь авторизация через WebView")
+                } else {
+                    throw Exception("HTTP error ${response.code}")
                 }
-            }.map { response ->
-                pageListParse(response)
             }
+        }.map { response ->
+            pageListParse(response)
+        }
 
     override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
@@ -495,170 +492,165 @@ class ComX : ParsedHttpSource() {
         ages: List<CheckFilter>,
     ) : Filter.Group<CheckFilter>("Возрастное ограничение", ages)
 
-    override fun getFilterList() =
-        FilterList(
-            OrderBy(),
-            PubList(getPubList()),
-            GenreList(getGenreList()),
-            TypeList(getTypeList()),
-            AgeList(getAgeList()),
-        )
+    override fun getFilterList() = FilterList(
+        OrderBy(),
+        PubList(getPubList()),
+        GenreList(getGenreList()),
+        TypeList(getTypeList()),
+        AgeList(getAgeList()),
+    )
 
-    private fun getAgeList() =
-        listOf(
-            CheckFilter("Для всех", "1"),
-            CheckFilter("18+", "2"),
-        )
+    private fun getAgeList() = listOf(
+        CheckFilter("Для всех", "1"),
+        CheckFilter("18+", "2"),
+    )
 
-    private fun getTypeList() =
-        listOf(
-            CheckFilter("События в комиксах", "1"),
-            CheckFilter("Аннуалы", "3"),
-            CheckFilter("Артбук", "4"),
-            CheckFilter("Ван-шот", "7"),
-            CheckFilter("Гайд", "15"),
-            CheckFilter("Графический Роман", "17"),
-            CheckFilter("Комикс Стрип", "19"),
-            CheckFilter("Лимитка", "21"),
-            CheckFilter("Макси-серия", "25"),
-            CheckFilter("Мини-серия", "27"),
-            CheckFilter("Онгоинг", "28"),
-            CheckFilter("Рассказ", "29"),
-            CheckFilter("Роман", "30"),
-            CheckFilter("Сборник", "31"),
-            CheckFilter("Серия", "32"),
-            CheckFilter("Спешл", "35"),
-            CheckFilter("Энциклопедия", "36"),
-        )
+    private fun getTypeList() = listOf(
+        CheckFilter("События в комиксах", "1"),
+        CheckFilter("Аннуалы", "3"),
+        CheckFilter("Артбук", "4"),
+        CheckFilter("Ван-шот", "7"),
+        CheckFilter("Гайд", "15"),
+        CheckFilter("Графический Роман", "17"),
+        CheckFilter("Комикс Стрип", "19"),
+        CheckFilter("Лимитка", "21"),
+        CheckFilter("Макси-серия", "25"),
+        CheckFilter("Мини-серия", "27"),
+        CheckFilter("Онгоинг", "28"),
+        CheckFilter("Рассказ", "29"),
+        CheckFilter("Роман", "30"),
+        CheckFilter("Сборник", "31"),
+        CheckFilter("Серия", "32"),
+        CheckFilter("Спешл", "35"),
+        CheckFilter("Энциклопедия", "36"),
+    )
 
-    private fun getPubList() =
-        listOf(
-            CheckFilter("Манга", "3"),
-            CheckFilter("Маньхуа", "45"),
-            CheckFilter("Манхва", "44"),
-            CheckFilter("Разные комиксы", "18"),
-            CheckFilter("Aftershock", "50"),
-            CheckFilter("Avatar Press", "11"),
-            CheckFilter("Boom! Studios", "12"),
-            CheckFilter("Dark Horse", "7"),
-            CheckFilter("DC Comics", "14"),
-            CheckFilter("Dynamite Entertainment", "10"),
-            CheckFilter("Icon Comics", "16"),
-            CheckFilter("IDW Publishing", "6"),
-            CheckFilter("Image", "4"),
-            CheckFilter("Marvel", "2"),
-            CheckFilter("Oni Press", "13"),
-            CheckFilter("Top Cow", "9"),
-            CheckFilter("Valiant", "15"),
-            CheckFilter("Vertigo", "8"),
-            CheckFilter("Wildstorm", "5"),
-            CheckFilter("Zenescope", "51"),
-        )
+    private fun getPubList() = listOf(
+        CheckFilter("Манга", "3"),
+        CheckFilter("Маньхуа", "45"),
+        CheckFilter("Манхва", "44"),
+        CheckFilter("Разные комиксы", "18"),
+        CheckFilter("Aftershock", "50"),
+        CheckFilter("Avatar Press", "11"),
+        CheckFilter("Boom! Studios", "12"),
+        CheckFilter("Dark Horse", "7"),
+        CheckFilter("DC Comics", "14"),
+        CheckFilter("Dynamite Entertainment", "10"),
+        CheckFilter("Icon Comics", "16"),
+        CheckFilter("IDW Publishing", "6"),
+        CheckFilter("Image", "4"),
+        CheckFilter("Marvel", "2"),
+        CheckFilter("Oni Press", "13"),
+        CheckFilter("Top Cow", "9"),
+        CheckFilter("Valiant", "15"),
+        CheckFilter("Vertigo", "8"),
+        CheckFilter("Wildstorm", "5"),
+        CheckFilter("Zenescope", "51"),
+    )
 
-    private fun getGenreList() =
-        listOf(
-            CheckFilter("Автобиографическая новелла", "9"),
-            CheckFilter("Альтернативная история", "10"),
-            CheckFilter("Антиутопия", "11"),
-            CheckFilter("Апокалипсис", "12"),
-            CheckFilter("Артбук", "14"),
-            CheckFilter("Афрофутуризм", "15"),
-            CheckFilter("Биография", "16"),
-            CheckFilter("Боевик", "17"),
-            CheckFilter("Боевые искусства", "18"),
-            CheckFilter("Вампиры", "19"),
-            CheckFilter("Вестерн", "20"),
-            CheckFilter("Военный", "21"),
-            CheckFilter("Гарем", "22"),
-            CheckFilter("Гендерная интрига", "23"),
-            CheckFilter("Героическое фэнтези", "24"),
-            CheckFilter("Детектив", "25"),
-            CheckFilter("Детский", "26"),
-            CheckFilter("Дзёсэй", "27"),
-            CheckFilter("Документальный", "28"),
-            CheckFilter("Драма", "29"),
-            CheckFilter("Единоборства", "30"),
-            CheckFilter("Жизнь", "31"),
-            CheckFilter("Зомби", "32"),
-            CheckFilter("Игра", "33"),
-            CheckFilter("Игры", "124"),
-            CheckFilter("Исекай", "35"),
-            CheckFilter("Исэкай", "38"),
-            CheckFilter("Исторический", "36"),
-            CheckFilter("История", "37"),
-            CheckFilter("Квест", "39"),
-            CheckFilter("Киберпанк", "40"),
-            CheckFilter("Кодомо", "41"),
-            CheckFilter("Комедия", "42"),
-            CheckFilter("Комелия", "43"),
-            CheckFilter("Космоопера", "44"),
-            CheckFilter("Космос", "45"),
-            CheckFilter("Криминал", "46"),
-            CheckFilter("Криптоистория", "47"),
-            CheckFilter("ЛГБТ", "48"),
-            CheckFilter("Магия", "49"),
-            CheckFilter("Мелодрама", "50"),
-            CheckFilter("Меха", "51"),
-            CheckFilter("Мистика", "52"),
-            CheckFilter("Музыка", "54"),
-            CheckFilter("Научная фантастика", "55"),
-            CheckFilter("Неотвратимость", "56"),
-            CheckFilter("Нуар", "57"),
-            CheckFilter("Омегаверс", "58"),
-            CheckFilter("Паника", "59"),
-            CheckFilter("Пародия", "60"),
-            CheckFilter("Пираты", "61"),
-            CheckFilter("Повседневность", "62"),
-            CheckFilter("Политика", "63"),
-            CheckFilter("Постапокалиптика", "64"),
-            CheckFilter("Предатель среди нас", "65"),
-            CheckFilter("Приключения", "67"),
-            CheckFilter("Приступления", "69"),
-            CheckFilter("Психические отклонения", "70"),
-            CheckFilter("Психоделика", "71"),
-            CheckFilter("Психология", "73"),
-            CheckFilter("Путешествия во времени", "74"),
-            CheckFilter("Религия", "75"),
-            CheckFilter("Романтика", "76"),
-            CheckFilter("Самурайский боевик", "77"),
-            CheckFilter("Сверхъестественное", "78"),
-            CheckFilter("Сейнен", "79"),
-            CheckFilter("Симбиоты", "80"),
-            CheckFilter("Сказка", "81"),
-            CheckFilter("Слэшер", "82"),
-            CheckFilter("Смерть", "83"),
-            CheckFilter("Спорт", "84"),
-            CheckFilter("Стимпанк", "85"),
-            CheckFilter("Супергероика", "87"),
-            CheckFilter("Сэйнэн", "90"),
-            CheckFilter("Сянься", "91"),
-            CheckFilter("Сёдзё", "93"),
-            CheckFilter("Сёдзё-ай", "94"),
-            CheckFilter("Сёнэн", "96"),
-            CheckFilter("Сёнэн-ай", "97"),
-            CheckFilter("Трагедия", "98"),
-            CheckFilter("Тревога", "99"),
-            CheckFilter("Триллер", "100"),
-            CheckFilter("Тюремная драма", "101"),
-            CheckFilter("Ужасы", "102"),
-            CheckFilter("Фантасмагория", "103"),
-            CheckFilter("Фантасмогория", "104"),
-            CheckFilter("Фантастика", "105"),
-            CheckFilter("Фэнтези", "106"),
-            CheckFilter("Хоррор", "109"),
-            CheckFilter("Черный юмор", "110"),
-            CheckFilter("Школа", "111"),
-            CheckFilter("Школьная жизнь", "123"),
-            CheckFilter("Шпионский", "113"),
-            CheckFilter("Экшен", "122"),
-            CheckFilter("Экшн", "115"),
-            CheckFilter("Эротика", "116"),
-            CheckFilter("Этти", "117"),
-            CheckFilter("Юмор", "118"),
-            CheckFilter("Юри", "119"),
-            CheckFilter("Яой", "120"),
-            CheckFilter("Ёнкома", "121"),
-        )
+    private fun getGenreList() = listOf(
+        CheckFilter("Автобиографическая новелла", "9"),
+        CheckFilter("Альтернативная история", "10"),
+        CheckFilter("Антиутопия", "11"),
+        CheckFilter("Апокалипсис", "12"),
+        CheckFilter("Артбук", "14"),
+        CheckFilter("Афрофутуризм", "15"),
+        CheckFilter("Биография", "16"),
+        CheckFilter("Боевик", "17"),
+        CheckFilter("Боевые искусства", "18"),
+        CheckFilter("Вампиры", "19"),
+        CheckFilter("Вестерн", "20"),
+        CheckFilter("Военный", "21"),
+        CheckFilter("Гарем", "22"),
+        CheckFilter("Гендерная интрига", "23"),
+        CheckFilter("Героическое фэнтези", "24"),
+        CheckFilter("Детектив", "25"),
+        CheckFilter("Детский", "26"),
+        CheckFilter("Дзёсэй", "27"),
+        CheckFilter("Документальный", "28"),
+        CheckFilter("Драма", "29"),
+        CheckFilter("Единоборства", "30"),
+        CheckFilter("Жизнь", "31"),
+        CheckFilter("Зомби", "32"),
+        CheckFilter("Игра", "33"),
+        CheckFilter("Игры", "124"),
+        CheckFilter("Исекай", "35"),
+        CheckFilter("Исэкай", "38"),
+        CheckFilter("Исторический", "36"),
+        CheckFilter("История", "37"),
+        CheckFilter("Квест", "39"),
+        CheckFilter("Киберпанк", "40"),
+        CheckFilter("Кодомо", "41"),
+        CheckFilter("Комедия", "42"),
+        CheckFilter("Комелия", "43"),
+        CheckFilter("Космоопера", "44"),
+        CheckFilter("Космос", "45"),
+        CheckFilter("Криминал", "46"),
+        CheckFilter("Криптоистория", "47"),
+        CheckFilter("ЛГБТ", "48"),
+        CheckFilter("Магия", "49"),
+        CheckFilter("Мелодрама", "50"),
+        CheckFilter("Меха", "51"),
+        CheckFilter("Мистика", "52"),
+        CheckFilter("Музыка", "54"),
+        CheckFilter("Научная фантастика", "55"),
+        CheckFilter("Неотвратимость", "56"),
+        CheckFilter("Нуар", "57"),
+        CheckFilter("Омегаверс", "58"),
+        CheckFilter("Паника", "59"),
+        CheckFilter("Пародия", "60"),
+        CheckFilter("Пираты", "61"),
+        CheckFilter("Повседневность", "62"),
+        CheckFilter("Политика", "63"),
+        CheckFilter("Постапокалиптика", "64"),
+        CheckFilter("Предатель среди нас", "65"),
+        CheckFilter("Приключения", "67"),
+        CheckFilter("Приступления", "69"),
+        CheckFilter("Психические отклонения", "70"),
+        CheckFilter("Психоделика", "71"),
+        CheckFilter("Психология", "73"),
+        CheckFilter("Путешествия во времени", "74"),
+        CheckFilter("Религия", "75"),
+        CheckFilter("Романтика", "76"),
+        CheckFilter("Самурайский боевик", "77"),
+        CheckFilter("Сверхъестественное", "78"),
+        CheckFilter("Сейнен", "79"),
+        CheckFilter("Симбиоты", "80"),
+        CheckFilter("Сказка", "81"),
+        CheckFilter("Слэшер", "82"),
+        CheckFilter("Смерть", "83"),
+        CheckFilter("Спорт", "84"),
+        CheckFilter("Стимпанк", "85"),
+        CheckFilter("Супергероика", "87"),
+        CheckFilter("Сэйнэн", "90"),
+        CheckFilter("Сянься", "91"),
+        CheckFilter("Сёдзё", "93"),
+        CheckFilter("Сёдзё-ай", "94"),
+        CheckFilter("Сёнэн", "96"),
+        CheckFilter("Сёнэн-ай", "97"),
+        CheckFilter("Трагедия", "98"),
+        CheckFilter("Тревога", "99"),
+        CheckFilter("Триллер", "100"),
+        CheckFilter("Тюремная драма", "101"),
+        CheckFilter("Ужасы", "102"),
+        CheckFilter("Фантасмагория", "103"),
+        CheckFilter("Фантасмогория", "104"),
+        CheckFilter("Фантастика", "105"),
+        CheckFilter("Фэнтези", "106"),
+        CheckFilter("Хоррор", "109"),
+        CheckFilter("Черный юмор", "110"),
+        CheckFilter("Школа", "111"),
+        CheckFilter("Школьная жизнь", "123"),
+        CheckFilter("Шпионский", "113"),
+        CheckFilter("Экшен", "122"),
+        CheckFilter("Экшн", "115"),
+        CheckFilter("Эротика", "116"),
+        CheckFilter("Этти", "117"),
+        CheckFilter("Юмор", "118"),
+        CheckFilter("Юри", "119"),
+        CheckFilter("Яой", "120"),
+        CheckFilter("Ёнкома", "121"),
+    )
 
     companion object {
         private val simpleDateFormat by lazy { SimpleDateFormat("dd.MM.yyyy", Locale.US) }

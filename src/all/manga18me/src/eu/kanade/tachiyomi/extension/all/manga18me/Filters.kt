@@ -3,14 +3,13 @@ package eu.kanade.tachiyomi.extension.all.manga18me
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        Filter.Header(name = "The filter is ignored when using text search."),
-        GenreFilter("Genre", getGenresList),
-        SortFilter("Sort", getSortsList),
-        RawFilter("Raw"),
-        CompletedFilter("Completed"),
-    )
+fun getFilters(): FilterList = FilterList(
+    Filter.Header(name = "The filter is ignored when using text search."),
+    GenreFilter("Genre", getGenresList),
+    SortFilter("Sort", getSortsList),
+    RawFilter("Raw"),
+    CompletedFilter("Completed"),
+)
 
 /** Filters **/
 

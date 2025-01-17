@@ -100,11 +100,10 @@ private val statusFilter: Array<String> =
         "Completed",
     )
 
-fun getFilters() =
-    FilterList(
-        TypeFilter("Type", typeFilter),
-        AuthorFilter("Author"),
-        ArtistFilter("Artist"),
-        StatusFilter("Status", statusFilter),
-        GenreFilter("Genres", genreList),
-    )
+fun getFilters() = FilterList(
+    TypeFilter("Type", typeFilter),
+    AuthorFilter("Author"),
+    ArtistFilter("Artist"),
+    StatusFilter("Status", statusFilter),
+    GenreFilter("Genres", genreList),
+)

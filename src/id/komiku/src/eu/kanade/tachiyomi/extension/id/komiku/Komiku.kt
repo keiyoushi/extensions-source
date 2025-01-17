@@ -32,12 +32,11 @@ class Komiku : ParsedHttpSource() {
     // popular
     override fun popularMangaSelector() = "div.bge"
 
-    override fun popularMangaRequest(page: Int): Request =
-        if (page == 1) {
-            GET("$baseUrlApi/other/hot/?orderby=meta_value_num", headers)
-        } else {
-            GET("$baseUrlApi/other/hot/page/$page/?orderby=meta_value_num", headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (page == 1) {
+        GET("$baseUrlApi/other/hot/?orderby=meta_value_num", headers)
+    } else {
+        GET("$baseUrlApi/other/hot/page/$page/?orderby=meta_value_num", headers)
+    }
 
     private val coverRegex = Regex("""(/Manga-|/Manhua-|/Manhwa-)""")
     private val coverUploadRegex = Regex("""/uploads/\d\d\d\d/\d\d/""")
@@ -69,12 +68,11 @@ class Komiku : ParsedHttpSource() {
     // latest
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (page == 1) {
-            GET("$baseUrlApi/other/hot/?orderby=modified&category_name=", headers)
-        } else {
-            GET("$baseUrlApi/other/hot/page/$page/?orderby=modified&category_name=", headers)
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (page == 1) {
+        GET("$baseUrlApi/other/hot/?orderby=modified&category_name=", headers)
+    } else {
+        GET("$baseUrlApi/other/hot/page/$page/?orderby=modified&category_name=", headers)
+    }
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
@@ -179,18 +177,17 @@ class Komiku : ParsedHttpSource() {
         project: Array<Status>,
     ) : Filter.Select<Status>("Filter Project", project, 0)
 
-    override fun getFilterList() =
-        FilterList(
-            CategoryNames(categoryNames),
-            OrderBy(orderBy),
-            GenreList1(genreList),
-            GenreList2(genreList),
-            StatusList(statusList),
-            Filter.Separator(),
-            Filter.Header("NOTE: cant be used with other filter!"),
-            Filter.Header("$name Project List page"),
-            ProjectList(projectFilter),
-        )
+    override fun getFilterList() = FilterList(
+        CategoryNames(categoryNames),
+        OrderBy(orderBy),
+        GenreList1(genreList),
+        GenreList2(genreList),
+        StatusList(statusList),
+        Filter.Separator(),
+        Filter.Header("NOTE: cant be used with other filter!"),
+        Filter.Header("$name Project List page"),
+        ProjectList(projectFilter),
+    )
 
     private val projectFilter =
         arrayOf(
@@ -278,48 +275,45 @@ class Komiku : ParsedHttpSource() {
         )
 
     // manga details
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            description = document.select("#Sinopsis > p").text().trim()
-            author = document.select("table.inftable td:contains(Komikus)+td").text()
-            genre = document.select("li[itemprop=genre] > a").joinToString { it.text() }
-            status = parseStatus(document.select("table.inftable tr > td:contains(Status) + td").text())
-            thumbnail_url = document.select("div.ims > img").attr("abs:src")
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        description = document.select("#Sinopsis > p").text().trim()
+        author = document.select("table.inftable td:contains(Komikus)+td").text()
+        genre = document.select("li[itemprop=genre] > a").joinToString { it.text() }
+        status = parseStatus(document.select("table.inftable tr > td:contains(Status) + td").text())
+        thumbnail_url = document.select("div.ims > img").attr("abs:src")
 
-            // add series type(manga/manhwa/manhua/other) thinggy to genre
-            val seriesTypeSelector =
-                "table.inftable tr:contains(Jenis) a," +
-                    " table.inftable tr:has(a[href*=category\\/]) a, a[href*=category\\/]"
-            document.select(seriesTypeSelector).firstOrNull()?.text()?.let {
-                if (it.isEmpty().not() && genre!!.contains(it, true).not()) {
-                    genre += if (genre!!.isEmpty()) it else ", $it"
-                }
+        // add series type(manga/manhwa/manhua/other) thinggy to genre
+        val seriesTypeSelector =
+            "table.inftable tr:contains(Jenis) a," +
+                " table.inftable tr:has(a[href*=category\\/]) a, a[href*=category\\/]"
+        document.select(seriesTypeSelector).firstOrNull()?.text()?.let {
+            if (it.isEmpty().not() && genre!!.contains(it, true).not()) {
+                genre += if (genre!!.isEmpty()) it else ", $it"
             }
         }
+    }
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("Ongoing") -> SManga.ONGOING
-            status.contains("Completed") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("Ongoing") -> SManga.ONGOING
+        status.contains("Completed") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // chapters
     override fun chapterListSelector() = "#Daftar_Chapter tr:has(td.judulseries)"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            name = element.select("a").text()
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        name = element.select("a").text()
 
-            val timeStamp = element.select("td.tanggalseries")
-            date_upload =
-                if (timeStamp.text().contains("lalu")) {
-                    parseRelativeDate(timeStamp.text().trim())
-                } else {
-                    parseDate(timeStamp.last()!!)
-                }
-        }
+        val timeStamp = element.select("td.tanggalseries")
+        date_upload =
+            if (timeStamp.text().contains("lalu")) {
+                parseRelativeDate(timeStamp.text().trim())
+            } else {
+                parseDate(timeStamp.last()!!)
+            }
+    }
 
     private fun parseDate(element: Element): Long = SimpleDateFormat("dd/MM/yyyy", Locale.US).parse(element.text())?.time ?: 0
 
@@ -338,10 +332,9 @@ class Komiku : ParsedHttpSource() {
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("#Baca_Komik img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#Baca_Komik img").mapIndexed { i, element ->
+        Page(i, "", element.attr("abs:src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

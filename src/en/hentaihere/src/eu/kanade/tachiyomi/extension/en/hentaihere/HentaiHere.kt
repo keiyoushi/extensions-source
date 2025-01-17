@@ -44,16 +44,15 @@ class HentaiHere : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client
-                .newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client
+            .newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/m/$id")
 
@@ -152,45 +151,44 @@ class HentaiHere : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val categories = document.select("#info .text-info:contains(Cat) ~ a")
-            val contents = document.select("#info .text-info:contains(Content:) ~ a")
-            val licensed = categories.find { it.text() == "Licensed" }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val categories = document.select("#info .text-info:contains(Cat) ~ a")
+        val contents = document.select("#info .text-info:contains(Content:) ~ a")
+        val licensed = categories.find { it.text() == "Licensed" }
 
-            title = document.select("h4 > a").first()!!.ownText()
-            author =
-                document
-                    .select("#info .text-info:contains(Artist:) ~ a")
-                    .joinToString { it.text() }
+        title = document.select("h4 > a").first()!!.ownText()
+        author =
+            document
+                .select("#info .text-info:contains(Artist:) ~ a")
+                .joinToString { it.text() }
 
-            description =
-                document
-                    .select("#info > div:has(> .text-info:contains(Brief Summary:))")
-                    .first()
-                    ?.ownText()
-            if (description == "Nothing yet!") {
-                description = ""
-            }
-
-            genre = (categories + contents).joinToString { it.text() }
-            status =
-                when (licensed) {
-                    null ->
-                        document
-                            .select("#info .text-info:contains(Status:) ~ a")
-                            .first()
-                            ?.text()
-                            ?.toStatus()
-                            ?: SManga.UNKNOWN
-                    else -> SManga.LICENSED
-                }
-            thumbnail_url =
-                document
-                    .select("#cover img")
-                    .first()!!
-                    .attr("src")
+        description =
+            document
+                .select("#info > div:has(> .text-info:contains(Brief Summary:))")
+                .first()
+                ?.ownText()
+        if (description == "Nothing yet!") {
+            description = ""
         }
+
+        genre = (categories + contents).joinToString { it.text() }
+        status =
+            when (licensed) {
+                null ->
+                    document
+                        .select("#info .text-info:contains(Status:) ~ a")
+                        .first()
+                        ?.text()
+                        ?.toStatus()
+                        ?: SManga.UNKNOWN
+                else -> SManga.LICENSED
+            }
+        thumbnail_url =
+            document
+                .select("#cover img")
+                .first()!!
+                .attr("src")
+    }
 
     // Chapters
     override fun chapterListSelector() = "li.sub-chp > a"
@@ -214,37 +212,35 @@ class HentaiHere : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(response: Response): List<Page> =
-        json
-            .decodeFromString<List<String>>(
-                response.body
-                    .string()
-                    .substringAfter("var rff_imageList = ")
-                    .substringBefore(";"),
-            ).mapIndexed { i, imagePath ->
-                Page(i, "", "$IMAGE_SERVER_URL/hentai$imagePath")
-            }
+    override fun pageListParse(response: Response): List<Page> = json
+        .decodeFromString<List<String>>(
+            response.body
+                .string()
+                .substringAfter("var rff_imageList = ")
+                .substringBefore(";"),
+        ).mapIndexed { i, imagePath ->
+            Page(i, "", "$IMAGE_SERVER_URL/hentai$imagePath")
+        }
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Note: Some ignored for text search, category!"),
-            Filter.Header("Note: Ignored when used with status!"),
-            SortFilter(sortFilterList.map { it.second }.toTypedArray()),
-            Filter.Separator(),
-            Filter.Header("Note: Ignored for text search!"),
-            AlphabetFilter(alphabetFilterList.map { it.second }.toTypedArray()),
-            Filter.Separator(),
-            Filter.Header("Note: Ignored for text search, category!"),
-            StatusFilter(statusFilterList.map { it.second }.toTypedArray()),
-            Filter.Separator(),
-            Filter.Header("Note: Ignored for text search!"),
-            CategoryFilter(categoryFilterList.map { it.second }.toTypedArray()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: Some ignored for text search, category!"),
+        Filter.Header("Note: Ignored when used with status!"),
+        SortFilter(sortFilterList.map { it.second }.toTypedArray()),
+        Filter.Separator(),
+        Filter.Header("Note: Ignored for text search!"),
+        AlphabetFilter(alphabetFilterList.map { it.second }.toTypedArray()),
+        Filter.Separator(),
+        Filter.Header("Note: Ignored for text search, category!"),
+        StatusFilter(statusFilterList.map { it.second }.toTypedArray()),
+        Filter.Separator(),
+        Filter.Header("Note: Ignored for text search!"),
+        CategoryFilter(categoryFilterList.map { it.second }.toTypedArray()),
+    )
 
     val sortFilterList =
         listOf(
@@ -355,12 +351,11 @@ class HentaiHere : ParsedHttpSource() {
         categories: Array<String>,
     ) : Filter.Select<String>("Category", categories, 0)
 
-    private fun String.toStatus(): Int =
-        when (this) {
-            "Completed" -> SManga.COMPLETED
-            "Ongoing" -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toStatus(): Int = when (this) {
+        "Completed" -> SManga.COMPLETED
+        "Ongoing" -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
 
     companion object {
         private const val IMAGE_SERVER_URL = "https://hentaicdn.com"

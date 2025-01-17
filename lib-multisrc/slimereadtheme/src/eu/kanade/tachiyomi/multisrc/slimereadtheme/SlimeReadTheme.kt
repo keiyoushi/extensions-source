@@ -125,18 +125,17 @@ abstract class SlimeReadTheme(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client
-                .newCall(GET("$apiUrl/book/$id", headers))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            searchMangaCache = searchMangaCache?.takeIf { page != 1 }
-                ?: super.fetchSearchManga(page, query, filters).toBlocking().last()
-            pageableOf(page, searchMangaCache!!)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client
+            .newCall(GET("$apiUrl/book/$id", headers))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        searchMangaCache = searchMangaCache?.takeIf { page != 1 }
+            ?: super.fetchSearchManga(page, query, filters).toBlocking().last()
+        pageableOf(page, searchMangaCache!!)
+    }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
         val details = mangaDetailsParse(response)
@@ -177,23 +176,22 @@ abstract class SlimeReadTheme(
 
     override fun mangaDetailsRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val info = response.parseAs<MangaInfoDto>()
-            thumbnail_url = info.thumbnail_url
-            title = info.name
-            description = info.description
-            genre = info.categories.joinToString()
-            url = "/book/${info.id}"
-            status =
-                when (info.status) {
-                    1 -> SManga.ONGOING
-                    2 -> SManga.COMPLETED
-                    3, 4 -> SManga.CANCELLED
-                    5 -> SManga.ON_HIATUS
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val info = response.parseAs<MangaInfoDto>()
+        thumbnail_url = info.thumbnail_url
+        title = info.name
+        description = info.description
+        genre = info.categories.joinToString()
+        url = "/book/${info.id}"
+        status =
+            when (info.status) {
+                1 -> SManga.ONGOING
+                2 -> SManga.COMPLETED
+                3, 4 -> SManga.CANCELLED
+                5 -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga) =
@@ -223,12 +221,11 @@ abstract class SlimeReadTheme(
             .replace(",", ".")
     }
 
-    private fun parseChapterDate(date: String): Long =
-        try {
-            dateFormat.parse(date)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun parseChapterDate(date: String): Long = try {
+        dateFormat.parse(date)!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     override fun getChapterUrl(chapter: SChapter): String {
         val url = "$baseUrl${chapter.url}".toHttpUrl()
@@ -283,10 +280,9 @@ abstract class SlimeReadTheme(
         MangasPage(slice, hasNextPage = endIndex < mangas.size)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream(it.body.byteStream())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
 
     private fun HttpUrl.Builder.addIfNotBlank(
         query: String,

@@ -17,7 +17,6 @@ class OtaScans :
             .rateLimit(2)
             .build()
 
-    override fun pageListParse(document: Document): List<Page> =
-        super.pageListParse(document).takeIf { it.isNotEmpty() }
-            ?: throw Exception("Maybe this content needs a password. Open in WebView")
+    override fun pageListParse(document: Document): List<Page> = super.pageListParse(document).takeIf { it.isNotEmpty() }
+        ?: throw Exception("Maybe this content needs a password. Open in WebView")
 }

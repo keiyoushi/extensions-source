@@ -20,15 +20,14 @@ class AsmHentai(
     override val supportsLatest = mangaLang.isNotBlank()
     override val supportSpeechless: Boolean = true
 
-    override fun Element.mangaLang() =
-        select("a:has(.flag)")
-            .attr("href")
-            .removeSuffix("/")
-            .substringAfterLast("/")
-            .let {
-                // Include Speechless in search results
-                if (it == LANGUAGE_SPEECHLESS) mangaLang else it
-            }
+    override fun Element.mangaLang() = select("a:has(.flag)")
+        .attr("href")
+        .removeSuffix("/")
+        .substringAfterLast("/")
+        .let {
+            // Include Speechless in search results
+            if (it == LANGUAGE_SPEECHLESS) mangaLang else it
+        }
 
     override fun Element.mangaUrl() = selectFirst(".image a")?.attr("abs:href")
 
@@ -38,27 +37,26 @@ class AsmHentai(
 
     override val favoritePath = "inc/user.php?act=favs"
 
-    override fun Element.getInfo(tag: String): String =
-        select(".tags:contains($tag:) .tag_list a")
-            .joinToString {
-                val name = it.selectFirst(".tag")?.ownText() ?: ""
-                if (tag.contains(regexTag)) {
-                    genres[name] =
-                        it
-                            .attr("href")
-                            .removeSuffix("/")
-                            .substringAfterLast('/')
-                }
-                listOf(
-                    name,
+    override fun Element.getInfo(tag: String): String = select(".tags:contains($tag:) .tag_list a")
+        .joinToString {
+            val name = it.selectFirst(".tag")?.ownText() ?: ""
+            if (tag.contains(regexTag)) {
+                genres[name] =
                     it
-                        .select(".split_tag")
-                        .text()
-                        .removePrefix("| ")
-                        .trim(),
-                ).filter { s -> s.isNotBlank() }
-                    .joinToString()
+                        .attr("href")
+                        .removeSuffix("/")
+                        .substringAfterLast('/')
             }
+            listOf(
+                name,
+                it
+                    .select(".split_tag")
+                    .text()
+                    .removePrefix("| ")
+                    .trim(),
+            ).filter { s -> s.isNotBlank() }
+                .joinToString()
+        }
 
     override fun Element.getInfoPages(document: Document?) = selectFirst(".book_page .pages h3")?.ownText()
 
@@ -94,24 +92,22 @@ class AsmHentai(
             }.build()
     }
 
-    override fun tagsParser(document: Document): List<Genre> =
-        document
-            .select(".tags_page .tags a.tag")
-            .mapNotNull {
-                Genre(
-                    it.ownText(),
-                    it
-                        .attr("href")
-                        .removeSuffix("/")
-                        .substringAfterLast('/'),
-                )
-            }
+    override fun tagsParser(document: Document): List<Genre> = document
+        .select(".tags_page .tags a.tag")
+        .mapNotNull {
+            Genre(
+                it.ownText(),
+                it
+                    .attr("href")
+                    .removeSuffix("/")
+                    .substringAfterLast('/'),
+            )
+        }
 
-    override fun getFilterList() =
-        FilterList(
-            listOf(
-                Filter.Header("HINT: Separate search term with comma (,)"),
-                Filter.Header("String query search doesn't support Sort"),
-            ) + super.getFilterList().list,
-        )
+    override fun getFilterList() = FilterList(
+        listOf(
+            Filter.Header("HINT: Separate search term with comma (,)"),
+            Filter.Header("String query search doesn't support Sort"),
+        ) + super.getFilterList().list,
+    )
 }

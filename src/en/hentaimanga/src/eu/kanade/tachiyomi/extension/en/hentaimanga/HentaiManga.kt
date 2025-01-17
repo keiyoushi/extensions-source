@@ -29,11 +29,10 @@ class HentaiManga :
 
     override fun searchMangaNextPageSelector() = "a.next"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            title = element.attr("title")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.attr("title")
+    }
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
         val form =

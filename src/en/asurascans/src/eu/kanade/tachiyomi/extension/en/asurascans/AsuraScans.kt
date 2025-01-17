@@ -102,10 +102,9 @@ class AsuraScans :
         return chain.proceed(request)
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/series?genres=&status=-1&types=-1&order=rating&page=$page", headers)
@@ -161,12 +160,11 @@ class AsuraScans :
 
     override fun searchMangaSelector() = "div.grid > a[href]"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href").toPermSlugIfNeeded())
-            title = element.selectFirst("div.block > span.block")!!.ownText()
-            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href").toPermSlugIfNeeded())
+        title = element.selectFirst("div.block > span.block")!!.ownText()
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+    }
 
     override fun searchMangaNextPageSelector() = "div.flex > a.flex.bg-themecolor:contains(Next)"
 
@@ -252,34 +250,32 @@ class AsuraScans :
         return super.mangaDetailsParse(response)
     }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("span.text-xl.font-bold")!!.ownText()
-            thumbnail_url = document.selectFirst("img[alt=poster]")?.attr("abs:src")
-            description = document.selectFirst("span.font-medium.text-sm")?.text()
-            author = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Author)) > h3:eq(1)")?.ownText()
-            artist = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Artist)) > h3:eq(1)")?.ownText()
-            genre =
-                buildList {
-                    document
-                        .selectFirst("div.flex:has(h3:eq(0):containsOwn(type)) > h3:eq(1)")
-                        ?.ownText()
-                        ?.let(::add)
-                    document
-                        .select("div[class^=space] > div.flex > button.text-white")
-                        .forEach { add(it.ownText()) }
-                }.joinToString()
-            status = parseStatus(document.selectFirst("div.flex:has(h3:eq(0):containsOwn(Status)) > h3:eq(1)")?.ownText())
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("span.text-xl.font-bold")!!.ownText()
+        thumbnail_url = document.selectFirst("img[alt=poster]")?.attr("abs:src")
+        description = document.selectFirst("span.font-medium.text-sm")?.text()
+        author = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Author)) > h3:eq(1)")?.ownText()
+        artist = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Artist)) > h3:eq(1)")?.ownText()
+        genre =
+            buildList {
+                document
+                    .selectFirst("div.flex:has(h3:eq(0):containsOwn(type)) > h3:eq(1)")
+                    ?.ownText()
+                    ?.let(::add)
+                document
+                    .select("div[class^=space] > div.flex > button.text-white")
+                    .forEach { add(it.ownText()) }
+            }.joinToString()
+        status = parseStatus(document.selectFirst("div.flex:has(h3:eq(0):containsOwn(Status)) > h3:eq(1)")?.ownText())
+    }
 
-    private fun parseStatus(status: String?) =
-        when (status) {
-            "Ongoing", "Season End" -> SManga.ONGOING
-            "Hiatus" -> SManga.ON_HIATUS
-            "Completed" -> SManga.COMPLETED
-            "Dropped" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?) = when (status) {
+        "Ongoing", "Season End" -> SManga.ONGOING
+        "Hiatus" -> SManga.ON_HIATUS
+        "Completed" -> SManga.COMPLETED
+        "Dropped" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         if (preferences.dynamicUrl()) {
@@ -295,28 +291,26 @@ class AsuraScans :
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListSelector() =
-        if (preferences.hidePremiumChapters()) {
-            "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))"
-        } else {
-            "div.scrollbar-thumb-themecolor > div.group"
-        }
+    override fun chapterListSelector() = if (preferences.hidePremiumChapters()) {
+        "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))"
+    } else {
+        "div.scrollbar-thumb-themecolor > div.group"
+    }
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href").toPermSlugIfNeeded())
-            val chNumber = element.selectFirst("h3")!!.ownText()
-            val chTitle = element.select("h3 > span").joinToString(" ") { it.ownText() }
-            name = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
-            date_upload =
-                try {
-                    val text = element.selectFirst("h3 + h3")!!.ownText()
-                    val cleanText = text.replace(CLEAN_DATE_REGEX, "$1")
-                    dateFormat.parse(cleanText)?.time ?: 0
-                } catch (_: Exception) {
-                    0L
-                }
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href").toPermSlugIfNeeded())
+        val chNumber = element.selectFirst("h3")!!.ownText()
+        val chTitle = element.select("h3 > span").joinToString(" ") { it.ownText() }
+        name = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
+        date_upload =
+            try {
+                val text = element.selectFirst("h3 + h3")!!.ownText()
+                val cleanText = text.replace(CLEAN_DATE_REGEX, "$1")
+                dateFormat.parse(cleanText)?.time ?: 0
+            } catch (_: Exception) {
+                0L
+            }
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (!preferences.dynamicUrl()) return super.pageListRequest(chapter)
@@ -400,17 +394,15 @@ class AsuraScans :
 
     private fun SharedPreferences.dynamicUrl(): Boolean = getBoolean(PREF_DYNAMIC_URL, true)
 
-    private fun SharedPreferences.hidePremiumChapters(): Boolean =
-        getBoolean(
-            PREF_HIDE_PREMIUM_CHAPTERS,
-            true,
-        )
+    private fun SharedPreferences.hidePremiumChapters(): Boolean = getBoolean(
+        PREF_HIDE_PREMIUM_CHAPTERS,
+        true,
+    )
 
-    private fun SharedPreferences.forceHighQuality(): Boolean =
-        getBoolean(
-            PREF_FORCE_HIGH_QUALITY,
-            false,
-        )
+    private fun SharedPreferences.forceHighQuality(): Boolean = getBoolean(
+        PREF_FORCE_HIGH_QUALITY,
+        false,
+    )
 
     private fun String.toPermSlugIfNeeded(): String {
         if (!preferences.dynamicUrl()) return this

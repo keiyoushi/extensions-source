@@ -160,13 +160,12 @@ class MangaDexHelper(
      * Remove any HTML characters in description to actual characters.
      * It also removes Markdown syntax for links, italic and bold.
      */
-    private fun String.removeEntitiesAndMarkdown(): String =
-        removeEntities()
-            .substringBefore("---")
-            .replace(markdownLinksRegex, "$1")
-            .replace(markdownItalicBoldRegex, "$1")
-            .replace(markdownItalicRegex, "$1")
-            .trim()
+    private fun String.removeEntitiesAndMarkdown(): String = removeEntities()
+        .substringBefore("---")
+        .replace(markdownLinksRegex, "$1")
+        .replace(markdownItalicBoldRegex, "$1")
+        .replace(markdownItalicRegex, "$1")
+        .trim()
 
     /**
      * Maps MangaDex status to Tachiyomi status.
@@ -304,34 +303,33 @@ class MangaDexHelper(
         coverSuffix: String?,
         lang: String,
         preferExtensionLangTitle: Boolean,
-    ): SManga =
-        SManga.create().apply {
-            url = "/manga/${mangaDataDto.id}"
+    ): SManga = SManga.create().apply {
+        url = "/manga/${mangaDataDto.id}"
 
-            val titleMap = mangaDataDto.attributes!!.title
-            title =
-                with(mangaDataDto.attributes) {
-                    titleMap[lang] ?: altTitles.run {
-                        val mainTitle = titleMap.values.firstOrNull()
-                        val langTitle = findTitleByLang(lang)
-                        val enTitle = findTitleByLang("en")
+        val titleMap = mangaDataDto.attributes!!.title
+        title =
+            with(mangaDataDto.attributes) {
+                titleMap[lang] ?: altTitles.run {
+                    val mainTitle = titleMap.values.firstOrNull()
+                    val langTitle = findTitleByLang(lang)
+                    val enTitle = findTitleByLang("en")
 
-                        if (preferExtensionLangTitle) {
-                            listOf(langTitle, mainTitle, enTitle)
-                        } else {
-                            listOf(mainTitle, langTitle, enTitle)
-                        }.firstNotNullOfOrNull { it }
-                    }
-                }?.removeEntities().orEmpty()
+                    if (preferExtensionLangTitle) {
+                        listOf(langTitle, mainTitle, enTitle)
+                    } else {
+                        listOf(mainTitle, langTitle, enTitle)
+                    }.firstNotNullOfOrNull { it }
+                }
+            }?.removeEntities().orEmpty()
 
-            coverFileName?.let {
-                thumbnail_url =
-                    when (!coverSuffix.isNullOrEmpty()) {
-                        true -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
-                        else -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
-                    }
-            }
+        coverFileName?.let {
+            thumbnail_url =
+                when (!coverSuffix.isNullOrEmpty()) {
+                    true -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
+                    else -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
+                }
         }
+    }
 
     /**
      * Create an [SManga] from the JSON element with all attributes filled.
@@ -484,21 +482,20 @@ class MangaDexHelper(
         }
     }
 
-    fun titleToSlug(title: String) =
-        title
-            .trim()
-            .lowercase(Locale.US)
-            .replace(titleSpecialCharactersRegex, "-")
-            .replace(trailingHyphenRegex, "")
-            .split("-")
-            .reduce { accumulator, element ->
-                val currentSlug = "$accumulator-$element"
-                if (currentSlug.length > 100) {
-                    accumulator
-                } else {
-                    currentSlug
-                }
+    fun titleToSlug(title: String) = title
+        .trim()
+        .lowercase(Locale.US)
+        .replace(titleSpecialCharactersRegex, "-")
+        .replace(trailingHyphenRegex, "")
+        .split("-")
+        .reduce { accumulator, element ->
+            val currentSlug = "$accumulator-$element"
+            if (currentSlug.length > 100) {
+                accumulator
+            } else {
+                currentSlug
             }
+        }
 
     /**
      * Adds a custom [TextWatcher] to the preference's [EditText] that show an

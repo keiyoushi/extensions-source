@@ -38,13 +38,12 @@ abstract class Guya(
 
     private val scanlatorCacheUrl by lazy { "$baseUrl/api/get_all_groups/" }
 
-    override fun headersBuilder() =
-        Headers.Builder().add(
-            "User-Agent",
-            "(Android ${Build.VERSION.RELEASE}; " +
-                "${Build.MANUFACTURER} ${Build.MODEL}) " +
-                "Tachiyomi/${AppInfo.getVersionName()} ${Build.ID}",
-        )
+    override fun headersBuilder() = Headers.Builder().add(
+        "User-Agent",
+        "(Android ${Build.VERSION.RELEASE}; " +
+            "${Build.MANUFACTURER} ${Build.MODEL}) " +
+            "Tachiyomi/${AppInfo.getVersionName()} ${Build.ID}",
+    )
 
     private val scanlators: ScanlatorStore = ScanlatorStore()
 
@@ -78,13 +77,12 @@ abstract class Guya(
     }
 
     // Overridden to use our overload
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response, manga)
-            }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response, manga)
+        }
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/api/series/${manga.url}/", headers)
 
@@ -98,13 +96,12 @@ abstract class Guya(
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/reader/series/${manga.url}/"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response, manga)
-            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response, manga)
+        }
 
     // Gets the chapter list based on the series being viewed
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/series/${manga.url}/", headers)
@@ -118,13 +115,12 @@ abstract class Guya(
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/manga/${chapter.url.replace('.', '-')}/1/"
 
     // Overridden fetch so that we use our overloaded method instead
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client
-            .newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .map { response ->
-                pageListParse(response, chapter)
-            }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client
+        .newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .map { response ->
+            pageListParse(response, chapter)
+        }
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/api/series/${chapter.url.split("/")[0]}/", headers)
 
@@ -161,26 +157,25 @@ abstract class Guya(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(SLUG_PREFIX) -> {
-                val slug = query.removePrefix(SLUG_PREFIX)
-                client
-                    .newCall(searchMangaRequest(page, query, filters))
-                    .asObservableSuccess()
-                    .map { response ->
-                        searchMangaParseWithSlug(response, slug)
-                    }
-            }
-            else -> {
-                client
-                    .newCall(searchMangaRequest(page, query, filters))
-                    .asObservableSuccess()
-                    .map { response ->
-                        searchMangaParse(response, query)
-                    }
-            }
+    ): Observable<MangasPage> = when {
+        query.startsWith(SLUG_PREFIX) -> {
+            val slug = query.removePrefix(SLUG_PREFIX)
+            client
+                .newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    searchMangaParseWithSlug(response, slug)
+                }
         }
+        else -> {
+            client
+                .newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    searchMangaParse(response, query)
+                }
+        }
+    }
 
     override fun searchMangaRequest(
         page: Int,

@@ -36,11 +36,10 @@ class SaikaiScan : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val apiHeaders =
@@ -230,100 +229,94 @@ class SaikaiScan : HttpSource() {
     // fetch('https://api.saikai.com.br/api/genres')
     //     .then(res => res.json())
     //     .then(res => console.log(res.data.map(g => `Genre("${g.name}", ${g.id})`).join(',\n')))
-    private fun getGenreList(): List<Genre> =
-        listOf(
-            Genre("Ação", 1),
-            Genre("Adulto", 23),
-            Genre("Artes Marciais", 84),
-            Genre("Aventura", 2),
-            Genre("Comédia", 15),
-            Genre("Drama", 14),
-            Genre("Ecchi", 19),
-            Genre("Esportes", 42),
-            Genre("eSports", 25),
-            Genre("Fantasia", 3),
-            Genre("Ficção Cientifica", 16),
-            Genre("Histórico", 37),
-            Genre("Horror", 27),
-            Genre("Isekai", 52),
-            Genre("Josei", 40),
-            Genre("Luta", 68),
-            Genre("Magia", 11),
-            Genre("Militar", 76),
-            Genre("Mistério", 57),
-            Genre("MMORPG", 80),
-            Genre("Música", 82),
-            Genre("One-shot", 51),
-            Genre("Psicológico", 34),
-            Genre("Realidade Vitual", 18),
-            Genre("Reencarnação", 43),
-            Genre("Romance", 9),
-            Genre("RPG", 61),
-            Genre("Sci-fi", 58),
-            Genre("Seinen", 21),
-            Genre("Shoujo", 35),
-            Genre("Shounen", 26),
-            Genre("Slice of Life", 38),
-            Genre("Sobrenatural", 74),
-            Genre("Suspense", 63),
-            Genre("Tragédia", 22),
-            Genre("VRMMO", 17),
-            Genre("Wuxia", 6),
-            Genre("Xianxia", 7),
-            Genre("Xuanhuan", 48),
-            Genre("Yaoi", 41),
-            Genre("Yuri", 83),
-        )
+    private fun getGenreList(): List<Genre> = listOf(
+        Genre("Ação", 1),
+        Genre("Adulto", 23),
+        Genre("Artes Marciais", 84),
+        Genre("Aventura", 2),
+        Genre("Comédia", 15),
+        Genre("Drama", 14),
+        Genre("Ecchi", 19),
+        Genre("Esportes", 42),
+        Genre("eSports", 25),
+        Genre("Fantasia", 3),
+        Genre("Ficção Cientifica", 16),
+        Genre("Histórico", 37),
+        Genre("Horror", 27),
+        Genre("Isekai", 52),
+        Genre("Josei", 40),
+        Genre("Luta", 68),
+        Genre("Magia", 11),
+        Genre("Militar", 76),
+        Genre("Mistério", 57),
+        Genre("MMORPG", 80),
+        Genre("Música", 82),
+        Genre("One-shot", 51),
+        Genre("Psicológico", 34),
+        Genre("Realidade Vitual", 18),
+        Genre("Reencarnação", 43),
+        Genre("Romance", 9),
+        Genre("RPG", 61),
+        Genre("Sci-fi", 58),
+        Genre("Seinen", 21),
+        Genre("Shoujo", 35),
+        Genre("Shounen", 26),
+        Genre("Slice of Life", 38),
+        Genre("Sobrenatural", 74),
+        Genre("Suspense", 63),
+        Genre("Tragédia", 22),
+        Genre("VRMMO", 17),
+        Genre("Wuxia", 6),
+        Genre("Xianxia", 7),
+        Genre("Xuanhuan", 48),
+        Genre("Yaoi", 41),
+        Genre("Yuri", 83),
+    )
 
     // fetch('https://api.saikai.com.br/api/countries?hasStories=1')
     //     .then(res => res.json())
     //     .then(res => console.log(res.data.map(g => `Country("${g.name}", ${g.id})`).join(',\n')))
-    private fun getCountryList(): List<Country> =
-        listOf(
-            Country("Todas", 0),
-            Country("Brasil", 32),
-            Country("China", 45),
-            Country("Coréia do Sul", 115),
-            Country("Espanha", 199),
-            Country("Estados Unidos da América", 1),
-            Country("Japão", 109),
-            Country("Portugal", 173),
-        )
+    private fun getCountryList(): List<Country> = listOf(
+        Country("Todas", 0),
+        Country("Brasil", 32),
+        Country("China", 45),
+        Country("Coréia do Sul", 115),
+        Country("Espanha", 199),
+        Country("Estados Unidos da América", 1),
+        Country("Japão", 109),
+        Country("Portugal", 173),
+    )
 
     // fetch('https://api.saikai.com.br/api/countries?hasStories=1')
     //     .then(res => res.json())
     //     .then(res => console.log(res.data.map(g => `Country("${g.name}", ${g.id})`).join(',\n')))
-    private fun getStatusList(): List<Status> =
-        listOf(
-            Status("Todos", 0),
-            Status("Cancelado", 5),
-            Status("Concluído", 1),
-            Status("Dropado", 6),
-            Status("Em Andamento", 2),
-            Status("Hiato", 4),
-            Status("Pausado", 3),
-        )
+    private fun getStatusList(): List<Status> = listOf(
+        Status("Todos", 0),
+        Status("Cancelado", 5),
+        Status("Concluído", 1),
+        Status("Dropado", 6),
+        Status("Em Andamento", 2),
+        Status("Hiato", 4),
+        Status("Pausado", 3),
+    )
 
-    private fun getSortProperties(): List<SortProperty> =
-        listOf(
-            SortProperty("Título", "title"),
-            SortProperty("Quantidade de capítulos", "releases_count"),
-            SortProperty("Visualizações", "pageviews"),
-            SortProperty("Data de criação", "created_at"),
-        )
+    private fun getSortProperties(): List<SortProperty> = listOf(
+        SortProperty("Título", "title"),
+        SortProperty("Quantidade de capítulos", "releases_count"),
+        SortProperty("Visualizações", "pageviews"),
+        SortProperty("Data de criação", "created_at"),
+    )
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            CountryFilter(getCountryList()),
-            StatusFilter(getStatusList()),
-            SortByFilter(getSortProperties()),
-            GenreFilter(getGenreList()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        CountryFilter(getCountryList()),
+        StatusFilter(getStatusList()),
+        SortByFilter(getSortProperties()),
+        GenreFilter(getGenreList()),
+    )
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(it.body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(it.body.string())
+    }
 
     companion object {
         const val SOURCE_NAME = "Saikai Scan"

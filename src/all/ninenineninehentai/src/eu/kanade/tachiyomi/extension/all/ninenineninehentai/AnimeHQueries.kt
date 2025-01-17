@@ -1,9 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.ninenineninehentai
 
-private fun buildQuery(queryAction: () -> String): String =
-    queryAction()
-        .trimIndent()
-        .replace("%", "$")
+private fun buildQuery(queryAction: () -> String): String = queryAction()
+    .trimIndent()
+    .replace("%", "$")
 
 val POPULAR_QUERY: String =
     buildQuery {

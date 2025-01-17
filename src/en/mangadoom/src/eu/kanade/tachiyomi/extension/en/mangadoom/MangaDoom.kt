@@ -83,10 +83,9 @@ class MangaDoom : HttpSource() {
      * Checks on a page that has pagination (e.g. popular-manga and latest-chapters)
      * whether or not a next page exists.
      */
-    private fun paginationHasNext(document: Document) =
-        !document
-            .select("ul.pagination > li:contains(»)")
-            .isEmpty()
+    private fun paginationHasNext(document: Document) = !document
+        .select("ul.pagination > li:contains(»)")
+        .isEmpty()
 
     // individual manga
     override fun mangaDetailsParse(response: Response): SManga {
@@ -404,14 +403,13 @@ class MangaDoom : HttpSource() {
     // filters
     private val genreManager = GenreGroupFilterManager(client, baseUrl)
 
-    override fun getFilterList() =
-        FilterList(
-            TypeFilter(),
-            AuthorTextFilter(),
-            ArtistTextFilter(),
-            StatusFilter(),
-            genreManager.getGenreGroupFilterOrPlaceholder(),
-        )
+    override fun getFilterList() = FilterList(
+        TypeFilter(),
+        AuthorTextFilter(),
+        ArtistTextFilter(),
+        StatusFilter(),
+        genreManager.getGenreGroupFilterOrPlaceholder(),
+    )
 
     private class TypeFilter :
         FormBodySelectFilter(
@@ -466,11 +464,10 @@ class MangaDoom : HttpSource() {
         val client: OkHttpClient,
         val baseUrl: String,
     ) {
-        fun getGenreGroupFilterOrPlaceholder(): Filter<*> =
-            when (val potentialGenreGroup = callForGenreGroup()) {
-                null -> GenreNotAvailable()
-                else -> potentialGenreGroup
-            }
+        fun getGenreGroupFilterOrPlaceholder(): Filter<*> = when (val potentialGenreGroup = callForGenreGroup()) {
+            null -> GenreNotAvailable()
+            else -> potentialGenreGroup
+        }
 
         private class GenreNotAvailable : Filter.Header("Reset for genre filter")
 
@@ -496,23 +493,21 @@ class MangaDoom : HttpSource() {
          * Checks if an object (e.g. cached response) isn't older than 15 minutes, by comparing its
          * timestamp with the current time
          */
-        private fun contentUpToDate(compareTimestamp: Long?): Boolean =
-            (
-                compareTimestamp != null &&
-                    (System.currentTimeMillis() - compareTimestamp < 15 * 60 * 1000)
-            )
+        private fun contentUpToDate(compareTimestamp: Long?): Boolean = (
+            compareTimestamp != null &&
+                (System.currentTimeMillis() - compareTimestamp < 15 * 60 * 1000)
+        )
 
         /**
          * Used to generate a GenreGroupFilter from cached Pair objects or (if the cached pairs are
          * unavailable) resorts a fetch approach.
          */
         private fun callForGenreGroup(): GenreGroupFilter? {
-            fun genreContentListToGenreGroup(genreFiltersContent: List<Pair<String, String>>) =
-                GenreGroupFilter(
-                    genreFiltersContent.map { singleGenreContent ->
-                        GenreFilter(singleGenreContent.first, singleGenreContent.second)
-                    },
-                )
+            fun genreContentListToGenreGroup(genreFiltersContent: List<Pair<String, String>>) = GenreGroupFilter(
+                genreFiltersContent.map { singleGenreContent ->
+                    GenreFilter(singleGenreContent.first, singleGenreContent.second)
+                },
+            )
 
             val genreGroupFromVar =
                 genreFiltersContent?.let { genreList ->
@@ -626,16 +621,15 @@ class MangaDoom : HttpSource() {
     /**
      * Used for latest, popular and search manga parsing to create [SManga] objects
      */
-    private fun mangaFromMangaTitleElement(mangaTitleElement: Element): SManga =
-        SManga
-            .create()
-            .apply {
-                this.title = mangaTitleElement.attr("title")
-                this.setUrlWithoutDomain(mangaTitleElement.attr("href"))
-                this.thumbnail_url =
-                    mangaTitleElement
-                        .select("img")
-                        .first()!!
-                        .attr("src")
-            }
+    private fun mangaFromMangaTitleElement(mangaTitleElement: Element): SManga = SManga
+        .create()
+        .apply {
+            this.title = mangaTitleElement.attr("title")
+            this.setUrlWithoutDomain(mangaTitleElement.attr("href"))
+            this.thumbnail_url =
+                mangaTitleElement
+                    .select("img")
+                    .first()!!
+                    .attr("src")
+        }
 }

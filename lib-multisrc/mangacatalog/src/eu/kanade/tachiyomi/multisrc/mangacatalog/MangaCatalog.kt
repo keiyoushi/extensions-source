@@ -36,11 +36,10 @@ abstract class MangaCatalog(
     private fun popularMangaFromPair(
         name: String,
         sourceurl: String,
-    ): SManga =
-        SManga.create().apply {
-            title = name
-            url = sourceurl
-        }
+    ): SManga = SManga.create().apply {
+        title = name
+        url = sourceurl
+    }
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -97,29 +96,27 @@ abstract class MangaCatalog(
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val info = document.select("div.bg-bg-secondary > div.px-6 > div.flex-col").text()
-            title = document.select("div.container > h1").text()
-            description = if ("Description" in info) info.substringAfter("Description").trim() else info
-            thumbnail_url = document.select("div.flex > img").attr("src")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val info = document.select("div.bg-bg-secondary > div.px-6 > div.flex-col").text()
+        title = document.select("div.container > h1").text()
+        description = if ("Description" in info) info.substringAfter("Description").trim() else info
+        thumbnail_url = document.select("div.flex > img").attr("src")
+    }
     // Chapters
 
     override fun chapterListSelector(): String = "div.w-full > div.bg-bg-secondary > div.grid"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val name1 = element.select(".col-span-4 > a").text()
-            val name2 = element.select(".text-xs:not(a)").text()
-            if (name2 == "") {
-                name = name1
-            } else {
-                name = "$name1 - $name2"
-            }
-            url = element.select(".col-span-4 > a").attr("abs:href")
-            date_upload = System.currentTimeMillis()
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val name1 = element.select(".col-span-4 > a").text()
+        val name2 = element.select(".text-xs:not(a)").text()
+        if (name2 == "") {
+            name = name1
+        } else {
+            name = "$name1 - $name2"
         }
+        url = element.select(".col-span-4 > a").attr("abs:href")
+        date_upload = System.currentTimeMillis()
+    }
 
     // Pages
 

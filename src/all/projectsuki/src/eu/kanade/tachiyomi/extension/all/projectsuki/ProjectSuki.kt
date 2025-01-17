@@ -170,18 +170,17 @@ internal class ProjectSukiException(
 internal inline fun reportErrorToUser(
     locationHint: String? = null,
     message: () -> String,
-): Nothing =
-    throw ProjectSukiException(
-        buildString {
-            append("[")
-            append(reportPrefix)
-            append("""]: """)
-            append(message())
-            if (!locationHint.isNullOrBlank()) {
-                append(" @$locationHint")
-            }
-        },
-    )
+): Nothing = throw ProjectSukiException(
+    buildString {
+        append("[")
+        append(reportPrefix)
+        append("""]: """)
+        append(message())
+        if (!locationHint.isNullOrBlank()) {
+            append(" @$locationHint")
+        }
+    },
+)
 
 /** Used when chapters don't have a [Language][DataExtractor.ChaptersTableColumnDataType.Language] column (if that ever happens). */
 internal const val UNKNOWN_LANGUAGE: String = "unknown"
@@ -241,15 +240,14 @@ class ProjectSuki :
      *
      * Using the default [HttpSource]'s [Headers](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers).
      */
-    override fun popularMangaRequest(page: Int) =
-        GET(
-            homepageUrl
-                .newBuilder()
-                .addPathSegment("browse")
-                .addPathSegment((page - 1).toString()) // starts at 0
-                .build(),
-            headers,
-        )
+    override fun popularMangaRequest(page: Int) = GET(
+        homepageUrl
+            .newBuilder()
+            .addPathSegment("browse")
+            .addPathSegment((page - 1).toString()) // starts at 0
+            .build(),
+        headers,
+    )
 
     /** Whether or not this extension supports the "Latest" tab. */
     override val supportsLatest: Boolean get() = true
@@ -264,10 +262,9 @@ class ProjectSuki :
      */
     private inline fun <reified T> HttpUrl.Builder.applyPSFilter(
         from: FilterList,
-    ): HttpUrl.Builder where T : Filter<*>, T : ProjectSukiFilters.ProjectSukiFilter =
-        apply {
-            from.firstNotNullOfOrNull { it as? T }?.run { applyFilter() }
-        }
+    ): HttpUrl.Builder where T : Filter<*>, T : ProjectSukiFilters.ProjectSukiFilter = apply {
+        from.firstNotNullOfOrNull { it as? T }?.run { applyFilter() }
+    }
 
     /**
      * Same concept as [popularMangaRequest], but is sent to [https://projectsuki.com/search](https://projectsuki.com/search).
@@ -277,20 +274,19 @@ class ProjectSuki :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        GET(
-            homepageUrl
-                .newBuilder()
-                .addPathSegment("search")
-                .addQueryParameter("page", (page - 1).toString())
-                .addQueryParameter("q", query)
-                .applyPSFilter<ProjectSukiFilters.Origin>(from = filters)
-                .applyPSFilter<ProjectSukiFilters.Status>(from = filters)
-                .applyPSFilter<ProjectSukiFilters.Author>(from = filters)
-                .applyPSFilter<ProjectSukiFilters.Artist>(from = filters)
-                .build(),
-            headers,
-        )
+    ): Request = GET(
+        homepageUrl
+            .newBuilder()
+            .addPathSegment("search")
+            .addQueryParameter("page", (page - 1).toString())
+            .addQueryParameter("q", query)
+            .applyPSFilter<ProjectSukiFilters.Origin>(from = filters)
+            .applyPSFilter<ProjectSukiFilters.Status>(from = filters)
+            .applyPSFilter<ProjectSukiFilters.Author>(from = filters)
+            .applyPSFilter<ProjectSukiFilters.Artist>(from = filters)
+            .build(),
+        headers,
+    )
 
     /**
      * Handles the server's [Response] that was returned from [popularMangaRequest]'s [Request].
@@ -500,12 +496,11 @@ class ProjectSuki :
      * of all the filters you want to be available.
      * Otherwise things like the reset button won't work.
      */
-    override fun getFilterList(): FilterList =
-        filterList(
-            ProjectSukiFilters.headersSequence(preferences),
-            ProjectSukiFilters.filtersSequence(preferences),
-            ProjectSukiFilters.footersSequence(preferences),
-        )
+    override fun getFilterList(): FilterList = filterList(
+        ProjectSukiFilters.headersSequence(preferences),
+        ProjectSukiFilters.filtersSequence(preferences),
+        ProjectSukiFilters.footersSequence(preferences),
+    )
 
     /**
      * Very similar to [popularMangaParse].
@@ -720,20 +715,18 @@ class ProjectSuki :
     /**
      * Not used in this extension, as [Page.imageUrl] is set directly.
      */
-    override fun imageUrlParse(response: Response): String =
-        reportErrorToUser {
-            // give a hint on who called this method
-            "invalid ${Thread.currentThread().stackTrace.take(3)}"
-        }
+    override fun imageUrlParse(response: Response): String = reportErrorToUser {
+        // give a hint on who called this method
+        "invalid ${Thread.currentThread().stackTrace.take(3)}"
+    }
 
     /**
      * Not used in this extension, as we override [fetchPageList] to modify the default behaviour.
      */
-    override fun pageListParse(response: Response): List<Page> =
-        reportErrorToUser("ProjectSuki.pageListParse") {
-            // give a hint on who called this method
-            "invalid ${Thread.currentThread().stackTrace.asSequence().drop(1).take(3).toList()}"
-        }
+    override fun pageListParse(response: Response): List<Page> = reportErrorToUser("ProjectSuki.pageListParse") {
+        // give a hint on who called this method
+        "invalid ${Thread.currentThread().stackTrace.asSequence().drop(1).take(3).toList()}"
+    }
 
     companion object {
         private const val DESCRIPTION_DIVIDER: String = "/=/-/=/-/=/-/=/-/=/-/=/-/=/-/=/"

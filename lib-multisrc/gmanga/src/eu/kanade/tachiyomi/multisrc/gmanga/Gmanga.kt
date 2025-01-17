@@ -36,10 +36,9 @@ abstract class Gmanga(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
 
@@ -194,31 +193,28 @@ abstract class Gmanga(
         }
     }
 
-    protected open fun getTypesFilter() =
-        listOf(
-            TagFilterData("1", "يابانية", Filter.TriState.STATE_INCLUDE),
-            TagFilterData("2", "كورية", Filter.TriState.STATE_INCLUDE),
-            TagFilterData("3", "صينية", Filter.TriState.STATE_INCLUDE),
-            TagFilterData("4", "عربية", Filter.TriState.STATE_INCLUDE),
-            TagFilterData("5", "كوميك", Filter.TriState.STATE_INCLUDE),
-            TagFilterData("6", "هواة", Filter.TriState.STATE_INCLUDE),
-            TagFilterData("7", "إندونيسية", Filter.TriState.STATE_INCLUDE),
-            TagFilterData("8", "روسية", Filter.TriState.STATE_INCLUDE),
-        )
+    protected open fun getTypesFilter() = listOf(
+        TagFilterData("1", "يابانية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("2", "كورية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("3", "صينية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("4", "عربية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("5", "كوميك", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("6", "هواة", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("7", "إندونيسية", Filter.TriState.STATE_INCLUDE),
+        TagFilterData("8", "روسية", Filter.TriState.STATE_INCLUDE),
+    )
 
-    protected open fun getStatusFilter() =
-        listOf(
-            TagFilterData("2", "مستمرة"),
-            TagFilterData("3", "منتهية"),
-        )
+    protected open fun getStatusFilter() = listOf(
+        TagFilterData("2", "مستمرة"),
+        TagFilterData("3", "منتهية"),
+    )
 
-    protected open fun getTranslationFilter() =
-        listOf(
-            TagFilterData("0", "منتهية"),
-            TagFilterData("1", "مستمرة"),
-            TagFilterData("2", "متوقفة"),
-            TagFilterData("3", "غير مترجمة", Filter.TriState.STATE_EXCLUDE),
-        )
+    protected open fun getTranslationFilter() = listOf(
+        TagFilterData("0", "منتهية"),
+        TagFilterData("1", "مستمرة"),
+        TagFilterData("2", "متوقفة"),
+        TagFilterData("3", "غير مترجمة", Filter.TriState.STATE_EXCLUDE),
+    )
 
     override fun getFilterList(): FilterList {
         CoroutineScope(Dispatchers.IO).launch { fetchFilters() }
@@ -256,14 +252,13 @@ abstract class Gmanga(
         )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response
-            .asJsoup()
-            .select(".js-react-on-rails-component")
-            .html()
-            .parseAs<MangaDataAction<MangaDetailsDto>>()
-            .mangaDataAction.mangaData
-            .toSManga(::createThumbnail)
+    override fun mangaDetailsParse(response: Response): SManga = response
+        .asJsoup()
+        .select(".js-react-on-rails-component")
+        .html()
+        .parseAs<MangaDataAction<MangaDetailsDto>>()
+        .mangaDataAction.mangaData
+        .toSManga(::createThumbnail)
 
     abstract fun chaptersRequest(manga: SManga): Request
 
@@ -273,13 +268,12 @@ abstract class Gmanga(
 
     final override fun chapterListParse(response: Response) = chaptersParse(response).sortChapters()
 
-    private fun List<SChapter>.sortChapters() =
-        sortedWith(
-            compareBy(
-                { -it.chapter_number },
-                { -it.date_upload },
-            ),
-        )
+    private fun List<SChapter>.sortChapters() = sortedWith(
+        compareBy(
+            { -it.chapter_number },
+            { -it.date_upload },
+        ),
+    )
 
     override fun pageListParse(response: Response): List<Page> {
         val data =
@@ -312,13 +306,12 @@ abstract class Gmanga(
     private fun parseNumber(
         index: Int,
         string: String,
-    ): Double? =
-        Regex("\\d+")
-            .findAll(string)
-            .map { it.value }
-            .toList()
-            .getOrNull(index)
-            ?.toDoubleOrNull()
+    ): Double? = Regex("\\d+")
+        .findAll(string)
+        .map { it.value }
+        .toList()
+        .getOrNull(index)
+        ?.toDoubleOrNull()
 
     protected inline fun <reified T> Response.decryptAs(): T = decrypt(parseAs<EncryptedResponse>().data).parseAs()
 

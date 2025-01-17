@@ -40,29 +40,27 @@ class MangaPlanet : ParsedHttpSource() {
             .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "mpaconf" to "18"))
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/browse/title?ttlpage=$page", headers)
 
     override fun popularMangaSelector() = ".book-list"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            title = element.selectFirst("h3")!!.text()
-            author = element.selectFirst("p:has(.fa-pen-nib)")?.text()
-            description = element.selectFirst("h3 + p")?.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
-            status =
-                when {
-                    element.selectFirst(".fa-flag-alt") != null -> SManga.COMPLETED
-                    element.selectFirst(".fa-arrow-right") != null -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.selectFirst("h3")!!.text()
+        author = element.selectFirst("p:has(.fa-pen-nib)")?.text()
+        description = element.selectFirst("h3 + p")?.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+        status =
+            when {
+                element.selectFirst(".fa-flag-alt") != null -> SManga.COMPLETED
+                element.selectFirst(".fa-arrow-right") != null -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
+    }
 
     override fun popularMangaNextPageSelector() = "ul.pagination a.page-link[rel=next]"
 
@@ -158,24 +156,23 @@ class MangaPlanet : ParsedHttpSource() {
 
     override fun chapterListSelector() = "ul.ep_ul li.list-group-item"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            element.selectFirst("h3 p")!!.let {
-                val id = it.id().substringAfter("epi_title_")
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst("h3 p")!!.let {
+            val id = it.id().substringAfter("epi_title_")
 
-                url = "/reader?cid=$id"
-                name = it.text()
-            }
-
-            date_upload =
-                try {
-                    val date = element.selectFirst("p")!!.ownText()
-
-                    dateFormat.parse(date)!!.time
-                } catch (_: Exception) {
-                    0L
-                }
+            url = "/reader?cid=$id"
+            name = it.text()
         }
+
+        date_upload =
+            try {
+                val date = element.selectFirst("p")!!.ownText()
+
+                dateFormat.parse(date)!!.time
+            } catch (_: Exception) {
+                0L
+            }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -204,17 +201,16 @@ class MangaPlanet : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(),
-            AccessTypeFilter(),
-            ReleaseStatusFilter(),
-            LetterFilter(),
-            CategoryFilter(),
-            SpicyLevelFilter(),
-            FormatFilter(),
-            RatingFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        AccessTypeFilter(),
+        ReleaseStatusFilter(),
+        LetterFilter(),
+        CategoryFilter(),
+        SpicyLevelFilter(),
+        FormatFilter(),
+        RatingFilter(),
+    )
 }
 
 private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)

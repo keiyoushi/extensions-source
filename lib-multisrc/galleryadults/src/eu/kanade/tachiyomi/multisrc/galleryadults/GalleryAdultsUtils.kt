@@ -17,14 +17,13 @@ val regexDate = Regex("""\d\D\D""")
 val regexNotNumber = Regex("""\D""")
 val regexRelativeDateTime = Regex("""\d*[^0-9]*(\d+)""")
 
-fun Element.imgAttr() =
-    when {
-        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
-        hasAttr("data-src") -> absUrl("data-src")
-        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-        hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
-        else -> absUrl("src")
-    }
+fun Element.imgAttr() = when {
+    hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
+    hasAttr("data-src") -> absUrl("data-src")
+    hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
+    hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
+    else -> absUrl("src")
+}
 
 fun Element.cleanTag(): String = text().cleanTag()
 
@@ -138,12 +137,11 @@ private fun parseRelativeDate(date: String): Long {
     }
 }
 
-private fun SimpleDateFormat.tryParse(string: String): Long =
-    try {
-        parse(string)?.time ?: 0L
-    } catch (_: ParseException) {
-        0L
-    }
+private fun SimpleDateFormat.tryParse(string: String): Long = try {
+    parse(string)?.time ?: 0L
+} catch (_: ParseException) {
+    0L
+}
 
 class WordSet(
     private vararg val words: String,

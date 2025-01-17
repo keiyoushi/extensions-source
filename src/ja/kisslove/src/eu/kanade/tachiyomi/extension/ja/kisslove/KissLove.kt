@@ -36,18 +36,17 @@ class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
     override fun chapterFromElement(
         element: Element,
         mangaTitle: String,
-    ): SChapter =
-        SChapter.create().apply {
-            element.select(chapterUrlSelector).first()!!.let {
-                setUrlWithoutDomain("$baseUrl/${it.attr("href")}")
-                name = it.attr("title")
-            }
-
-            date_upload =
-                element
-                    .select(chapterTimeSelector)
-                    .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
+    ): SChapter = SChapter.create().apply {
+        element.select(chapterUrlSelector).first()!!.let {
+            setUrlWithoutDomain("$baseUrl/${it.attr("href")}")
+            name = it.attr("title")
         }
+
+        date_upload =
+            element
+                .select(chapterTimeSelector)
+                .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
+    }
 
     private fun parseChapterDate(date: String): Long {
         val value = date.split(' ')[dateValueIndex].toInt()

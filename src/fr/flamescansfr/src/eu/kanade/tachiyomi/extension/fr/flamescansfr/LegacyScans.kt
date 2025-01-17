@@ -64,24 +64,23 @@ class LegacyScans : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val manga =
-                SManga.create().apply {
-                    url = "/comics/${query.substringAfter(URL_SEARCH_PREFIX)}"
-                }
-            client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().map { response ->
-                val document = response.asJsoup()
-                when {
-                    isMangaPage(document) -> {
-                        MangasPage(listOf(mangaDetailsParse(document)), false)
-                    }
-                    else -> MangasPage(emptyList(), false)
-                }
+    ): Observable<MangasPage> = if (query.startsWith(URL_SEARCH_PREFIX)) {
+        val manga =
+            SManga.create().apply {
+                url = "/comics/${query.substringAfter(URL_SEARCH_PREFIX)}"
             }
-        } else {
-            super.fetchSearchManga(page, query, filters)
+        client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().map { response ->
+            val document = response.asJsoup()
+            when {
+                isMangaPage(document) -> {
+                    MangasPage(listOf(mangaDetailsParse(document)), false)
+                }
+                else -> MangasPage(emptyList(), false)
+            }
         }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -168,25 +167,23 @@ class LegacyScans : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = ""
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            SelectFilter("Status", "status", statusList),
-            SelectFilter("Type", "type", typesList),
-            GenreList("Genres", genresList),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        SelectFilter("Status", "status", statusList),
+        SelectFilter("Type", "type", typesList),
+        GenreList("Genres", genresList),
+    )
 
-    private fun mangaDetailsParse(document: Document): SManga =
-        with(document.selectFirst(".serieContainer")!!) {
-            SManga.create().apply {
-                title = selectFirst("h1")!!.text()
-                thumbnail_url = selectFirst("img")?.absUrl("src")
-                genre = select(".serieGenre span").joinToString { it.text() }
-                description = selectFirst(mangaDetailsDescriptionSelector)?.text()
-                author = selectFirst(".serieAdd p:contains(produit) strong")?.text()
-                artist = selectFirst(".serieAdd p:contains(Auteur) strong")?.text()
-                setUrlWithoutDomain(document.location())
-            }
+    private fun mangaDetailsParse(document: Document): SManga = with(document.selectFirst(".serieContainer")!!) {
+        SManga.create().apply {
+            title = selectFirst("h1")!!.text()
+            thumbnail_url = selectFirst("img")?.absUrl("src")
+            genre = select(".serieGenre span").joinToString { it.text() }
+            description = selectFirst(mangaDetailsDescriptionSelector)?.text()
+            author = selectFirst(".serieAdd p:contains(produit) strong")?.text()
+            artist = selectFirst(".serieAdd p:contains(Auteur) strong")?.text()
+            setUrlWithoutDomain(document.location())
         }
+    }
 
     private fun pageOffset(
         page: Int,
@@ -216,12 +213,11 @@ class LegacyScans : HttpSource() {
 
     private fun isMangaPage(document: Document): Boolean = document.selectFirst(mangaDetailsDescriptionSelector) != null
 
-    private fun String.toDate(): Long =
-        try {
-            dateFormat.parse(trim())!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String.toDate(): Long = try {
+        dateFormat.parse(trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"

@@ -36,40 +36,38 @@ abstract class PaprikaAlt(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotBlank()) {
-            GET("$baseUrl/search?s=$query&post_type=manga&page=$page")
-        } else {
-            val url = "$baseUrl/genres/".toHttpUrl().newBuilder()
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> url.addPathSegment(filter.toUriPart())
-                    is OrderFilter -> url.addQueryParameter("orderby", filter.toUriPart())
-                    else -> {}
+    ): Request = if (query.isNotBlank()) {
+        GET("$baseUrl/search?s=$query&post_type=manga&page=$page")
+    } else {
+        val url = "$baseUrl/genres/".toHttpUrl().newBuilder()
+        filters.forEach { filter ->
+            when (filter) {
+                is GenreFilter -> url.addPathSegment(filter.toUriPart())
+                is OrderFilter -> url.addQueryParameter("orderby", filter.toUriPart())
+                else -> {}
+            }
+        }
+        url.addQueryParameter("page", page.toString())
+        GET(url.build(), headers)
+    }
+
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select(".animeinfo .rm h1")[0].text()
+        thumbnail_url = document.select(".animeinfo .lm  img").attr("abs:src")
+        document.select(".listinfo li").forEach {
+            it.text().apply {
+                when {
+                    this.startsWith("Author") -> author = this.substringAfter(":").trim()
+                    this.startsWith("Artist") -> artist = this.substringAfter(":").trim().replace(";", ",")
+                    this.startsWith("Genre") -> genre = this.substringAfter(":").trim().replace(";", ",")
+                    this.startsWith("Status") -> status = this.substringAfter(":").trim().toStatus()
                 }
             }
-            url.addQueryParameter("page", page.toString())
-            GET(url.build(), headers)
         }
+        description = document.select("#noidungm").joinToString("\n") { it.text() }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select(".animeinfo .rm h1")[0].text()
-            thumbnail_url = document.select(".animeinfo .lm  img").attr("abs:src")
-            document.select(".listinfo li").forEach {
-                it.text().apply {
-                    when {
-                        this.startsWith("Author") -> author = this.substringAfter(":").trim()
-                        this.startsWith("Artist") -> artist = this.substringAfter(":").trim().replace(";", ",")
-                        this.startsWith("Genre") -> genre = this.substringAfter(":").trim().replace(";", ",")
-                        this.startsWith("Status") -> status = this.substringAfter(":").trim().toStatus()
-                    }
-                }
-            }
-            description = document.select("#noidungm").joinToString("\n") { it.text() }
-
-            // Log.d("Paprika", "mangaDetials")
-        }
+        // Log.d("Paprika", "mangaDetials")
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -83,17 +81,16 @@ abstract class PaprikaAlt(
     override fun chapterFromElement(
         element: Element,
         mangaTitle: String,
-    ): SChapter =
-        SChapter.create().apply {
-            element.select(".leftoff").let {
-                name = it.text().substringAfter("$mangaTitle ")
-                setUrlWithoutDomain(it.select("a").attr("href"))
-            }
-            date_upload =
-                element
-                    .select(".rightoff")
-                    .firstOrNull()
-                    ?.text()
-                    .toDate()
+    ): SChapter = SChapter.create().apply {
+        element.select(".leftoff").let {
+            name = it.text().substringAfter("$mangaTitle ")
+            setUrlWithoutDomain(it.select("a").attr("href"))
         }
+        date_upload =
+            element
+                .select(".rightoff")
+                .firstOrNull()
+                ?.text()
+                .toDate()
+    }
 }

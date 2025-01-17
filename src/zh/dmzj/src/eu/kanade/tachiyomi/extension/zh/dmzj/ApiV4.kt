@@ -68,22 +68,21 @@ object ApiV4 {
     ) {
         val isLicensed get() = chapterGroups.isEmpty()
 
-        fun toSManga() =
-            SManga.create().apply {
-                url = getMangaUrl(id.toString())
-                title = this@MangaDto.title
-                author = authors.joinToString { it.name }
-                description =
-                    if (isLicensed) {
-                        "${this@MangaDto.description}\n\n漫画 ID (1): $id"
-                    } else {
-                        this@MangaDto.description
-                    }
-                genre = genres.joinToString { it.name }
-                status = parseStatus(this@MangaDto.status[0].name)
-                thumbnail_url = cover
-                initialized = true
-            }
+        fun toSManga() = SManga.create().apply {
+            url = getMangaUrl(id.toString())
+            title = this@MangaDto.title
+            author = authors.joinToString { it.name }
+            description =
+                if (isLicensed) {
+                    "${this@MangaDto.description}\n\n漫画 ID (1): $id"
+                } else {
+                    this@MangaDto.description
+                }
+            genre = genres.joinToString { it.name }
+            status = parseStatus(this@MangaDto.status[0].name)
+            thumbnail_url = cover
+            initialized = true
+        }
 
         fun parseChapterList(): List<SChapter> {
             val mangaId = id.toString()
@@ -124,12 +123,11 @@ object ApiV4 {
         @ProtoNumber(2) private val name: String,
         @ProtoNumber(3) private val updateTime: Long,
     ) {
-        fun toSChapterInternal() =
-            SChapter.create().apply {
-                url = id.toString()
-                name = this@ChapterDto.name.formatChapterName()
-                date_upload = updateTime * 1000
-            }
+        fun toSChapterInternal() = SChapter.create().apply {
+            url = id.toString()
+            name = this@ChapterDto.name.formatChapterName()
+            date_upload = updateTime * 1000
+        }
     }
 
     @Serializable
@@ -137,8 +135,7 @@ object ApiV4 {
         @ProtoNumber(6) private val lowResImages: List<String>,
         @ProtoNumber(8) private val images: List<String>,
     ) {
-        fun toPageList(isLowRes: Boolean) =
-            // page count can be messy, see manga ID 55847 chapters 107-109
+        fun toPageList(isLowRes: Boolean) = // page count can be messy, see manga ID 55847 chapters 107-109
             if (images.size == lowResImages.size) {
                 parsePageList(images, lowResImages)
             } else if (isLowRes) {
@@ -159,20 +156,19 @@ object ApiV4 {
         @ProtoNumber(6) private val genres: String,
         @ProtoNumber(9) private val slug: String?,
     ) {
-        fun toSManga() =
-            SManga.create().apply {
-                url =
-                    when {
-                        id != null -> getMangaUrl(id.toString())
-                        slug != null -> PREFIX_ID_SEARCH + slug
-                        else -> throw Exception("无法解析")
-                    }
-                title = this@RankingItemDto.title
-                author = authors.formatList()
-                genre = genres.formatList()
-                status = parseStatus(this@RankingItemDto.status)
-                thumbnail_url = cover
-            }
+        fun toSManga() = SManga.create().apply {
+            url =
+                when {
+                    id != null -> getMangaUrl(id.toString())
+                    slug != null -> PREFIX_ID_SEARCH + slug
+                    else -> throw Exception("无法解析")
+                }
+            title = this@RankingItemDto.title
+            author = authors.formatList()
+            genre = genres.formatList()
+            status = parseStatus(this@RankingItemDto.status)
+            thumbnail_url = cover
+        }
     }
 
     @Serializable

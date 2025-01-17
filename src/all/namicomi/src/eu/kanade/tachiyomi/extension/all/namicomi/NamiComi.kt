@@ -49,11 +49,10 @@ abstract class NamiComi(
 
     private val helper = NamiComiHelper(lang)
 
-    final override fun headersBuilder() =
-        super.headersBuilder().apply {
-            set("Referer", "$baseUrl/")
-            set("Origin", baseUrl)
-        }
+    final override fun headersBuilder() = super.headersBuilder().apply {
+        set("Referer", "$baseUrl/")
+        set("Origin", baseUrl)
+    }
 
     override val client =
         network.client
@@ -230,16 +229,15 @@ abstract class NamiComi(
     /**
      * Requests information about gated chapters (requiring payment & login).
      */
-    private fun accessibleChapterListRequest(chapterIds: List<String>): Request =
-        POST(
-            NamiComiConstants.apiGatingCheckUrl,
-            headers,
-            chapterIds
-                .map { EntityAccessRequestItemDto(it, NamiComiConstants.chapter) }
-                .let { helper.json.encodeToString(EntityAccessRequestDto(it)) }
-                .toRequestBody(),
-            CacheControl.FORCE_NETWORK,
-        )
+    private fun accessibleChapterListRequest(chapterIds: List<String>): Request = POST(
+        NamiComiConstants.apiGatingCheckUrl,
+        headers,
+        chapterIds
+            .map { EntityAccessRequestItemDto(it, NamiComiConstants.chapter) }
+            .let { helper.json.encodeToString(EntityAccessRequestDto(it)) }
+            .toRequestBody(),
+        CacheControl.FORCE_NETWORK,
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         if (response.code == 204) {
@@ -367,18 +365,16 @@ abstract class NamiComi(
 
     override fun getFilterList(): FilterList = helper.filters.getFilterList(helper.intl)
 
-    private fun HttpUrl.Builder.addCommonIncludeParameters() =
-        this
-            .addQueryParameter("includes[]", NamiComiConstants.coverArt)
-            .addQueryParameter("includes[]", NamiComiConstants.organization)
-            .addQueryParameter("includes[]", NamiComiConstants.tag)
-            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
-            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
+    private fun HttpUrl.Builder.addCommonIncludeParameters() = this
+        .addQueryParameter("includes[]", NamiComiConstants.coverArt)
+        .addQueryParameter("includes[]", NamiComiConstants.organization)
+        .addQueryParameter("includes[]", NamiComiConstants.tag)
+        .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
+        .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            helper.json.decodeFromString(body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        helper.json.decodeFromString(body.string())
+    }
 
     private val SharedPreferences.coverQuality
         get() = getString(NamiComiConstants.getCoverQualityPreferenceKey(extLang), "")

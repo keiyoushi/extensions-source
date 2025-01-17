@@ -87,11 +87,10 @@ class GenreFilter :
     }
 }
 
-fun getFilters() =
-    FilterList(
-        Filter.Header("Ignored when using text search"),
-        Filter.Separator(),
-        SortFilter(),
-        StatusFilter(),
-        GenreFilter(),
-    )
+fun getFilters() = FilterList(
+    Filter.Header("Ignored when using text search"),
+    Filter.Separator(),
+    SortFilter(),
+    StatusFilter(),
+    GenreFilter(),
+)

@@ -64,14 +64,13 @@ class Epikman :
 
     override fun searchMangaParse(response: Response) = MangasPage(mangaListParse(response.asJsoup()), false)
 
-    private fun mangaListParse(document: Document) =
-        document.select("#Blog1 .grid > div").map { element ->
-            SManga.create().apply {
-                with(element.selectFirst(".clamp")!!) {
-                    title = text()
-                    setUrlWithoutDomain(absUrl("href"))
-                }
-                thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+    private fun mangaListParse(document: Document) = document.select("#Blog1 .grid > div").map { element ->
+        SManga.create().apply {
+            with(element.selectFirst(".clamp")!!) {
+                title = text()
+                setUrlWithoutDomain(absUrl("href"))
             }
+            thumbnail_url = element.selectFirst("img")!!.absUrl("src")
         }
+    }
 }

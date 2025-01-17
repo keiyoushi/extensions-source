@@ -27,12 +27,11 @@ abstract class Gattsu(
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder() =
-        Headers
-            .Builder()
-            .add("Accept", ACCEPT)
-            .add("Accept-Language", ACCEPT_LANGUAGE)
-            .add("Referer", baseUrl)
+    override fun headersBuilder() = Headers
+        .Builder()
+        .add("Accept", ACCEPT)
+        .add("Accept-Language", ACCEPT_LANGUAGE)
+        .add("Referer", baseUrl)
 
     // Website does not have a popular, so use latest instead.
     override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)
@@ -50,12 +49,11 @@ abstract class Gattsu(
 
     override fun latestUpdatesSelector() = "div.meio div.lista ul li a[href^=$baseUrl]"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("span.thumb-titulo").first()!!.text()
-            thumbnail_url = element.select("span.thumb-imagem img.wp-post-image").first()!!.attr("src")
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("span.thumb-titulo").first()!!.text()
+        thumbnail_url = element.select("span.thumb-imagem img.wp-post-image").first()!!.attr("src")
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
     override fun latestUpdatesNextPageSelector(): String = "ul.paginacao li.next > a"
 
@@ -81,29 +79,28 @@ abstract class Gattsu(
 
     override fun searchMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val postBox = document.select("div.meio div.post-box").first()!!
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val postBox = document.select("div.meio div.post-box").first()!!
 
-            title = postBox.select("h1.post-titulo").first()!!.text()
-            author = postBox.select("ul.post-itens li:contains(Artista) a").firstOrNull()?.text()
-            genre =
-                postBox
-                    .select("ul.post-itens li:contains(Tags) a")
-                    .joinToString(", ") { it.text() }
-            description =
-                postBox
-                    .select("div.post-texto p")
-                    .joinToString("\n\n") { it.text() }
-                    .replace("Sinopse :", "")
-                    .trim()
-            status = SManga.COMPLETED
-            thumbnail_url =
-                postBox
-                    .select("div.post-capa > img.wp-post-image")
-                    .attr("src")
-                    .withoutSize()
-        }
+        title = postBox.select("h1.post-titulo").first()!!.text()
+        author = postBox.select("ul.post-itens li:contains(Artista) a").firstOrNull()?.text()
+        genre =
+            postBox
+                .select("ul.post-itens li:contains(Tags) a")
+                .joinToString(", ") { it.text() }
+        description =
+            postBox
+                .select("div.post-texto p")
+                .joinToString("\n\n") { it.text() }
+                .replace("Sinopse :", "")
+                .trim()
+        status = SManga.COMPLETED
+        thumbnail_url =
+            postBox
+                .select("div.post-capa > img.wp-post-image")
+                .attr("src")
+                .withoutSize()
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -119,31 +116,28 @@ abstract class Gattsu(
 
     override fun chapterListSelector() = "div.meio div.post-box:first-of-type"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = "Capítulo único"
-            scanlator = element.select("ul.post-itens li:contains(Tradutor) a").firstOrNull()?.text()
-            date_upload =
-                element
-                    .ownerDocument()!!
-                    .select("meta[property=article:published_time]")
-                    .firstOrNull()
-                    ?.attr("content")
-                    .orEmpty()
-                    .toDate()
-            setUrlWithoutDomain(element.ownerDocument()!!.location())
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = "Capítulo único"
+        scanlator = element.select("ul.post-itens li:contains(Tradutor) a").firstOrNull()?.text()
+        date_upload =
+            element
+                .ownerDocument()!!
+                .select("meta[property=article:published_time]")
+                .firstOrNull()
+                ?.attr("content")
+                .orEmpty()
+                .toDate()
+        setUrlWithoutDomain(element.ownerDocument()!!.location())
+    }
+
+    protected open fun pageListSelector(): String = "div.meio div.post-box ul.post-fotos li a > img, " +
+        "div.meio div.post-box.listaImagens div.galeriaHtml img"
+
+    override fun pageListParse(document: Document): List<Page> = document
+        .select(pageListSelector())
+        .mapIndexed { i, el ->
+            Page(i, document.location(), el.imgAttr().withoutSize())
         }
-
-    protected open fun pageListSelector(): String =
-        "div.meio div.post-box ul.post-fotos li a > img, " +
-            "div.meio div.post-box.listaImagens div.galeriaHtml img"
-
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(pageListSelector())
-            .mapIndexed { i, el ->
-                Page(i, document.location(), el.imgAttr().withoutSize())
-            }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -157,19 +151,17 @@ abstract class Gattsu(
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    protected fun Element.imgAttr(): String =
-        if (hasAttr("data-src")) {
-            attr("abs:data-src")
-        } else {
-            attr("abs:src")
-        }
+    protected fun Element.imgAttr(): String = if (hasAttr("data-src")) {
+        attr("abs:data-src")
+    } else {
+        attr("abs:src")
+    }
 
-    protected fun String.toDate(): Long =
-        try {
-            DATE_FORMATTER.parse(this.substringBefore("T"))?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    protected fun String.toDate(): Long = try {
+        DATE_FORMATTER.parse(this.substringBefore("T"))?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
+    }
 
     protected fun String.withoutSize(): String = this.replace(THUMB_SIZE_REGEX, ".")
 

@@ -102,12 +102,11 @@ class SortFilter(
     ) {
     fun getSort() = sorts[state?.index ?: 0].second
 
-    fun getDirection() =
-        if (state?.ascending != false) {
-            "asc"
-        } else {
-            "desc"
-        }
+    fun getDirection() = if (state?.ascending != false) {
+        "asc"
+    } else {
+        "desc"
+    }
 
     companion object {
         val POPULAR = FilterList(SortFilter(Selection(3, false)))

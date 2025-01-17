@@ -11,10 +11,9 @@ class MangaNoon :
         "https://vrnoin.site",
         "ar",
     ) {
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
+    }
 
     // From Galaxy
     override fun String?.parseChapterDate(): Long {

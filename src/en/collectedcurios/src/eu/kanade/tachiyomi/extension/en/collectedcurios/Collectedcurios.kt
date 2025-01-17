@@ -22,28 +22,27 @@ class Collectedcurios : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(
-            MangasPage(
-                arrayListOf(
-                    SManga.create().apply {
-                        title = "Sequential Art"
-                        artist = "Jolly Jack aka Phillip M Jackson"
-                        author = "Jolly Jack aka Phillip M Jackson"
-                        status = SManga.ONGOING
-                        url = "/sequentialart.php"
-                        description = "Sequential Art webcomic."
-                        thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Sequential_Art_Button.jpg"
-                    },
-                    SManga.create().apply {
-                        title = "Battle Bunnies"
-                        artist = "Jolly Jack aka Phillip M Jackson"
-                        author = "Jolly Jack aka Phillip M Jackson"
-                        status = SManga.ONGOING
-                        url = "/battlebunnies.php"
-                        description = "Battle Bunnies webcomic."
-                        thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Battle_Bunnies_Button.jpg"
-                    },
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
+        MangasPage(
+            arrayListOf(
+                SManga.create().apply {
+                    title = "Sequential Art"
+                    artist = "Jolly Jack aka Phillip M Jackson"
+                    author = "Jolly Jack aka Phillip M Jackson"
+                    status = SManga.ONGOING
+                    url = "/sequentialart.php"
+                    description = "Sequential Art webcomic."
+                    thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Sequential_Art_Button.jpg"
+                },
+                SManga.create().apply {
+                    title = "Battle Bunnies"
+                    artist = "Jolly Jack aka Phillip M Jackson"
+                    author = "Jolly Jack aka Phillip M Jackson"
+                    status = SManga.ONGOING
+                    url = "/battlebunnies.php"
+                    description = "Battle Bunnies webcomic."
+                    thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Battle_Bunnies_Button.jpg"
+                },
                     /*
                     SManga.create().apply {
                         title = "Spider and Scorpion"
@@ -55,10 +54,10 @@ class Collectedcurios : ParsedHttpSource() {
                         thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Spider_And_Scorpion_Button.jpg"
                     },
                      */
-                ),
-                false,
             ),
-        )
+            false,
+        ),
+    )
 
     override fun fetchSearchManga(
         page: Int,
@@ -103,10 +102,9 @@ class Collectedcurios : ParsedHttpSource() {
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            name = element.selectFirst(".w3-round")?.attr("value") ?: "Chapter"
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst(".w3-round")?.attr("value") ?: "Chapter"
+    }
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 

@@ -41,10 +41,9 @@ class Cartoon18 :
             .followRedirects(false)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrlWithLang?sort=hits&page=$page", headers)
 

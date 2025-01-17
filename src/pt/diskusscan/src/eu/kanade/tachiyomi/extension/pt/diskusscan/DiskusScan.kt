@@ -127,18 +127,17 @@ class DiskusScan :
             .build()
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set(
-                "Accept",
-                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            ).set("Accept-Language", "pt-BR,en-US;q=0.7,en;q=0.3")
-            .set("Alt-Used", baseUrl.substringAfterLast("/"))
-            .set("Sec-Fetch-Dest", "document")
-            .set("Sec-Fetch-Mode", "navigate")
-            .set("Sec-Fetch-Site", "same-origin")
-            .set("Sec-Fetch-User", "?1")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set(
+            "Accept",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        ).set("Accept-Language", "pt-BR,en-US;q=0.7,en;q=0.3")
+        .set("Alt-Used", baseUrl.substringAfterLast("/"))
+        .set("Sec-Fetch-Dest", "document")
+        .set("Sec-Fetch-Mode", "navigate")
+        .set("Sec-Fetch-Site", "same-origin")
+        .set("Sec-Fetch-User", "?1")
 
     // =========================== Manga Details ============================
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -153,13 +152,12 @@ class DiskusScan :
     override val seriesAuthorSelector = ".infotable tr:contains(Autor) td:last-child"
     override val seriesDescriptionSelector = ".entry-content[itemprop=description] > *:not([class^=disku])"
 
-    override fun String?.parseStatus() =
-        when (orEmpty().trim().lowercase()) {
-            "ativa" -> SManga.ONGOING
-            "finalizada" -> SManga.COMPLETED
-            "hiato" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    override fun String?.parseStatus() = when (orEmpty().trim().lowercase()) {
+        "ativa" -> SManga.ONGOING
+        "finalizada" -> SManga.COMPLETED
+        "hiato" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)

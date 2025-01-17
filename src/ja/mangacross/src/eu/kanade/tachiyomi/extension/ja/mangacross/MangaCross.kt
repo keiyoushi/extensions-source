@@ -53,11 +53,10 @@ class MangaCross : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { mangaDetailsParse(it).apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { mangaDetailsParse(it).apply { initialized = true } }
 
     // mangaDetailsRequest untouched in order to let WebView open web page instead of json
 
@@ -67,14 +66,13 @@ class MangaCross : HttpSource() {
 
     override fun chapterListParse(response: Response) = response.parseAs<MCComicDetails>().comic.toSChapterList()
 
-    override fun pageListParse(response: Response): List<Page> =
-        try {
-            response.parseAs<MCViewer>().episode_pages.mapIndexed { i, it ->
-                Page(i, imageUrl = it.image.original_url)
-            }
-        } catch (e: SerializationException) {
-            throw Exception("Chapter is no longer available!")
+    override fun pageListParse(response: Response): List<Page> = try {
+        response.parseAs<MCViewer>().episode_pages.mapIndexed { i, it ->
+            Page(i, imageUrl = it.image.original_url)
         }
+    } catch (e: SerializationException) {
+        throw Exception("Chapter is no longer available!")
+    }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
@@ -97,19 +95,18 @@ class MangaCross : HttpSource() {
         }
     }
 
-    override fun getFilterList() =
-        if (::tags.isInitialized) {
-            FilterList(
-                Filter.Header("NOTE: Ignored if using text search!"),
-                TagFilter("Tag", tags),
-            )
-        } else {
-            fetchTags()
-            FilterList(
-                Filter.Header("Fetching tags..."),
-                Filter.Header("Go back to previous screen and retry."),
-            )
-        }
+    override fun getFilterList() = if (::tags.isInitialized) {
+        FilterList(
+            Filter.Header("NOTE: Ignored if using text search!"),
+            TagFilter("Tag", tags),
+        )
+    } else {
+        fetchTags()
+        FilterList(
+            Filter.Header("Fetching tags..."),
+            Filter.Header("Go back to previous screen and retry."),
+        )
+    }
 
     private class TagFilter(
         name: String,

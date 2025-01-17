@@ -81,13 +81,12 @@ class WNACG :
         return GET(builder.build(), headers)
     }
 
-    override fun headersBuilder() =
-        Headers
-            .Builder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
-            .set("referer", baseUrl)
-            .set("sec-fetch-mode", "no-cors")
-            .set("sec-fetch-site", "cross-site")
+    override fun headersBuilder() = Headers
+        .Builder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
+        .set("referer", baseUrl)
+        .set("sec-fetch-mode", "no-cors")
+        .set("sec-fetch-site", "cross-site")
 
     override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
 
@@ -153,11 +152,10 @@ class WNACG :
 
     // >>> Filters >>>
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("注意：分类不支持搜索"),
-            CategoryFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("注意：分类不支持搜索"),
+        CategoryFilter(),
+    )
 
     private class CategoryFilter :
         UriPartFilter(

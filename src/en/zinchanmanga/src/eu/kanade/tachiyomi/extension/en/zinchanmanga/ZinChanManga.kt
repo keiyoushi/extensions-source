@@ -9,20 +9,17 @@ class ZinChanManga : Madara("ZinChanManga", "https://zinchanmanga.net", "en") {
     override val versionId = 2
     override val useNewChapterEndpoint = true
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        super.popularMangaFromElement(element).apply {
-            title = url.urlToTitle() ?: title
-        }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        title = url.urlToTitle() ?: title
+    }
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        super.searchMangaFromElement(element).apply {
-            title = url.urlToTitle() ?: title
-        }
+    override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
+        title = url.urlToTitle() ?: title
+    }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            title = document.location().urlToTitle() ?: title
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        title = document.location().urlToTitle() ?: title
+    }
 
     private fun String.urlToTitle(): String? {
         val slug =

@@ -17,39 +17,37 @@ class MangaMammy :
 
     override fun popularMangaSelector() = searchMangaSelector()
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                listOf(
-                    OrderByFilter(
-                        "",
-                        listOf(
-                            Pair("", ""),
-                            Pair("", "views"),
-                        ),
-                        1,
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            listOf(
+                OrderByFilter(
+                    "",
+                    listOf(
+                        Pair("", ""),
+                        Pair("", "views"),
                     ),
+                    1,
                 ),
             ),
-        )
+        ),
+    )
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                listOf(
-                    OrderByFilter(
-                        "",
-                        listOf(
-                            Pair("", ""),
-                            Pair("", "latest"),
-                        ),
-                        1,
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            listOf(
+                OrderByFilter(
+                    "",
+                    listOf(
+                        Pair("", ""),
+                        Pair("", "latest"),
                     ),
+                    1,
                 ),
             ),
-        )
+        ),
+    )
 }

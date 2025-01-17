@@ -22,12 +22,11 @@ class KingsOfDarkness : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/proyectos", headers)
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            url = element.child(0).attr("href")
-            title = element.nextElementSibling()!!.text()
-            thumbnail_url = element.selectFirst("img")!!.image
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        url = element.child(0).attr("href")
+        title = element.nextElementSibling()!!.text()
+        thumbnail_url = element.selectFirst("img")!!.image
+    }
 
     override fun fetchSearchManga(
         page: Int,
@@ -39,34 +38,31 @@ class KingsOfDarkness : ParsedHttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            url = document.location()
-            title = document.selectFirst("#SITE_PAGES h2")!!.text()
-            thumbnail_url = document.selectFirst("#SITE_PAGES img")!!.image
-            document.select("#SITE_PAGES p:last-of-type").let { el ->
-                description = el[0].text().trim()
-                genre = el[1].select("a").joinToString { it.text() }
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        url = document.location()
+        title = document.selectFirst("#SITE_PAGES h2")!!.text()
+        thumbnail_url = document.selectFirst("#SITE_PAGES img")!!.image
+        document.select("#SITE_PAGES p:last-of-type").let { el ->
+            description = el[0].text().trim()
+            genre = el[1].select("a").joinToString { it.text() }
         }
+    }
 
     override fun chapterListSelector() = "#SITE_PAGES a[target=_self]"
 
     override fun chapterListRequest(manga: SManga) = GET(manga.url, headers)
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            url = element.attr("href")
-            name = element.child(0).text()
-            chapter_number = name.substring(3).toFloat()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        url = element.attr("href")
+        name = element.child(0).text()
+        chapter_number = name.substring(3).toFloat()
+    }
 
     override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers)
 
-    override fun pageListParse(document: Document) =
-        document.select("#SITE_PAGES img").mapIndexed { idx, el ->
-            Page(idx, "", el.image)
-        }
+    override fun pageListParse(document: Document) = document.select("#SITE_PAGES img").mapIndexed { idx, el ->
+        Page(idx, "", el.image)
+    }
 
     private inline val Element.image: String
         get() = attr("src").substringBefore("/v1/fill")

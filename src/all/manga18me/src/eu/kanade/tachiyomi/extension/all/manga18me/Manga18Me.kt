@@ -29,10 +29,9 @@ open class Manga18Me(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("Referer", "$baseUrl/")
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("Referer", "$baseUrl/")
+    }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/$page?orderby=trending", headers)
 
@@ -65,12 +64,11 @@ open class Manga18Me(
 
     override fun popularMangaNextPageSelector() = ".next"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst("div.item-thumb.wleft a")!!.attr("title")
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst("div.item-thumb.wleft a")!!.attr("title")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/$page?orderby=latest", headers)
 
@@ -146,59 +144,57 @@ open class Manga18Me(
 
     override fun getFilterList() = getFilters()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val info = document.selectFirst("div.post_content")!!
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val info = document.selectFirst("div.post_content")!!
 
-            title = document.select("div.post-title.wleft > h1").text()
-            description =
-                buildString {
-                    document
-                        .select("div.ss-manga > p")
-                        .eachText()
-                        .onEach {
-                            append(it.trim())
-                            append("\n\n")
-                        }
+        title = document.select("div.post-title.wleft > h1").text()
+        description =
+            buildString {
+                document
+                    .select("div.ss-manga > p")
+                    .eachText()
+                    .onEach {
+                        append(it.trim())
+                        append("\n\n")
+                    }
 
-                    info
-                        .selectFirst("div.post-content_item.wleft:contains(Alternative) div.summary-content")
-                        ?.text()
-                        ?.takeIf { it != "Updating" && it.isNotEmpty() }
-                        ?.let {
-                            append("Alternative Names:\n")
-                            append(it.trim())
-                        }
-                }
-            status =
-                when (info.select("div.post-content_item.wleft:contains(Status) div.summary-content").text()) {
-                    "Ongoing" -> SManga.ONGOING
-                    "Completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            author = info.selectFirst("div.href-content.artist-content > a")?.text()?.takeIf { it != "Updating" }
-            artist = info.selectFirst("div.href-content.artist-content > a")?.text()?.takeIf { it != "Updating" }
-            genre = info.select("div.href-content.genres-content > a[href*=/manga-list/]").eachText().joinToString()
-            thumbnail_url = document.selectFirst("div.summary_image > img")?.absUrl("src")
-        }
+                info
+                    .selectFirst("div.post-content_item.wleft:contains(Alternative) div.summary-content")
+                    ?.text()
+                    ?.takeIf { it != "Updating" && it.isNotEmpty() }
+                    ?.let {
+                        append("Alternative Names:\n")
+                        append(it.trim())
+                    }
+            }
+        status =
+            when (info.select("div.post-content_item.wleft:contains(Status) div.summary-content").text()) {
+                "Ongoing" -> SManga.ONGOING
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        author = info.selectFirst("div.href-content.artist-content > a")?.text()?.takeIf { it != "Updating" }
+        artist = info.selectFirst("div.href-content.artist-content > a")?.text()?.takeIf { it != "Updating" }
+        genre = info.select("div.href-content.genres-content > a[href*=/manga-list/]").eachText().joinToString()
+        thumbnail_url = document.selectFirst("div.summary_image > img")?.absUrl("src")
+    }
 
     override fun chapterListSelector() = "ul.row-content-chapter.wleft .a-h.wleft"
 
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            element.selectFirst("a")!!.run {
-                setUrlWithoutDomain(absUrl("href"))
-                name = text()
-            }
-            date_upload =
-                try {
-                    dateFormat.parse(element.selectFirst("span")!!.text())!!.time
-                } catch (_: Exception) {
-                    0L
-                }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst("a")!!.run {
+            setUrlWithoutDomain(absUrl("href"))
+            name = text()
         }
+        date_upload =
+            try {
+                dateFormat.parse(element.selectFirst("span")!!.text())!!.time
+            } catch (_: Exception) {
+                0L
+            }
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val contents = document.select("div.read-content.wleft img")

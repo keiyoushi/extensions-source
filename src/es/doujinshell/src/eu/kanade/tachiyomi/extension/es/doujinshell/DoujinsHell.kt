@@ -29,15 +29,13 @@ class DoujinsHell :
 
     override fun chapterListSelector() = "div.listing-chapters_wrap li.wp-manga-chapter"
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        super.chapterListParse(response).apply {
-            if (size == 1) first().name = "Capítulo"
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).apply {
+        if (size == 1) first().name = "Capítulo"
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        super.pageListParse(document).also { pages ->
-            if (pages.isEmpty() && document.select(".reading-content iframe").isNotEmpty()) {
-                throw Exception("No se admiten vídeos")
-            }
+    override fun pageListParse(document: Document): List<Page> = super.pageListParse(document).also { pages ->
+        if (pages.isEmpty() && document.select(".reading-content iframe").isNotEmpty()) {
+            throw Exception("No se admiten vídeos")
         }
+    }
 }

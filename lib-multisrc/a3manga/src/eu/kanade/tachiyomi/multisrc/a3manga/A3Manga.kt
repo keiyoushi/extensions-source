@@ -47,12 +47,11 @@ open class A3Manga(
 
     override fun popularMangaSelector() = ".comic-list .comic-item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select(".comic-title-link a").attr("href"))
-            title = element.select(".comic-title").text().trim()
-            thumbnail_url = element.select(".img-thumbnail").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select(".comic-title-link a").attr("href"))
+        title = element.select(".comic-title").text().trim()
+        thumbnail_url = element.select(".img-thumbnail").attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector() = "li.next:not(.disabled)"
 
@@ -68,36 +67,34 @@ open class A3Manga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val id = query.removePrefix(PREFIX_ID_SEARCH).trim()
-                fetchMangaDetails(
-                    SManga.create().apply {
-                        url = "/truyen-tranh/$id/"
-                    },
-                ).map {
-                    it.url = "/truyen-tranh/$id/"
-                    MangasPage(listOf(it), false)
-                }
+    ): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val id = query.removePrefix(PREFIX_ID_SEARCH).trim()
+            fetchMangaDetails(
+                SManga.create().apply {
+                    url = "/truyen-tranh/$id/"
+                },
+            ).map {
+                it.url = "/truyen-tranh/$id/"
+                MangasPage(listOf(it), false)
             }
-            else -> super.fetchSearchManga(page, query, filters)
         }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        POST(
-            "$baseUrl/wp-admin/admin-ajax.php",
-            headers,
-            FormBody
-                .Builder()
-                .add("action", "searchtax")
-                .add("keyword", query)
-                .build(),
-        )
+    ): Request = POST(
+        "$baseUrl/wp-admin/admin-ajax.php",
+        headers,
+        FormBody
+            .Builder()
+            .add("action", "searchtax")
+            .add("keyword", query)
+            .build(),
+    )
 
     override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
@@ -126,38 +123,36 @@ open class A3Manga(
         return MangasPage(manga, false)
     }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.select(".info-title").text()
-            author = document.select(".comic-info strong:contains(Tác giả) + span").text().trim()
-            description = document.select(".intro-container .text-justify").text().substringBefore("— Xem Thêm —")
-            genre =
-                document.select(".comic-info .tags a").joinToString { tag ->
-                    tag.text().split(' ').joinToString(separator = " ") { word ->
-                        word.replaceFirstChar { it.titlecase() }
-                    }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.select(".info-title").text()
+        author = document.select(".comic-info strong:contains(Tác giả) + span").text().trim()
+        description = document.select(".intro-container .text-justify").text().substringBefore("— Xem Thêm —")
+        genre =
+            document.select(".comic-info .tags a").joinToString { tag ->
+                tag.text().split(' ').joinToString(separator = " ") { word ->
+                    word.replaceFirstChar { it.titlecase() }
                 }
-            thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
+            }
+        thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
 
-            val statusString = document.select(".comic-info strong:contains(Tình trạng) + span").text()
-            status =
-                when (statusString) {
-                    "Đang tiến hành" -> SManga.ONGOING
-                    "Trọn bộ " -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+        val statusString = document.select(".comic-info strong:contains(Tình trạng) + span").text()
+        status =
+            when (statusString) {
+                "Đang tiến hành" -> SManga.ONGOING
+                "Trọn bộ " -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     override fun chapterListSelector(): String = ".chapter-table table tbody tr"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            name = element.select("a .hidden-sm").text()
-            date_upload = runCatching {
-                dateFormat.parse(element.select("td").last()!!.text())?.time
-            }.getOrNull() ?: 0
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        name = element.select("a .hidden-sm").text()
+        date_upload = runCatching {
+            dateFormat.parse(element.select("td").last()!!.text())?.time
+        }.getOrNull() ?: 0
+    }
 
     protected fun decodeImgList(document: Document): String {
         val htmlContentScript =

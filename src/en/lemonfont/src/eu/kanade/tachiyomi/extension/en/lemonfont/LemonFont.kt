@@ -26,38 +26,35 @@ class LemonFont : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.comic-collection > a:not([href*=redbubble])"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.select("p").text().trim()
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.select("p").text().trim()
+        thumbnail_url = element.select("img").attr("abs:src")
 
-            if (!element.attr("href").contains("http")) {
-                setUrlWithoutDomain(element.attr("abs:href"))
-            } else {
-                status = SManga.LICENSED
-                setUrlWithoutDomain(element.attr("href"))
-            }
+        if (!element.attr("href").contains("http")) {
+            setUrlWithoutDomain(element.attr("abs:href"))
+        } else {
+            status = SManga.LICENSED
+            setUrlWithoutDomain(element.attr("href"))
         }
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val seriesUrl: String = document.location()
-            val homePage: Document = client.newCall(GET("$baseUrl/comics/", headers)).execute().asJsoup()
-            val element: Element = homePage.select("div.comic-collection > a[abs:href=$seriesUrl]").first()!!
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val seriesUrl: String = document.location()
+        val homePage: Document = client.newCall(GET("$baseUrl/comics/", headers)).execute().asJsoup()
+        val element: Element = homePage.select("div.comic-collection > a[abs:href=$seriesUrl]").first()!!
 
-            thumbnail_url = element.select("img").attr("abs:src")
-            status = getStatus(element)
-            author = "LemonFont"
-        }
+        thumbnail_url = element.select("img").attr("abs:src")
+        status = getStatus(element)
+        author = "LemonFont"
+    }
 
-    private fun getStatus(element: Element) =
-        when {
-            element.attr("href").contains("http") -> SManga.LICENSED
-            element.select("p").first()!!.id() == "tag-ongoing" -> SManga.ONGOING
-            else -> SManga.COMPLETED
-        }
+    private fun getStatus(element: Element) = when {
+        element.attr("href").contains("http") -> SManga.LICENSED
+        element.select("p").first()!!.id() == "tag-ongoing" -> SManga.ONGOING
+        else -> SManga.COMPLETED
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaInfo = response.asJsoup().select("div.container > div.content > script").toString()

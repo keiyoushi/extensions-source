@@ -17,11 +17,10 @@ class Manga168 :
                 timeZone = TimeZone.getTimeZone("Asia/Bangkok")
             },
     ) {
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            // Add 'color' badge as a genre
-            if (document.selectFirst(".thumb .colored") != null) {
-                genre = genre?.plus(", Color")
-            }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        // Add 'color' badge as a genre
+        if (document.selectFirst(".thumb .colored") != null) {
+            genre = genre?.plus(", Color")
         }
+    }
 }

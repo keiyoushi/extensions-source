@@ -98,26 +98,24 @@ class BlackScans : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga) = POST("$API_URL/api/serie/", headers, manga.createPostPayload())
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<MangaDetailsDto>().let { dto ->
-            SManga.create().apply {
-                title = dto.title
-                description = dto.synopsis
-                thumbnail_url = "$API_URL/media/${dto.cover}"
-                author = dto.author
-                artist = dto.artist
-                genre = dto.genres.joinToString()
-                url = "/series/${dto.code}"
-                status = dto.status.toMangaStatus()
-            }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsDto>().let { dto ->
+        SManga.create().apply {
+            title = dto.title
+            description = dto.synopsis
+            thumbnail_url = "$API_URL/media/${dto.cover}"
+            author = dto.author
+            artist = dto.artist
+            genre = dto.genres.joinToString()
+            url = "/series/${dto.code}"
+            status = dto.status.toMangaStatus()
         }
+    }
 
-    private fun String.toMangaStatus(): Int =
-        when (this.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toMangaStatus(): Int = when (this.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ============================
 
@@ -152,10 +150,9 @@ class BlackScans : HttpSource() {
         return POST("$API_URL/api/chapter/info/", headers, payload)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<PagesDto>().images.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = "$API_URL//media/$imageUrl")
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PagesDto>().images.mapIndexed { index, imageUrl ->
+        Page(index, imageUrl = "$API_URL//media/$imageUrl")
+    }
 
     // ============================== Utils ===============================
 
@@ -169,19 +166,17 @@ class BlackScans : HttpSource() {
         return """{"$field": "$mangaCode"}""".toRequestBody("application/json".toMediaType())
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream(it.body.byteStream())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
 
     private inline fun <reified T> RequestBody.parseAs(): T = json.decodeFromString(Buffer().also { writeTo(it) }.readUtf8())
 
-    private fun String.toDate() =
-        try {
-            dateFormat.parse(this)!!.time
-        } catch (_: Exception) {
-            0
-        }
+    private fun String.toDate() = try {
+        dateFormat.parse(this)!!.time
+    } catch (_: Exception) {
+        0
+    }
 
     companion object {
         const val API_URL = "https://api.blackscans.site"

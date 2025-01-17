@@ -30,15 +30,14 @@ class MangamoHelper(
             }
 
         @Suppress("UNCHECKED_CAST")
-        inline fun <reified T> String.parseJson(): T =
-            when (T::class) {
-                DocumentDto::class ->
-                    json.decodeFromString<T>(
-                        DocumentSerializer(serializer<T>() as KSerializer<out DocumentDto<out Any?>>) as KSerializer<T>,
-                        this,
-                    )
-                else -> json.decodeFromString<T>(this)
-            }
+        inline fun <reified T> String.parseJson(): T = when (T::class) {
+            DocumentDto::class ->
+                json.decodeFromString<T>(
+                    DocumentSerializer(serializer<T>() as KSerializer<out DocumentDto<out Any?>>) as KSerializer<T>,
+                    this,
+                )
+            else -> json.decodeFromString<T>(this)
+        }
     }
 
     val jsonHeaders =
@@ -57,17 +56,16 @@ class MangamoHelper(
     fun getChapterUrl(chapter: ChapterDto): String =
         "?${MangamoConstants.SERIES_QUERY_PARAM}=${chapter.seriesId}&${MangamoConstants.CHAPTER_QUERY_PARAM}=${chapter.id}"
 
-    fun getSeriesStatus(series: SeriesDto): Int =
-        when (series.releaseStatusTag) {
-            "Ongoing" -> SManga.ONGOING
-            "series-complete" -> SManga.COMPLETED
-            "Completed" -> SManga.COMPLETED
-            "Paused" -> SManga.ON_HIATUS
-            else ->
-                if (series.ongoing == true) {
-                    SManga.ONGOING
-                } else {
-                    SManga.UNKNOWN
-                }
-        }
+    fun getSeriesStatus(series: SeriesDto): Int = when (series.releaseStatusTag) {
+        "Ongoing" -> SManga.ONGOING
+        "series-complete" -> SManga.COMPLETED
+        "Completed" -> SManga.COMPLETED
+        "Paused" -> SManga.ON_HIATUS
+        else ->
+            if (series.ongoing == true) {
+                SManga.ONGOING
+            } else {
+                SManga.UNKNOWN
+            }
+    }
 }

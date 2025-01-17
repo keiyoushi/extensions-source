@@ -286,13 +286,12 @@ class Hachi : HttpSource() {
     // Other
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private fun String.parseStatus() =
-        when (this.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "dropped" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.parseStatus() = when (this.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "dropped" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     private fun fetchBuildId(document: Document? = null): String {
         val realDocument =

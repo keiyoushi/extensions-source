@@ -108,25 +108,24 @@ class Kuaikanmanhua : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotEmpty()) {
-            GET("$apiUrl/v1/search/topic?q=$query&size=18", headers)
-        } else {
-            lateinit var genre: String
-            lateinit var status: String
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> {
-                        genre = filter.toUriPart()
-                    }
-                    is StatusFilter -> {
-                        status = filter.toUriPart()
-                    }
-                    else -> {}
+    ): Request = if (query.isNotEmpty()) {
+        GET("$apiUrl/v1/search/topic?q=$query&size=18", headers)
+    } else {
+        lateinit var genre: String
+        lateinit var status: String
+        filters.forEach { filter ->
+            when (filter) {
+                is GenreFilter -> {
+                    genre = filter.toUriPart()
                 }
+                is StatusFilter -> {
+                    status = filter.toUriPart()
+                }
+                else -> {}
             }
-            GET("$apiUrl/v1/search/by_tag?since=${(page - 1) * 10}&tag=$genre&sort=1&query_category=%7B%22update_status%22:$status%7D")
         }
+        GET("$apiUrl/v1/search/by_tag?since=${(page - 1) * 10}&tag=$genre&sort=1&query_category=%7B%22update_status%22:$status%7D")
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val body = response.body.string()
@@ -148,20 +147,19 @@ class Kuaikanmanhua : HttpSource() {
         return Observable.just(sManga)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        SManga.create().apply {
-            val data =
-                json
-                    .parseToJsonElement(response.body.string())
-                    .jsonObject["data"]!!
-                    .jsonObject
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val data =
+            json
+                .parseToJsonElement(response.body.string())
+                .jsonObject["data"]!!
+                .jsonObject
 
-            title = data["title"]!!.jsonPrimitive.content
-            thumbnail_url = data["vertical_image_url"]!!.jsonPrimitive.content
-            author = data["user"]!!.jsonObject["nickname"]!!.jsonPrimitive.content
-            description = data["description"]!!.jsonPrimitive.content
-            status = data["update_status_code"]!!.jsonPrimitive.int
-        }
+        title = data["title"]!!.jsonPrimitive.content
+        thumbnail_url = data["vertical_image_url"]!!.jsonPrimitive.content
+        author = data["user"]!!.jsonObject["nickname"]!!.jsonPrimitive.content
+        description = data["description"]!!.jsonPrimitive.content
+        status = data["update_status_code"]!!.jsonPrimitive.int
+    }
 
     // Chapters & Pages
 
@@ -251,12 +249,11 @@ class Kuaikanmanhua : HttpSource() {
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("注意：不影響按標題搜索"),
-            StatusFilter(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("注意：不影響按標題搜索"),
+        StatusFilter(),
+        GenreFilter(),
+    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

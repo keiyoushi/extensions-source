@@ -59,19 +59,18 @@ abstract class MangaHub(
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add(
-                "Accept",
-                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-            ).add("Accept-Language", "en-US,en;q=0.5")
-            .add("DNT", "1")
-            .add("Referer", "$baseUrl/")
-            .add("Sec-Fetch-Dest", "document")
-            .add("Sec-Fetch-Mode", "navigate")
-            .add("Sec-Fetch-Site", "same-origin")
-            .add("Upgrade-Insecure-Requests", "1")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add(
+            "Accept",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        ).add("Accept-Language", "en-US,en;q=0.5")
+        .add("DNT", "1")
+        .add("Referer", "$baseUrl/")
+        .add("Sec-Fetch-Dest", "document")
+        .add("Sec-Fetch-Mode", "navigate")
+        .add("Sec-Fetch-Site", "same-origin")
+        .add("Upgrade-Insecure-Requests", "1")
 
     open val json: Json by injectLazy()
 
@@ -388,11 +387,10 @@ abstract class MangaHub(
         return POST("$baseApiUrl/graphql", newHeaders, body)
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        super
-            .fetchPageList(chapter)
-            .doOnError { refreshApiKey(chapter) }
-            .retry(1)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = super
+        .fetchPageList(chapter)
+        .doOnError { refreshApiKey(chapter) }
+        .retry(1)
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
@@ -453,11 +451,10 @@ abstract class MangaHub(
         genres: Array<Genre>,
     ) : Filter.Select<Genre>("Genres", genres, 0)
 
-    override fun getFilterList() =
-        FilterList(
-            OrderBy(orderBy),
-            GenreList(genres),
-        )
+    override fun getFilterList() = FilterList(
+        OrderBy(orderBy),
+        GenreList(genres),
+    )
 
     private val orderBy =
         arrayOf(

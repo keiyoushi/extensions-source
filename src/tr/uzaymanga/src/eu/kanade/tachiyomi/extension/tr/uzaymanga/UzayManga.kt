@@ -42,10 +42,9 @@ class UzayManga : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search?page=$page&search=&order=4")
 
@@ -54,12 +53,11 @@ class UzayManga : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "section[aria-label='series area'] .card"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst("h2")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h2")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/search?page=$page&search=&order=3")
 
@@ -121,34 +119,32 @@ class UzayManga : ParsedHttpSource() {
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            with(document.selectFirst("#content")!!) {
-                title = selectFirst("h1")!!.text()
-                thumbnail_url = selectFirst("img")?.absUrl("src")
-                genre = select("a[href^='search?categories']").joinToString { it.text() }
-                description = selectFirst("div.grid h2 + p")?.text()
-                val pageStatus = selectFirst("span:contains(Durum) + span")?.text() ?: ""
-                status =
-                    when {
-                        pageStatus.contains("Devam Ediyor", "Birakildi") -> SManga.ONGOING
-                        pageStatus.contains("Tamamlandi") -> SManga.COMPLETED
-                        pageStatus.contains("Ara Veridi") -> SManga.ON_HIATUS
-                        else -> SManga.UNKNOWN
-                    }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        with(document.selectFirst("#content")!!) {
+            title = selectFirst("h1")!!.text()
+            thumbnail_url = selectFirst("img")?.absUrl("src")
+            genre = select("a[href^='search?categories']").joinToString { it.text() }
+            description = selectFirst("div.grid h2 + p")?.text()
+            val pageStatus = selectFirst("span:contains(Durum) + span")?.text() ?: ""
+            status =
+                when {
+                    pageStatus.contains("Devam Ediyor", "Birakildi") -> SManga.ONGOING
+                    pageStatus.contains("Tamamlandi") -> SManga.COMPLETED
+                    pageStatus.contains("Ara Veridi") -> SManga.ON_HIATUS
+                    else -> SManga.UNKNOWN
+                }
 
-                setUrlWithoutDomain(document.location())
-            }
+            setUrlWithoutDomain(document.location())
         }
+    }
 
     override fun chapterListSelector() = "div.list-episode a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            name = element.selectFirst("h3")!!.text()
-            date_upload = element.selectFirst("span")?.text()?.toDate() ?: 0L
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst("h3")!!.text()
+        date_upload = element.selectFirst("span")?.text()?.toDate() ?: 0L
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val script =
@@ -170,12 +166,11 @@ class UzayManga : ParsedHttpSource() {
 
     private fun isMangaPage(document: Document): Boolean = document.selectFirst("div.grid h2 + p") != null
 
-    private fun String.toDate(): Long =
-        try {
-            dateFormat.parse(this)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String.toDate(): Long = try {
+        dateFormat.parse(this)!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     private fun String.contains(vararg fragment: String): Boolean = fragment.any { trim().contains(it, ignoreCase = true) }
 

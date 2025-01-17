@@ -51,11 +51,10 @@ class SpyFakku : HttpSource() {
 
     private val charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .set("Origin", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseApiUrl/library?sort=released_at&page=$page", headers)
 
@@ -128,10 +127,9 @@ class SpyFakku : HttpSource() {
         }
 
     private fun getAdditionals(data: List<JsonElement>): ShortHentai {
-        fun Collection<JsonElement>.getTags(): List<Name> =
-            this.map {
-                Name(data[it.jsonPrimitive.int + 2].jsonPrimitive.content, data[it.jsonPrimitive.int + 3].jsonPrimitive.content)
-            }
+        fun Collection<JsonElement>.getTags(): List<Name> = this.map {
+            Name(data[it.jsonPrimitive.int + 2].jsonPrimitive.content, data[it.jsonPrimitive.int + 3].jsonPrimitive.content)
+        }
         val hentaiIndexes = json.decodeFromJsonElement<HentaiIndexes>(data[1])
 
         val hash = data[hentaiIndexes.hash].jsonPrimitive.content
@@ -158,16 +156,15 @@ class SpyFakku : HttpSource() {
 
     private fun <T> Collection<T>.emptyToNull(): Collection<T>? = this.ifEmpty { null }
 
-    private fun Hentai.toSManga() =
-        SManga.create().apply {
-            title = this@toSManga.title
-            url = "/g/$id?$pages&hash=$hash"
-            author = tags?.filter { it.namespace == "circle" }?.joinToString { it.name }
-            artist = tags?.filter { it.namespace == "artist" }?.joinToString { it.name }
-            genre = tags?.filter { it.namespace == "tag" }?.joinToString { it.name }
-            thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
-            status = SManga.COMPLETED
-        }
+    private fun Hentai.toSManga() = SManga.create().apply {
+        title = this@toSManga.title
+        url = "/g/$id?$pages&hash=$hash"
+        author = tags?.filter { it.namespace == "circle" }?.joinToString { it.name }
+        artist = tags?.filter { it.namespace == "artist" }?.joinToString { it.name }
+        genre = tags?.filter { it.namespace == "tag" }?.joinToString { it.name }
+        thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
+        status = SManga.COMPLETED
+    }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         val response1: Response = client.newCall(mangaDetailsRequest(manga)).execute()

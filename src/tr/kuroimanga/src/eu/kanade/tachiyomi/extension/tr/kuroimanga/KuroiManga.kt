@@ -30,8 +30,7 @@ class KuroiManga :
         return pageList
     }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            name = element.selectFirst("li > a")!!.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        name = element.selectFirst("li > a")!!.text()
+    }
 }

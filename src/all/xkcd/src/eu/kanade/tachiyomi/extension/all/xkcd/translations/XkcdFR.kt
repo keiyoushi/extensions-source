@@ -18,28 +18,26 @@ class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {
 
     override fun String.numbered(number: Any) = "$number. $this"
 
-    override fun chapterListParse(response: Response) =
-        response.asJsoup().select(chapterListSelector).map {
-            SChapter.create().apply {
-                url = "/" + it.attr("href")
-                val number = url.substringAfter('=')
-                name = it.text().numbered(number)
-                chapter_number = number.toFloat()
-                // no dates available
-                date_upload = 0L
-            }
+    override fun chapterListParse(response: Response) = response.asJsoup().select(chapterListSelector).map {
+        SChapter.create().apply {
+            url = "/" + it.attr("href")
+            val number = url.substringAfter('=')
+            name = it.text().numbered(number)
+            chapter_number = number.toFloat()
+            // no dates available
+            date_upload = 0L
         }
+    }
 
-    override fun pageListParse(response: Response) =
-        response.asJsoup().selectFirst(imageSelector)!!.let {
-            // no interactive comics here
-            val img = it.child(2).child(0).child(0)
+    override fun pageListParse(response: Response) = response.asJsoup().selectFirst(imageSelector)!!.let {
+        // no interactive comics here
+        val img = it.child(2).child(0).child(0)
 
-            // create a text image for the alt text
-            val text = wordWrap(it.child(0).text(), img.attr("alt"))
+        // create a text image for the alt text
+        val text = wordWrap(it.child(0).text(), img.attr("alt"))
 
-            listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text.image()))
-        }
+        listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text.image()))
+    }
 
     override val interactiveText: String
         get() = throw UnsupportedOperationException()

@@ -31,10 +31,9 @@ class WeebCentral : ParsedHttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
@@ -42,12 +41,11 @@ class WeebCentral : ParsedHttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            defaultFilterList(SortFilter("Popularity")),
-        )
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        defaultFilterList(SortFilter("Popularity")),
+    )
 
     override fun popularMangaSelector(): String = searchMangaSelector()
 
@@ -57,12 +55,11 @@ class WeebCentral : ParsedHttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            defaultFilterList(SortFilter("Latest Updates")),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        defaultFilterList(SortFilter("Latest Updates")),
+    )
 
     override fun latestUpdatesSelector(): String = searchMangaSelector()
 
@@ -96,14 +93,13 @@ class WeebCentral : ParsedHttpSource() {
 
     override fun searchMangaSelector(): String = "article:has(section)"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-            with(element.selectFirst("div > a")!!) {
-                title = text()
-                setUrlWithoutDomain(attr("abs:href"))
-            }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        with(element.selectFirst("div > a")!!) {
+            title = text()
+            setUrlWithoutDomain(attr("abs:href"))
         }
+    }
 
     override fun searchMangaNextPageSelector(): String = "button"
 
@@ -113,50 +109,48 @@ class WeebCentral : ParsedHttpSource() {
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val descBuilder = StringBuilder()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val descBuilder = StringBuilder()
 
-            with(document.select("section[x-data] > section")[0]) {
-                thumbnail_url = selectFirst("img")!!.attr("abs:src")
-                author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
-                genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
-                status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
+        with(document.select("section[x-data] > section")[0]) {
+            thumbnail_url = selectFirst("img")!!.attr("abs:src")
+            author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
+            genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
+            status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
 
-                if (selectFirst("ul > li > strong:contains(Official Translation) + a:contains(Yes)") != null) {
-                    descBuilder.appendLine("Official Translation")
-                    descBuilder.appendLine()
-                }
+            if (selectFirst("ul > li > strong:contains(Official Translation) + a:contains(Yes)") != null) {
+                descBuilder.appendLine("Official Translation")
+                descBuilder.appendLine()
             }
-
-            with(document.select("section[x-data] > section")[1]) {
-                title = selectFirst("h1")!!.text()
-
-                val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
-                if (alternateTitles.size > 0) {
-                    descBuilder.appendLine("Associated Name(s):")
-                    alternateTitles.forEach { descBuilder.appendLine(it.text()) }
-                    descBuilder.appendLine()
-                }
-
-                descBuilder.append(
-                    selectFirst("li:has(strong:contains(Description)) > p")
-                        ?.text()
-                        ?.replace("NOTE: ", "\n\nNOTE: "),
-                )
-            }
-
-            description = descBuilder.toString()
         }
 
-    private fun Element?.parseStatus(): Int =
-        when (this?.text()?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "complete" -> SManga.COMPLETED
-            "hiatus" -> SManga.ON_HIATUS
-            "canceled" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
+        with(document.select("section[x-data] > section")[1]) {
+            title = selectFirst("h1")!!.text()
+
+            val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
+            if (alternateTitles.size > 0) {
+                descBuilder.appendLine("Associated Name(s):")
+                alternateTitles.forEach { descBuilder.appendLine(it.text()) }
+                descBuilder.appendLine()
+            }
+
+            descBuilder.append(
+                selectFirst("li:has(strong:contains(Description)) > p")
+                    ?.text()
+                    ?.replace("NOTE: ", "\n\nNOTE: "),
+            )
         }
+
+        description = descBuilder.toString()
+    }
+
+    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "complete" -> SManga.COMPLETED
+        "hiatus" -> SManga.ON_HIATUS
+        "canceled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ==============================
 
@@ -175,21 +169,19 @@ class WeebCentral : ParsedHttpSource() {
 
     override fun chapterListSelector() = "a[x-data]"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.selectFirst("span.flex > span")!!.text()
-            setUrlWithoutDomain(element.attr("abs:href"))
-            element.selectFirst("time[datetime]")?.also {
-                date_upload = it.attr("datetime").parseDate()
-            }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.selectFirst("span.flex > span")!!.text()
+        setUrlWithoutDomain(element.attr("abs:href"))
+        element.selectFirst("time[datetime]")?.also {
+            date_upload = it.attr("datetime").parseDate()
         }
+    }
 
-    private fun String.parseDate(): Long =
-        try {
-            dateFormat.parse(this)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun String.parseDate(): Long = try {
+        dateFormat.parse(this)!!.time
+    } catch (_: ParseException) {
+        0L
+    }
     // =============================== Pages ================================
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -228,15 +220,14 @@ class WeebCentral : ParsedHttpSource() {
 
     // ============================= Utilities ==============================
 
-    private fun defaultFilterList(sortFilter: SortFilter): FilterList =
-        FilterList(
-            sortFilter,
-            SortOrderFilter(),
-            OfficialTranslationFilter(),
-            StatusFilter(),
-            TypeFilter(),
-            TagFilter(),
-        )
+    private fun defaultFilterList(sortFilter: SortFilter): FilterList = FilterList(
+        sortFilter,
+        SortOrderFilter(),
+        OfficialTranslationFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        TagFilter(),
+    )
 
     companion object {
         const val FETCH_LIMIT = 24

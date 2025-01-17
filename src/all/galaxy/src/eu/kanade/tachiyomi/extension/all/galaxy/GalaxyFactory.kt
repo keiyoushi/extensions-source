@@ -66,9 +66,8 @@ class GalaxyFactory : SourceFactory {
         }
     }
 
-    override fun createSources() =
-        listOf(
-            GalaxyWebtoon(),
-            GalaxyManga(),
-        )
+    override fun createSources() = listOf(
+        GalaxyWebtoon(),
+        GalaxyManga(),
+    )
 }

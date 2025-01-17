@@ -12,17 +12,16 @@ class ReaperScans :
     ) {
     override val dateSelector = ".text-xs.w-fit"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            if (description.isNullOrBlank() == true) {
-                description = document.selectFirst("#expand_content > p")?.text()
-            }
-
-            // Search for the sibling div of the image with the status icon
-            status = document.selectFirst("div:has(> img[src*=status]) + div").parseStatus()
-
-            genre = document.select("div:has(>h1) > div > a").joinToString { it.text() }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        if (description.isNullOrBlank() == true) {
+            description = document.selectFirst("#expand_content > p")?.text()
         }
+
+        // Search for the sibling div of the image with the status icon
+        status = document.selectFirst("div:has(> img[src*=status]) + div").parseStatus()
+
+        genre = document.select("div:has(>h1) > div > a").joinToString { it.text() }
+    }
 
     // Migrated from Madara to Keyoapp.
     override val versionId = 4

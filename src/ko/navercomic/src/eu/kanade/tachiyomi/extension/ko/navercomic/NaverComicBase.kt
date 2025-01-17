@@ -103,13 +103,12 @@ abstract class NaverComicBase(
     private fun createChapter(
         chapter: MangaChapter,
         id: Int,
-    ): SChapter =
-        SChapter.create().apply {
-            url = "/$mType/detail?titleId=$id&no=${chapter.no}"
-            name = chapter.subtitle
-            chapter_number = chapter.no.toFloat()
-            date_upload = parseChapterDate(chapter.serviceDateDescription)
-        }
+    ): SChapter = SChapter.create().apply {
+        url = "/$mType/detail?titleId=$id&no=${chapter.no}"
+        name = chapter.subtitle
+        chapter_number = chapter.no.toFloat()
+        date_upload = parseChapterDate(chapter.serviceDateDescription)
+    }
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 

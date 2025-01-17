@@ -56,11 +56,10 @@ abstract class GigaViewer(
 
     protected open val publisher: String = ""
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Origin", baseUrl)
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Origin", baseUrl)
+        .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()
 
@@ -68,15 +67,14 @@ abstract class GigaViewer(
 
     override fun popularMangaSelector(): String = "ul.series-list li a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("h2.series-list-title")!!.text()
-            thumbnail_url =
-                element
-                    .selectFirst("div.series-list-thumb img")!!
-                    .attr("data-src")
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h2.series-list-title")!!.text()
+        thumbnail_url =
+            element
+                .selectFirst("div.series-list-thumb img")!!
+                .attr("data-src")
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -93,11 +91,10 @@ abstract class GigaViewer(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        client
-            .newCall(searchMangaRequest(page, query, filters))
-            .asObservableIgnoreCode(404)
-            .map(::searchMangaParse)
+    ): Observable<MangasPage> = client
+        .newCall(searchMangaRequest(page, query, filters))
+        .asObservableIgnoreCode(404)
+        .map(::searchMangaParse)
 
     override fun searchMangaRequest(
         page: Int,
@@ -132,30 +129,28 @@ abstract class GigaViewer(
 
     override fun searchMangaSelector() = "ul.search-series-list li, ul.series-list li"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("div.title-box p.series-title")!!.text()
-            thumbnail_url = element.selectFirst("div.thmb-container a img")!!.attr("src")
-            setUrlWithoutDomain(element.selectFirst("div.thmb-container a")!!.attr("href"))
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("div.title-box p.series-title")!!.text()
+        thumbnail_url = element.selectFirst("div.thmb-container a img")!!.attr("src")
+        setUrlWithoutDomain(element.selectFirst("div.thmb-container a")!!.attr("href"))
+    }
 
     override fun searchMangaNextPageSelector(): String? = null
 
     protected open fun mangaDetailsInfoSelector(): String = "section.series-information div.series-header"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val infoElement = document.selectFirst(mangaDetailsInfoSelector())!!
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val infoElement = document.selectFirst(mangaDetailsInfoSelector())!!
 
-            title = infoElement.selectFirst("h1.series-header-title")!!.text()
-            author = infoElement.selectFirst("h2.series-header-author")!!.text()
-            artist = author
-            description = infoElement.selectFirst("p.series-header-description")!!.text()
-            thumbnail_url =
-                infoElement
-                    .selectFirst("div.series-header-image-wrapper img")!!
-                    .attr("data-src")
-        }
+        title = infoElement.selectFirst("h1.series-header-title")!!.text()
+        author = infoElement.selectFirst("h2.series-header-author")!!.text()
+        artist = author
+        description = infoElement.selectFirst("p.series-header-description")!!.text()
+        thumbnail_url =
+            infoElement
+                .selectFirst("div.series-header-image-wrapper img")!!
+                .attr("data-src")
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -354,17 +349,15 @@ abstract class GigaViewer(
         return output.toByteArray()
     }
 
-    private fun Call.asObservableIgnoreCode(code: Int): Observable<Response> =
-        asObservable().doOnNext { response ->
-            if (!response.isSuccessful && response.code != code) {
-                response.close()
-                throw Exception("HTTP error ${response.code}")
-            }
+    private fun Call.asObservableIgnoreCode(code: Int): Observable<Response> = asObservable().doOnNext { response ->
+        if (!response.isSuccessful && response.code != code) {
+            response.close()
+            throw Exception("HTTP error ${response.code}")
         }
+    }
 
-    private fun String.toDate(): Long =
-        runCatching { DATE_PARSER.parse(this)?.time }
-            .getOrNull() ?: 0L
+    private fun String.toDate(): Long = runCatching { DATE_PARSER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private val DATE_PARSER by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH) }

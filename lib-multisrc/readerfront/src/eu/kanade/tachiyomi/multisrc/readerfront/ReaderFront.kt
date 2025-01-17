@@ -53,49 +53,47 @@ abstract class ReaderFront(
         return GET("$apiUrl?query=${chapterById(id.toInt())}", headers)
     }
 
-    override fun latestUpdatesParse(response: Response) =
-        response
-            .parse<List<Work>>("works")
-            .map {
-                SManga.create().apply {
-                    url = it.stub
-                    title = it.toString()
-                    thumbnail_url = getImageCDN(it.thumbnail_path)
-                }
-            }.let { MangasPage(it, false) }
-
-    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
-
-    override fun mangaDetailsParse(response: Response) =
-        response.parse<Work>("work").let {
+    override fun latestUpdatesParse(response: Response) = response
+        .parse<List<Work>>("works")
+        .map {
             SManga.create().apply {
                 url = it.stub
                 title = it.toString()
                 thumbnail_url = getImageCDN(it.thumbnail_path)
-                description = it.description
-                author = it.authors!!.joinToString()
-                artist = it.artists!!.joinToString()
-                genre =
-                    buildString {
-                        if (it.adult!!) append("18+, ")
-                        append(it.demographic_name!!)
-                        if (it.genres!!.isNotEmpty()) {
-                            append(", ")
-                            it.genres.joinTo(this, transform = i18n::get)
-                        }
-                        append(", ")
-                        append(it.type!!)
-                    }
-                status =
-                    when {
-                        it.licensed!! -> SManga.LICENSED
-                        it.status_name == "on_going" -> SManga.ONGOING
-                        it.status_name == "completed" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-                initialized = true
             }
+        }.let { MangasPage(it, false) }
+
+    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
+
+    override fun mangaDetailsParse(response: Response) = response.parse<Work>("work").let {
+        SManga.create().apply {
+            url = it.stub
+            title = it.toString()
+            thumbnail_url = getImageCDN(it.thumbnail_path)
+            description = it.description
+            author = it.authors!!.joinToString()
+            artist = it.artists!!.joinToString()
+            genre =
+                buildString {
+                    if (it.adult!!) append("18+, ")
+                    append(it.demographic_name!!)
+                    if (it.genres!!.isNotEmpty()) {
+                        append(", ")
+                        it.genres.joinTo(this, transform = i18n::get)
+                    }
+                    append(", ")
+                    append(it.type!!)
+                }
+            status =
+                when {
+                    it.licensed!! -> SManga.LICENSED
+                    it.status_name == "on_going" -> SManga.ONGOING
+                    it.status_name == "completed" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            initialized = true
         }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val stub = response.request.url.fragment ?: ""
@@ -117,12 +115,11 @@ abstract class ReaderFront(
         }
     }
 
-    override fun pageListParse(response: Response) =
-        response.parse<Chapter>("chapterById").let {
-            it.mapIndexed { idx, page ->
-                Page(idx, "", getImageCDN(it.path(page), page.width))
-            }
+    override fun pageListParse(response: Response) = response.parse<Chapter>("chapterById").let {
+        it.mapIndexed { idx, page ->
+            Page(idx, "", getImageCDN(it.path(page), page.width))
         }
+    }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/work/$lang/${manga.url}"
 
@@ -157,13 +154,12 @@ abstract class ReaderFront(
 
     private inline fun MangasPage.filter(predicate: (SManga) -> Boolean) = copy(mangas.filter(predicate))
 
-    private inline fun <reified T> Response.parse(name: String) =
-        json.parseToJsonElement(body.string()).jsonObject.run {
-            if (containsKey("errors")) {
-                throw Error(get("errors")!![0]["message"].content)
-            }
-            json.decodeFromJsonElement<T>(get("data")!![name])
+    private inline fun <reified T> Response.parse(name: String) = json.parseToJsonElement(body.string()).jsonObject.run {
+        if (containsKey("errors")) {
+            throw Error(get("errors")!![0]["message"].content)
         }
+        json.decodeFromJsonElement<T>(get("data")!![name])
+    }
 
     private operator fun JsonElement.get(key: String) = jsonObject[key]!!
 

@@ -187,11 +187,10 @@ abstract class Comick(
     private val SharedPreferences.scorePosition: String
         get() = getString(SCORE_POSITION_PREF, SCORE_POSITION_DEFAULT) ?: SCORE_POSITION_DEFAULT
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("Referer", "$baseUrl/")
-            add("User-Agent", "Tachiyomi ${System.getProperty("http.agent")}")
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("Referer", "$baseUrl/")
+        add("User-Agent", "Tachiyomi ${System.getProperty("http.agent")}")
+    }
 
     override val client =
         network.cloudflareClient
@@ -249,31 +248,30 @@ abstract class Comick(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(SLUG_SEARCH_PREFIX)) {
-            // url deep link
-            val slugOrHid = query.substringAfter(SLUG_SEARCH_PREFIX)
-            val manga = SManga.create().apply { this.url = "/comic/$slugOrHid#" }
-            fetchMangaDetails(manga).map {
-                MangasPage(listOf(it), false)
-            }
-        } else if (query.isEmpty()) {
-            // regular filtering without text search
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map(::searchMangaParse)
-        } else {
-            // text search, no pagination in api
-            if (page == 1) {
-                client
-                    .newCall(querySearchRequest(query))
-                    .asObservableSuccess()
-                    .map(::querySearchParse)
-            } else {
-                Observable.just(paginatedSearchPage(page))
-            }
+    ): Observable<MangasPage> = if (query.startsWith(SLUG_SEARCH_PREFIX)) {
+        // url deep link
+        val slugOrHid = query.substringAfter(SLUG_SEARCH_PREFIX)
+        val manga = SManga.create().apply { this.url = "/comic/$slugOrHid#" }
+        fetchMangaDetails(manga).map {
+            MangasPage(listOf(it), false)
         }
+    } else if (query.isEmpty()) {
+        // regular filtering without text search
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map(::searchMangaParse)
+    } else {
+        // text search, no pagination in api
+        if (page == 1) {
+            client
+                .newCall(querySearchRequest(query))
+                .asObservableSuccess()
+                .map(::querySearchParse)
+        } else {
+            Observable.just(paginatedSearchPage(page))
+        }
+    }
 
     private fun querySearchRequest(query: String): Request {
         val url =
@@ -415,13 +413,12 @@ abstract class Comick(
         return GET("$apiUrl$mangaUrl?tachiyomi=true", headers)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response, manga).apply { initialized = true }
-            }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response, manga).apply { initialized = true }
+        }
 
     override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response, SManga.create())
 

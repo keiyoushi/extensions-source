@@ -45,8 +45,7 @@ class OrderFilter(
     }
 }
 
-fun getFilters() =
-    FilterList(
-        StatusFilter(),
-        OrderFilter(),
-    )
+fun getFilters() = FilterList(
+    StatusFilter(),
+    OrderFilter(),
+)

@@ -50,10 +50,9 @@ class SimplyCosplay :
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()
 
@@ -130,13 +129,12 @@ class SimplyCosplay :
         endPoint: String,
         sort: String,
         page: Int,
-    ): HttpUrl.Builder =
-        apiUrl.newBuilder().apply {
-            addPathSegment(endPoint)
-            addQueryParameter("sort", sort)
-            addQueryParameter("limit", LIMIT.toString())
-            addQueryParameter("page", page.toString())
-        }
+    ): HttpUrl.Builder = apiUrl.newBuilder().apply {
+        addPathSegment(endPoint)
+        addQueryParameter("sort", sort)
+        addQueryParameter("limit", LIMIT.toString())
+        addQueryParameter("page", page.toString())
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         val url = browseUrlBuilder(preference.getDefaultBrowse(), "hot", page)
@@ -167,16 +165,15 @@ class SimplyCosplay :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(SEARCH_PREFIX)) {
-            val url = query.substringAfter(SEARCH_PREFIX)
-            val manga = SManga.create().apply { this.url = url }
-            fetchMangaDetails(manga).map {
-                MangasPage(listOf(it), false)
-            }
-        } else {
-            super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> = if (query.startsWith(SEARCH_PREFIX)) {
+        val url = query.substringAfter(SEARCH_PREFIX)
+        val manga = SManga.create().apply { this.url = url }
+        fetchMangaDetails(manga).map {
+            MangasPage(listOf(it), false)
         }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -329,25 +326,24 @@ class SimplyCosplay :
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    url = manga.url
-                    name =
-                        manga.url.split("/")[1].replaceFirstChar {
-                            if (it.isLowerCase()) {
-                                it.titlecase(
-                                    Locale.ROOT,
-                                )
-                            } else {
-                                it.toString()
-                            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                url = manga.url
+                name =
+                    manga.url.split("/")[1].replaceFirstChar {
+                        if (it.isLowerCase()) {
+                            it.titlecase(
+                                Locale.ROOT,
+                            )
+                        } else {
+                            it.toString()
                         }
-                    date_upload = manga.description?.substringAfterLast("Date: ").parseDate()
-                },
-            ),
-        )
+                    }
+                date_upload = manga.description?.substringAfterLast("Date: ").parseDate()
+            },
+        ),
+    )
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
@@ -390,9 +386,8 @@ class SimplyCosplay :
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private fun String?.parseDate(): Long =
-        runCatching { dateFormat.parse(this!!)!!.time }
-            .getOrDefault(0L)
+    private fun String?.parseDate(): Long = runCatching { dateFormat.parse(this!!)!!.time }
+        .getOrDefault(0L)
 
     companion object {
         private const val LIMIT = 20

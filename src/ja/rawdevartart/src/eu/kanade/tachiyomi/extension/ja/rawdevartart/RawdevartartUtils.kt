@@ -24,57 +24,54 @@ fun PaginatedMangaList.toMangasPage(): MangasPage {
     return MangasPage(manga, hasNextPage)
 }
 
-private fun MangaDto.toSManga() =
-    SManga.create().apply {
-        // The website URL is manually calculated using a slugify function that I am too
-        // lazy to reimplement.
-        url = "/spa/manga/$id"
-        title = name
-        thumbnail_url = coverImage
-    }
+private fun MangaDto.toSManga() = SManga.create().apply {
+    // The website URL is manually calculated using a slugify function that I am too
+    // lazy to reimplement.
+    url = "/spa/manga/$id"
+    title = name
+    thumbnail_url = coverImage
+}
 
-fun MangaDetailsDto.toSManga() =
-    SManga.create().apply {
-        title = detail.name
-        author = authors.joinToString { it.name }
-        description =
-            buildString {
-                if (!detail.alternativeName.isNullOrEmpty()) {
-                    append("Alternative Title: ")
-                    appendLine(detail.alternativeName)
-                    appendLine()
-                }
-
-                if (!detail.description.isNullOrEmpty()) {
-                    append(detail.description)
-                }
+fun MangaDetailsDto.toSManga() = SManga.create().apply {
+    title = detail.name
+    author = authors.joinToString { it.name }
+    description =
+        buildString {
+            if (!detail.alternativeName.isNullOrEmpty()) {
+                append("Alternative Title: ")
+                appendLine(detail.alternativeName)
+                appendLine()
             }
-        genre = tags.joinToString { it.name }
-        status = if (detail.status) SManga.COMPLETED else SManga.ONGOING
-        thumbnail_url = detail.coverImageFull ?: detail.coverImage
-    }
+
+            if (!detail.description.isNullOrEmpty()) {
+                append(detail.description)
+            }
+        }
+    genre = tags.joinToString { it.name }
+    status = if (detail.status) SManga.COMPLETED else SManga.ONGOING
+    thumbnail_url = detail.coverImageFull ?: detail.coverImage
+}
 
 fun MangaDetailsDto.toSChapterList() = chapters.map { it.toSChapter(detail.id) }
 
-private fun ChapterDto.toSChapter(mangaId: Int) =
-    SChapter.create().apply {
-        url = "/spa/manga/$mangaId/$number"
-        name =
-            buildString {
-                append("Chapter ")
-                append(formatChapterNumber(number))
+private fun ChapterDto.toSChapter(mangaId: Int) = SChapter.create().apply {
+    url = "/spa/manga/$mangaId/$number"
+    name =
+        buildString {
+            append("Chapter ")
+            append(formatChapterNumber(number))
 
-                if (title.isNotEmpty()) {
-                    append(": ")
-                    append(title)
-                }
+            if (title.isNotEmpty()) {
+                append(": ")
+                append(title)
             }
-        chapter_number = number
-        date_upload =
-            runCatching {
-                dateFormat.parse(datePublished)!!.time
-            }.getOrDefault(0L)
-    }
+        }
+    chapter_number = number
+    date_upload =
+        runCatching {
+            dateFormat.parse(datePublished)!!.time
+        }.getOrDefault(0L)
+}
 
 fun ChapterDetailsDto.toPageList(baseUrl: String): List<Page> {
     val document = Jsoup.parseBodyFragment(detail.content!!, baseUrl)

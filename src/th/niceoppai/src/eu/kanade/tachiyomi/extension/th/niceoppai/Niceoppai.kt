@@ -44,14 +44,13 @@ class Niceoppai : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.nde"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("div.det a")!!.text()
-            element.select("div.cvr").let {
-                setUrlWithoutDomain(it.select("a").attr("href"))
-                thumbnail_url = it.select("img").attr("abs:src")
-            }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("div.det a")!!.text()
+        element.select("div.cvr").let {
+            setUrlWithoutDomain(it.select("a").attr("href"))
+            thumbnail_url = it.select("img").attr("abs:src")
         }
+    }
 
     override fun popularMangaNextPageSelector() = "ul.pgg li a"
 
@@ -100,27 +99,25 @@ class Niceoppai : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        client
-            .newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map {
-                val document = it.asJsoup()
-                val mangas: List<SManga> =
-                    document.select(searchMangaSelector()).map { element ->
-                        searchMangaFromElement(element)
-                    }
+    ): Observable<MangasPage> = client
+        .newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map {
+            val document = it.asJsoup()
+            val mangas: List<SManga> =
+                document.select(searchMangaSelector()).map { element ->
+                    searchMangaFromElement(element)
+                }
 
-                MangasPage(mangas, false)
-            }
+            MangasPage(mangas, false)
+        }
 
     // Manga summary page
-    private fun getStatus(status: String) =
-        when (status) {
-            "ยังไม่จบ" -> SManga.ONGOING
-            "จบแล้ว" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun getStatus(status: String) = when (status) {
+        "ยังไม่จบ" -> SManga.ONGOING
+        "จบแล้ว" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div.det").first()!!
@@ -147,12 +144,11 @@ class Niceoppai : ParsedHttpSource() {
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0
 
-        fun SimpleDateFormat.tryParse(string: String): Long =
-            try {
-                parse(string)?.time ?: 0
-            } catch (_: ParseException) {
-                0
-            }
+        fun SimpleDateFormat.tryParse(string: String): Long = try {
+            parse(string)?.time ?: 0
+        } catch (_: ParseException) {
+            0
+        }
 
         return when {
             // Handle 'yesterday' and 'today', using midnight

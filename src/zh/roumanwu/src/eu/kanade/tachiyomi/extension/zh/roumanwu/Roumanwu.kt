@@ -49,17 +49,16 @@ class Roumanwu :
 
     override fun popularMangaSelector(): String = "div.px-1 > div:matches(正熱門|今日最佳|本週熱門) .grid a[href*=/books/]"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("div.truncate").text()
-            url = element.attr("href")
-            thumbnail_url =
-                element
-                    .select("div.bg-cover")
-                    .attr("style")
-                    .substringAfter("background-image:url(\"")
-                    .substringBefore("\")")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("div.truncate").text()
+        url = element.attr("href")
+        thumbnail_url =
+            element
+                .select("div.bg-cover")
+                .attr("style")
+                .substringAfter("background-image:url(\"")
+                .substringBefore("\")")
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -84,17 +83,16 @@ class Roumanwu :
 
     override fun latestUpdatesSelector(): String = "div.px-1 > div:contains(最近更新) .grid a[href*=/books/]"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("div.truncate").text()
-            url = element.attr("href")
-            thumbnail_url =
-                element
-                    .select("div.bg-cover")
-                    .attr("style")
-                    .substringAfter("background-image:url(\"")
-                    .substringBefore("\")")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("div.truncate").text()
+        url = element.attr("href")
+        thumbnail_url =
+            element
+                .select("div.bg-cover")
+                .attr("style")
+                .substringAfter("background-image:url(\"")
+                .substringBefore("\")")
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -111,41 +109,38 @@ class Roumanwu :
 
     override fun searchMangaSelector(): String = "a[href*=/books/]"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("div.truncate").text()
-            url = element.attr("href")
-            thumbnail_url =
-                element
-                    .select("div.bg-cover")
-                    .attr("style")
-                    .substringAfter("background-image:url(\"")
-                    .substringBefore("\")")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("div.truncate").text()
+        url = element.attr("href")
+        thumbnail_url =
+            element
+                .select("div.bg-cover")
+                .attr("style")
+                .substringAfter("background-image:url(\"")
+                .substringBefore("\")")
+    }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select("div.basis-3\\/5 > div.text-xl").text()
-            thumbnail_url = baseUrl + document.select("main > div:first-child img").attr("src")
-            author = document.select("div.basis-3\\/5 > div:nth-child(3) span").text()
-            artist = author
-            status =
-                when (document.select("div.basis-3\\/5 > div:nth-child(4) span").text()) {
-                    "連載中" -> SManga.ONGOING
-                    "已完結" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            genre = document.select("div.basis-3\\/5 > div:nth-child(6) span").text().replace(",", ", ")
-            description = document.select("p:contains(簡介:)").text().substring(3)
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("div.basis-3\\/5 > div.text-xl").text()
+        thumbnail_url = baseUrl + document.select("main > div:first-child img").attr("src")
+        author = document.select("div.basis-3\\/5 > div:nth-child(3) span").text()
+        artist = author
+        status =
+            when (document.select("div.basis-3\\/5 > div:nth-child(4) span").text()) {
+                "連載中" -> SManga.ONGOING
+                "已完結" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        genre = document.select("div.basis-3\\/5 > div:nth-child(6) span").text().replace(",", ", ")
+        description = document.select("p:contains(簡介:)").text().substring(3)
+    }
 
     override fun chapterListSelector(): String = "a[href~=/books/.*/\\d+]"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            url = element.attr("href")
-            name = element.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        url = element.attr("href")
+        name = element.text()
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
@@ -168,13 +163,12 @@ class Roumanwu :
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("提示：搜尋時篩選無效"),
-            TagFilter(),
-            StatusFilter(),
-            SortFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("提示：搜尋時篩選無效"),
+        TagFilter(),
+        StatusFilter(),
+        SortFilter(),
+    )
 
     private abstract class UriPartFilter(
         name: String,
@@ -188,12 +182,11 @@ class Roumanwu :
     }
 
     private class StatusFilter : UriPartFilter("狀態", arrayOf("全部", "連載中", "已完結")) {
-        override fun toUriPart() =
-            when (state) {
-                1 -> "&continued=true"
-                2 -> "&continued=false"
-                else -> ""
-            }
+        override fun toUriPart() = when (state) {
+            1 -> "&continued=true"
+            2 -> "&continued=false"
+            else -> ""
+        }
     }
 
     private class SortFilter : UriPartFilter("排序", arrayOf("更新日期", "評分")) {

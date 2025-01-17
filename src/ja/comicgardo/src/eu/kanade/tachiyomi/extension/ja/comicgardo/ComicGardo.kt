@@ -24,15 +24,13 @@ class ComicGardo :
 
     override fun popularMangaSelector(): String = "ul.series-section-list li.series-section-item > a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("h5.series-title")!!.text()
-            thumbnail_url = element.selectFirst("div.thumb img")!!.attr("data-src")
-            setUrlWithoutDomain(element.attr("href")!!)
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h5.series-title")!!.text()
+        thumbnail_url = element.selectFirst("div.thumb img")!!.attr("data-src")
+        setUrlWithoutDomain(element.attr("href")!!)
+    }
 
-    override fun getCollections(): List<Collection> =
-        listOf(
-            Collection("連載一覧", ""),
-        )
+    override fun getCollections(): List<Collection> = listOf(
+        Collection("連載一覧", ""),
+    )
 }

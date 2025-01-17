@@ -79,10 +79,9 @@ class ZeurelScan : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        Observable.just(
-            MangasPage(mangaList.filter { it.title.contains(query, true) }, false),
-        )
+    ): Observable<MangasPage> = Observable.just(
+        MangasPage(mangaList.filter { it.title.contains(query, true) }, false),
+    )
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
@@ -94,27 +93,25 @@ class ZeurelScan : HttpSource() {
 
     // Details
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup()
-            val info = document.selectFirst("div.testo")!!
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        val info = document.selectFirst("div.testo")!!
 
-            title = info.selectFirst("div.intestazione:contains(Titolo)")!!.nextElementSibling()!!.text()
-            author = info.selectFirst("div.intestazione:contains(Autore)")!!.nextElementSibling()!!.text()
-            artist = info.selectFirst("div.intestazione:contains(Artista)")!!.nextElementSibling()!!.text()
-            genre = info.selectFirst("div.intestazione:contains(Genere)")!!.nextElementSibling()!!.text()
-            description = info.selectFirst("div.intestazione:contains(Trama)")!!.nextElementSibling()!!.text()
-            thumbnail_url = document.select("div.immagine > img").attr("abs:src")
+        title = info.selectFirst("div.intestazione:contains(Titolo)")!!.nextElementSibling()!!.text()
+        author = info.selectFirst("div.intestazione:contains(Autore)")!!.nextElementSibling()!!.text()
+        artist = info.selectFirst("div.intestazione:contains(Artista)")!!.nextElementSibling()!!.text()
+        genre = info.selectFirst("div.intestazione:contains(Genere)")!!.nextElementSibling()!!.text()
+        description = info.selectFirst("div.intestazione:contains(Trama)")!!.nextElementSibling()!!.text()
+        thumbnail_url = document.select("div.immagine > img").attr("abs:src")
 
-            status = parseStatus(info.selectFirst("div.intestazione:contains(Stato)")!!.nextElementSibling()!!.text())
-        }
+        status = parseStatus(info.selectFirst("div.intestazione:contains(Stato)")!!.nextElementSibling()!!.text())
+    }
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("In Corso", true) -> SManga.ONGOING
-            status.contains("Completa", true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("In Corso", true) -> SManga.ONGOING
+        status.contains("Completa", true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
 
@@ -134,17 +131,15 @@ class ZeurelScan : HttpSource() {
         }
     }
 
-    private fun parseChapterDate(date: String): Long =
-        try {
-            SimpleDateFormat("d MMM yyyy", Locale.ITALIAN).parse(date)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun parseChapterDate(date: String): Long = try {
+        SimpleDateFormat("d MMM yyyy", Locale.ITALIAN).parse(date)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
+    }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.asJsoup().select("div.Immag img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
-        }
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.Immag img").mapIndexed { i, element ->
+        Page(i, "", element.attr("abs:src"))
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

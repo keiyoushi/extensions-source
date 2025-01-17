@@ -15,29 +15,27 @@ private val markdownLinksRegex = "\\[([^]]+)]\\(([^)]+)\\)".toRegex()
 private val markdownItalicBoldRegex = "\\*+\\s*([^*]*)\\s*\\*+".toRegex()
 private val markdownItalicRegex = "_+\\s*([^_]*)\\s*_+".toRegex()
 
-internal fun String.beautifyDescription(): String =
-    Parser
-        .unescapeEntities(this, false)
-        .substringBefore("---")
-        .replace(markdownLinksRegex, "")
-        .replace(markdownItalicBoldRegex, "")
-        .replace(markdownItalicRegex, "")
-        .trim()
+internal fun String.beautifyDescription(): String = Parser
+    .unescapeEntities(this, false)
+    .substringBefore("---")
+    .replace(markdownLinksRegex, "")
+    .replace(markdownItalicBoldRegex, "")
+    .replace(markdownItalicRegex, "")
+    .trim()
 
-internal fun Int?.parseStatus(translationComplete: Boolean?): Int =
-    when (this) {
-        1 -> SManga.ONGOING
-        2 -> {
-            if (translationComplete == true) {
-                SManga.COMPLETED
-            } else {
-                SManga.PUBLISHING_FINISHED
-            }
+internal fun Int?.parseStatus(translationComplete: Boolean?): Int = when (this) {
+    1 -> SManga.ONGOING
+    2 -> {
+        if (translationComplete == true) {
+            SManga.COMPLETED
+        } else {
+            SManga.PUBLISHING_FINISHED
         }
-        3 -> SManga.CANCELLED
-        4 -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
     }
+    3 -> SManga.CANCELLED
+    4 -> SManga.ON_HIATUS
+    else -> SManga.UNKNOWN
+}
 
 internal fun parseCover(
     thumbnailUrl: String?,
@@ -55,19 +53,17 @@ internal fun beautifyChapterName(
     vol: String,
     chap: String,
     title: String,
-): String =
-    buildString {
-        if (vol.isNotEmpty()) {
-            if (chap.isEmpty()) append("Volume $vol") else append("Vol. $vol")
-        }
-        if (chap.isNotEmpty()) {
-            if (vol.isEmpty()) append("Chapter $chap") else append(", Ch. $chap")
-        }
-        if (title.isNotEmpty()) {
-            if (chap.isEmpty()) append(title) else append(": $title")
-        }
+): String = buildString {
+    if (vol.isNotEmpty()) {
+        if (chap.isEmpty()) append("Volume $vol") else append("Vol. $vol")
     }
+    if (chap.isNotEmpty()) {
+        if (vol.isEmpty()) append("Chapter $chap") else append(", Ch. $chap")
+    }
+    if (title.isNotEmpty()) {
+        if (chap.isEmpty()) append(title) else append(": $title")
+    }
+}
 
-internal fun String.parseDate(): Long =
-    runCatching { dateFormat.parse(this)?.time }
-        .getOrNull() ?: 0L
+internal fun String.parseDate(): Long = runCatching { dateFormat.parse(this)?.time }
+    .getOrNull() ?: 0L

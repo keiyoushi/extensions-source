@@ -49,17 +49,16 @@ class Dm5 :
 
     override fun popularMangaSelector(): String = "ul.mh-list > li > div.mh-item"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("h2.title > a")!!.text()
-            thumbnail_url =
-                element
-                    .selectFirst("p.mh-cover")!!
-                    .attr("style")
-                    .substringAfter("url(")
-                    .substringBefore(")")
-            url = element.selectFirst("h2.title > a")!!.attr("href")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h2.title > a")!!.text()
+        thumbnail_url =
+            element
+                .selectFirst("p.mh-cover")!!
+                .attr("style")
+                .substringAfter("url(")
+                .substringBefore(")")
+        url = element.selectFirst("h2.title > a")!!.attr("href")
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manhua-list-s2-p$page/", headers)
 
@@ -79,34 +78,32 @@ class Dm5 :
 
     override fun searchMangaSelector(): String = "ul.mh-list > li, div.banner_detail_form"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst(".title > a")!!.text()
-            thumbnail_url = element.selectFirst("img")?.attr("src")
-                ?: element
-                    .selectFirst("p.mh-cover")!!
-                    .attr("style")
-                    .substringAfter("url(")
-                    .substringBefore(")")
-            url = element.selectFirst(".title > a")!!.attr("href")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst(".title > a")!!.text()
+        thumbnail_url = element.selectFirst("img")?.attr("src")
+            ?: element
+                .selectFirst("p.mh-cover")!!
+                .attr("style")
+                .substringAfter("url(")
+                .substringBefore(")")
+        url = element.selectFirst(".title > a")!!.attr("href")
+    }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("div.banner_detail_form p.title")!!.ownText()
-            thumbnail_url = document.selectFirst("div.banner_detail_form img")!!.attr("abs:src")
-            author = document.selectFirst("div.banner_detail_form p.subtitle > a")!!.text()
-            artist = author
-            genre = document.select("div.banner_detail_form p.tip a").eachText().joinToString(", ")
-            val el = document.selectFirst("div.banner_detail_form p.content")!!
-            description = el.ownText() + el.selectFirst("span")?.ownText().orEmpty()
-            status =
-                when (document.selectFirst("div.banner_detail_form p.tip > span > span")!!.text()) {
-                    "连载中" -> SManga.ONGOING
-                    "已完结" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("div.banner_detail_form p.title")!!.ownText()
+        thumbnail_url = document.selectFirst("div.banner_detail_form img")!!.attr("abs:src")
+        author = document.selectFirst("div.banner_detail_form p.subtitle > a")!!.text()
+        artist = author
+        genre = document.select("div.banner_detail_form p.tip a").eachText().joinToString(", ")
+        val el = document.selectFirst("div.banner_detail_form p.content")!!
+        description = el.ownText() + el.selectFirst("span")?.ownText().orEmpty()
+        status =
+            when (document.selectFirst("div.banner_detail_form p.tip > span > span")!!.text()) {
+                "连载中" -> SManga.ONGOING
+                "已完结" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()

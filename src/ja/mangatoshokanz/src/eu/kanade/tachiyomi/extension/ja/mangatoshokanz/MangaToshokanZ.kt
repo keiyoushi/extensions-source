@@ -31,11 +31,10 @@ class MangaToshokanZ : HttpSource() {
             .addNetworkInterceptor(::r18Interceptor)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            // author/illustrator name might just show blank if language not set to japan
-            .add("cookie", "_LANG_=ja")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        // author/illustrator name might just show blank if language not set to japan
+        .add("cookie", "_LANG_=ja")
 
     private val keys: KeyPair by lazy {
         getKeys()
@@ -141,27 +140,26 @@ class MangaToshokanZ : HttpSource() {
 
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
-    private fun Response.toMangas(selector: String): List<SManga> =
-        asJsoup()
-            .selectFirst(selector)!!
-            .children()
-            .filter { child ->
-                child.`is`("li")
-            }.filterNot { li ->
-                // discard manga that in the middle of asking for license progress, it can't be read
-                li.selectFirst(".iconConsent") != null
-            }.map { li ->
-                SManga.create().apply {
-                    val a = li.selectFirst("h4 > a")!!
-                    url = a.attr("href").substringAfterLast("/")
-                    title = a.text()
+    private fun Response.toMangas(selector: String): List<SManga> = asJsoup()
+        .selectFirst(selector)!!
+        .children()
+        .filter { child ->
+            child.`is`("li")
+        }.filterNot { li ->
+            // discard manga that in the middle of asking for license progress, it can't be read
+            li.selectFirst(".iconConsent") != null
+        }.map { li ->
+            SManga.create().apply {
+                val a = li.selectFirst("h4 > a")!!
+                url = a.attr("href").substringAfterLast("/")
+                title = a.text()
 
-                    thumbnail_url =
-                        li.selectFirst("a > img")!!.attr("data-src").ifBlank {
-                            li.selectFirst("a > img")!!.attr("src")
-                        }
-                }
+                thumbnail_url =
+                    li.selectFirst("a > img")!!.attr("data-src").ifBlank {
+                        li.selectFirst("a > img")!!.attr("src")
+                    }
             }
+        }
 
     override fun getFilterList() = FilterList(Category(), Sort())
 
@@ -345,12 +343,11 @@ class MangaToshokanZ : HttpSource() {
         return appJsString.substringAfter("__serial = \"").substringBefore("\";")
     }
 
-    private fun virgoBuilder(): HttpUrl.Builder =
-        baseUrl
-            .toHttpUrl()
-            .newBuilder()
-            .host("vw.mangaz.com")
-            .addPathSegment("virgo")
+    private fun virgoBuilder(): HttpUrl.Builder = baseUrl
+        .toHttpUrl()
+        .newBuilder()
+        .host("vw.mangaz.com")
+        .addPathSegment("virgo")
 
     override fun pageListParse(response: Response): List<Page> {
         val decrypted = response.decryptPages(keys.private)

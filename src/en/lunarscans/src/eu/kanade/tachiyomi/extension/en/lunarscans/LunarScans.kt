@@ -43,12 +43,11 @@ class LunarScans :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isEmpty()) {
-            super.searchMangaRequest(page, query, filters)
-        } else {
-            GET("$baseUrl/?s=$query&page=$page", headers)
-        }
+    ): Request = if (query.isEmpty()) {
+        super.searchMangaRequest(page, query, filters)
+    } else {
+        GET("$baseUrl/?s=$query&page=$page", headers)
+    }
 
     override fun getFilterList(): FilterList {
         val filters =

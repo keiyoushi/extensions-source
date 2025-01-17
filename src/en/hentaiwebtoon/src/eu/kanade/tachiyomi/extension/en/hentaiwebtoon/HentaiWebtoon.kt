@@ -31,8 +31,7 @@ class HentaiWebtoon : Madara("HentaiWebtoon", "https://hentaiwebtoon.com", "en")
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
 
-    override fun pageListParse(document: Document) =
-        super.pageListParse(document).onEach {
-            it.imageUrl = it.imageUrl?.replace("http://", "https://")
-        }
+    override fun pageListParse(document: Document) = super.pageListParse(document).onEach {
+        it.imageUrl = it.imageUrl?.replace("http://", "https://")
+    }
 }

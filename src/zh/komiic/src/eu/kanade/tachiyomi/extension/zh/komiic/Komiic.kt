@@ -146,16 +146,15 @@ class Komiic : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val mangaId = query.substringAfter(PREFIX_ID_SEARCH)
-            client
-                .newCall(comicByIDRequest(mangaId))
-                .asObservableSuccess()
-                .map(::parseComicByID)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val mangaId = query.substringAfter(PREFIX_ID_SEARCH)
+        client
+            .newCall(comicByIDRequest(mangaId))
+            .asObservableSuccess()
+            .map(::parseComicByID)
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val res = response.parseAs<Data<SearchResponse>>()
@@ -185,13 +184,12 @@ class Komiic : HttpSource() {
      * 解析日期
      * Parse date
      */
-    private fun parseDate(dateStr: String): Long =
-        try {
-            DATE_FORMAT.parse(dateStr)?.time ?: 0L
-        } catch (e: ParseException) {
-            e.printStackTrace()
-            0L
-        }
+    private fun parseDate(dateStr: String): Long = try {
+        DATE_FORMAT.parse(dateStr)?.time ?: 0L
+    } catch (e: ParseException) {
+        e.printStackTrace()
+        0L
+    }
 
     // Chapter list
     override fun chapterListRequest(manga: SManga): Request {
@@ -275,13 +273,12 @@ class Komiic : HttpSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request =
-        super
-            .imageRequest(page)
-            .newBuilder()
-            .addHeader("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'")
-            .addHeader("referer", page.url)
-            .build()
+    override fun imageRequest(page: Page): Request = super
+        .imageRequest(page)
+        .newBuilder()
+        .addHeader("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'")
+        .addHeader("referer", page.url)
+        .build()
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
@@ -289,10 +286,9 @@ class Komiic : HttpSource() {
 
     private inline fun <reified T> Response.parseAs(): T = use { body.string() }.parseAs()
 
-    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-        json
-            .encodeToString(this)
-            .toRequestBody(JSON_MEDIA_TYPE)
+    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody = json
+        .encodeToString(this)
+        .toRequestBody(JSON_MEDIA_TYPE)
 
     companion object {
         private const val PAGE_SIZE = 20

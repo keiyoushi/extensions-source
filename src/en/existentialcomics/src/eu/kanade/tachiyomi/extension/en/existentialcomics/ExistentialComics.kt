@@ -56,14 +56,13 @@ class ExistentialComics : ParsedHttpSource() {
         return chapter
     }
 
-    override fun pageListParse(document: Document) =
-        document.select(".comicImg").mapIndexed { i, element ->
-            Page(
-                i,
-                "",
-                "https:" + element.attr("src").substring(1),
-            )
-        }
+    override fun pageListParse(document: Document) = document.select(".comicImg").mapIndexed { i, element ->
+        Page(
+            i,
+            "",
+            "https:" + element.attr("src").substring(1),
+        )
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 

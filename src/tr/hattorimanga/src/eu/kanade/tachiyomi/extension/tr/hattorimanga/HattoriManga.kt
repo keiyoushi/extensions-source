@@ -129,11 +129,10 @@ class HattoriManga : HttpSource() {
         slug: String,
         page: Int,
         manga: SManga,
-    ): HMChapterDto =
-        client
-            .newCall(GET("$baseUrl/load-more-chapters/$slug?page=$page", headers))
-            .execute()
-            .parseAs<HMChapterDto>()
+    ): HMChapterDto = client
+        .newCall(GET("$baseUrl/load-more-chapters/$slug?page=$page", headers))
+        .execute()
+        .parseAs<HMChapterDto>()
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest-chapters")
 
@@ -156,30 +155,28 @@ class HattoriManga : HttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response
-            .asJsoup()
-            .select(".image-wrapper img")
-            .mapIndexed { index, element ->
-                Page(index, imageUrl = "$baseUrl${element.attr("data-src")}")
-            }.takeIf { it.isNotEmpty() } ?: throw Exception("Oturum açmanız, WebView'ı açmanız ve oturum açmanız gerekir")
+    override fun pageListParse(response: Response): List<Page> = response
+        .asJsoup()
+        .select(".image-wrapper img")
+        .mapIndexed { index, element ->
+            Page(index, imageUrl = "$baseUrl${element.attr("data-src")}")
+        }.takeIf { it.isNotEmpty() } ?: throw Exception("Oturum açmanız, WebView'ı açmanız ve oturum açmanız gerekir")
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        response.use {
-            val mangas =
-                it
-                    .parseAs<HMLatestUpdateDto>()
-                    .chapters
-                    .map {
-                        SManga.create().apply {
-                            val manga = it.manga
-                            title = manga.title
-                            thumbnail_url = "$baseUrl/storage/${manga.thumbnail}"
-                            url = "/manga/${manga.slug}"
-                        }
-                    }.distinctBy { manga -> manga.title }
-            MangasPage(mangas, false)
-        }
+    override fun latestUpdatesParse(response: Response): MangasPage = response.use {
+        val mangas =
+            it
+                .parseAs<HMLatestUpdateDto>()
+                .chapters
+                .map {
+                    SManga.create().apply {
+                        val manga = it.manga
+                        title = manga.title
+                        thumbnail_url = "$baseUrl/storage/${manga.thumbnail}"
+                        url = "/manga/${manga.slug}"
+                    }
+                }.distinctBy { manga -> manga.title }
+        MangasPage(mangas, false)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -284,30 +281,27 @@ class HattoriManga : HttpSource() {
 
     override fun imageUrlParse(response: Response) = ""
 
-    private fun mangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst("h5")!!.text()
-            thumbnail_url = element.selectFirst(".img-con")?.absUrl("data-setbg")
-            genre = element.select(".product-card-con ul li").joinToString { it.text() }
-            val script = element.attr("onclick")
-            setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups["url"]!!.value)
-        }
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h5")!!.text()
+        thumbnail_url = element.selectFirst(".img-con")?.absUrl("data-setbg")
+        genre = element.select(".product-card-con ul li").joinToString { it.text() }
+        val script = element.attr("onclick")
+        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups["url"]!!.value)
+    }
 
-    private fun parseGenres(document: Document): List<Genre> =
-        document
-            .select(".tags-blog a")
-            .map { element -> Genre(element.text()) }
+    private fun parseGenres(document: Document): List<Genre> = document
+        .select(".tags-blog a")
+        .map { element -> Genre(element.text()) }
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     private fun Response.isPageExpired() = code == 419
 
-    private fun String.toDate(): Long =
-        try {
-            dateFormat.parse(trim())!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String.toDate(): Long = try {
+        dateFormat.parse(trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     class GenreList(
         title: String,

@@ -32,13 +32,12 @@ class ComicFx : ParsedHttpSource() {
     override val lang = "id"
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36",
-            )
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36",
+        )
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/filterList?page=$page&sortBy=name&asc=true", headers)
@@ -143,42 +142,40 @@ class ComicFx : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Details
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            author = document.select("#author").text()
-            artist = document.select(".infolengkap span:contains(Artist) a, #artist").text()
-            status = parseStatus(document.select(".infolengkap span:contains(status) i").text())
-            description = document.select("div.sinopsis p").text()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        author = document.select("#author").text()
+        artist = document.select(".infolengkap span:contains(Artist) a, #artist").text()
+        status = parseStatus(document.select(".infolengkap span:contains(status) i").text())
+        description = document.select("div.sinopsis p").text()
 
-            // Add series type (manga/manhwa/manhua/other) to genre
-            val genres = document.select(".genre-komik a").map { it.text() }.toMutableList()
-            document
-                .selectFirst(".infokomik .type")
-                ?.ownText()
-                .takeIf { it.isNullOrBlank().not() }
-                ?.let { genres.add(it) }
-            genre =
-                genres
-                    .map { genre ->
-                        genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
-                            if (char.isLowerCase()) {
-                                char.titlecase(Locale.forLanguageTag(lang))
-                            } else {
-                                char.toString()
-                            }
+        // Add series type (manga/manhwa/manhua/other) to genre
+        val genres = document.select(".genre-komik a").map { it.text() }.toMutableList()
+        document
+            .selectFirst(".infokomik .type")
+            ?.ownText()
+            .takeIf { it.isNullOrBlank().not() }
+            ?.let { genres.add(it) }
+        genre =
+            genres
+                .map { genre ->
+                    genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
+                        if (char.isLowerCase()) {
+                            char.titlecase(Locale.forLanguageTag(lang))
+                        } else {
+                            char.toString()
                         }
-                    }.joinToString { it.trim() }
+                    }
+                }.joinToString { it.trim() }
 
-            thumbnail_url = document.select(".thumb img").attr("abs:src")
-        }
+        thumbnail_url = document.select(".thumb img").attr("abs:src")
+    }
 
-    private fun parseStatus(element: String?): Int =
-        when {
-            element == null -> SManga.UNKNOWN
-            listOf("ongoing", "publishing").any { it.contains(element, ignoreCase = true) } -> SManga.ONGOING
-            listOf("completed").any { it.contains(element, ignoreCase = true) } -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(element: String?): Int = when {
+        element == null -> SManga.UNKNOWN
+        listOf("ongoing", "publishing").any { it.contains(element, ignoreCase = true) } -> SManga.ONGOING
+        listOf("completed").any { it.contains(element, ignoreCase = true) } -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
     override fun chapterListSelector() = "div.chaplist li .pull-left a"
@@ -198,25 +195,23 @@ class ComicFx : ParsedHttpSource() {
         return chapters
     }
 
-    private fun parseDate(date: String): Long =
-        when (date) {
-            "hari ini" -> System.currentTimeMillis()
-            "kemarin" -> System.currentTimeMillis() - (1000 * 60 * 60 * 24) // yesterday
-            else -> {
-                try {
-                    SimpleDateFormat("dd-mm-yyyy", Locale.ENGLISH).parse(date)?.time ?: 0L
-                } catch (_: ParseException) {
-                    0L
-                }
+    private fun parseDate(date: String): Long = when (date) {
+        "hari ini" -> System.currentTimeMillis()
+        "kemarin" -> System.currentTimeMillis() - (1000 * 60 * 60 * 24) // yesterday
+        else -> {
+            try {
+                SimpleDateFormat("dd-mm-yyyy", Locale.ENGLISH).parse(date)?.time ?: 0L
+            } catch (_: ParseException) {
+                0L
             }
         }
+    }
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.selectFirst("span.chapternum")!!.text()
-            date_upload = parseDate(element.selectFirst("span.chapterdate")!!.text())
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.selectFirst("span.chapternum")!!.text()
+        date_upload = parseDate(element.selectFirst("span.chapterdate")!!.text())
+    }
 
     // Pages
     override fun imageUrlParse(document: Document) = ""
@@ -230,19 +225,18 @@ class ComicFx : ParsedHttpSource() {
     }
 
     // filters
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(sortList),
-            GenreFilter(),
-            StatusFilter(),
-            TypeFilter(),
-            ArtistFilter("Artist"),
-            AuthorFilter("Author"),
-            Filter.Separator(),
-            Filter.Header("NOTE: Can't be used with other filter!"),
-            Filter.Header("$name Project List page"),
-            ProjectFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        SortFilter(sortList),
+        GenreFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        ArtistFilter("Artist"),
+        AuthorFilter("Author"),
+        Filter.Separator(),
+        Filter.Header("NOTE: Can't be used with other filter!"),
+        Filter.Header("$name Project List page"),
+        ProjectFilter(),
+    )
 
     private class ArtistFilter(
         name: String,

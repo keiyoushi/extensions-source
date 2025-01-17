@@ -87,10 +87,9 @@ abstract class GalleryAdults(
         val lang: String,
     )
 
-    protected open fun Element.mangaTitle(selector: String = ".caption"): String? =
-        mangaFullTitle(selector).let {
-            if (preferences.shortTitle) it?.shortenTitle() else it
-        }
+    protected open fun Element.mangaTitle(selector: String = ".caption"): String? = mangaFullTitle(selector).let {
+        if (preferences.shortTitle) it?.shortenTitle() else it
+    }
 
     protected open fun Element.mangaFullTitle(selector: String) = selectFirst(selector)?.text()
 
@@ -128,12 +127,11 @@ abstract class GalleryAdults(
 
     override fun popularMangaSelector() = "div.thumb"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.mangaTitle()!!
-            setUrlWithoutDomain(element.mangaUrl()!!)
-            thumbnail_url = element.mangaThumbnail()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.mangaTitle()!!
+        setUrlWithoutDomain(element.mangaUrl()!!)
+        thumbnail_url = element.mangaThumbnail()
+    }
 
     override fun popularMangaNextPageSelector() = ".pagination li.active + li:not(.disabled)"
 
@@ -425,14 +423,13 @@ abstract class GalleryAdults(
     protected open fun buildQueryString(
         tags: List<String>,
         query: String,
-    ): String =
-        (tags + query).filterNot { it.isBlank() }.joinToString(",") {
-            // any space except after a comma (we're going to replace spaces only between words)
-            it
-                .trim()
-                .replace(regexSpaceNotAfterComma, "+")
-                .replace(" ", "")
-        }
+    ): String = (tags + query).filterNot { it.isBlank() }.joinToString(",") {
+        // any space except after a comma (we're going to replace spaces only between words)
+        it
+            .trim()
+            .replace(regexSpaceNotAfterComma, "+")
+            .replace(" ", "")
+    }
 
     protected open fun tagBrowsingSearchRequest(
         page: Int,
@@ -501,11 +498,10 @@ abstract class GalleryAdults(
     protected open fun loginRequired(
         document: Document,
         url: String,
-    ): Boolean =
-        (
-            url.contains("/login/") &&
-                document.select("input[value=Login]").isNotEmpty()
-        )
+    ): Boolean = (
+        url.contains("/login/") &&
+            document.select("input[value=Login]").isNotEmpty()
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -548,18 +544,17 @@ abstract class GalleryAdults(
     // Details
     protected open val mangaDetailInfoSelector = ".gallery_top"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        document.selectFirst(mangaDetailInfoSelector)!!.run {
-            SManga.create().apply {
-                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                status = SManga.COMPLETED
-                title = mangaTitle("h1")!!
-                thumbnail_url = getCover()
-                genre = getInfo("Tags")
-                author = getInfo("Artists")
-                description = getDescription(document)
-            }
+    override fun mangaDetailsParse(document: Document): SManga = document.selectFirst(mangaDetailInfoSelector)!!.run {
+        SManga.create().apply {
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.COMPLETED
+            title = mangaTitle("h1")!!
+            thumbnail_url = getCover()
+            genre = getInfo("Tags")
+            author = getInfo("Artists")
+            description = getDescription(document)
         }
+    }
 
     protected open fun Element.getCover() = selectFirst(".cover img")?.imgAttr()
 
@@ -570,39 +565,35 @@ abstract class GalleryAdults(
      */
     protected abstract fun Element.getInfo(tag: String): String
 
-    protected open fun Element.getDescription(document: Document? = null): String =
-        (
-            listOf("Parodies", "Characters", "Languages", "Categories", "Category")
-                .mapNotNull { tag ->
-                    getInfo(tag)
-                        .takeIf { it.isNotBlank() }
-                        ?.let { "$tag: $it" }
-                } +
-                listOfNotNull(
-                    getInfoPages(document),
-                    getInfoAlternativeTitle(),
-                    getInfoFullTitle(),
-                )
-        ).joinToString("\n\n")
+    protected open fun Element.getDescription(document: Document? = null): String = (
+        listOf("Parodies", "Characters", "Languages", "Categories", "Category")
+            .mapNotNull { tag ->
+                getInfo(tag)
+                    .takeIf { it.isNotBlank() }
+                    ?.let { "$tag: $it" }
+            } +
+            listOfNotNull(
+                getInfoPages(document),
+                getInfoAlternativeTitle(),
+                getInfoFullTitle(),
+            )
+    ).joinToString("\n\n")
 
-    protected open fun Element.getInfoPages(document: Document? = null): String? =
-        document
-            ?.inputIdValueOf(totalPagesSelector)
-            ?.takeIf { it.isNotBlank() }
-            ?.let { "Pages: $it" }
+    protected open fun Element.getInfoPages(document: Document? = null): String? = document
+        ?.inputIdValueOf(totalPagesSelector)
+        ?.takeIf { it.isNotBlank() }
+        ?.let { "Pages: $it" }
 
-    protected open fun Element.getInfoAlternativeTitle(): String? =
-        selectFirst("h1 + h2, .subtitle")
-            ?.ownText()
-            .takeIf { !it.isNullOrBlank() }
-            ?.let { "Alternative title: $it" }
+    protected open fun Element.getInfoAlternativeTitle(): String? = selectFirst("h1 + h2, .subtitle")
+        ?.ownText()
+        .takeIf { !it.isNullOrBlank() }
+        ?.let { "Alternative title: $it" }
 
     protected open fun Element.getInfoFullTitle(): String? = if (preferences.shortTitle) "Full title: ${mangaFullTitle("h1")}" else null
 
-    protected open fun Element.getTime(): Long =
-        selectFirst(".uploaded")
-            ?.ownText()
-            .toDate(simpleDateFormat)
+    protected open fun Element.getTime(): Long = selectFirst(".uploaded")
+        ?.ownText()
+        .toDate(simpleDateFormat)
 
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -667,16 +658,14 @@ abstract class GalleryAdults(
             ?: getCover()!!.toHttpUrl().host
     }
 
-    protected open fun Element.serverNumber(): String? =
-        inputIdValueOf(serverSelector)
-            .takeIf { it.isNotBlank() }
+    protected open fun Element.serverNumber(): String? = inputIdValueOf(serverSelector)
+        .takeIf { it.isNotBlank() }
 
-    protected open fun Element.parseJson(): String? =
-        selectFirst("script:containsData(parseJSON)")
-            ?.data()
-            ?.substringAfter("$.parseJSON('")
-            ?.substringBefore("');")
-            ?.trim()
+    protected open fun Element.parseJson(): String? = selectFirst("script:containsData(parseJSON)")
+        ?.data()
+        ?.substringAfter("$.parseJSON('")
+        ?.substringBefore("');")
+        ?.trim()
 
     /**
      * Page URL: $baseUrl/$pageUri/<id>/<page>
@@ -868,18 +857,17 @@ abstract class GalleryAdults(
     /**
      * Parsing [document] to return a list of tags in <name, uri> pairs.
      */
-    protected open fun tagsParser(document: Document): List<Genre> =
-        document
-            .select("a.tag_btn")
-            .mapNotNull {
-                Genre(
-                    it.select(".list_tag, .tag_name").text(),
-                    it
-                        .attr("href")
-                        .removeSuffix("/")
-                        .substringAfterLast('/'),
-                )
-            }
+    protected open fun tagsParser(document: Document): List<Genre> = document
+        .select("a.tag_btn")
+        .mapNotNull {
+            Genre(
+                it.select(".list_tag, .tag_name").text(),
+                it
+                    .attr("href")
+                    .removeSuffix("/")
+                    .substringAfterLast('/'),
+            )
+        }
 
     protected open fun requestTags() {
         if (!tagsFetched && tagsFetchAttempt < 3) {
@@ -969,40 +957,37 @@ abstract class GalleryAdults(
         return FilterList(filters)
     }
 
-    protected open fun getSortOrderURIs() =
-        listOf(
-            Pair("Popular", "pp"),
-            Pair("Latest", "lt"),
-        ) +
-            if (useIntermediateSearch || supportAdvancedSearch) {
-                listOf(
-                    Pair("Downloads", "dl"),
-                    Pair("Top Rated", "tr"),
-                )
-            } else {
-                emptyList()
-            }
+    protected open fun getSortOrderURIs() = listOf(
+        Pair("Popular", "pp"),
+        Pair("Latest", "lt"),
+    ) +
+        if (useIntermediateSearch || supportAdvancedSearch) {
+            listOf(
+                Pair("Downloads", "dl"),
+                Pair("Top Rated", "tr"),
+            )
+        } else {
+            emptyList()
+        }
 
-    protected open fun getCategoryURIs() =
-        listOf(
-            SearchFlagFilter("Manga", "m"),
-            SearchFlagFilter("Doujinshi", "d"),
-            SearchFlagFilter("Western", "w"),
-            SearchFlagFilter("Image Set", "i"),
-            SearchFlagFilter("Artist CG", "a"),
-            SearchFlagFilter("Game CG", "g"),
-        )
+    protected open fun getCategoryURIs() = listOf(
+        SearchFlagFilter("Manga", "m"),
+        SearchFlagFilter("Doujinshi", "d"),
+        SearchFlagFilter("Western", "w"),
+        SearchFlagFilter("Image Set", "i"),
+        SearchFlagFilter("Artist CG", "a"),
+        SearchFlagFilter("Game CG", "g"),
+    )
 
-    protected open fun getLanguageURIs() =
-        listOf(
-            Pair(LANGUAGE_ENGLISH, "en"),
-            Pair(LANGUAGE_JAPANESE, "jp"),
-            Pair(LANGUAGE_SPANISH, "es"),
-            Pair(LANGUAGE_FRENCH, "fr"),
-            Pair(LANGUAGE_KOREAN, "kr"),
-            Pair(LANGUAGE_GERMAN, "de"),
-            Pair(LANGUAGE_RUSSIAN, "ru"),
-        )
+    protected open fun getLanguageURIs() = listOf(
+        Pair(LANGUAGE_ENGLISH, "en"),
+        Pair(LANGUAGE_JAPANESE, "jp"),
+        Pair(LANGUAGE_SPANISH, "es"),
+        Pair(LANGUAGE_FRENCH, "fr"),
+        Pair(LANGUAGE_KOREAN, "kr"),
+        Pair(LANGUAGE_GERMAN, "de"),
+        Pair(LANGUAGE_RUSSIAN, "ru"),
+    )
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"

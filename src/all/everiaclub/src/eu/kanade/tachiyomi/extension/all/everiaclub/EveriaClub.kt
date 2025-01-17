@@ -19,10 +19,9 @@ class EveriaClub : ParsedHttpSource() {
     override val name = "Everia.club"
     override val supportsLatest = true
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val Element.imgSrc: String
         get() =
@@ -124,13 +123,12 @@ class EveriaClub : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("NOTE: Only one filter will be applied!"),
-            Filter.Separator(),
-            CategoryFilter(),
-            TagFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Only one filter will be applied!"),
+        Filter.Separator(),
+        CategoryFilter(),
+        TagFilter(),
+    )
 
     open class UriPartFilter(
         displayName: String,

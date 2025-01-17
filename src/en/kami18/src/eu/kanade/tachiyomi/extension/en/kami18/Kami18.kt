@@ -29,10 +29,9 @@ class Kami18 : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super.headersBuilder().apply {
-            add("Referer", "$baseUrl/")
-        }
+    override fun headersBuilder() = super.headersBuilder().apply {
+        add("Referer", "$baseUrl/")
+    }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/albums?o=mv&page=$page", headers)
 
@@ -45,15 +44,14 @@ class Kami18 : HttpSource() {
         return MangasPage(entries.map(::popularMangaFromElement), hasNextPage)
     }
 
-    private fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a:has(button)")!!.absUrl("href"))
-            title = element.selectFirst("img")!!.attr("title")
-            thumbnail_url =
-                element.selectFirst("img")?.let { img ->
-                    img.absUrl("src").takeIf { !it.contains("blank") } ?: img.absUrl("data-original")
-                }
-        }
+    private fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a:has(button)")!!.absUrl("href"))
+        title = element.selectFirst("img")!!.attr("title")
+        thumbnail_url =
+            element.selectFirst("img")?.let { img ->
+                img.absUrl("src").takeIf { !it.contains("blank") } ?: img.absUrl("data-original")
+            }
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/albums?o=mr&page=$page", headers)
 
@@ -117,20 +115,19 @@ class Kami18 : HttpSource() {
 
     override fun getFilterList() = getFilters()
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup()
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
 
-            description =
-                buildString {
-                    val desc = document.selectFirst("div[class*=p-t-5]:contains(description：)")?.ownText()?.substringAfter("：") ?: ""
-                    append(desc)
-                    append("\n\n", document.select("div[class\$=p-b-5]:contains(Pages)").text())
-                }
-            status = SManga.UNKNOWN
-            author = document.select("div[class*=p-t-5]:contains(Author) > div").eachText().joinToString()
-            genre = document.select("div[class*=p-t-5]:contains(Tags) > div:not(:contains(add))").eachText().joinToString()
-        }
+        description =
+            buildString {
+                val desc = document.selectFirst("div[class*=p-t-5]:contains(description：)")?.ownText()?.substringAfter("：") ?: ""
+                append(desc)
+                append("\n\n", document.select("div[class\$=p-b-5]:contains(Pages)").text())
+            }
+        status = SManga.UNKNOWN
+        author = document.select("div[class*=p-t-5]:contains(Author) > div").eachText().joinToString()
+        genre = document.select("div[class*=p-t-5]:contains(Tags) > div:not(:contains(add))").eachText().joinToString()
+    }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 

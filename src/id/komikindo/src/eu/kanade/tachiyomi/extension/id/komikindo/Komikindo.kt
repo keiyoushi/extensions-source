@@ -29,17 +29,16 @@ class Komikindo :
                 chain.proceed(request)
             }.build()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            thumbnail_url =
-                thumbnail_url
-                    ?.toHttpUrlOrNull()
-                    ?.takeIf { it.queryParameter("resize") == null }
-                    ?.newBuilder()
-                    ?.setEncodedQueryParameter("resize", "165,225")
-                    ?.build()
-                    ?.toString()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        thumbnail_url =
+            thumbnail_url
+                ?.toHttpUrlOrNull()
+                ?.takeIf { it.queryParameter("resize") == null }
+                ?.newBuilder()
+                ?.setEncodedQueryParameter("resize", "165,225")
+                ?.build()
+                ?.toString()
+    }
 
     override val hasProjectPage = true
 }

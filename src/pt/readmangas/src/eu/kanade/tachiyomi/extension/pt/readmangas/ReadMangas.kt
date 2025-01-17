@@ -270,15 +270,14 @@ class ReadMangas : HttpSource() {
         throw Exception("Não foi possivel obter os capitulos da página: $page")
     }
 
-    private fun chapterListParse(chapters: List<ChapterDto>): List<SChapter> =
-        chapters.map {
-            SChapter.create().apply {
-                name = it.title
-                chapter_number = it.number.toFloat()
-                date_upload = it.createdAt.toDate()
-                url = "/readme/${it.id}"
-            }
+    private fun chapterListParse(chapters: List<ChapterDto>): List<SChapter> = chapters.map {
+        SChapter.create().apply {
+            name = it.title
+            chapter_number = it.number.toFloat()
+            date_upload = it.createdAt.toDate()
+            url = "/readme/${it.id}"
         }
+    }
 
     // =========================== Pages ===================================
 
@@ -318,19 +317,17 @@ class ReadMangas : HttpSource() {
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private fun String.toDate() =
-        try {
-            dateFormat.parse(this)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String.toDate() = try {
+        dateFormat.parse(this)!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
-    private fun String.toStatus() =
-        when (lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "hiatus" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toStatus() = when (lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "hiatus" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     @SuppressLint("SimpleDateFormat")
     companion object {

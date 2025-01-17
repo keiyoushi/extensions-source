@@ -117,10 +117,9 @@ class KadoComi : HttpSource() {
         }
     }
 
-    private fun getGenres(work: KadoComiWork): String =
-        listOfNotNull(work.genre?.name, work.subGenre?.name)
-            .plus(work.tags.orEmpty().map { it.name })
-            .joinToString()
+    private fun getGenres(work: KadoComiWork): String = listOfNotNull(work.genre?.name, work.subGenre?.name)
+        .plus(work.tags.orEmpty().map { it.name })
+        .joinToString()
 
     // ============================== Chapters ===============================
 
@@ -260,32 +259,29 @@ class KadoComi : HttpSource() {
     private fun descrambleImage(
         imageByteArray: ByteArray,
         hashByteArray: ByteArray,
-    ): ByteArray =
-        imageByteArray
-            .mapIndexed { idx, byte ->
-                byte xor hashByteArray[idx % hashByteArray.size]
-            }.toByteArray()
+    ): ByteArray = imageByteArray
+        .mapIndexed { idx, byte ->
+            byte xor hashByteArray[idx % hashByteArray.size]
+        }.toByteArray()
 
-    private fun searchResultsParse(results: KadoComiSearchResultsDto): List<SManga> =
-        results.result.map {
-            SManga.create().apply {
-                url = "/detail/${it.code}"
-                title = it.title
-                thumbnail_url = getThumbnailUrl(it)
-            }
+    private fun searchResultsParse(results: KadoComiSearchResultsDto): List<SManga> = results.result.map {
+        SManga.create().apply {
+            url = "/detail/${it.code}"
+            title = it.title
+            thumbnail_url = getThumbnailUrl(it)
         }
+    }
 
     companion object {
         // inactive chapter icon
         private const val LOCK = "🔒 "
 
         // date formatting
-        private fun parseDate(dateStr: String): Long =
-            try {
-                dateFormat.parse(dateStr)!!.time
-            } catch (_: ParseException) {
-                0L
-            }
+        private fun parseDate(dateStr: String): Long = try {
+            dateFormat.parse(dateStr)!!.time
+        } catch (_: ParseException) {
+            0L
+        }
 
         private val dateFormat by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)

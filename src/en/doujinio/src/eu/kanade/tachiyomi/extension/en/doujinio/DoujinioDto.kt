@@ -22,17 +22,16 @@ class Manga(
     @SerialName("creator_name")
     private val artist: String,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            url = "/manga/$id"
-            title = this@Manga.title
-            description = this@Manga.description
-            thumbnail_url = this@Manga.thumb
-            artist = this@Manga.artist
-            genre = this@Manga.tags.joinToString(", ") { it.name }
-            status = SManga.COMPLETED
-            initialized = true
-        }
+    fun toSManga() = SManga.create().apply {
+        url = "/manga/$id"
+        title = this@Manga.title
+        description = this@Manga.description
+        thumbnail_url = this@Manga.thumb
+        artist = this@Manga.artist
+        genre = this@Manga.tags.joinToString(", ") { it.name }
+        status = SManga.COMPLETED
+        initialized = true
+    }
 }
 
 @Serializable
@@ -54,13 +53,12 @@ class Chapter(
     @SerialName("published_at")
     private val publishedAt: String,
 ) {
-    fun toSChapter() =
-        SChapter.create().apply {
-            url = "manga/$mangaId/chapter/$id"
-            name = this@Chapter.name
-            chapter_number = (order + 1).toFloat()
-            date_upload = parseDate(publishedAt)
-        }
+    fun toSChapter() = SChapter.create().apply {
+        url = "manga/$mangaId/chapter/$id"
+        name = this@Chapter.name
+        chapter_number = (order + 1).toFloat()
+        date_upload = parseDate(publishedAt)
+    }
 }
 
 @Serializable
@@ -79,14 +77,13 @@ class ChapterManifest(
     @SerialName("readingOrder")
     private val pages: List<ChapterPage>,
 ) {
-    fun toPageList() =
-        pages.mapIndexed { i, page ->
-            Page(
-                index = i,
-                url = metadata.identifier,
-                imageUrl = page.href,
-            )
-        }
+    fun toPageList() = pages.mapIndexed { i, page ->
+        Page(
+            index = i,
+            url = metadata.identifier,
+            imageUrl = page.href,
+        )
+    }
 }
 
 @Serializable

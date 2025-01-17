@@ -39,13 +39,12 @@ class MangaDto(
         @SerialName("stt_nome")
         val value: String?,
     ) {
-        fun toStatus(): Int =
-            when (value?.lowercase()) {
-                "em andamento" -> SManga.ONGOING
-                "completo" -> SManga.COMPLETED
-                "hiato" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
+        fun toStatus(): Int = when (value?.lowercase()) {
+            "em andamento" -> SManga.ONGOING
+            "completo" -> SManga.COMPLETED
+            "hiato" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
     }
 }
 

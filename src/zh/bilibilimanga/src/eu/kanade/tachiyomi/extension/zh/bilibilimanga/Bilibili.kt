@@ -60,12 +60,11 @@ abstract class Bilibili(
             .rateLimitHost(COVER_CDN_URL.toHttpUrl(), 2)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Accept", ACCEPT_JSON)
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Accept", ACCEPT_JSON)
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     protected open val intl by lazy { BilibiliIntl(lang) }
 
@@ -87,27 +86,25 @@ abstract class Bilibili(
 
     protected open val signedIn: Boolean = false
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(
-            page = page,
-            query = "",
-            filters =
-                FilterList(
-                    SortFilter("", getAllSortOptions(), defaultPopularSort),
-                ),
-        )
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page = page,
+        query = "",
+        filters =
+            FilterList(
+                SortFilter("", getAllSortOptions(), defaultPopularSort),
+            ),
+    )
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(
-            page = page,
-            query = "",
-            filters =
-                FilterList(
-                    SortFilter("", getAllSortOptions(), defaultLatestSort),
-                ),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page = page,
+        query = "",
+        filters =
+            FilterList(
+                SortFilter("", getAllSortOptions(), defaultLatestSort),
+            ),
+    )
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -201,14 +198,13 @@ abstract class Bilibili(
         return MangasPage(comicList, hasNextPage)
     }
 
-    private fun searchMangaFromObject(comic: BilibiliComicDto): SManga =
-        SManga.create().apply {
-            title = Jsoup.parse(comic.title).text()
-            thumbnail_url = comic.verticalCover + THUMBNAIL_RESOLUTION
+    private fun searchMangaFromObject(comic: BilibiliComicDto): SManga = SManga.create().apply {
+        title = Jsoup.parse(comic.title).text()
+        thumbnail_url = comic.verticalCover + THUMBNAIL_RESOLUTION
 
-            val comicId = if (comic.id == 0) comic.seasonId else comic.id
-            url = "/detail/mc$comicId"
-        }
+        val comicId = if (comic.id == 0) comic.seasonId else comic.id
+        url = "/detail/mc$comicId"
+    }
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
@@ -233,35 +229,34 @@ abstract class Bilibili(
         return POST(apiUrl, newHeaders, requestBody)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        SManga.create().apply {
-            val comic = response.parseAs<BilibiliComicDto>().data!!
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val comic = response.parseAs<BilibiliComicDto>().data!!
 
-            title = comic.title
-            author = comic.authorName.joinToString()
-            genre = comic.styles.joinToString()
-            status =
-                when {
-                    comic.isFinish == 1 -> SManga.COMPLETED
-                    comic.isOnHiatus -> SManga.ON_HIATUS
-                    else -> SManga.ONGOING
+        title = comic.title
+        author = comic.authorName.joinToString()
+        genre = comic.styles.joinToString()
+        status =
+            when {
+                comic.isFinish == 1 -> SManga.COMPLETED
+                comic.isOnHiatus -> SManga.ON_HIATUS
+                else -> SManga.ONGOING
+            }
+        description =
+            buildString {
+                if (comic.hasPaidChapters && !signedIn) {
+                    append("${intl.hasPaidChaptersWarning(comic.paidChaptersCount)}\n\n")
                 }
-            description =
-                buildString {
-                    if (comic.hasPaidChapters && !signedIn) {
-                        append("${intl.hasPaidChaptersWarning(comic.paidChaptersCount)}\n\n")
-                    }
 
-                    append(comic.classicLines)
+                append(comic.classicLines)
 
-                    if (comic.updateWeekdays.isNotEmpty() && status == SManga.ONGOING) {
-                        append("\n\n${intl.informationTitle}:")
-                        append("\n• ${intl.getUpdateDays(comic.updateWeekdays)}")
-                    }
+                if (comic.updateWeekdays.isNotEmpty() && status == SManga.ONGOING) {
+                    append("\n\n${intl.informationTitle}:")
+                    append("\n• ${intl.getUpdateDays(comic.updateWeekdays)}")
                 }
-            thumbnail_url = comic.verticalCover
-            url = "/detail/mc" + comic.id
-        }
+            }
+        thumbnail_url = comic.verticalCover
+        url = "/detail/mc" + comic.id
+    }
 
     // Chapters are available in the same url of the manga details.
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
@@ -280,23 +275,22 @@ abstract class Bilibili(
         episode: BilibiliEpisodeDto,
         comicId: Int,
         isUnlocked: Boolean = false,
-    ): SChapter =
-        SChapter.create().apply {
-            name =
-                buildString {
-                    if (episode.isPaid && !isUnlocked) {
-                        append("$EMOJI_LOCKED ")
-                    }
-
-                    append(episode.shortTitle)
-
-                    if (episode.title.isNotBlank()) {
-                        append(" - ${episode.title}")
-                    }
+    ): SChapter = SChapter.create().apply {
+        name =
+            buildString {
+                if (episode.isPaid && !isUnlocked) {
+                    append("$EMOJI_LOCKED ")
                 }
-            date_upload = episode.publicationTime.toDate()
-            url = "/mc$comicId/${episode.id}"
-        }
+
+                append(episode.shortTitle)
+
+                if (episode.title.isNotBlank()) {
+                    append(" - ${episode.title}")
+                }
+            }
+        date_upload = episode.publicationTime.toDate()
+        url = "/mc$comicId/${episode.id}"
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
@@ -400,11 +394,10 @@ abstract class Bilibili(
 
     protected open fun getAllAreas(): Array<BilibiliTag> = emptyArray()
 
-    protected open fun getAllSortOptions(): Array<BilibiliTag> =
-        arrayOf(
-            BilibiliTag(intl.sortInterest, 0),
-            BilibiliTag(intl.sortUpdated, 4),
-        )
+    protected open fun getAllSortOptions(): Array<BilibiliTag> = arrayOf(
+        BilibiliTag(intl.sortInterest, 0),
+        BilibiliTag(intl.sortUpdated, 4),
+    )
 
     protected open fun getAllStatus(): Array<String> = arrayOf(intl.statusAll, intl.statusOngoing, intl.statusComplete)
 
@@ -426,13 +419,12 @@ abstract class Bilibili(
         return FilterList(filters)
     }
 
-    override fun imageRequest(page: Page): Request =
-        super
-            .imageRequest(page)
-            .newBuilder()
-            .tag(TAG_IMAGE_REQUEST)
-            .tag(TagImagePath::class.java, TagImagePath(page.url))
-            .build()
+    override fun imageRequest(page: Page): Request = super
+        .imageRequest(page)
+        .newBuilder()
+        .tag(TAG_IMAGE_REQUEST)
+        .tag(TagImagePath::class.java, TagImagePath(page.url))
+        .build()
 
     private fun decryptImageIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -514,25 +506,22 @@ abstract class Bilibili(
 
     private inline fun <reified R> List<*>.firstInstanceOrNull(): R? = firstOrNull { it is R } as? R
 
-    protected open fun HttpUrl.Builder.addCommonParameters(): HttpUrl.Builder =
-        apply {
-            if (name == "BILIBILI COMICS") {
-                addQueryParameter("lang", apiLang)
-                addQueryParameter("sys_lang", apiLang)
-            }
-
-            addQueryParameter("device", "pc")
-            addQueryParameter("platform", "web")
+    protected open fun HttpUrl.Builder.addCommonParameters(): HttpUrl.Builder = apply {
+        if (name == "BILIBILI COMICS") {
+            addQueryParameter("lang", apiLang)
+            addQueryParameter("sys_lang", apiLang)
         }
 
-    protected inline fun <reified T> Response.parseAs(): BilibiliResultDto<T> =
-        use {
-            json.decodeFromString(it.body.string())
-        }
+        addQueryParameter("device", "pc")
+        addQueryParameter("platform", "web")
+    }
 
-    private fun String.toDate(): Long =
-        runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
+    protected inline fun <reified T> Response.parseAs(): BilibiliResultDto<T> = use {
+        json.decodeFromString(it.body.string())
+    }
+
+    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     private class TagImagePath(
         val path: String,

@@ -37,11 +37,10 @@ class ManhwaWeb : HttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
 
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/manhwa/nuevos", headers)
 
@@ -111,17 +110,16 @@ class ManhwaWeb : HttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            TypeFilter(),
-            DemographyFilter(),
-            StatusFilter(),
-            EroticFilter(),
-            Filter.Separator(),
-            GenreFilter("Géneros", getGenres()),
-            Filter.Separator(),
-            SortByFilter("Ordenar por", getSortProperties()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        TypeFilter(),
+        DemographyFilter(),
+        StatusFilter(),
+        EroticFilter(),
+        Filter.Separator(),
+        GenreFilter("Géneros", getGenres()),
+        Filter.Separator(),
+        SortByFilter("Ordenar por", getSortProperties()),
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadSearchDto>(response.body.string())
@@ -149,14 +147,13 @@ class ManhwaWeb : HttpSource() {
         return chapters.sortedByDescending { it.chapter_number }
     }
 
-    private fun ChapterDto.toSChapter() =
-        SChapter.create().apply {
-            name = "Capítulo ${number.toString().removeSuffix(".0")}"
-            chapter_number = number
-            date_upload = createdAt ?: 0
-            url = espUrl ?: rawUrl!!
-            scanlator = if (espUrl != null) "Esp" else "Raw"
-        }
+    private fun ChapterDto.toSChapter() = SChapter.create().apply {
+        name = "Capítulo ${number.toString().removeSuffix(".0")}"
+        chapter_number = number
+        date_upload = createdAt ?: 0
+        url = espUrl ?: rawUrl!!
+        scanlator = if (espUrl != null) "Esp" else "Raw"
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val slug = chapter.url.removeSuffix("/").substringAfterLast("/")

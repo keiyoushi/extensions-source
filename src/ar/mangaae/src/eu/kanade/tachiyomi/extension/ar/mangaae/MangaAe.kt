@@ -46,28 +46,26 @@ class MangaAe :
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .set("Origin", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga/page:$page", headers)
 
     override fun popularMangaSelector() = "div.mangacontainer"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url =
-                element.selectFirst("img")?.run {
-                    attr("data-pagespeed-lazy-src").ifEmpty { attr("src") }
-                }
-            element.selectFirst("div.mangacontainer a.manga")!!.run {
-                title = text()
-                setUrlWithoutDomain(absUrl("href"))
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url =
+            element.selectFirst("img")?.run {
+                attr("data-pagespeed-lazy-src").ifEmpty { attr("src") }
             }
+        element.selectFirst("div.mangacontainer a.manga")!!.run {
+            title = text()
+            setUrlWithoutDomain(absUrl("href"))
         }
+    }
 
     override fun popularMangaNextPageSelector() = "div.pagination a:last-child:not(.active)"
 
@@ -76,15 +74,14 @@ class MangaAe :
 
     override fun latestUpdatesSelector() = "div.popular-manga-container"
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url =
-                element.selectFirst("img")?.run {
-                    attr("data-pagespeed-lazy-src").ifEmpty { attr("src") }
-                }
-            setUrlWithoutDomain(element.selectFirst("a:has(img)")!!.attr("href"))
-            title = element.selectFirst("a:last-child")!!.text()
-        }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url =
+            element.selectFirst("img")?.run {
+                attr("data-pagespeed-lazy-src").ifEmpty { attr("src") }
+            }
+        setUrlWithoutDomain(element.selectFirst("a:has(img)")!!.attr("href"))
+        title = element.selectFirst("a:last-child")!!.text()
+    }
 
     override fun latestUpdatesNextPageSelector() = null
 
@@ -116,46 +113,42 @@ class MangaAe :
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val infoElement = document.selectFirst("div.indexcontainer")!!
-            // Essential info, a NPE may be understandable
-            with(infoElement) {
-                title = selectFirst("h1.EnglishName")!!.text().removeSurrounding("(", ")")
-                author = selectFirst("div.manga-details-author h4")?.text()
-                artist = author
-                thumbnail_url = selectFirst("img.manga-cover")?.attr("src")
-            }
-
-            // Additional info
-            infoElement.selectFirst("div.manga-details-extended")?.run {
-                status = parseStatus(selectFirst("td h4")?.text().orEmpty())
-                genre = select("a[href*=tag]").eachText().joinToString()
-                description = selectFirst("h4[style*=overflow-y]")?.text()
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val infoElement = document.selectFirst("div.indexcontainer")!!
+        // Essential info, a NPE may be understandable
+        with(infoElement) {
+            title = selectFirst("h1.EnglishName")!!.text().removeSurrounding("(", ")")
+            author = selectFirst("div.manga-details-author h4")?.text()
+            artist = author
+            thumbnail_url = selectFirst("img.manga-cover")?.attr("src")
         }
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("مستمرة") -> SManga.ONGOING
-            status.contains("مكتملة") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+        // Additional info
+        infoElement.selectFirst("div.manga-details-extended")?.run {
+            status = parseStatus(selectFirst("td h4")?.text().orEmpty())
+            genre = select("a[href*=tag]").eachText().joinToString()
+            description = selectFirst("h4[style*=overflow-y]")?.text()
         }
+    }
+
+    private fun parseStatus(status: String) = when {
+        status.contains("مستمرة") -> SManga.ONGOING
+        status.contains("مكتملة") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListSelector() = "ul.new-manga-chapters > li a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href").removeSuffix("/1/") + "/0/allpages")
-            name = "\u061C" + element.text() // Add unicode ARABIC LETTER MARK to ensure all titles are right to left
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href").removeSuffix("/1/") + "/0/allpages")
+        name = "\u061C" + element.text() // Add unicode ARABIC LETTER MARK to ensure all titles are right to left
+    }
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div#showchaptercontainer img").mapIndexed { index, item ->
-            Page(index, "", item.attr("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#showchaptercontainer img").mapIndexed { index, item ->
+        Page(index, "", item.attr("src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

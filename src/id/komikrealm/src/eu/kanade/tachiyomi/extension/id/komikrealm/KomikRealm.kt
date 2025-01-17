@@ -133,25 +133,22 @@ class KomikRealm :
 
     private val intl by lazy { ZeistMangaIntl(lang) }
 
-    override fun getStatusList(): List<Status> =
-        listOf(
-            Status(intl.all, ""),
-            Status(intl.statusOngoing, "Ongoing"),
-            Status(intl.statusCompleted, "Completed"),
-        )
+    override fun getStatusList(): List<Status> = listOf(
+        Status(intl.all, ""),
+        Status(intl.statusOngoing, "Ongoing"),
+        Status(intl.statusCompleted, "Completed"),
+    )
 
-    override fun getTypeList(): List<Type> =
-        listOf(
-            Type(intl.all, ""),
-            Type(intl.typeManga, "Manga"),
-            Type(intl.typeManhua, "Manhua"),
-            Type(intl.typeManhwa, "Manhwa"),
-        )
+    override fun getTypeList(): List<Type> = listOf(
+        Type(intl.all, ""),
+        Type(intl.typeManga, "Manga"),
+        Type(intl.typeManhua, "Manhua"),
+        Type(intl.typeManhwa, "Manhwa"),
+    )
 
-    override fun getGenreList(): List<Genre> =
-        listOf(
-            Genre("Drama", "Drama"),
-            Genre("Mature", "Mature"),
-            Genre("Supernatural", "Supernatural"),
-        )
+    override fun getGenreList(): List<Genre> = listOf(
+        Genre("Drama", "Drama"),
+        Genre("Mature", "Mature"),
+        Genre("Supernatural", "Supernatural"),
+    )
 }

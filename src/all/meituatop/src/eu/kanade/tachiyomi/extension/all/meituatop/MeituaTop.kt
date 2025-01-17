@@ -91,10 +91,9 @@ class MeituaTop : HttpSource() {
         return Observable.just(listOf(chapter))
     }
 
-    private fun parseDate(date: String): Long =
-        runCatching {
-            dateFormat.parse(date)?.time
-        }.getOrNull() ?: 0L
+    private fun parseDate(date: String): Long = runCatching {
+        dateFormat.parse(date)?.time
+    }.getOrNull() ?: 0L
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
@@ -111,11 +110,10 @@ class MeituaTop : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Category (ignored for text search)"),
-            RegionFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Category (ignored for text search)"),
+        RegionFilter(),
+    )
 
     private class RegionFilter :
         Filter.Select<String>(
@@ -123,12 +121,11 @@ class MeituaTop : HttpSource() {
             arrayOf("All", "国产美女", "韩国美女", "台湾美女", "日本美女", "欧美美女", "泰国美女"),
         )
 
-    private fun String.pageNumber() =
-        numberRegex
-            .findAll(this)
-            .last()
-            .value
-            .toInt()
+    private fun String.pageNumber() = numberRegex
+        .findAll(this)
+        .last()
+        .value
+        .toInt()
 
     private val numberRegex by lazy { Regex("""\d+""") }
 

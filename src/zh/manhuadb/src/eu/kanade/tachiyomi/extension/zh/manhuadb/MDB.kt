@@ -44,13 +44,12 @@ abstract class MDB(
 
     override fun popularMangaSelector() = "div.comic-main-section > div.comic-book-unit"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            val link = element.selectFirst("h2 > a")!!
-            setUrlWithoutDomain(link.attr("href"))
-            title = link.text()
-            thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        val link = element.selectFirst("h2 > a")!!
+        setUrlWithoutDomain(link.attr("href"))
+        title = link.text()
+        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.absUrl("src")
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -64,20 +63,19 @@ abstract class MDB(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.isNotEmpty()) {
-            val request = GET(searchUrl(page, query), headers)
-            client.newCall(request).asObservableSuccess().map { searchMangaParse(it) }
-        } else {
-            val params =
-                filters
-                    .filterIsInstance<CategoryFilter>()
-                    .map { it.getParam() }
-                    .filterTo(mutableListOf()) { it.isNotEmpty() }
-                    .apply { add("page-$page") }
-            val request = GET(listUrl(params.joinToString("-")), headers)
-            client.newCall(request).asObservableSuccess().map { popularMangaParse(it) }
-        }
+    ): Observable<MangasPage> = if (query.isNotEmpty()) {
+        val request = GET(searchUrl(page, query), headers)
+        client.newCall(request).asObservableSuccess().map { searchMangaParse(it) }
+    } else {
+        val params =
+            filters
+                .filterIsInstance<CategoryFilter>()
+                .map { it.getParam() }
+                .filterTo(mutableListOf()) { it.isNotEmpty() }
+                .apply { add("page-$page") }
+        val request = GET(listUrl(params.joinToString("-")), headers)
+        client.newCall(request).asObservableSuccess().map { popularMangaParse(it) }
+    }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
@@ -97,20 +95,19 @@ abstract class MDB(
 
     protected open fun transformDescription(description: String) = description
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = transformTitle(document.selectFirst(Evaluator.Tag("h1"))!!.text())
-            author = document.selectFirst(authorSelector)!!.text()
-            description = transformDescription(document.selectFirst("p.comic_story")!!.text())
-            genre = parseGenre(document).joinToString(", ")
-            status =
-                when (document.selectFirst("a.comic-pub-state")!!.text()) {
-                    "连载中" -> SManga.ONGOING
-                    "已完结" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            thumbnail_url = document.selectFirst("td.comic-cover > img")!!.absUrl("src")
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = transformTitle(document.selectFirst(Evaluator.Tag("h1"))!!.text())
+        author = document.selectFirst(authorSelector)!!.text()
+        description = transformDescription(document.selectFirst("p.comic_story")!!.text())
+        genre = parseGenre(document).joinToString(", ")
+        status =
+            when (document.selectFirst("a.comic-pub-state")!!.text()) {
+                "连载中" -> SManga.ONGOING
+                "已完结" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        thumbnail_url = document.selectFirst("td.comic-cover > img")!!.absUrl("src")
+    }
 
     protected open fun parseGenre(document: Document): List<String> {
         val list = mutableListOf<String>()
@@ -125,11 +122,10 @@ abstract class MDB(
 
     override fun chapterListSelector() = "#comic-book-list li > a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.attr("title")
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.attr("title")
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val imgData =
@@ -214,16 +210,15 @@ abstract class MDB(
         return ""
     }
 
-    override fun getFilterList() =
-        if (::categories.isInitialized) {
-            FilterList(
-                Filter.Header("如果使用文本搜索，将会忽略分类筛选"),
-                *categories.map { it.toFilter() }.toTypedArray(),
-            )
-        } else {
-            FilterList(
-                Filter.Header("点击“重置”即可刷新分类，如果失败，"),
-                Filter.Header("请尝试重新从图源列表点击进入图源"),
-            )
-        }
+    override fun getFilterList() = if (::categories.isInitialized) {
+        FilterList(
+            Filter.Header("如果使用文本搜索，将会忽略分类筛选"),
+            *categories.map { it.toFilter() }.toTypedArray(),
+        )
+    } else {
+        FilterList(
+            Filter.Header("点击“重置”即可刷新分类，如果失败，"),
+            Filter.Header("请尝试重新从图源列表点击进入图源"),
+        )
+    }
 }

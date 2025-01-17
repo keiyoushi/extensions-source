@@ -4,12 +4,11 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class PururinFactory : SourceFactory {
-    override fun createSources(): List<Source> =
-        listOf(
-            PururinAll(),
-            PururinEN(),
-            PururinJA(),
-        )
+    override fun createSources(): List<Source> = listOf(
+        PururinAll(),
+        PururinEN(),
+        PururinJA(),
+    )
 }
 
 class PururinAll : Pururin()

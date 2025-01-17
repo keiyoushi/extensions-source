@@ -39,24 +39,22 @@ abstract class SinMH(
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", System.getProperty("http.agent")!!)
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", System.getProperty("http.agent")!!)
+        .add("Referer", baseUrl)
 
     protected open val nextPageSelector = "ul.pagination > li.next:not(.disabled)"
     protected open val comicItemSelector = "#contList > li, li.list-comic"
     protected open val comicItemTitleSelector = "p > a, h3 > a"
 
-    protected open fun mangaFromElement(element: Element) =
-        SManga.create().apply {
-            val titleElement = element.selectFirst(comicItemTitleSelector)!!
-            title = titleElement.text()
-            setUrlWithoutDomain(titleElement.attr("href"))
-            val image = element.selectFirst(Evaluator.Tag("img"))!!
-            thumbnail_url = image.attr("src").ifEmpty { image.attr("data-src") }
-        }
+    protected open fun mangaFromElement(element: Element) = SManga.create().apply {
+        val titleElement = element.selectFirst(comicItemTitleSelector)!!
+        title = titleElement.text()
+        setUrlWithoutDomain(titleElement.attr("href"))
+        val image = element.selectFirst(Evaluator.Tag("img"))!!
+        thumbnail_url = image.attr("src").ifEmpty { image.attr("data-src") }
+    }
 
     // Popular
 
@@ -136,29 +134,28 @@ abstract class SinMH(
 
     override fun getMangaUrl(manga: SManga) = mobileUrl + manga.url
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst(".book-title > h1")!!.text()
-            val detailsList = document.selectFirst(Evaluator.Class("detail-list"))!!
-            author = detailsList.select("strong:contains(作者) ~ *").text()
-            description =
-                document
-                    .selectFirst(Evaluator.Id("intro-all"))!!
-                    .text()
-                    .trim()
-                    .removePrefix("漫画简介：")
-                    .trim()
-                    .removePrefix("漫画简介：")
-                    .trim() // some sources have double prefix
-            genre = mangaDetailsParseDefaultGenre(document, detailsList)
-            status =
-                when (detailsList.selectFirst("strong:contains(状态) + *")!!.text()) {
-                    "连载中" -> SManga.ONGOING
-                    "已完结" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            thumbnail_url = document.selectFirst("div.book-cover img")!!.attr("src")
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst(".book-title > h1")!!.text()
+        val detailsList = document.selectFirst(Evaluator.Class("detail-list"))!!
+        author = detailsList.select("strong:contains(作者) ~ *").text()
+        description =
+            document
+                .selectFirst(Evaluator.Id("intro-all"))!!
+                .text()
+                .trim()
+                .removePrefix("漫画简介：")
+                .trim()
+                .removePrefix("漫画简介：")
+                .trim() // some sources have double prefix
+        genre = mangaDetailsParseDefaultGenre(document, detailsList)
+        status =
+            when (detailsList.selectFirst("strong:contains(状态) + *")!!.text()) {
+                "连载中" -> SManga.ONGOING
+                "已完结" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        thumbnail_url = document.selectFirst("div.book-cover img")!!.attr("src")
+    }
 
     protected open fun mangaDetailsParseDefaultGenre(
         document: Document,
@@ -236,12 +233,11 @@ abstract class SinMH(
     /** 必须是 "section item" */
     override fun chapterListSelector() = ".chapter-body li > a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            val children = element.children()
-            name = if (children.isEmpty()) element.text() else children[0].text()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        val children = element.children()
+        name = if (children.isEmpty()) element.text() else children[0].text()
+    }
 
     // Pages
 
@@ -275,12 +271,11 @@ abstract class SinMH(
     }
 
     // default parsing of ["...","..."]
-    protected open fun parsePageImages(chapterImages: String): List<String> =
-        if (chapterImages.length > 4) {
-            chapterImages.run { substring(2, length - 2) }.replace("""\/""", "/").split("\",\"")
-        } else {
-            emptyList() // []
-        }
+    protected open fun parsePageImages(chapterImages: String): List<String> = if (chapterImages.length > 4) {
+        chapterImages.run { substring(2, length - 2) }.replace("""\/""", "/").split("\",\"")
+    } else {
+        emptyList() // []
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

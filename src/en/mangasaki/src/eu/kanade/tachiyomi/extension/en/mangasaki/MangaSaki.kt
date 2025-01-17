@@ -62,30 +62,28 @@ class MangaSaki : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotEmpty()) {
-            searchMode = true
-            GET("$baseUrl/search/node/$query?page=${page - 1}", headers)
-        } else {
-            searchMode = false
-            var url = "$baseUrl/tags/"
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> {
-                        url += "${filter.toUriPart()}?page=${page - 1}"
-                    }
-                    else -> {}
+    ): Request = if (query.isNotEmpty()) {
+        searchMode = true
+        GET("$baseUrl/search/node/$query?page=${page - 1}", headers)
+    } else {
+        searchMode = false
+        var url = "$baseUrl/tags/"
+        filters.forEach { filter ->
+            when (filter) {
+                is GenreFilter -> {
+                    url += "${filter.toUriPart()}?page=${page - 1}"
                 }
+                else -> {}
             }
-            GET(url, headers)
         }
+        GET(url, headers)
+    }
 
-    override fun searchMangaSelector(): String =
-        if (!searchMode) {
-            "div.view-content div.views-row"
-        } else {
-            "ol.search-results li.search-result"
-        }
+    override fun searchMangaSelector(): String = if (!searchMode) {
+        "div.view-content div.views-row"
+    } else {
+        "ol.search-results li.search-result"
+    }
 
     override fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -186,12 +184,11 @@ class MangaSaki : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
     private class GenreFilter :
         UriPartFilter(

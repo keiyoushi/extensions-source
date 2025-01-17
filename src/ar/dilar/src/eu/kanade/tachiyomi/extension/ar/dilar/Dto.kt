@@ -23,14 +23,13 @@ class ChapterRelease(
 ) {
     val isMonetized get() = hasRevLink && supportLink.isNotEmpty()
 
-    fun toSChapter() =
-        SChapter.create().apply {
-            url = "/r/$id"
-            chapter_number = chapter.float
-            date_upload = timestamp * 1000
-            scanlator = teamName
+    fun toSChapter() = SChapter.create().apply {
+        url = "/r/$id"
+        chapter_number = chapter.float
+        date_upload = timestamp * 1000
+        scanlator = teamName
 
-            val chapterName = title.let { if (it.trim() != "") " - $it" else "" }
-            name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
-        }
+        val chapterName = title.let { if (it.trim() != "") " - $it" else "" }
+        name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
+    }
 }

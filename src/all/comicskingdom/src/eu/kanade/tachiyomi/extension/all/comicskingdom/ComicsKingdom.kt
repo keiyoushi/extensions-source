@@ -44,35 +44,32 @@ class ComicsKingdom(
     private val mangaPerPage = 20
     private val chapterPerPage = 100
 
-    private fun mangaApiUrl(): HttpUrl.Builder =
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("wp-json/wp/v2")
-            addPathSegment("ck_feature")
-            addQueryParameter("per_page", mangaPerPage.toString())
-            addQueryParameter("_fields", MangaFields)
-            addQueryParameter("ck_language", if (lang == "es") "spanish" else "english")
-        }
+    private fun mangaApiUrl(): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegments("wp-json/wp/v2")
+        addPathSegment("ck_feature")
+        addQueryParameter("per_page", mangaPerPage.toString())
+        addQueryParameter("_fields", MangaFields)
+        addQueryParameter("ck_language", if (lang == "es") "spanish" else "english")
+    }
 
-    private fun chapterApiUrl(): HttpUrl.Builder =
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("wp-json/wp/v2")
-            addPathSegment("ck_comic")
-            addQueryParameter("per_page", chapterPerPage.toString())
-            addQueryParameter("_fields", ChapterFields)
-        }
+    private fun chapterApiUrl(): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegments("wp-json/wp/v2")
+        addPathSegment("ck_comic")
+        addQueryParameter("per_page", chapterPerPage.toString())
+        addQueryParameter("_fields", ChapterFields)
+    }
 
     private fun getReq(
         orderBy: String,
         page: Int,
-    ): Request =
-        GET(
-            mangaApiUrl()
-                .apply {
-                    addQueryParameter("orderBy", orderBy)
-                    addQueryParameter("page", page.toString())
-                }.build(),
-            headers,
-        )
+    ): Request = GET(
+        mangaApiUrl()
+            .apply {
+                addQueryParameter("orderBy", orderBy)
+                addQueryParameter("page", page.toString())
+            }.build(),
+        headers,
+    )
 
     override fun popularMangaRequest(page: Int): Request = getReq("relevance", page)
 
@@ -82,42 +79,41 @@ class ComicsKingdom(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        GET(
-            mangaApiUrl()
-                .apply {
-                    addQueryParameter("search", query)
-                    addQueryParameter("page", page.toString())
+    ): Request = GET(
+        mangaApiUrl()
+            .apply {
+                addQueryParameter("search", query)
+                addQueryParameter("page", page.toString())
 
-                    if (!filters.isEmpty()) {
-                        for (filter in filters) {
-                            when (filter) {
-                                is OrderFilter -> {
-                                    addQueryParameter("orderby", filter.getValue())
-                                }
-
-                                is GenreList -> {
-                                    if (filter.included.isNotEmpty()) {
-                                        addQueryParameter(
-                                            "ck_genre",
-                                            filter.included.joinToString(","),
-                                        )
-                                    }
-                                    if (filter.excluded.isNotEmpty()) {
-                                        addQueryParameter(
-                                            "ck_genre_exclude",
-                                            filter.excluded.joinToString(","),
-                                        )
-                                    }
-                                }
-
-                                else -> {}
+                if (!filters.isEmpty()) {
+                    for (filter in filters) {
+                        when (filter) {
+                            is OrderFilter -> {
+                                addQueryParameter("orderby", filter.getValue())
                             }
+
+                            is GenreList -> {
+                                if (filter.included.isNotEmpty()) {
+                                    addQueryParameter(
+                                        "ck_genre",
+                                        filter.included.joinToString(","),
+                                    )
+                                }
+                                if (filter.excluded.isNotEmpty()) {
+                                    addQueryParameter(
+                                        "ck_genre_exclude",
+                                        filter.excluded.joinToString(","),
+                                    )
+                                }
+                            }
+
+                            else -> {}
                         }
                     }
-                }.build(),
-            headers,
-        )
+                }
+            }.build(),
+        headers,
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val list = json.decodeFromString<List<Manga>>(response.body.string())
@@ -150,18 +146,17 @@ class ComicsKingdom(
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        SManga.create().apply {
-            val mangaData = json.decodeFromString<Manga>(response.body.string())
-            title = mangaData.title.rendered
-            author =
-                mangaData.meta.ck_byline_on_app
-                    .substringAfter("By")
-                    .trim()
-            description = Jsoup.parse(mangaData.content.rendered).text()
-            status = SManga.UNKNOWN
-            thumbnail_url = thumbnailUrlRegex.find(mangaData.yoast_head)?.groupValues?.get(1)
-        }
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val mangaData = json.decodeFromString<Manga>(response.body.string())
+        title = mangaData.title.rendered
+        author =
+            mangaData.meta.ck_byline_on_app
+                .substringAfter("By")
+                .trim()
+        description = Jsoup.parse(mangaData.content.rendered).text()
+        status = SManga.UNKNOWN
+        thumbnail_url = thumbnailUrlRegex.find(mangaData.yoast_head)?.groupValues?.get(1)
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${(baseUrl + manga.url).toHttpUrl().queryParameter("slug")}"
 
@@ -317,32 +312,30 @@ class ComicsKingdom(
             get() = state.filter { it.isExcluded() }.map { it.gid }
     }
 
-    override fun getFilterList() =
-        FilterList(
-            OrderFilter(),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        OrderFilter(),
+        GenreList(getGenreList()),
+    )
 
-    private fun getGenreList() =
-        listOf(
-            Genre("Action", "action"),
-            Genre("Adventure", "adventure"),
-            Genre("Classic", "classic"),
-            Genre("Comedy", "comedy"),
-            Genre("Crime", "crime"),
-            Genre("Fantasy", "fantasy"),
-            Genre("Gag Cartoons", "gag-cartoons"),
-            Genre("Mystery", "mystery"),
-            Genre("New Arrivals", "new-arrivals"),
-            Genre("Non-Fiction", "non-fiction"),
-            Genre("OffBeat", "offbeat"),
-            Genre("Political Cartoons", "political-cartoons"),
-            Genre("Romance", "romance"),
-            Genre("Sci-Fi", "sci-fi"),
-            Genre("Slice Of Life", "slice-of-life"),
-            Genre("Superhero", "superhero"),
-            Genre("Vintage", "vintage"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Action", "action"),
+        Genre("Adventure", "adventure"),
+        Genre("Classic", "classic"),
+        Genre("Comedy", "comedy"),
+        Genre("Crime", "crime"),
+        Genre("Fantasy", "fantasy"),
+        Genre("Gag Cartoons", "gag-cartoons"),
+        Genre("Mystery", "mystery"),
+        Genre("New Arrivals", "new-arrivals"),
+        Genre("Non-Fiction", "non-fiction"),
+        Genre("OffBeat", "offbeat"),
+        Genre("Political Cartoons", "political-cartoons"),
+        Genre("Romance", "romance"),
+        Genre("Sci-Fi", "sci-fi"),
+        Genre("Slice Of Life", "slice-of-life"),
+        Genre("Superhero", "superhero"),
+        Genre("Vintage", "vintage"),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val compactpref =

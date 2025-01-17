@@ -81,20 +81,19 @@ class BentoManga :
     }
 
     // Generic (used by popular/latest/search)
-    private fun mangaListFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title =
-                element
-                    .select("div")
-                    .select("div.manga_header h1")
-                    .text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url =
-                element
-                    .select("div")
-                    .select("img[alt=couverture manga]")
-                    .attr("src")
-        }
+    private fun mangaListFromElement(element: Element): SManga = SManga.create().apply {
+        title =
+            element
+                .select("div")
+                .select("div.manga_header h1")
+                .text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url =
+            element
+                .select("div")
+                .select("img[alt=couverture manga]")
+                .attr("src")
+    }
 
     private fun mangaListSelector() = "div#mangas_content div.manga"
 
@@ -155,46 +154,44 @@ class BentoManga :
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title =
-                document
-                    .select("div.manga div.manga-infos div.component-manga-title div.component-manga-title_main h1 ")
-                    .text()
-            artist = document.select("div.datas div.datas_more-artists div.datas_more-artists-people a").text()
-            author = document.select("div.datas div.datas_more-authors div.datas_more-authors-peoples div a").text()
-            description = document.select("div.datas div.datas_synopsis").text()
-            genre =
-                document
-                    .select("div.manga div.manga-infos div.component-manga-categories a")
-                    .joinToString(" , ") { it.text() }
-            status = document
-                .selectFirst("div.datas div.datas_more div.datas_more-status div.datas_more-status-data")
-                ?.text()
-                ?.let {
-                    when {
-                        it.contains("En cours") -> SManga.ONGOING
-                        it.contains("Terminé") -> SManga.COMPLETED
-                        it.contains("En pause") -> SManga.ON_HIATUS
-                        it.contains("Licencié") -> SManga.LICENSED
-                        it.contains("Abandonné") -> SManga.CANCELLED
-                        else -> SManga.UNKNOWN
-                    }
-                } ?: SManga.UNKNOWN
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title =
+            document
+                .select("div.manga div.manga-infos div.component-manga-title div.component-manga-title_main h1 ")
+                .text()
+        artist = document.select("div.datas div.datas_more-artists div.datas_more-artists-people a").text()
+        author = document.select("div.datas div.datas_more-authors div.datas_more-authors-peoples div a").text()
+        description = document.select("div.datas div.datas_synopsis").text()
+        genre =
+            document
+                .select("div.manga div.manga-infos div.component-manga-categories a")
+                .joinToString(" , ") { it.text() }
+        status = document
+            .selectFirst("div.datas div.datas_more div.datas_more-status div.datas_more-status-data")
+            ?.text()
+            ?.let {
+                when {
+                    it.contains("En cours") -> SManga.ONGOING
+                    it.contains("Terminé") -> SManga.COMPLETED
+                    it.contains("En pause") -> SManga.ON_HIATUS
+                    it.contains("Licencié") -> SManga.LICENSED
+                    it.contains("Abandonné") -> SManga.CANCELLED
+                    else -> SManga.UNKNOWN
+                }
+            } ?: SManga.UNKNOWN
 
-            thumbnail_url = document.select("img[alt=couverture manga]").attr("src")
-        }
+        thumbnail_url = document.select("img[alt=couverture manga]").attr("src")
+    }
 
-    private fun apiHeaders(refererURL: String) =
-        headers
-            .newBuilder()
-            .apply {
-                set("Referer", refererURL)
-                set("x-requested-with", "XMLHttpRequest")
-                // without this we get 404 but I don't know why, I cannot find any information about this 'a' header.
-                // In chrome the value is constantly changing on each request, but giving this fixed value seems to work
-                set("a", "1df19bce590b")
-            }.build()
+    private fun apiHeaders(refererURL: String) = headers
+        .newBuilder()
+        .apply {
+            set("Referer", refererURL)
+            set("x-requested-with", "XMLHttpRequest")
+            // without this we get 404 but I don't know why, I cannot find any information about this 'a' header.
+            // In chrome the value is constantly changing on each request, but giving this fixed value seems to work
+            set("a", "1df19bce590b")
+        }.build()
 
     // Chapters
     // Subtract relative date
@@ -218,13 +215,12 @@ class BentoManga :
 
     override fun chapterListSelector() = "div.page_content div.chapters_content div.div-item"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.select("div.component-chapter-title a span.chapter_volume").text()
-            setUrlWithoutDomain(element.select("div.component-chapter-title a:not([style*='display:none'])").attr("href"))
-            date_upload = parseRelativeDate(element.select("div.component-chapter-date").text())
-            scanlator = element.select("div.component-chapter-teams a span").joinToString(" + ") { it.text() }
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.select("div.component-chapter-title a span.chapter_volume").text()
+        setUrlWithoutDomain(element.select("div.component-chapter-title a:not([style*='display:none'])").attr("href"))
+        date_upload = parseRelativeDate(element.select("div.component-chapter-date").text())
+        scanlator = element.select("div.component-chapter-teams a span").joinToString(" + ") { it.text() }
+    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val requestUrl =
@@ -360,13 +356,12 @@ class BentoManga :
     }
 
     // Filters
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(),
-            TypeFilter(),
-            StatusFilter(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        TypeFilter(),
+        StatusFilter(),
+        GenreFilter(),
+    )
 
     private class SortFilter :
         UriSelectFilter(

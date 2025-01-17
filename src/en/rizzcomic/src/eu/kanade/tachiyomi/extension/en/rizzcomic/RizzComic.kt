@@ -46,10 +46,9 @@ class RizzComic :
                 chain.proceed(request.newBuilder().headers(headers).build())
             }.build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("X-Requested-With", randomString((1..20).random())) // For WebView
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("X-Requested-With", randomString((1..20).random())) // For WebView
 
     private val apiHeaders by lazy {
         headersBuilder()
@@ -103,14 +102,13 @@ class RizzComic :
         return POST("$baseUrl/Index/filter_series", apiHeaders, form)
     }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Filters don't work with text search"),
-            SortFilter(),
-            StatusFilter(),
-            TypeFilter(),
-            GenreFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Filters don't work with text search"),
+        SortFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        GenreFilter(),
+    )
 
     @Serializable
     class Comic(
@@ -166,11 +164,10 @@ class RizzComic :
         return MangasPage(entries, false)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { mangaDetailsParse(it).apply { description = manga.description } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { mangaDetailsParse(it).apply { description = manga.description } }
 
     override fun imageRequest(page: Page): Request {
         val newHeaders =
@@ -184,14 +181,13 @@ class RizzComic :
 
     private inline fun <reified T> Response.parseAs(): T = use { it.body.string() }.let(json::decodeFromString)
 
-    private fun String.capitalize() =
-        replaceFirstChar {
-            if (it.isLowerCase()) {
-                it.titlecase(Locale.ROOT)
-            } else {
-                it.toString()
-            }
+    private fun String.capitalize() = replaceFirstChar {
+        if (it.isLowerCase()) {
+            it.titlecase(Locale.ROOT)
+        } else {
+            it.toString()
         }
+    }
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')

@@ -41,11 +41,10 @@ class MangaFun : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("Origin", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
 
     private val json: Json by injectLazy()
 
@@ -62,15 +61,14 @@ class MangaFun : HttpSource() {
 
     private lateinit var directory: List<MinifiedMangaDto>
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(popularMangaRequest(page))
-                .asObservableSuccess()
-                .map { popularMangaParse(it) }
-        } else {
-            Observable.just(parseDirectory(page))
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(popularMangaRequest(page))
+            .asObservableSuccess()
+            .map { popularMangaParse(it) }
+    } else {
+        Observable.just(parseDirectory(page))
+    }
 
     override fun popularMangaRequest(page: Int) = GET("$apiUrl/title/all", headers)
 
@@ -82,15 +80,14 @@ class MangaFun : HttpSource() {
         return parseDirectory(1)
     }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(latestUpdatesRequest(page))
-                .asObservableSuccess()
-                .map { latestUpdatesParse(it) }
-        } else {
-            Observable.just(parseDirectory(page))
-        }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(latestUpdatesRequest(page))
+            .asObservableSuccess()
+            .map { latestUpdatesParse(it) }
+    } else {
+        Observable.just(parseDirectory(page))
+    }
 
     override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
 
@@ -297,13 +294,12 @@ class MangaFun : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            GenreFilter(),
-            TypeFilter(),
-            StatusFilter(),
-            SortFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        GenreFilter(),
+        TypeFilter(),
+        StatusFilter(),
+        SortFilter(),
+    )
 
     private fun parseDirectory(page: Int): MangasPage {
         val endRange = min((page * 24), directory.size)

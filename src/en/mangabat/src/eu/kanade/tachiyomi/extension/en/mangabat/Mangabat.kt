@@ -15,8 +15,7 @@ class Mangabat : MangaBox("Mangabat", "https://h.mangabat.com", "en", SimpleDate
 
     override fun searchMangaSelector() = "div.list-story-item"
 
-    override fun getAdvancedGenreFilters(): List<AdvGenre> =
-        getGenreFilters()
-            .drop(1)
-            .map { AdvGenre(it.first, it.second) }
+    override fun getAdvancedGenreFilters(): List<AdvGenre> = getGenreFilters()
+        .drop(1)
+        .map { AdvGenre(it.first, it.second) }
 }

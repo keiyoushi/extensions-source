@@ -56,19 +56,18 @@ class TeamX :
 
     override fun popularMangaSelector() = "div.listupd div.bsx"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("a").attr("title")
-            setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
-            thumbnail_url =
-                element.select("img").let {
-                    if (it.hasAttr("data-src")) {
-                        it.attr("abs:data-src")
-                    } else {
-                        it.attr("abs:src")
-                    }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("a").attr("title")
+        setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
+        thumbnail_url =
+            element.select("img").let {
+                if (it.hasAttr("data-src")) {
+                    it.attr("abs:data-src")
+                } else {
+                    it.attr("abs:src")
                 }
-        }
+            }
+    }
 
     override fun popularMangaNextPageSelector() = "a[rel=next]"
 
@@ -104,13 +103,12 @@ class TeamX :
 
     override fun latestUpdatesSelector() = "div.last-chapter div.box"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            val linkElement = element.select("div.info a")
-            title = linkElement.select("h3").text()
-            setUrlWithoutDomain(linkElement.first()!!.attr("href"))
-            thumbnail_url = element.select("div.imgu img").first()!!.absUrl("src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        val linkElement = element.select("div.info a")
+        title = linkElement.select("h3").text()
+        setUrlWithoutDomain(linkElement.first()!!.attr("href"))
+        thumbnail_url = element.select("div.imgu img").first()!!.absUrl("src")
+    }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -124,39 +122,37 @@ class TeamX :
 
     override fun searchMangaSelector() = "li.list-group-item"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            val urlAndText = element.select("div.ms-2 a")
-            title = urlAndText.text()
-            setUrlWithoutDomain(urlAndText.first()!!.absUrl("href"))
-            thumbnail_url = element.select("a img").first()!!.absUrl("src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        val urlAndText = element.select("div.ms-2 a")
+        title = urlAndText.text()
+        setUrlWithoutDomain(urlAndText.first()!!.absUrl("href"))
+        thumbnail_url = element.select("a img").first()!!.absUrl("src")
+    }
 
     // doesnt matter as there is no next page
     override fun searchMangaNextPageSelector(): String? = null
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select("div.author-info-title h1").text()
-            description = document.select("div.review-content").text()
-            if (description.isNullOrBlank()) {
-                description = document.select("div.review-content p").text()
-            }
-            genre = document.select("div.review-author-info a").joinToString { it.text() }
-            thumbnail_url = document.select("div.text-right img").first()!!.absUrl("src")
-            status =
-                document
-                    .selectFirst(".full-list-info > small:first-child:contains(الحالة) + small")
-                    ?.text()
-                    .toStatus()
-            author =
-                document
-                    .selectFirst(".full-list-info > small:first-child:contains(الرسام) + small")
-                    ?.text()
-                    ?.takeIf { it != "غير معروف" }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("div.author-info-title h1").text()
+        description = document.select("div.review-content").text()
+        if (description.isNullOrBlank()) {
+            description = document.select("div.review-content p").text()
         }
+        genre = document.select("div.review-author-info a").joinToString { it.text() }
+        thumbnail_url = document.select("div.text-right img").first()!!.absUrl("src")
+        status =
+            document
+                .selectFirst(".full-list-info > small:first-child:contains(الحالة) + small")
+                ?.text()
+                .toStatus()
+        author =
+            document
+                .selectFirst(".full-list-info > small:first-child:contains(الرسام) + small")
+                ?.text()
+                ?.takeIf { it != "غير معروف" }
+    }
 
     // Chapters
     private fun chapterNextPageSelector() = popularMangaNextPageSelector()
@@ -190,42 +186,38 @@ class TeamX :
 
     override fun chapterListSelector() = "div.eplister ul a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val chpNum = element.select("div.epl-num").text()
-            val chpTitle = element.select("div.epl-title").text()
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val chpNum = element.select("div.epl-num").text()
+        val chpTitle = element.select("div.epl-title").text()
 
-            name =
-                when (chpNum.isNullOrBlank()) {
-                    true -> chpTitle
-                    false -> "$chpNum - $chpTitle"
-                }
+        name =
+            when (chpNum.isNullOrBlank()) {
+                true -> chpTitle
+                false -> "$chpNum - $chpTitle"
+            }
 
-            date_upload = parseChapterDate(element.select("div.epl-date").text())
+        date_upload = parseChapterDate(element.select("div.epl-date").text())
 
-            setUrlWithoutDomain(element.attr("href"))
-        }
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
-    private fun parseChapterDate(date: String): Long =
-        runCatching {
-            chapterFormat.parse(date)?.time
-        }.getOrNull() ?: 0
+    private fun parseChapterDate(date: String): Long = runCatching {
+        chapterFormat.parse(date)?.time
+    }.getOrNull() ?: 0
 
-    private fun String?.toStatus() =
-        when (this) {
-            "مستمرة" -> SManga.ONGOING
-            "قادم قريبًا" -> SManga.ONGOING // "coming soon"
-            "مكتمل" -> SManga.COMPLETED
-            "متوقف" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun String?.toStatus() = when (this) {
+        "مستمرة" -> SManga.ONGOING
+        "قادم قريبًا" -> SManga.ONGOING // "coming soon"
+        "مكتمل" -> SManga.COMPLETED
+        "متوقف" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.image_list img[src]").mapIndexed { i, img ->
-            Page(i, "", img.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.image_list img[src]").mapIndexed { i, img ->
+        Page(i, "", img.absUrl("src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

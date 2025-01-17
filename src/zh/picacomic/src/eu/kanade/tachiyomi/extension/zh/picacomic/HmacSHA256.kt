@@ -21,11 +21,10 @@ internal fun hmacSHA256(
 private val hexTable = "0123456789abcdef".toCharArray()
 
 @OptIn(ExperimentalUnsignedTypes::class)
-internal fun MacResult.convertToString() =
-    buildString(size * 2) {
-        this@convertToString.forEach {
-            val value = it.toUByte().toInt()
-            append(hexTable[value ushr 4])
-            append(hexTable[value and 0x0f])
-        }
+internal fun MacResult.convertToString() = buildString(size * 2) {
+    this@convertToString.forEach {
+        val value = it.toUByte().toInt()
+        append(hexTable[value ushr 4])
+        append(hexTable[value and 0x0f])
     }
+}

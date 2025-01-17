@@ -57,13 +57,12 @@ class DarkRoomFansub :
         return MangasPage(mangas, false)
     }
 
-    private fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            val anchor = element.selectFirst("a:not(:has(img))")!!
-            title = anchor.ownText()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            setUrlWithoutDomain(anchor.absUrl("href"))
-        }
+    private fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        val anchor = element.selectFirst("a:not(:has(img))")!!
+        title = anchor.ownText()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(anchor.absUrl("href"))
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -99,25 +98,21 @@ class DarkRoomFansub :
         }
     }
 
-    private fun chapterListFromDocument(document: Document) =
-        document
-            .select(".grid.gtc-f141a > div > a, .series-chapterlist .flexch-infoz a")
-            .map(::toSChapter)
+    private fun chapterListFromDocument(document: Document) = document
+        .select(".grid.gtc-f141a > div > a, .series-chapterlist .flexch-infoz a")
+        .map(::toSChapter)
 
-    private fun getChapterListURL(url: String): String =
-        fetchChapterList(url)
-            .selectFirst("h1 + .tac a")!!
-            .absUrl("href")
+    private fun getChapterListURL(url: String): String = fetchChapterList(url)
+        .selectFirst("h1 + .tac a")!!
+        .absUrl("href")
 
-    private fun fetchChapterList(url: String) =
-        client
-            .newCall(GET(url, headers))
-            .execute()
-            .asJsoup()
+    private fun fetchChapterList(url: String) = client
+        .newCall(GET(url, headers))
+        .execute()
+        .asJsoup()
 
-    private fun toSChapter(element: Element) =
-        SChapter.create().apply {
-            name = element.text()
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    private fun toSChapter(element: Element) = SChapter.create().apply {
+        name = element.text()
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 }

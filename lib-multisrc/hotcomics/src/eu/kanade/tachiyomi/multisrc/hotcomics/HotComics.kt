@@ -32,10 +32,9 @@ abstract class HotComics(
                 CookieInterceptor(baseUrl.removePrefix("https://"), "hc_vfs" to "Y"),
             ).build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/en", headers)
 
@@ -84,12 +83,11 @@ abstract class HotComics(
         browseList: List<Pair<String, String>>,
     ) : SelectFilter("Browse", browseList)
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Doesn't work with Text search"),
-            Filter.Separator(),
-            BrowseFilter(browseList),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Doesn't work with Text search"),
+        Filter.Separator(),
+        BrowseFilter(browseList),
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -109,56 +107,54 @@ abstract class HotComics(
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup()
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
 
-            title = document.selectFirst("h2.episode-title")!!.text()
-            with(document.selectFirst("p.type_box")!!) {
-                author =
-                    selectFirst("span.writer")
-                        ?.text()
-                        ?.substringAfter("ⓒ")
-                        ?.trim()
-                genre =
-                    selectFirst("span.type")
-                        ?.text()
-                        ?.split("/")
-                        ?.joinToString { it.trim() }
-                status =
-                    when (selectFirst("span.date")?.text()) {
-                        "End", "Ende" -> SManga.COMPLETED
-                        null -> SManga.UNKNOWN
-                        else -> SManga.ONGOING
-                    }
-            }
-            description =
-                buildString {
-                    document
-                        .selectFirst("div.episode-contents header")
-                        ?.text()
-                        ?.let {
-                            append(it)
-                            append("\n\n")
-                        }
-                    document
-                        .selectFirst("div.title_content > h2:not(.episode-title)")
-                        ?.text()
-                        ?.let { append(it) }
-                }.trim()
-        }
-
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response
-            .asJsoup()
-            .select("#tab-chapter a")
-            .map { element ->
-                SChapter.create().apply {
-                    setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
-                    name = element.selectFirst(".cell-num")!!.text()
-                    date_upload = parseDate(element.selectFirst(".cell-time")?.text())
+        title = document.selectFirst("h2.episode-title")!!.text()
+        with(document.selectFirst("p.type_box")!!) {
+            author =
+                selectFirst("span.writer")
+                    ?.text()
+                    ?.substringAfter("ⓒ")
+                    ?.trim()
+            genre =
+                selectFirst("span.type")
+                    ?.text()
+                    ?.split("/")
+                    ?.joinToString { it.trim() }
+            status =
+                when (selectFirst("span.date")?.text()) {
+                    "End", "Ende" -> SManga.COMPLETED
+                    null -> SManga.UNKNOWN
+                    else -> SManga.ONGOING
                 }
-            }.reversed()
+        }
+        description =
+            buildString {
+                document
+                    .selectFirst("div.episode-contents header")
+                    ?.text()
+                    ?.let {
+                        append(it)
+                        append("\n\n")
+                    }
+                document
+                    .selectFirst("div.title_content > h2:not(.episode-title)")
+                    ?.text()
+                    ?.let { append(it) }
+            }.trim()
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> = response
+        .asJsoup()
+        .select("#tab-chapter a")
+        .map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
+                name = element.selectFirst(".cell-num")!!.text()
+                date_upload = parseDate(element.selectFirst(".cell-time")?.text())
+            }
+        }.reversed()
 
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
 
@@ -172,16 +168,14 @@ abstract class HotComics(
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.asJsoup().select("#viewer-img img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.imgAttr())
-        }
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("#viewer-img img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.imgAttr())
+    }
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-src") -> absUrl("data-src")
-            else -> absUrl("src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-src") -> absUrl("data-src")
+        else -> absUrl("src")
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

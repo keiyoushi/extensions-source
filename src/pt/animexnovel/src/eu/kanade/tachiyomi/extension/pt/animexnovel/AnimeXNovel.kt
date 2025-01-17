@@ -23,38 +23,35 @@ class AnimeXNovel :
     override val popularMangaSelectorTitle = "h3 > a"
     override val popularMangaSelectorUrl = popularMangaSelectorTitle
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        super.popularMangaParse(response).let { mangaPage ->
-            mangaPage.mangas.filter { it.title.contains("[Mangá]") }.let {
-                mangaPage.copy(it)
-            }
+    override fun popularMangaParse(response: Response): MangasPage = super.popularMangaParse(response).let { mangaPage ->
+        mangaPage.mangas.filter { it.title.contains("[Mangá]") }.let {
+            mangaPage.copy(it)
         }
+    }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        super.latestUpdatesParse(response).let {
-            it.copy(it.mangas.filter { it.title.contains("[Mangá]") })
-        }
+    override fun latestUpdatesParse(response: Response): MangasPage = super.latestUpdatesParse(response).let {
+        it.copy(it.mangas.filter { it.title.contains("[Mangá]") })
+    }
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup()
-            title = document.selectFirst("h1")!!.text()
-            thumbnail_url = document.selectFirst(".thumb")?.absUrl("src")
-            description = document.selectFirst("#synopsis")?.text()
-            document.selectFirst("span[data-status]")?.let {
-                status = parseStatus(it.text())
-            }
-            genre =
-                document
-                    .select("dl:has(dt:contains(Gênero)) dd a")
-                    .joinToString { it.text() }
-
-            setUrlWithoutDomain(document.location())
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        title = document.selectFirst("h1")!!.text()
+        thumbnail_url = document.selectFirst(".thumb")?.absUrl("src")
+        description = document.selectFirst("#synopsis")?.text()
+        document.selectFirst("span[data-status]")?.let {
+            status = parseStatus(it.text())
         }
+        genre =
+            document
+                .select("dl:has(dt:contains(Gênero)) dd a")
+                .joinToString { it.text() }
+
+        setUrlWithoutDomain(document.location())
+    }
 
     // ============================== Chapters ===============================
 

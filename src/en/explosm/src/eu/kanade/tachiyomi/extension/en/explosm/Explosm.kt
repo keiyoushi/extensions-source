@@ -115,12 +115,11 @@ class Explosm : HttpSource() {
 
     private val date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    private fun JsonElement?.getContent(key: String): String =
-        this
-            ?.jsonObject
-            ?.get(key)
-            ?.jsonPrimitive
-            ?.content ?: throw Exception("Error getting chapter content from $key")
+    private fun JsonElement?.getContent(key: String): String = this
+        ?.jsonObject
+        ?.get(key)
+        ?.jsonPrimitive
+        ?.content ?: throw Exception("Error getting chapter content from $key")
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         var chapterCount = 0F

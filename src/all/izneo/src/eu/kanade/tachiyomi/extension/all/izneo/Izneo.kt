@@ -72,11 +72,10 @@ class Izneo(
 
     private var seriesCount = 0
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Cookie", "lang=$lang;")
-            .set("Referer", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Cookie", "lang=$lang;")
+        .set("Referer", baseUrl)
 
     override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/new?offset=${page - 1}&order=1&abo=0", apiHeaders)
 
@@ -92,47 +91,45 @@ class Izneo(
 
     override fun imageRequest(page: Page) = GET(ORIGIN + "/book/" + page.imageUrl!!, apiHeaders)
 
-    override fun latestUpdatesParse(response: Response) =
-        response.parse().run {
-            val count =
-                try {
-                    get("series_count")!!.jsonPrimitive.int
-                } catch (_: IllegalArgumentException) {
-                    return@run MangasPage(emptyList(), false)
+    override fun latestUpdatesParse(response: Response) = response.parse().run {
+        val count =
+            try {
+                get("series_count")!!.jsonPrimitive.int
+            } catch (_: IllegalArgumentException) {
+                return@run MangasPage(emptyList(), false)
+            }
+        val series =
+            get("series")!!
+                .jsonObject.values
+                .flatMap {
+                    json.decodeFromJsonElement<List<Series>>(it)
+                }.also { seriesCount += it.size }
+        if (count == seriesCount) seriesCount = 0
+        series
+            .map {
+                SManga.create().apply {
+                    url = it.url
+                    title = it.name
+                    genre = it.genres
+                    author = it.authors.joinToString()
+                    artist = it.authors.joinToString()
+                    thumbnail_url = "$ORIGIN/$lang${it.cover}"
+                    description = it.toString()
                 }
-            val series =
-                get("series")!!
-                    .jsonObject.values
-                    .flatMap {
-                        json.decodeFromJsonElement<List<Series>>(it)
-                    }.also { seriesCount += it.size }
-            if (count == seriesCount) seriesCount = 0
-            series
-                .map {
-                    SManga.create().apply {
-                        url = it.url
-                        title = it.name
-                        genre = it.genres
-                        author = it.authors.joinToString()
-                        artist = it.authors.joinToString()
-                        thumbnail_url = "$ORIGIN/$lang${it.cover}"
-                        description = it.toString()
-                    }
-                }.let { MangasPage(it, seriesCount != 0) }
-        }
+            }.let { MangasPage(it, seriesCount != 0) }
+    }
 
     override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
 
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
-    override fun pageListParse(response: Response) =
-        response.parse()["data"]!!.jsonObject.run {
-            val id = get("id")!!.jsonPrimitive.content
-            get("pages")!!.jsonArray.map {
-                val page = json.decodeFromJsonElement<AlbumPage>(it)
-                Page(page.albumPageNumber, "", id + page.toString())
-            }
+    override fun pageListParse(response: Response) = response.parse()["data"]!!.jsonObject.run {
+        val id = get("id")!!.jsonPrimitive.content
+        get("pages")!!.jsonArray.map {
+            val page = json.decodeFromJsonElement<AlbumPage>(it)
+            Page(page.albumPageNumber, "", id + page.toString())
         }
+    }
 
     override fun fetchSearchManga(
         page: Int,
@@ -210,17 +207,16 @@ class Izneo(
 
     private fun String.btoa() = Base64.encode(toByteArray(), Base64.DEFAULT)
 
-    private fun Response.parse() =
-        json
-            .parseToJsonElement(body.string())
-            .apply {
-                if (jsonObject["status"]?.jsonPrimitive?.content == "error") {
-                    when (jsonObject["code"]?.jsonPrimitive?.content) {
-                        "4" -> throw Error("You are not authorized to view this")
-                        else -> throw Error(jsonObject["data"]?.jsonPrimitive?.content)
-                    }
+    private fun Response.parse() = json
+        .parseToJsonElement(body.string())
+        .apply {
+            if (jsonObject["status"]?.jsonPrimitive?.content == "error") {
+                when (jsonObject["code"]?.jsonPrimitive?.content) {
+                    "4" -> throw Error("You are not authorized to view this")
+                    else -> throw Error(jsonObject["data"]?.jsonPrimitive?.content)
                 }
-            }.jsonObject
+            }
+        }.jsonObject
 
     override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
 

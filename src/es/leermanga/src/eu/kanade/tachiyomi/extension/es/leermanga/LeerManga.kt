@@ -105,19 +105,18 @@ class LeerManga :
         return FilterList(filters)
     }
 
-    override fun parseGenres(document: Document): List<Genre> =
-        mutableListOf<Genre>().apply {
-            this += Genre("Todos", "")
-            this +=
-                document
-                    .select(".genres__collapse li a")
-                    .map { a ->
-                        Genre(
-                            a.text(),
-                            a.absUrl("href"),
-                        )
-                    }
-        }
+    override fun parseGenres(document: Document): List<Genre> = mutableListOf<Genre>().apply {
+        this += Genre("Todos", "")
+        this +=
+            document
+                .select(".genres__collapse li a")
+                .map { a ->
+                    Genre(
+                        a.text(),
+                        a.absUrl("href"),
+                    )
+                }
+    }
 
     class GenreGroup(
         displayName: String,

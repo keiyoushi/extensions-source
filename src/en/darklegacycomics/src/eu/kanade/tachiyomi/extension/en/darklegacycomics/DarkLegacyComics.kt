@@ -21,51 +21,48 @@ class DarkLegacyComics : HttpSource() {
 
     override val supportsLatest = false
 
-    override fun chapterListParse(response: Response) =
-        response.asJsoup().select(".archive_link").map {
-            val index = it.selectFirst(".index")!!.text()
-            val date = it.selectFirst(".date")!!.ownText()
-            val title = it.selectFirst(".name")!!.text()
-            val characters = it.select(".characters").text()
-            SChapter.create().apply {
-                url = "/$index"
-                name = "#$index: $title"
-                chapter_number = index.toFloat()
-                // Not actually scanlators but whatever
-                scanlator = characters.replace(" ", ", ")
-                // One of the dates is missing the year
-                date_upload =
-                    when (date) {
-                        "Sep 20" -> 1442696400000L // Sep 20, 2015
-                        else -> dateFormat.parse(date)?.time ?: 0L
-                    }
-            }
+    override fun chapterListParse(response: Response) = response.asJsoup().select(".archive_link").map {
+        val index = it.selectFirst(".index")!!.text()
+        val date = it.selectFirst(".date")!!.ownText()
+        val title = it.selectFirst(".name")!!.text()
+        val characters = it.select(".characters").text()
+        SChapter.create().apply {
+            url = "/$index"
+            name = "#$index: $title"
+            chapter_number = index.toFloat()
+            // Not actually scanlators but whatever
+            scanlator = characters.replace(" ", ", ")
+            // One of the dates is missing the year
+            date_upload =
+                when (date) {
+                    "Sep 20" -> 1442696400000L // Sep 20, 2015
+                    else -> dateFormat.parse(date)?.time ?: 0L
+                }
         }
+    }
 
-    override fun pageListParse(response: Response) =
-        response.asJsoup().select(".comic > img").mapIndexed { idx, img ->
-            Page(idx, "", img.absUrl("src"))
-        }
+    override fun pageListParse(response: Response) = response.asJsoup().select(".comic > img").mapIndexed { idx, img ->
+        Page(idx, "", img.absUrl("src"))
+    }
 
-    override fun fetchPopularManga(page: Int) =
-        listOf(
-            SManga.create().apply {
-                url = "/archive"
-                title = "Dark Legacy Comics"
-                thumbnail_url = THUMB_URL
-                status = SManga.ONGOING
-                author = AUTHOR_NAME
-                artist = AUTHOR_NAME
-            },
-            SManga.create().apply {
-                url = "/specials/1.php"
-                title = "Dark Legacy Comics Specials"
-                thumbnail_url = THUMB_URL
-                status = SManga.COMPLETED
-                author = AUTHOR_NAME
-                artist = AUTHOR_NAME
-            },
-        ).let { Observable.just(MangasPage(it, false))!! }
+    override fun fetchPopularManga(page: Int) = listOf(
+        SManga.create().apply {
+            url = "/archive"
+            title = "Dark Legacy Comics"
+            thumbnail_url = THUMB_URL
+            status = SManga.ONGOING
+            author = AUTHOR_NAME
+            artist = AUTHOR_NAME
+        },
+        SManga.create().apply {
+            url = "/specials/1.php"
+            title = "Dark Legacy Comics Specials"
+            thumbnail_url = THUMB_URL
+            status = SManga.COMPLETED
+            author = AUTHOR_NAME
+            artist = AUTHOR_NAME
+        },
+    ).let { Observable.just(MangasPage(it, false))!! }
 
     override fun fetchSearchManga(
         page: Int,
@@ -75,20 +72,19 @@ class DarkLegacyComics : HttpSource() {
 
     override fun fetchMangaDetails(manga: SManga) = Observable.just(manga.apply { initialized = true })!!
 
-    override fun fetchChapterList(manga: SManga) =
-        if (manga.url == "/archive") {
-            super.fetchChapterList(manga)
-        } else {
-            specials
-                .map {
-                    SChapter.create().apply {
-                        name = it.value
-                        url = "/specials/${it.key}"
-                        chapter_number = it.key.toFloat()
-                        date_upload = SPECIALS_DATE
-                    }
-                }.let { Observable.just(it)!! }
-        }
+    override fun fetchChapterList(manga: SManga) = if (manga.url == "/archive") {
+        super.fetchChapterList(manga)
+    } else {
+        specials
+            .map {
+                SChapter.create().apply {
+                    name = it.value
+                    url = "/specials/${it.key}"
+                    chapter_number = it.key.toFloat()
+                    date_upload = SPECIALS_DATE
+                }
+            }.let { Observable.just(it)!! }
+    }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 

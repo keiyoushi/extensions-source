@@ -45,17 +45,16 @@ class Chapter(
     private val isUserRented: Boolean,
     val createdAt: String,
 ) : Accessible {
-    override fun toString() =
-        buildString {
-            append(title)
-            if (subtitle.isNotEmpty()) {
-                append(" - ")
-                append(subtitle)
-            }
-            if (!isFree && !(isUserUnlocked || isUserRented)) {
-                append(" \uD83D\uDD12")
-            }
+    override fun toString() = buildString {
+        append(title)
+        if (subtitle.isNotEmpty()) {
+            append(" - ")
+            append(subtitle)
         }
+        if (!isFree && !(isUserUnlocked || isUserRented)) {
+            append(" \uD83D\uDD12")
+        }
+    }
 }
 
 @Serializable

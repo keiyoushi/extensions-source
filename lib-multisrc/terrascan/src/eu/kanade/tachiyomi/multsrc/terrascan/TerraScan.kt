@@ -48,12 +48,11 @@ abstract class TerraScan(
     open val popularMangaTitleSelector: String = "p, h3"
     open val popularMangaThumbnailSelector: String = "img"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst(popularMangaTitleSelector)!!.ownText()
-            thumbnail_url = element.selectFirst(popularMangaThumbnailSelector)?.srcAttr()
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst(popularMangaTitleSelector)!!.ownText()
+        thumbnail_url = element.selectFirst(popularMangaThumbnailSelector)?.srcAttr()
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    }
 
     override fun popularMangaNextPageSelector() = ".pagination > .page-item:not(.disabled):last-child"
 
@@ -166,28 +165,26 @@ abstract class TerraScan(
     open val mangaDetailsDescriptionSelector: String = "p"
     open val mangaDetailsGenreSelector: String = ".card:has(h5:contains(Categorias)) a, .card:has(h5:contains(Categorias)) div"
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            with(document.selectFirst(mangaDetailsContainerSelector)!!) {
-                title = selectFirst(mangaDetailsTitleSelector)!!.text()
-                thumbnail_url = selectFirst(mangaDetailsThumbnailSelector)?.absUrl("href")
-                description = selectFirst(mangaDetailsDescriptionSelector)?.text()
-                genre =
-                    document
-                        .select(mangaDetailsGenreSelector)
-                        .joinToString { it.ownText() }
-            }
-            setUrlWithoutDomain(document.location())
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        with(document.selectFirst(mangaDetailsContainerSelector)!!) {
+            title = selectFirst(mangaDetailsTitleSelector)!!.text()
+            thumbnail_url = selectFirst(mangaDetailsThumbnailSelector)?.absUrl("href")
+            description = selectFirst(mangaDetailsDescriptionSelector)?.text()
+            genre =
+                document
+                    .select(mangaDetailsGenreSelector)
+                    .joinToString { it.ownText() }
         }
+        setUrlWithoutDomain(document.location())
+    }
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            with(element.selectFirst("h5")!!) {
-                name = ownText()
-                date_upload = selectFirst("div")!!.ownText().toDate()
-            }
-            setUrlWithoutDomain(element.absUrl("href"))
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        with(element.selectFirst("h5")!!) {
+            name = ownText()
+            date_upload = selectFirst("div")!!.ownText().toDate()
         }
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     override fun chapterListSelector() = ".col-chapter a"
 
@@ -245,32 +242,29 @@ abstract class TerraScan(
         return lowerBound
     }
 
-    private fun Element.srcAttr(): String =
-        when {
-            hasAttr("data-src") -> absUrl("data-src")
-            else -> absUrl("src")
-        }
+    private fun Element.srcAttr(): String = when {
+        hasAttr("data-src") -> absUrl("data-src")
+        else -> absUrl("src")
+    }
 
-    private fun String.toDate() =
-        try {
-            dateFormat.parse(trim())!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String.toDate() = try {
+        dateFormat.parse(trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     open val genreFilterSelector: String = "form div > div:has(input) div"
 
-    private fun parseGenres(document: Document): List<Genre> =
-        document
-            .select(genreFilterSelector)
-            .map { element ->
-                val input = element.selectFirst("input")!!
-                Genre(
-                    name = element.selectFirst("label")!!.ownText(),
-                    query = input.attr("name"),
-                    value = input.attr("value"),
-                )
-            }
+    private fun parseGenres(document: Document): List<Genre> = document
+        .select(genreFilterSelector)
+        .map { element ->
+            val input = element.selectFirst("input")!!
+            Genre(
+                name = element.selectFirst("label")!!.ownText(),
+                query = input.attr("name"),
+                value = input.attr("value"),
+            )
+        }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"

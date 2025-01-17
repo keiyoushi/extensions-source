@@ -4,16 +4,15 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.FormBody
 
-fun getFilterListInternal() =
-    FilterList(
-        Filter.Header("搜索选项"),
-        SearchTypeFilter(),
-        SortFilter(),
-        Filter.Separator(),
-        Filter.Header("排行榜（搜索文本时无效）"),
-        RankingFilter(),
-        RankingRangeFilter(),
-    )
+fun getFilterListInternal() = FilterList(
+    Filter.Header("搜索选项"),
+    SearchTypeFilter(),
+    SortFilter(),
+    Filter.Separator(),
+    Filter.Header("排行榜（搜索文本时无效）"),
+    RankingFilter(),
+    RankingRangeFilter(),
+)
 
 interface ListingFilter {
     fun addTo(builder: FormBody.Builder)

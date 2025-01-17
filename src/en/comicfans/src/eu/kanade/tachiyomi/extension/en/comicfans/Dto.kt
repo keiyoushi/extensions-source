@@ -26,26 +26,25 @@ class MangaDto(
     val authorPseudonym: String? = null,
     val synopsis: String? = null,
 ) {
-    fun toSManga(cdnUrl: String): SManga =
-        SManga.create().apply {
-            title = this@MangaDto.title
-            thumbnail_url = "$cdnUrl/$coverImgUrl"
-            author = authorPseudonym
+    fun toSManga(cdnUrl: String): SManga = SManga.create().apply {
+        title = this@MangaDto.title
+        thumbnail_url = "$cdnUrl/$coverImgUrl"
+        author = authorPseudonym
 
-            url =
-                buildString {
-                    append("/comic/")
-                    append(slugify(id, title))
-                }
-            description = synopsis
-            status =
-                when (this@MangaDto.status) {
-                    0 -> SManga.ONGOING
-                    1 -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            initialized = true
-        }
+        url =
+            buildString {
+                append("/comic/")
+                append(slugify(id, title))
+            }
+        description = synopsis
+        status =
+            when (this@MangaDto.status) {
+                0 -> SManga.ONGOING
+                1 -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        initialized = true
+    }
 }
 
 @Serializable
@@ -54,17 +53,16 @@ class ChapterDto(
     val title: String,
     val updateTime: Long? = null,
 ) {
-    fun toSChapter(index: Int): SChapter =
-        SChapter.create().apply {
-            name = "Ch. $index - $title"
-            chapter_number = index.toFloat()
-            date_upload = updateTime ?: 0L
-            url =
-                buildString {
-                    append("/episode/")
-                    append(slugify(id, title))
-                }
-        }
+    fun toSChapter(index: Int): SChapter = SChapter.create().apply {
+        name = "Ch. $index - $title"
+        chapter_number = index.toFloat()
+        date_upload = updateTime ?: 0L
+        url =
+            buildString {
+                append("/episode/")
+                append(slugify(id, title))
+            }
+    }
 }
 
 @Serializable
@@ -84,16 +82,15 @@ private val hyphenRegex = Regex("-{2,}")
 private fun slugify(
     id: Int,
     title: String,
-): String =
-    buildString {
-        append(id)
-        append("-")
-        append(
-            title
-                .lowercase()
-                .replace(symbolsRegex, "-")
-                .replace(hyphenRegex, "-")
-                .removeSuffix("-")
-                .removePrefix("-"),
-        )
-    }
+): String = buildString {
+    append(id)
+    append("-")
+    append(
+        title
+            .lowercase()
+            .replace(symbolsRegex, "-")
+            .replace(hyphenRegex, "-")
+            .removeSuffix("-")
+            .removePrefix("-"),
+    )
+}

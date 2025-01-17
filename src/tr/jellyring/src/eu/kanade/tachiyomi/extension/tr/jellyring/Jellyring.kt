@@ -18,16 +18,15 @@ class Jellyring :
     override fun genresRequest() = popularMangaRequest(1)
 
     // Derived from CreepyScans
-    override fun parseGenres(document: Document): List<Genre> =
-        document.select(".list-unstyled li").mapNotNull { genre ->
-            genre.selectFirst("a[href]")?.let {
-                val slug =
-                    it
-                        .attr("href")
-                        .split("/")
-                        .last(String::isNotEmpty)
+    override fun parseGenres(document: Document): List<Genre> = document.select(".list-unstyled li").mapNotNull { genre ->
+        genre.selectFirst("a[href]")?.let {
+            val slug =
+                it
+                    .attr("href")
+                    .split("/")
+                    .last(String::isNotEmpty)
 
-                Genre(it.ownText().trim(), slug)
-            }
+            Genre(it.ownText().trim(), slug)
         }
+    }
 }

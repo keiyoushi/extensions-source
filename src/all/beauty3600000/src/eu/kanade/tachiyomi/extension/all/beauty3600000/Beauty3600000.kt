@@ -23,10 +23,9 @@ class Beauty3600000 : ParsedHttpSource() {
     override val name = "3600000 Beauty"
     override val supportsLatest = false
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Latest
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
@@ -38,13 +37,12 @@ class Beauty3600000 : ParsedHttpSource() {
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
     // Popular
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url = element.select("a img.ls_lazyimg").attr("file")
-            title = element.select(".entry-title").text()
-            setUrlWithoutDomain(element.select(".entry-title > a").attr("abs:href"))
-            status = SManga.COMPLETED
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.select("a img.ls_lazyimg").attr("file")
+        title = element.select(".entry-title").text()
+        setUrlWithoutDomain(element.select(".entry-title > a").attr("abs:href"))
+        status = SManga.COMPLETED
+    }
 
     override fun popularMangaNextPageSelector() = ".next"
 
@@ -95,16 +93,15 @@ class Beauty3600000 : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     // Details
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val main = document.selectFirst("#main")!!
-            title = main.select(".entry-title").text()
-            description = main.select(".entry-title").text()
-            genre = getGenres(document).joinToString(", ")
-            thumbnail_url = main.select(".entry-content img.ls_lazyimg").attr("file")
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val main = document.selectFirst("#main")!!
+        title = main.select(".entry-title").text()
+        description = main.select(".entry-title").text()
+        genre = getGenres(document).joinToString(", ")
+        thumbnail_url = main.select(".entry-content img.ls_lazyimg").attr("file")
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    }
 
     private fun getGenres(element: Element): List<String> {
         val genres = mutableListOf<String>()
@@ -118,12 +115,11 @@ class Beauty3600000 : ParsedHttpSource() {
         return genres
     }
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("link[rel=\"shortlink\"]").attr("href"))
-            name = "Gallery"
-            date_upload = getDate(element.select("#main time").attr("datetime"))
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("link[rel=\"shortlink\"]").attr("href"))
+        name = "Gallery"
+        date_upload = getDate(element.select("#main time").attr("datetime"))
+    }
 
     override fun chapterListSelector() = "html"
 
@@ -141,13 +137,12 @@ class Beauty3600000 : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("NOTE: Only one filter will be applied!"),
-            Filter.Separator(),
-            CategoryFilter(),
-            TagFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Only one filter will be applied!"),
+        Filter.Separator(),
+        CategoryFilter(),
+        TagFilter(),
+    )
 
     open class UriPartFilter(
         displayName: String,
@@ -180,12 +175,11 @@ class Beauty3600000 : ParsedHttpSource() {
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
-    private fun getDate(str: String): Long =
-        try {
-            DATE_FORMAT.parse(str)!!.time
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun getDate(str: String): Long = try {
+        DATE_FORMAT.parse(str)!!.time
+    } catch (e: ParseException) {
+        0L
+    }
 
     companion object {
         private val DATE_FORMAT by lazy {

@@ -99,23 +99,20 @@ class BlackToon : HttpSource() {
         }
     }
 
-    private fun List<SeriesItem>.getPageChunk(page: Int): MangasPage =
-        MangasPage(
-            mangas =
-                subList((page - 1) * 24, min(page * 24, size))
-                    .map { it.toSManga(cdnUrl) },
-            hasNextPage = (page + 1) * 24 <= size,
-        )
+    private fun List<SeriesItem>.getPageChunk(page: Int): MangasPage = MangasPage(
+        mangas =
+            subList((page - 1) * 24, min(page * 24, size))
+                .map { it.toSManga(cdnUrl) },
+        hasNextPage = (page + 1) * 24 <= size,
+    )
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(
-            db.sortedByDescending { it.hot }.getPageChunk(page),
-        )
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
+        db.sortedByDescending { it.hot }.getPageChunk(page),
+    )
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        Observable.just(
-            db.sortedByDescending { it.updatedAt }.getPageChunk(page),
-        )
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.just(
+        db.sortedByDescending { it.updatedAt }.getPageChunk(page),
+    )
 
     override fun fetchSearchManga(
         page: Int,
@@ -146,18 +143,17 @@ class BlackToon : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/webtoon/${manga.url}.html#${manga.status}", headers)
 
-    override fun getMangaUrl(manga: SManga): String =
-        buildString {
-            if (currentBaseUrlHost.isBlank()) {
-                append(baseUrl)
-            } else {
-                append("https://")
-                append(currentBaseUrlHost)
-            }
-            append("/webtoon/")
-            append(manga.url)
-            append(".html")
+    override fun getMangaUrl(manga: SManga): String = buildString {
+        if (currentBaseUrlHost.isBlank()) {
+            append(baseUrl)
+        } else {
+            append("https://")
+            append(currentBaseUrlHost)
         }
+        append("/webtoon/")
+        append(manga.url)
+        append(".html")
+    }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
@@ -195,18 +191,17 @@ class BlackToon : HttpSource() {
         return data.map { it.toSChapter(mangaId) }.reversed()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String =
-        buildString {
-            if (currentBaseUrlHost.isBlank()) {
-                append(baseUrl)
-            } else {
-                append("https://")
-                append(currentBaseUrlHost)
-            }
-            append("/webtoons/")
-            append(chapter.url)
-            append(".html")
+    override fun getChapterUrl(chapter: SChapter): String = buildString {
+        if (currentBaseUrlHost.isBlank()) {
+            append(baseUrl)
+        } else {
+            append("https://")
+            append(currentBaseUrlHost)
         }
+        append("/webtoons/")
+        append(chapter.url)
+        append(".html")
+    }
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/webtoons/${chapter.url}.html", headers)
 

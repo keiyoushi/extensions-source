@@ -38,10 +38,9 @@ open class MonochromeCMS(
         filters: FilterList,
     ) = GET("$apiUrl/manga?limit=10&offset=${10 * (page - 1)}&title=$query", headers)
 
-    override fun searchMangaParse(response: Response) =
-        response.decode<Results>().let {
-            MangasPage(it.map(::mangaFromAPI), it.hasNext)
-        }
+    override fun searchMangaParse(response: Response) = response.decode<Results>().let {
+        MangasPage(it.map(::mangaFromAPI), it.hasNext)
+    }
 
     override fun fetchSearchManga(
         page: Int,
@@ -61,18 +60,17 @@ open class MonochromeCMS(
 
     override fun chapterListRequest(manga: SManga) = GET("$apiUrl/manga/${manga.url}/chapters", headers)
 
-    override fun fetchChapterList(manga: SManga) =
-        client.newCall(chapterListRequest(manga)).asObservableSuccess().map {
-            it.decode<List<Chapter>>().map { ch ->
-                SChapter.create().apply {
-                    name = ch.title
-                    url = manga.url + ch.parts
-                    chapter_number = ch.number
-                    date_upload = ch.timestamp
-                    scanlator = ch.scanGroup
-                }
+    override fun fetchChapterList(manga: SManga) = client.newCall(chapterListRequest(manga)).asObservableSuccess().map {
+        it.decode<List<Chapter>>().map { ch ->
+            SChapter.create().apply {
+                name = ch.title
+                url = manga.url + ch.parts
+                chapter_number = ch.number
+                date_upload = ch.timestamp
+                scanlator = ch.scanGroup
             }
-        }!!
+        }
+    }!!
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val (uuid, version, length) = chapter.url.split('|')
@@ -87,21 +85,20 @@ open class MonochromeCMS(
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/chapters/${chapter.url.subSequence(37, 73)}"
 
-    private fun mangaFromAPI(manga: Manga) =
-        SManga.create().apply {
-            url = manga.id
-            title = manga.title
-            author = manga.author
-            artist = manga.artist
-            description = manga.description
-            thumbnail_url = apiUrl + manga.cover
-            status =
-                when (manga.status) {
-                    "ongoing", "hiatus" -> SManga.ONGOING
-                    "completed", "cancelled" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    private fun mangaFromAPI(manga: Manga) = SManga.create().apply {
+        url = manga.id
+        title = manga.title
+        author = manga.author
+        artist = manga.artist
+        description = manga.description
+        thumbnail_url = apiUrl + manga.cover
+        status =
+            when (manga.status) {
+                "ongoing", "hiatus" -> SManga.ONGOING
+                "completed", "cancelled" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     private inline fun <reified T> Response.decode() = json.decodeFromString<T>(body.string())
 

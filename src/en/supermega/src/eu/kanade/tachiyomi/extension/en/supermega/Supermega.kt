@@ -42,9 +42,8 @@ class Supermega : ParsedHttpSource() {
         return Observable.just(MangasPage(arrayListOf(manga), false))
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        fetchPopularManga(1)
-            .map { it.mangas.first().apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
+        .map { it.mangas.first().apply { initialized = true } }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val latestComicNumber =
@@ -71,12 +70,11 @@ class Supermega : ParsedHttpSource() {
         )
     }
 
-    override fun pageListParse(document: Document) =
-        document
-            .select("img[border='4']")
-            .mapIndexed { i, element ->
-                Page(i, "", element.attr("src"))
-            }
+    override fun pageListParse(document: Document) = document
+        .select("img[border='4']")
+        .mapIndexed { i, element ->
+            Page(i, "", element.attr("src"))
+        }
 
     // idk if this is needed i just copied the megatokyo extension lul
     // certificate wasn't trusted for some reason so trusted all certificates

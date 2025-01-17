@@ -72,11 +72,10 @@ sealed class ReaderFrontI18N(
     }
 
     companion object {
-        operator fun invoke(lang: String) =
-            when (lang) {
-                "es" -> SPANISH
-                "en" -> ENGLISH
-                else -> error("Unsupported language: $lang")
-            }
+        operator fun invoke(lang: String) = when (lang) {
+            "es" -> SPANISH
+            "en" -> ENGLISH
+            else -> error("Unsupported language: $lang")
+        }
     }
 }

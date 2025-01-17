@@ -48,26 +48,24 @@ class SeriesDto(
     @SerialName("idioma")
     val language: String? = null,
 ) {
-    fun toSManga(seriesPath: String): SManga =
-        SManga.create().apply {
-            title = name
-            thumbnail_url = thumbnail
-            url = "$seriesPath/$slug"
-        }
+    fun toSManga(seriesPath: String): SManga = SManga.create().apply {
+        title = name
+        thumbnail_url = thumbnail
+        url = "$seriesPath/$slug"
+    }
 
-    fun toSMangaDetails(): SManga =
-        SManga.create().apply {
-            title = name
-            thumbnail_url = thumbnail
-            description = synopsis
-            if (!alternativeName.isNullOrBlank()) {
-                if (!description.isNullOrBlank()) description += "\n\n"
-                description += "Nombres alternativos: $alternativeName"
-            }
-            genre = genders.joinToString { it.gender.name }
-            author = authors.joinToString { it.author.name }
-            artist = artists.joinToString { it.artist.name }
+    fun toSMangaDetails(): SManga = SManga.create().apply {
+        title = name
+        thumbnail_url = thumbnail
+        description = synopsis
+        if (!alternativeName.isNullOrBlank()) {
+            if (!description.isNullOrBlank()) description += "\n\n"
+            description += "Nombres alternativos: $alternativeName"
         }
+        genre = genders.joinToString { it.gender.name }
+        author = authors.joinToString { it.author.name }
+        artist = artists.joinToString { it.artist.name }
+    }
 }
 
 @Serializable
@@ -105,20 +103,19 @@ class ChapterDto(
     fun toSChapter(
         seriesPath: String,
         seriesSlug: String,
-    ): SChapter =
-        SChapter.create().apply {
-            name = "Capítulo ${number.toString().removeSuffix(".0")}"
-            if (!this@ChapterDto.name.isNullOrBlank()) {
-                name += " - ${this@ChapterDto.name}"
-            }
-            date_upload =
-                try {
-                    DATE_FORMATTER.parse(date)?.time ?: 0L
-                } catch (e: Exception) {
-                    0L
-                }
-            url = "$seriesPath/$seriesSlug/$slug"
+    ): SChapter = SChapter.create().apply {
+        name = "Capítulo ${number.toString().removeSuffix(".0")}"
+        if (!this@ChapterDto.name.isNullOrBlank()) {
+            name += " - ${this@ChapterDto.name}"
         }
+        date_upload =
+            try {
+                DATE_FORMATTER.parse(date)?.time ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+        url = "$seriesPath/$seriesSlug/$slug"
+    }
 
     companion object {
         private val DATE_FORMATTER by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US) }

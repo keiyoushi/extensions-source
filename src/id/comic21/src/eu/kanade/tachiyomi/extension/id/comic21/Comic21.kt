@@ -12,20 +12,19 @@ class Comic21 :
     ) {
     override val hasProjectPage = true
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            // Add 'color' badge as a genre
-            if (document.selectFirst(".thumb .colored") != null) {
-                val genres =
-                    genre
-                        ?.split(", ")
-                        ?.toMutableList()
-                        ?: mutableListOf()
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        // Add 'color' badge as a genre
+        if (document.selectFirst(".thumb .colored") != null) {
+            val genres =
+                genre
+                    ?.split(", ")
+                    ?.toMutableList()
+                    ?: mutableListOf()
 
-                genre =
-                    genres
-                        .apply { add("Color") }
-                        .joinToString()
-            }
+            genre =
+                genres
+                    .apply { add("Color") }
+                    .joinToString()
         }
+    }
 }

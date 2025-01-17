@@ -20,10 +20,9 @@ class FreleinBooks : ParsedHttpSource() {
     override val name = "Frelein Books"
     override val supportsLatest = true
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val Element.imgSrc: String
         get() =
@@ -42,19 +41,18 @@ class FreleinBooks : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = ".olderLink"
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (page == 1) {
-            GET(baseUrl)
-        } else {
-            val dateParam = page * 7 * 2
-            // Calendar set to the current date
-            val calendar: Calendar = Calendar.getInstance()
-            // rollback 14 days
-            calendar.add(Calendar.DAY_OF_YEAR, -dateParam)
-            val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            // now the date is 14 days back
-            GET("$baseUrl/search?updated-max=${formatter.format(calendar.time)}T12:38:00%2B07:00&max-results=12&start=12&by-date=false")
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (page == 1) {
+        GET(baseUrl)
+    } else {
+        val dateParam = page * 7 * 2
+        // Calendar set to the current date
+        val calendar: Calendar = Calendar.getInstance()
+        // rollback 14 days
+        calendar.add(Calendar.DAY_OF_YEAR, -dateParam)
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        // now the date is 14 days back
+        GET("$baseUrl/search?updated-max=${formatter.format(calendar.time)}T12:38:00%2B07:00&max-results=12&start=12&by-date=false")
+    }
 
     override fun latestUpdatesSelector() = ".blogPosts > article"
 
@@ -160,15 +158,14 @@ class FreleinBooks : ParsedHttpSource() {
 
     // Filters
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("NOTE: Only one filter will be applied!"),
-            Filter.Separator(),
-            GroupFilter(),
-            MagazineFilter(),
-            FashionMagazineFilter(),
-            TagFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Only one filter will be applied!"),
+        Filter.Separator(),
+        GroupFilter(),
+        MagazineFilter(),
+        FashionMagazineFilter(),
+        TagFilter(),
+    )
 
     open class UriPartFilter(
         displayName: String,

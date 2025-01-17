@@ -15,8 +15,7 @@ class GrabberZone :
     ) {
     override val mangaSubString = "comics"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            name = element.selectFirst("a + a")!!.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        name = element.selectFirst("a + a")!!.text()
+    }
 }

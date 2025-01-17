@@ -26,10 +26,9 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga-list?page=$page", headers)
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        super.popularMangaFromElement(element).apply {
-            title = element.select(popularMangaUrlSelector).text()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        title = element.select(popularMangaUrlSelector).text()
+    }
 
     // latest
     override fun latestUpdatesSelector() = "div.d-flex:nth-child(6) div.col-6"
@@ -72,25 +71,23 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
     }
 
     // manga details
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            document.select(mangaDetailsSelectorStatus).last()?.let {
-                status =
-                    when (it.text()) {
-                        in "complete" -> SManga.COMPLETED
-                        in "ongoing" -> SManga.ONGOING
-                        else -> SManga.UNKNOWN
-                    }
-            }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        document.select(mangaDetailsSelectorStatus).last()?.let {
+            status =
+                when (it.text()) {
+                    in "complete" -> SManga.COMPLETED
+                    in "ongoing" -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
         }
+    }
 
     // chapter list
     override val chapterUrlSuffix = ""
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            name = element.select("p").text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        name = element.select("p").text()
+    }
 
     // page list
     override val pageListParseSelector = "#chapter_imgs img"
@@ -235,9 +232,8 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
         genreList: Array<String>,
     ) : Filter.Select<String>(title, genreList)
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Note: Ignored if using text search"),
-            GenreFilter("Genre", getGenreList),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: Ignored if using text search"),
+        GenreFilter("Genre", getGenreList),
+    )
 }

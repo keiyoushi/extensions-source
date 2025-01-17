@@ -34,18 +34,17 @@ class WeLoveMangaOne : FMReader("WeLoveMangaOne", "https://welovemanga.one", "ja
     override fun chapterFromElement(
         element: Element,
         mangaTitle: String,
-    ): SChapter =
-        SChapter.create().apply {
-            element.let {
-                setUrlWithoutDomain(it.attr("abs:href"))
-                name = it.attr("title")
-            }
-
-            date_upload =
-                element
-                    .select(chapterTimeSelector)
-                    .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
+    ): SChapter = SChapter.create().apply {
+        element.let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            name = it.attr("title")
         }
+
+        date_upload =
+            element
+                .select(chapterTimeSelector)
+                .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
+    }
 
     private fun parseChapterDate(date: String): Long {
         val value = date.split(' ')[dateValueIndex].toInt()

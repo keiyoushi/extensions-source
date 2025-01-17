@@ -35,39 +35,34 @@ data class MCComic(
     val episodes: List<MCEpisode>? = null,
 //  val books: List<MCBook>? = null,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            url = "/comics/$dir_name"
-            title = this@MCComic.title
-            author = this@MCComic.author
-            description = getDescription()
-            genre = getGenre()
-            status = getStatus()
-            thumbnail_url = list_image_double_url
-        }
+    fun toSManga() = SManga.create().apply {
+        url = "/comics/$dir_name"
+        title = this@MCComic.title
+        author = this@MCComic.author
+        description = getDescription()
+        genre = getGenre()
+        status = getStatus()
+        thumbnail_url = list_image_double_url
+    }
 
-    fun toSChapterList() =
-        episodes!!
-            // .filter { it.status == "public" }  // preserve private chapters in case user downloaded before
-            .map { it.toSChapter("/comics/$dir_name") }
+    fun toSChapterList() = episodes!!
+        // .filter { it.status == "public" }  // preserve private chapters in case user downloaded before
+        .map { it.toSChapter("/comics/$dir_name") }
 
-    private fun getDescription() =
-        listOfNotNull(
-            episodes?.firstOrNull()?.getNextDatePrefix(),
-            outline?.stripHtml(),
-        ).joinToString("\n")
+    private fun getDescription() = listOfNotNull(
+        episodes?.firstOrNull()?.getNextDatePrefix(),
+        outline?.stripHtml(),
+    ).joinToString("\n")
 
-    private fun getGenre() =
-        listOfNotNull(
-            comic_category?.display_name,
-            comic_tags.joinToString(", ") { it.name },
-        ).joinToString(", ")
+    private fun getGenre() = listOfNotNull(
+        comic_category?.display_name,
+        comic_tags.joinToString(", ") { it.name },
+    ).joinToString(", ")
 
-    private fun getStatus() =
-        when {
-            episodes?.firstOrNull()?.episode_next_date.isNullOrEmpty() -> SManga.UNKNOWN
-            else -> SManga.ONGOING
-        }
+    private fun getStatus() = when {
+        episodes?.firstOrNull()?.episode_next_date.isNullOrEmpty() -> SManga.UNKNOWN
+        else -> SManga.ONGOING
+    }
 
     private fun String.stripHtml() = Jsoup.parseBodyFragment(this).text()
 }
@@ -118,29 +113,27 @@ data class MCEpisode(
     val next_date_customize_text: String?,
     val comic: MCComic? = null, // in latest
 ) {
-    fun toSChapter(urlPrefix: String) =
-        SChapter.create().apply {
-            url = "$urlPrefix/$sort_volume/viewer.json"
-            val prefix = if (status == "public") "" else "🔒 "
-            name = "$prefix$volume $title"
-            // milliseconds are always 000
-            date_upload = JST_FORMAT_LIST.parseJST(publish_start)!!.time
-            // show end date in scanlator field
-            scanlator = publish_end?.let { "~" + LOCAL_FORMAT_LIST.format(JST_FORMAT_LIST.parseJST(it)!!) }
-        }
+    fun toSChapter(urlPrefix: String) = SChapter.create().apply {
+        url = "$urlPrefix/$sort_volume/viewer.json"
+        val prefix = if (status == "public") "" else "🔒 "
+        name = "$prefix$volume $title"
+        // milliseconds are always 000
+        date_upload = JST_FORMAT_LIST.parseJST(publish_start)!!.time
+        // show end date in scanlator field
+        scanlator = publish_end?.let { "~" + LOCAL_FORMAT_LIST.format(JST_FORMAT_LIST.parseJST(it)!!) }
+    }
 
-    fun getNextDatePrefix(): String? =
-        when {
-            !episode_next_date.isNullOrEmpty() -> {
-                val date =
-                    JST_FORMAT_DESC.parseJST(episode_next_date)!!.apply {
-                        time += 10 * 3600 * 1000 // 10 am JST
-                    }
-                "【Next: ${LOCAL_FORMAT_DESC.format(date)}】"
-            }
-            !next_date_customize_text.isNullOrEmpty() -> "【$next_date_customize_text】"
-            else -> null
+    fun getNextDatePrefix(): String? = when {
+        !episode_next_date.isNullOrEmpty() -> {
+            val date =
+                JST_FORMAT_DESC.parseJST(episode_next_date)!!.apply {
+                    time += 10 * 3600 * 1000 // 10 am JST
+                }
+            "【Next: ${LOCAL_FORMAT_DESC.format(date)}】"
         }
+        !next_date_customize_text.isNullOrEmpty() -> "【$next_date_customize_text】"
+        else -> null
+    }
 
     companion object {
         // for thread-safety
@@ -151,10 +144,9 @@ data class MCEpisode(
 
         private fun SimpleDateFormat.parseJST(date: String) = parse(date.removeSuffix("+09:00"))
 
-        private fun getJSTFormat() =
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ENGLISH).apply {
-                timeZone = TimeZone.getTimeZone("GMT+09:00")
-            }
+        private fun getJSTFormat() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("GMT+09:00")
+        }
     }
 }
 

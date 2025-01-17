@@ -17,20 +17,17 @@ class KdtScans :
     override val useNewChapterEndpoint = true
     override val fetchGenres = false
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        super.popularMangaFromElement(element).apply {
-            title = title.cleanupTitle()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        title = title.cleanupTitle()
+    }
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        super.searchMangaFromElement(element).apply {
-            title = title.cleanupTitle()
-        }
+    override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
+        title = title.cleanupTitle()
+    }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            title = title.cleanupTitle()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        title = title.cleanupTitle()
+    }
 
     private fun String.cleanupTitle() = replace(titleCleanupRegex, "").trim()
 

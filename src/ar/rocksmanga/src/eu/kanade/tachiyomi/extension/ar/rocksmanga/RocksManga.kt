@@ -18,10 +18,9 @@ class RocksManga :
 
     override val popularMangaUrlSelector = "div.manga-poster a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        super.popularMangaFromElement(element).apply {
-            title = element.selectFirst(popularMangaUrlSelector)!!.attr("title")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        title = element.selectFirst(popularMangaUrlSelector)!!.attr("title")
+    }
 
     override fun searchMangaSelector() = "#manga-search-results .manga-item"
 

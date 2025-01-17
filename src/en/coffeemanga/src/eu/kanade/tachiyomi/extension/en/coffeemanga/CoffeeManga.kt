@@ -6,11 +6,10 @@ import org.jsoup.nodes.Element
 class CoffeeManga : Madara("Coffee Manga", "https://coffeemanga.io", "en") {
     override val useNewChapterEndpoint = false
 
-    override fun imageFromElement(element: Element): String? =
-        when {
-            element.hasAttr("data-src") && element.attr("data-src").isNotEmpty() -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") && element.attr("data-lazy-src").isNotEmpty() -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") && element.attr("srcset").isNotEmpty() -> element.attr("abs:srcset").substringBefore(" ")
-            else -> element.attr("abs:src")
-        }
+    override fun imageFromElement(element: Element): String? = when {
+        element.hasAttr("data-src") && element.attr("data-src").isNotEmpty() -> element.attr("abs:data-src")
+        element.hasAttr("data-lazy-src") && element.attr("data-lazy-src").isNotEmpty() -> element.attr("abs:data-lazy-src")
+        element.hasAttr("srcset") && element.attr("srcset").isNotEmpty() -> element.attr("abs:srcset").substringBefore(" ")
+        else -> element.attr("abs:src")
+    }
 }

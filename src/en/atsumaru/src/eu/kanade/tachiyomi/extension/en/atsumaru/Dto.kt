@@ -41,28 +41,27 @@ class MangaDto(
     // Chapters
     val chapters: List<ChapterDto>? = null,
 ) {
-    fun toSManga(): SManga =
-        SManga.create().apply {
-            title = this@MangaDto.title
-            thumbnail_url = cover
-            url = "/manga/s1/$slug"
+    fun toSManga(): SManga = SManga.create().apply {
+        title = this@MangaDto.title
+        thumbnail_url = cover
+        url = "/manga/s1/$slug"
 
-            authors?.let {
-                author = it.joinToString()
-            }
-            description = this@MangaDto.description
-            genres?.let {
-                genre = it.joinToString()
-            }
-            statuses?.let {
-                status =
-                    when (it.first().lowercase().substringBefore(" ")) {
-                        "ongoing" -> SManga.ONGOING
-                        "complete" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-            }
+        authors?.let {
+            author = it.joinToString()
         }
+        description = this@MangaDto.description
+        genres?.let {
+            genre = it.joinToString()
+        }
+        statuses?.let {
+            status =
+                when (it.first().lowercase().substringBefore(" ")) {
+                    "ongoing" -> SManga.ONGOING
+                    "complete" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+        }
+    }
 }
 
 @Serializable
@@ -73,37 +72,35 @@ class ChapterDto(
     private val title: String? = null,
     private val date: String? = null,
 ) {
-    fun toSChapter(slug: String): SChapter =
-        SChapter.create().apply {
-            val chapterNumber =
-                this@ChapterDto
-                    .name
-                    .replace("_", ".")
-                    .filter { it.isDigit() || it == '.' }
+    fun toSChapter(slug: String): SChapter = SChapter.create().apply {
+        val chapterNumber =
+            this@ChapterDto
+                .name
+                .replace("_", ".")
+                .filter { it.isDigit() || it == '.' }
 
-            name =
-                buildString {
-                    append("Chapter ")
-                    append(chapterNumber)
-                    if (title != null) {
-                        append(" - ")
-                        append(title)
-                    }
+        name =
+            buildString {
+                append("Chapter ")
+                append(chapterNumber)
+                if (title != null) {
+                    append(" - ")
+                    append(title)
                 }
-            url = "$slug/${this@ChapterDto.name}"
-            chapter_number = chapterNumber.toFloat()
-            scanlator = type.takeUnless { it == "Chapter" }
-            date?.let {
-                date_upload = parseDate(it)
             }
+        url = "$slug/${this@ChapterDto.name}"
+        chapter_number = chapterNumber.toFloat()
+        scanlator = type.takeUnless { it == "Chapter" }
+        date?.let {
+            date_upload = parseDate(it)
         }
+    }
 
-    private fun parseDate(dateStr: String): Long =
-        try {
-            DATE_FORMAT.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseDate(dateStr: String): Long = try {
+        DATE_FORMAT.parse(dateStr)!!.time
+    } catch (_: ParseException) {
+        0L
+    }
 
     companion object {
         private val DATE_FORMAT by lazy {

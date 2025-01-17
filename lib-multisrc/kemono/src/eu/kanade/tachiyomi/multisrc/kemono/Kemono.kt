@@ -41,10 +41,9 @@ open class Kemono(
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -67,24 +66,21 @@ open class Kemono(
 
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.fromCallable {
-            searchMangas(page, sortBy = "pop" to "desc")
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
+        searchMangas(page, sortBy = "pop" to "desc")
+    }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        Observable.fromCallable {
-            searchMangas(page, sortBy = "lat" to "desc")
-        }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
+        searchMangas(page, sortBy = "lat" to "desc")
+    }
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        Observable.fromCallable {
-            searchMangas(page, query, filters)
-        }
+    ): Observable<MangasPage> = Observable.fromCallable {
+        searchMangas(page, query, filters)
+    }
 
     private fun searchMangas(
         page: Int = 1,
@@ -220,30 +216,29 @@ open class Kemono(
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url.replace("$apiPath/", "")}"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.fromCallable {
-            KemonoPostDto.dateFormat.timeZone =
-                when (manga.author) {
-                    "Pixiv Fanbox", "Fantia" -> TimeZone.getTimeZone("GMT+09:00")
-                    else -> TimeZone.getTimeZone("GMT")
-                }
-            val prefMaxPost =
-                preferences
-                    .getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
-                    .toInt()
-                    .coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
-            var offset = 0
-            var hasNextPage = true
-            val result = ArrayList<SChapter>()
-            while (offset < prefMaxPost && hasNextPage) {
-                val request = GET("$baseUrl/$apiPath${manga.url}?o=$offset", headers)
-                val page: List<KemonoPostDto> = retry(request).parseAs()
-                page.forEach { post -> if (post.images.isNotEmpty()) result.add(post.toSChapter()) }
-                offset += PAGE_POST_LIMIT
-                hasNextPage = page.size == PAGE_POST_LIMIT
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        KemonoPostDto.dateFormat.timeZone =
+            when (manga.author) {
+                "Pixiv Fanbox", "Fantia" -> TimeZone.getTimeZone("GMT+09:00")
+                else -> TimeZone.getTimeZone("GMT")
             }
-            result
+        val prefMaxPost =
+            preferences
+                .getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
+                .toInt()
+                .coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
+        var offset = 0
+        var hasNextPage = true
+        val result = ArrayList<SChapter>()
+        while (offset < prefMaxPost && hasNextPage) {
+            val request = GET("$baseUrl/$apiPath${manga.url}?o=$offset", headers)
+            val page: List<KemonoPostDto> = retry(request).parseAs()
+            page.forEach { post -> if (post.images.isNotEmpty()) result.add(post.toSChapter()) }
+            offset += PAGE_POST_LIMIT
+            hasNextPage = page.size == PAGE_POST_LIMIT
         }
+        result
+    }
 
     private fun retry(request: Request): Response {
         var code = 0
@@ -285,10 +280,9 @@ open class Kemono(
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream(it.body.byteStream())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context)
@@ -312,16 +306,15 @@ open class Kemono(
 
     // Filters
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            SortFilter(
-                "Sort by",
-                Filter.Sort.Selection(0, false),
-                getSortsList,
-            ),
-            TypeFilter("Types", getTypes),
-            FavouritesFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(
+            "Sort by",
+            Filter.Sort.Selection(0, false),
+            getSortsList,
+        ),
+        TypeFilter("Types", getTypes),
+        FavouritesFilter(),
+    )
 
     open val getTypes: List<String> = emptyList()
 

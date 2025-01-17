@@ -65,10 +65,9 @@ class PlotTwistNoFansub :
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -76,20 +75,19 @@ class PlotTwistNoFansub :
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            with(element.selectFirst("div.panel-body div.mangaThumbnail")!!) {
-                val mangaUrl =
-                    selectFirst("a")!!
-                        .attr("href")
-                        .removeSuffix("/")
-                        .substringBeforeLast("/")
-                        .replaceFirst("/reader/", "/plotwist/manga/")
-                setUrlWithoutDomain(mangaUrl)
-                thumbnail_url = select("img").imgAttr()
-                title = select("img").attr("title")
-            }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        with(element.selectFirst("div.panel-body div.mangaThumbnail")!!) {
+            val mangaUrl =
+                selectFirst("a")!!
+                    .attr("href")
+                    .removeSuffix("/")
+                    .substringBeforeLast("/")
+                    .replaceFirst("/reader/", "/plotwist/manga/")
+            setUrlWithoutDomain(mangaUrl)
+            thumbnail_url = select("img").imgAttr()
+            title = select("img").attr("title")
         }
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -132,30 +130,28 @@ class PlotTwistNoFansub :
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst(".entry-title a")!!.attr("href"))
-            title = element.selectFirst(".entry-title a")!!.text()
-            thumbnail_url =
-                element
-                    .select("span.entry-thumb")
-                    .attr("style")
-                    .substringAfter("url(")
-                    .substringBeforeLast(")")
-                    .removeSurrounding("'")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst(".entry-title a")!!.attr("href"))
+        title = element.selectFirst(".entry-title a")!!.text()
+        thumbnail_url =
+            element
+                .select("span.entry-thumb")
+                .attr("style")
+                .substringAfter("url(")
+                .substringBeforeLast(")")
+                .removeSurrounding("'")
+    }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            with(document.selectFirst("div.td-ss-main-content")!!) {
-                title = selectFirst("div.td-post-header .entry-title p")!!.text()
-                with(selectFirst("div.td-post-content")!!) {
-                    thumbnail_url = selectFirst("img.entry-thumb")?.imgAttr()
-                    description = select("> p").joinToString("\n") { it.text() }
-                    genre = select("div.mangaInfo > a.tagElement").joinToString { it.text() }
-                }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        with(document.selectFirst("div.td-ss-main-content")!!) {
+            title = selectFirst("div.td-post-header .entry-title p")!!.text()
+            with(selectFirst("div.td-post-content")!!) {
+                thumbnail_url = selectFirst("img.entry-thumb")?.imgAttr()
+                description = select("> p").joinToString("\n") { it.text() }
+                genre = select("div.mangaInfo > a.tagElement").joinToString { it.text() }
             }
         }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -248,18 +244,16 @@ class PlotTwistNoFansub :
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Haga click en \"Filtrar\" para ver todos los mangas."),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Haga click en \"Filtrar\" para ver todos los mangas."),
+    )
 
-    private fun Element.imgAttr(): String =
-        when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
-            this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
-            else -> this.attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        this.hasAttr("data-src") -> this.attr("abs:data-src")
+        this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
+        this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
+        else -> this.attr("abs:src")
+    }
 
     private fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 

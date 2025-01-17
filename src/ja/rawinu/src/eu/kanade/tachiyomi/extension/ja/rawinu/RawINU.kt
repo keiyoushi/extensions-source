@@ -64,12 +64,11 @@ class RawINU :
         return doc.select(chapterListSelector()).map(::chapterFromElement)
     }
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            name = element.attr(chapterNameAttrSelector).trim()
-            date_upload = element.select(chapterTimeSelector).run { if (hasText()) parseRelativeDate(text()) else 0 }
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        name = element.attr(chapterNameAttrSelector).trim()
+        date_upload = element.select(chapterTimeSelector).run { if (hasText()) parseRelativeDate(text()) else 0 }
+    }
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {

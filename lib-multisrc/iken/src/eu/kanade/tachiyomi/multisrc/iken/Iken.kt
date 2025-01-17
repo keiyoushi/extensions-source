@@ -27,10 +27,9 @@ abstract class Iken(
 
     private val json by injectLazy<Json>()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     private var genres = emptyList<Pair<String, String>>()
     protected val titleCache by lazy {
@@ -105,13 +104,12 @@ abstract class Iken(
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            StatusFilter(),
-            TypeFilter(),
-            GenreFilter(genres),
-            Filter.Header("Open popular mangas if genre filter is empty"),
-        )
+    override fun getFilterList() = FilterList(
+        StatusFilter(),
+        TypeFilter(),
+        GenreFilter(genres),
+        Filter.Header("Open popular mangas if genre filter is empty"),
+    )
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.url.substringBeforeLast("#")

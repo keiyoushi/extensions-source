@@ -38,10 +38,9 @@ class CosplayTele : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -66,10 +65,9 @@ class CosplayTele : ParsedHttpSource() {
 
     private val popularPageLimit = 20
 
-    override fun popularMangaRequest(page: Int) =
-        GET(
-            "$baseUrl/wp-json/wordpress-popular-posts/v1/popular-posts?offset=${page * popularPageLimit}&limit=$popularPageLimit&range=last7days&embed=true&_embed=wp:featuredmedia&_fields=title,link,_embedded,_links.wp:featuredmedia",
-        )
+    override fun popularMangaRequest(page: Int) = GET(
+        "$baseUrl/wp-json/wordpress-popular-posts/v1/popular-posts?offset=${page * popularPageLimit}&limit=$popularPageLimit&range=last7days&embed=true&_embed=wp:featuredmedia&_fields=title,link,_embedded,_links.wp:featuredmedia",
+    )
 
     override fun popularMangaSelector(): String = ""
 

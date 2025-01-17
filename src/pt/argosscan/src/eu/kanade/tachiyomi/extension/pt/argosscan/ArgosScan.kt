@@ -47,14 +47,13 @@ class ArgosScan : ParsedHttpSource() {
 
     override fun popularMangaSelector() = ".card__main._grid:not(:has(a[href*=novel]))"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            with(element.selectFirst("h3.card__title")!!) {
-                title = text()
-                setUrlWithoutDomain(selectFirst("a")!!.absUrl("href"))
-            }
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        with(element.selectFirst("h3.card__title")!!) {
+            title = text()
+            setUrlWithoutDomain(selectFirst("a")!!.absUrl("href"))
         }
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
 
     override fun popularMangaNextPageSelector() = null
 
@@ -92,56 +91,52 @@ class ArgosScan : ParsedHttpSource() {
 
     // ============================ Details =====================================
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            thumbnail_url = document.selectFirst("img.story__thumbnail-image")?.absUrl("src")
-            description = document.selectFirst(".story__summary p")?.text()
-            document.selectFirst(".story__status")?.let {
-                status =
-                    when (it.text().trim().lowercase()) {
-                        "em andamento" -> SManga.ONGOING
-                        else -> SManga.UNKNOWN
-                    }
-            }
-            setUrlWithoutDomain(document.location())
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        thumbnail_url = document.selectFirst("img.story__thumbnail-image")?.absUrl("src")
+        description = document.selectFirst(".story__summary p")?.text()
+        document.selectFirst(".story__status")?.let {
+            status =
+                when (it.text().trim().lowercase()) {
+                    "em andamento" -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
         }
+        setUrlWithoutDomain(document.location())
+    }
 
     // ============================ Chapter =====================================
 
     override fun chapterListSelector() = ".chapter-group__list li:has(a)"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            with(element.selectFirst("a")!!) {
-                name = text()
-                setUrlWithoutDomain(absUrl("href"))
-            }
-            element.selectFirst(".chapter-group__list-item-date")?.attr("datetime")?.let {
-                date_upload = it.parseDate()
-            }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        with(element.selectFirst("a")!!) {
+            name = text()
+            setUrlWithoutDomain(absUrl("href"))
         }
+        element.selectFirst(".chapter-group__list-item-date")?.attr("datetime")?.let {
+            date_upload = it.parseDate()
+        }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> =
         super.chapterListParse(response).sortedByDescending(SChapter::chapter_number)
 
     // ============================ Pages =======================================
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("#chapter-content img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#chapter-content img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.absUrl("src"))
+    }
 
     override fun imageUrlParse(document: Document) = ""
 
     // ============================== Utilities ==================================
 
-    private fun String.parseDate(): Long =
-        try {
-            dateFormat.parse(this.trim())!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String.parseDate(): Long = try {
+        dateFormat.parse(this.trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     companion object {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)

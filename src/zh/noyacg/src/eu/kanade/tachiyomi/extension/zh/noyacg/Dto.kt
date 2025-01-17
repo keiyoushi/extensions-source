@@ -19,20 +19,19 @@ class MangaDto(
     @SerialName("Time") private val timestamp: Long,
     @SerialName("Len") private val pageCount: Int,
 ) {
-    fun toSManga(imageCdn: String) =
-        SManga.create().also {
-            it.url = id.toString()
-            it.title = title
-            it.author = author.formatNames()
-            it.description = "时间：${mangaDateFormat.format(timestamp * 1000)}\n" +
-                "页数：$pageCount\n" +
-                "原作：${parody.formatNames()}\n" +
-                "角色：${character.formatNames()}"
-            it.genre = genres.replace(" ", ", ")
-            it.status = SManga.COMPLETED
-            it.thumbnail_url = "$imageCdn/$id/m1.webp"
-            it.initialized = pageCount > 0
-        }
+    fun toSManga(imageCdn: String) = SManga.create().also {
+        it.url = id.toString()
+        it.title = title
+        it.author = author.formatNames()
+        it.description = "时间：${mangaDateFormat.format(timestamp * 1000)}\n" +
+            "页数：$pageCount\n" +
+            "原作：${parody.formatNames()}\n" +
+            "角色：${character.formatNames()}"
+        it.genre = genres.replace(" ", ", ")
+        it.status = SManga.COMPLETED
+        it.thumbnail_url = "$imageCdn/$id/m1.webp"
+        it.initialized = pageCount > 0
+    }
 }
 
 fun SManga.field(index: Int): String = description!!.split("\n")[index].substringAfter('：')
@@ -43,10 +42,9 @@ val SManga.pageCount: Int get() = field(1).toInt()
 val dateFormat get() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
 private val mangaDateFormat = dateFormat
 
-fun String.formatNames() =
-    split(" ").joinToString { name ->
-        name.split("-").joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
-    }
+fun String.formatNames() = split(" ").joinToString { name ->
+    name.split("-").joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
+}
 
 @Serializable
 class ListingPageDto(

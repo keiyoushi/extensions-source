@@ -3,22 +3,21 @@ package eu.kanade.tachiyomi.extension.all.hitomi
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        SelectFilter("Sort by", getSortsList),
-        TypeFilter("Types"),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Groups", "group"),
-        TextFilter("Artists", "artist"),
-        TextFilter("Series", "series"),
-        TextFilter("Characters", "character"),
-        TextFilter("Male Tags", "male"),
-        TextFilter("Female Tags", "female"),
-        Filter.Header("Please don't put Female/Male tags here, they won't work!"),
-        TextFilter("Tags", "tag"),
-    )
+fun getFilters(): FilterList = FilterList(
+    SelectFilter("Sort by", getSortsList),
+    TypeFilter("Types"),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    TextFilter("Groups", "group"),
+    TextFilter("Artists", "artist"),
+    TextFilter("Series", "series"),
+    TextFilter("Characters", "character"),
+    TextFilter("Male Tags", "male"),
+    TextFilter("Female Tags", "female"),
+    Filter.Header("Please don't put Female/Male tags here, they won't work!"),
+    TextFilter("Tags", "tag"),
+)
 
 internal open class TextFilter(
     name: String,

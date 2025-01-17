@@ -57,10 +57,9 @@ open class Comikey(
             .rateLimit(3)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT)
@@ -105,16 +104,15 @@ open class Comikey(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
-            val url = "/comics/$slug/"
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+        val url = "/comics/$slug/"
 
-            fetchMangaDetails(SManga.create().apply { this.url = url })
-                .map { MangasPage(listOf(it), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+        fetchMangaDetails(SManga.create().apply { this.url = url })
+            .map { MangasPage(listOf(it), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -145,19 +143,18 @@ open class Comikey(
 
     override fun searchMangaSelector() = "div.series-listing[data-view=list] > ul > li"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("div.series-data span.title a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-
-            description = element.select("div.excerpt p").text() +
-                "\n\n" +
-                element.select("div.desc p").text()
-            genre = element.select("ul.category-listing li a").joinToString { it.text() }
-            thumbnail_url = element.selectFirst("div.image picture img")?.absUrl("src")
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("div.series-data span.title a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+
+        description = element.select("div.excerpt p").text() +
+            "\n\n" +
+            element.select("div.desc p").text()
+        genre = element.select("ul.category-listing li a").joinToString { it.text() }
+        thumbnail_url = element.selectFirst("div.image picture img")?.absUrl("src")
+    }
 
     override fun searchMangaNextPageSelector() = "ul.pagination li.next-page:not(.disabled)"
 
@@ -275,10 +272,9 @@ open class Comikey(
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        Observable.fromCallable {
-            pageListParse(chapter)
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        pageListParse(chapter)
+    }
 
     override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 

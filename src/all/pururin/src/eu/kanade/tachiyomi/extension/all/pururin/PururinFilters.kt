@@ -3,27 +3,26 @@ package eu.kanade.tachiyomi.extension.all.pururin
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        SelectFilter("Sort by", getSortsList),
-        TypeFilter("Types"),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Tags", "[Content]"),
-        TextFilter("Artists", "[Artist]"),
-        TextFilter("Circles", "[Circle]"),
-        TextFilter("Parodies", "[Parody]"),
-        TextFilter("Languages", "[Language]"),
-        TextFilter("Scanlators", "[Scanlator]"),
-        TextFilter("Conventions", "[Convention]"),
-        TextFilter("Collections", "[Collections]"),
-        TextFilter("Categories", "[Category]"),
-        TextFilter("Uploaders", "[Uploader]"),
-        Filter.Separator(),
-        Filter.Header("Filter by pages, for example: (>20)"),
-        PageFilter("Pages"),
-    )
+fun getFilters(): FilterList = FilterList(
+    SelectFilter("Sort by", getSortsList),
+    TypeFilter("Types"),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    TextFilter("Tags", "[Content]"),
+    TextFilter("Artists", "[Artist]"),
+    TextFilter("Circles", "[Circle]"),
+    TextFilter("Parodies", "[Parody]"),
+    TextFilter("Languages", "[Language]"),
+    TextFilter("Scanlators", "[Scanlator]"),
+    TextFilter("Conventions", "[Convention]"),
+    TextFilter("Collections", "[Collections]"),
+    TextFilter("Categories", "[Category]"),
+    TextFilter("Uploaders", "[Uploader]"),
+    Filter.Separator(),
+    Filter.Header("Filter by pages, for example: (>20)"),
+    PageFilter("Pages"),
+)
 
 internal class TypeFilter(
     name: String,

@@ -150,25 +150,24 @@ class Hiveworks : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
-    private fun searchOriginalMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.select("img")[1].attr("abs:src")
-            title =
-                element
-                    .select("div.header")
-                    .text()
-                    .substringBefore("by")
-                    .trim()
-            author =
-                element
-                    .select("div.header")
-                    .text()
-                    .substringAfter("by")
-                    .trim()
-            artist = author
-            description = element.select("div.description").text().trim()
-            url = element.select("a").first()!!.attr("href")
-        }
+    private fun searchOriginalMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.select("img")[1].attr("abs:src")
+        title =
+            element
+                .select("div.header")
+                .text()
+                .substringBefore("by")
+                .trim()
+        author =
+            element
+                .select("div.header")
+                .text()
+                .substringAfter("by")
+                .trim()
+        artist = author
+        description = element.select("div.description").text().trim()
+        url = element.select("a").first()!!.attr("href")
+    }
 
     // Common
 
@@ -220,17 +219,16 @@ class Hiveworks : ParsedHttpSource() {
     // Chapters
 
     // Included to call custom error codes
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        if (manga.status != SManga.LICENSED) {
-            client
-                .newCall(chapterListRequest(manga))
-                .asObservableSuccess()
-                .map { response ->
-                    chapterListParse(response)
-                }
-        } else {
-            Observable.error(Exception("Licensed - No chapters to show"))
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = if (manga.status != SManga.LICENSED) {
+        client
+            .newCall(chapterListRequest(manga))
+            .asObservableSuccess()
+            .map { response ->
+                chapterListParse(response)
+            }
+    } else {
+        Observable.error(Exception("Licensed - No chapters to show"))
+    }
 
     override fun chapterListSelector() = "select[name=comic] option"
 
@@ -326,22 +324,21 @@ class Hiveworks : ParsedHttpSource() {
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Only one filter can be used at a time"),
-            Filter.Separator(),
-            UpdateDay(),
-            RatingFilter(),
-            GenreFilter(),
-            TitleFilter(),
-            SortFilter(),
-            Filter.Separator(),
-            Filter.Header("Extra Lists"),
-            OriginalsFilter(),
-            KidsFilter(),
-            CompletedFilter(),
-            HiatusFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Only one filter can be used at a time"),
+        Filter.Separator(),
+        UpdateDay(),
+        RatingFilter(),
+        GenreFilter(),
+        TitleFilter(),
+        SortFilter(),
+        Filter.Separator(),
+        Filter.Header("Extra Lists"),
+        OriginalsFilter(),
+        KidsFilter(),
+        CompletedFilter(),
+        HiatusFilter(),
+    )
 
     private class OriginalsFilter : Filter.CheckBox("Original Comics")
 
@@ -587,23 +584,21 @@ class Hiveworks : ParsedHttpSource() {
     }
 
     // Used to throw custom error codes for http codes
-    private fun Call.asObservableSuccess(): Observable<Response> =
-        asObservable().doOnNext { response ->
-            if (!response.isSuccessful) {
-                response.close()
-                when (response.code) {
-                    404 -> throw Exception("This comic has a unsupported chapter list")
-                    else -> throw Exception("HiveWorks Comics HTTP Error ${response.code}")
-                }
+    private fun Call.asObservableSuccess(): Observable<Response> = asObservable().doOnNext { response ->
+        if (!response.isSuccessful) {
+            response.close()
+            when (response.code) {
+                404 -> throw Exception("This comic has a unsupported chapter list")
+                else -> throw Exception("HiveWorks Comics HTTP Error ${response.code}")
             }
         }
+    }
 
     private fun parseDate(
         dateStr: String,
         format: SimpleDateFormat,
-    ): Long =
-        runCatching { format.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
+    ): Long = runCatching { format.parse(dateStr)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private val DATE_FORMATTER by lazy { SimpleDateFormat("MMM dd, yyyy", Locale.US) }

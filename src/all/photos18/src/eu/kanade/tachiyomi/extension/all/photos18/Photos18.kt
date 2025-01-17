@@ -43,10 +43,9 @@ class Photos18 :
             .followRedirects(false)
             .build()
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("Referer", baseUrl)
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("Referer", baseUrl)
+    }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrlWithLang/sort/views?page=$page", headers)
 
@@ -124,15 +123,14 @@ class Photos18 :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(),
-            if (categories.isEmpty()) {
-                Filter.Header("Tap 'Reset' to load categories")
-            } else {
-                CategoryFilter(categories)
-            },
-        )
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        if (categories.isEmpty()) {
+            Filter.Header("Tap 'Reset' to load categories")
+        } else {
+            CategoryFilter(categories)
+        },
+    )
 
     private open class QueryFilter(
         name: String,

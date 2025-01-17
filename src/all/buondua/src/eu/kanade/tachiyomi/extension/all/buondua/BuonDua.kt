@@ -113,12 +113,11 @@ class BuonDua : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            TagFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        TagFilter(),
+    )
 
     class TagFilter : Filter.Text("Tag ID")
 

@@ -26,25 +26,23 @@ class TwoKinds : HttpSource() {
     override val id: Long = 3133607736276627986
 
     // the one and only manga entry
-    fun mangaSinglePages(): SManga =
-        SManga.create().apply {
-            title = "TwoKinds (1 page per chapter)"
-            thumbnail_url = "https://dummyimage.com/768x994/000/ffffff.jpg&text=$title"
-            artist = "Tom Fischbach"
-            author = "Tom Fischbach"
-            status = SManga.UNKNOWN
-            url = "1"
-        }
+    fun mangaSinglePages(): SManga = SManga.create().apply {
+        title = "TwoKinds (1 page per chapter)"
+        thumbnail_url = "https://dummyimage.com/768x994/000/ffffff.jpg&text=$title"
+        artist = "Tom Fischbach"
+        author = "Tom Fischbach"
+        status = SManga.UNKNOWN
+        url = "1"
+    }
 
-    fun manga20Pages(): SManga =
-        SManga.create().apply {
-            title = "TwoKinds (20 pages per chapter)"
-            thumbnail_url = "https://dummyimage.com/768x994/000/ffffff.jpg&text=$title"
-            artist = "Tom Fischbach"
-            author = "Tom Fischbach"
-            status = SManga.UNKNOWN
-            url = "20"
-        }
+    fun manga20Pages(): SManga = SManga.create().apply {
+        title = "TwoKinds (20 pages per chapter)"
+        thumbnail_url = "https://dummyimage.com/768x994/000/ffffff.jpg&text=$title"
+        artist = "Tom Fischbach"
+        author = "Tom Fischbach"
+        status = SManga.UNKNOWN
+        url = "20"
+    }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> =
         Observable.just(MangasPage(listOf(mangaSinglePages(), manga20Pages()), false))
@@ -72,13 +70,12 @@ class TwoKinds : HttpSource() {
 
     // chapter list
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response, manga)
-            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response, manga)
+        }
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/archive/", headers)
 

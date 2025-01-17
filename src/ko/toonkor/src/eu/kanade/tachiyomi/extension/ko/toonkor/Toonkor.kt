@@ -47,14 +47,13 @@ class Toonkor :
 
     override fun popularMangaSelector() = "div.section-item-inner"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("div.section-item-title a").let {
-                title = it.select("h3").text()
-                url = it.attr("href")
-            }
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("div.section-item-title a").let {
+            title = it.select("h3").text()
+            url = it.attr("href")
         }
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -103,28 +102,26 @@ class Toonkor :
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            with(document.select("table.bt_view1")) {
-                title = select("td.bt_title").text()
-                author = select("td.bt_label span.bt_data").text()
-                description = select("td.bt_over").text()
-                thumbnail_url = select("td.bt_thumb img").firstOrNull()?.attr("abs:src")
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        with(document.select("table.bt_view1")) {
+            title = select("td.bt_title").text()
+            author = select("td.bt_label span.bt_data").text()
+            description = select("td.bt_over").text()
+            thumbnail_url = select("td.bt_thumb img").firstOrNull()?.attr("abs:src")
         }
+    }
 
     // Chapters
 
     override fun chapterListSelector() = "table.web_list tr:has(td.content__title)"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            element.select("td.content__title").let {
-                url = it.attr("data-role")
-                name = it.text()
-            }
-            date_upload = element.select("td.episode__index").text().toDate()
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.select("td.content__title").let {
+            url = it.attr("data-role")
+            name = it.text()
         }
+        date_upload = element.select("td.episode__index").text().toDate()
+    }
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
@@ -154,13 +151,12 @@ class Toonkor :
 
     // Filters
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Note: can't combine with text search!"),
-            Filter.Separator(),
-            TypeFilter(getTypeList()),
-            SortFilter(getSortList()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: can't combine with text search!"),
+        Filter.Separator(),
+        TypeFilter(getTypeList()),
+        SortFilter(getSortList()),
+    )
 
     private class TypeFilter(
         vals: Array<Pair<String, String>>,
@@ -170,19 +166,17 @@ class Toonkor :
         vals: Array<Pair<String, String>>,
     ) : UriPartFilter("Sort", vals)
 
-    private fun getTypeList() =
-        arrayOf(
-            Pair("Webtoons", webtoonsRequestPath),
-            Pair("Manga", "/%EB%8B%A8%ED%96%89%EB%B3%B8"),
-            Pair("Hentai", "/%EB%A7%9D%EA%B0%80"),
-        )
+    private fun getTypeList() = arrayOf(
+        Pair("Webtoons", webtoonsRequestPath),
+        Pair("Manga", "/%EB%8B%A8%ED%96%89%EB%B3%B8"),
+        Pair("Hentai", "/%EB%A7%9D%EA%B0%80"),
+    )
 
-    private fun getSortList() =
-        arrayOf(
-            Pair("Popular", ""),
-            Pair("Latest", latestRequestModifier),
-            Pair("Completed", "/%EC%99%84%EA%B2%B0"),
-        )
+    private fun getSortList() = arrayOf(
+        Pair("Popular", ""),
+        Pair("Latest", latestRequestModifier),
+        Pair("Completed", "/%EC%99%84%EA%B2%B0"),
+    )
 
     open class UriPartFilter(
         displayName: String,

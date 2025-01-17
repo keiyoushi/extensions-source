@@ -13,23 +13,22 @@ private val INSERT_ADJACENT_HTML_REGEX =
 internal fun parseInsertAdjacentHtmlScript(
     script: String,
     targetName: String = "target",
-): List<String> =
-    QuickJs.create().use { qjs ->
-        val cleanedScript =
-            script
-                .split("\n")
-                .filterNot {
-                    it.contains("var $targetName") || it.contains("$targetName.classList")
-                }.joinToString("\n")
-                .replace(INSERT_ADJACENT_HTML_REGEX, ".push(")
-        val result =
-            qjs.evaluate(
-                """
-                const $targetName = [];
-                $cleanedScript
-                $targetName
-                """.trimIndent(),
-            )
+): List<String> = QuickJs.create().use { qjs ->
+    val cleanedScript =
+        script
+            .split("\n")
+            .filterNot {
+                it.contains("var $targetName") || it.contains("$targetName.classList")
+            }.joinToString("\n")
+            .replace(INSERT_ADJACENT_HTML_REGEX, ".push(")
+    val result =
+        qjs.evaluate(
+            """
+            const $targetName = [];
+            $cleanedScript
+            $targetName
+            """.trimIndent(),
+        )
 
-        (result as Array<*>).map { it as String }
-    }
+    (result as Array<*>).map { it as String }
+}

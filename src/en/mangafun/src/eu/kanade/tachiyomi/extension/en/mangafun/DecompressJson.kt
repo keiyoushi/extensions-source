@@ -113,12 +113,11 @@ object DecompressJson {
         }
     }
 
-    private fun decodeBool(s: String): JsonPrimitive =
-        when (s) {
-            "b|T" -> JsonPrimitive(true)
-            "b|F" -> JsonPrimitive(false)
-            else -> JsonPrimitive(s.isNotEmpty())
-        }
+    private fun decodeBool(s: String): JsonPrimitive = when (s) {
+        "b|T" -> JsonPrimitive(true)
+        "b|F" -> JsonPrimitive(false)
+        else -> JsonPrimitive(s.isNotEmpty())
+    }
 
     private fun decodeNum(s: String): JsonPrimitive = JsonPrimitive(sToInt(s.substringAfter("n|")))
 

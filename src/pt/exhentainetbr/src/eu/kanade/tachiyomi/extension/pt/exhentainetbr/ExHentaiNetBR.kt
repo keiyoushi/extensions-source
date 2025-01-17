@@ -38,12 +38,11 @@ class ExHentaiNetBR : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "article.itemP"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst("h3")!!.ownText()
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h3")!!.ownText()
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    }
 
     override fun popularMangaNextPageSelector() = ".content-pagination li[class='active'] + li:not([class='next'])"
 
@@ -111,39 +110,36 @@ class ExHentaiNetBR : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst(".stats_box h3")!!.text()
-            description = document.selectFirst(".sinopse_manga .info_p:last-child")?.text()
-            thumbnail_url = document.selectFirst(".anime_cover img")?.imgAttr()
-            artist = document.selectFirst(".sinopse_manga h5:contains(Artista) + span")?.text()
-            author = artist
-            genre = document.select(".tag-btn").joinToString { it.ownText() }
-            val statusLabel = document.selectFirst(".stats_box span")?.ownText() ?: ""
-            status =
-                when {
-                    statusLabel.equals("Completo", ignoreCase = true) -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            setUrlWithoutDomain(document.location())
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst(".stats_box h3")!!.text()
+        description = document.selectFirst(".sinopse_manga .info_p:last-child")?.text()
+        thumbnail_url = document.selectFirst(".anime_cover img")?.imgAttr()
+        artist = document.selectFirst(".sinopse_manga h5:contains(Artista) + span")?.text()
+        author = artist
+        genre = document.select(".tag-btn").joinToString { it.ownText() }
+        val statusLabel = document.selectFirst(".stats_box span")?.ownText() ?: ""
+        status =
+            when {
+                statusLabel.equals("Completo", ignoreCase = true) -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        setUrlWithoutDomain(document.location())
+    }
 
     override fun chapterListSelector() = ".chapter_content a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            name = element.selectFirst(".name_chapter")!!.text()
-            val date = element.selectFirst("span.release-date")?.ownText() ?: ""
-            date_upload = date.substringAfter(":").trim().toDate()
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst(".name_chapter")!!.text()
+        val date = element.selectFirst("span.release-date")?.ownText() ?: ""
+        date_upload = date.substringAfter(":").trim().toDate()
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     override fun chapterListParse(response: Response) = super.chapterListParse(response).reversed()
 
-    override fun pageListParse(document: Document) =
-        document.select("div.manga_image > img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.imgAttr())
-        }
+    override fun pageListParse(document: Document) = document.select("div.manga_image > img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.imgAttr())
+    }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -164,20 +160,18 @@ class ExHentaiNetBR : ParsedHttpSource() {
         )
     }
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        else -> attr("abs:src")
+    }
 
-    private fun String.toDate(): Long =
-        try {
-            dateFormat.parse(trim())!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String.toDate(): Long = try {
+        dateFormat.parse(trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     companion object {
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)

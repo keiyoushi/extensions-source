@@ -38,27 +38,24 @@ class HentaiNexus : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 1)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int) =
-        GET(
-            baseUrl + (if (page > 1) "/page/$page" else ""),
-            headers,
-        )
+    override fun popularMangaRequest(page: Int) = GET(
+        baseUrl + (if (page > 1) "/page/$page" else ""),
+        headers,
+    )
 
     override fun popularMangaSelector() = ".container .column"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst(".card-header-title")!!.text()
-            thumbnail_url = element.selectFirst(".card-image img")?.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst(".card-header-title")!!.text()
+        thumbnail_url = element.selectFirst(".card-image img")?.absUrl("src")
+    }
 
     override fun popularMangaNextPageSelector() = "a.pagination-next[href]"
 
@@ -74,16 +71,15 @@ class HentaiNexus : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client
-                .newCall(GET("$baseUrl/view/$id", headers))
-                .asObservableSuccess()
-                .map { MangasPage(listOf(mangaDetailsParse(it).apply { url = "/view/$id" }), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client
+            .newCall(GET("$baseUrl/view/$id", headers))
+            .asObservableSuccess()
+            .map { MangasPage(listOf(mangaDetailsParse(it).apply { url = "/view/$id" }), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -121,38 +117,37 @@ class HentaiNexus : ParsedHttpSource() {
 
     private val tagCountRegex = Regex("""\s*\([\d,]+\)$""")
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val table = document.selectFirst(".view-page-details")!!
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val table = document.selectFirst(".view-page-details")!!
 
-            title = document.selectFirst("h1.title")!!.text()
-            artist = table.select("td.viewcolumn:contains(Artist) + td a").joinToString { it.ownText() }
-            author = table.select("td.viewcolumn:contains(Author) + td a").joinToString { it.ownText() }
-            description =
-                buildString {
-                    listOf("Circle", "Event", "Magazine", "Parody", "Publisher", "Pages", "Favorites").forEach { key ->
-                        val cell = table.selectFirst("td.viewcolumn:contains($key) + td")
+        title = document.selectFirst("h1.title")!!.text()
+        artist = table.select("td.viewcolumn:contains(Artist) + td a").joinToString { it.ownText() }
+        author = table.select("td.viewcolumn:contains(Author) + td a").joinToString { it.ownText() }
+        description =
+            buildString {
+                listOf("Circle", "Event", "Magazine", "Parody", "Publisher", "Pages", "Favorites").forEach { key ->
+                    val cell = table.selectFirst("td.viewcolumn:contains($key) + td")
 
-                        cell
-                            ?.ownText()
-                            ?.ifEmpty { cell.selectFirst("a")!!.ownText() }
-                            ?.let { appendLine("$key: $it") }
-                    }
-                    appendLine()
-
-                    table.selectFirst("td.viewcolumn:contains(Description) + td")?.text()?.let {
-                        appendLine(it)
-                    }
+                    cell
+                        ?.ownText()
+                        ?.ifEmpty { cell.selectFirst("a")!!.ownText() }
+                        ?.let { appendLine("$key: $it") }
                 }
-            genre =
-                table.select("span.tag a").joinToString {
-                    it.text().replace(tagCountRegex, "")
-                }
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            status = SManga.COMPLETED
+                appendLine()
 
-            thumbnail_url = document.selectFirst("figure.image img")?.attr("src")
-        }
+                table.selectFirst("td.viewcolumn:contains(Description) + td")?.text()?.let {
+                    appendLine(it)
+                }
+            }
+        genre =
+            table.select("span.tag a").joinToString {
+                it.text().replace(tagCountRegex, "")
+            }
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        status = SManga.COMPLETED
+
+        thumbnail_url = document.selectFirst("figure.image img")?.attr("src")
+    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val id = manga.url.split("/").last()
@@ -187,26 +182,25 @@ class HentaiNexus : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header(
-                """
-                Separate items with commas (,)
-                Prepend with dash (-) to exclude
-                For items with multiple words, surround them with double quotes (")
-                """.trimIndent(),
-            ),
-            TagFilter(),
-            ArtistFilter(),
-            AuthorFilter(),
-            CircleFilter(),
-            EventFilter(),
-            ParodyFilter(),
-            MagazineFilter(),
-            PublisherFilter(),
-            Filter.Separator(),
-            OffsetPageFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header(
+            """
+            Separate items with commas (,)
+            Prepend with dash (-) to exclude
+            For items with multiple words, surround them with double quotes (")
+            """.trimIndent(),
+        ),
+        TagFilter(),
+        ArtistFilter(),
+        AuthorFilter(),
+        CircleFilter(),
+        EventFilter(),
+        ParodyFilter(),
+        MagazineFilter(),
+        PublisherFilter(),
+        Filter.Separator(),
+        OffsetPageFilter(),
+    )
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"

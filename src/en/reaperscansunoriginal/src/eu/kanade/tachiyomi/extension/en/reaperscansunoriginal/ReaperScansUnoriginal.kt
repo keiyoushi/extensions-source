@@ -55,12 +55,11 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // Search
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url = element.select(".poster-image-wrapper > img").attr("src")
-            title = element.select(".info > a").text()
-            setUrlWithoutDomain(element.selectFirst(".info a")!!.attr("href"))
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.select(".poster-image-wrapper > img").attr("src")
+        title = element.select(".info > a").text()
+        setUrlWithoutDomain(element.selectFirst(".info a")!!.attr("href"))
+    }
 
     override fun searchMangaNextPageSelector() = "a[rel=\"next\"]"
 
@@ -99,12 +98,11 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
     }
 
     // Chapter
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.attr("title")
-            date_upload = parseRelativeDate(element.selectFirst("span + span")?.text())
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.attr("title")
+        date_upload = parseRelativeDate(element.selectFirst("span + span")?.text())
+    }
 
     private fun parseRelativeDate(date: String?): Long {
         if (date == null) {
@@ -137,24 +135,22 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
     override fun chapterListSelector() = "a.cairo"
 
     // Details
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            document.selectFirst("div.serie-info")?.let { info ->
-                description = info.selectFirst("div.description-content")?.text()
-                author = info.selectFirst("span:containsOwn(Author) + span")?.text()
-                artist = info.selectFirst("span:containsOwn(Artist) + span")?.text()
-                status = info.selectFirst("span:containsOwn(Status) + span")?.text().toStatus()
-                genre = info.select("div.genre-link").joinToString { it.text() }
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.selectFirst("div.serie-info")?.let { info ->
+            description = info.selectFirst("div.description-content")?.text()
+            author = info.selectFirst("span:containsOwn(Author) + span")?.text()
+            artist = info.selectFirst("span:containsOwn(Artist) + span")?.text()
+            status = info.selectFirst("span:containsOwn(Status) + span")?.text().toStatus()
+            genre = info.select("div.genre-link").joinToString { it.text() }
         }
+    }
 
-    private fun String?.toStatus() =
-        when {
-            this == null -> SManga.UNKNOWN
-            this.contains("Ongoing") -> SManga.ONGOING
-            this.contains("Completed") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String?.toStatus() = when {
+        this == null -> SManga.UNKNOWN
+        this.contains("Ongoing") -> SManga.ONGOING
+        this.contains("Completed") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {
@@ -168,22 +164,20 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filter
-    override fun getFilterList() =
-        FilterList(
-            TypeFilter(),
-            Filter.Header("Press \"Reset\" to attempt to load genres"),
-            GenreFilter(genres),
-            YearFilter(),
-            StatusFilter(),
-            OrderFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        TypeFilter(),
+        Filter.Header("Press \"Reset\" to attempt to load genres"),
+        GenreFilter(genres),
+        YearFilter(),
+        StatusFilter(),
+        OrderFilter(),
+    )
 
     private var genres = emptyList<Pair<String, String>>()
 
-    private fun parseGenres(document: Document): List<Pair<String, String>> =
-        document
-            .select("li:has(input[name=\"genre[]\"])")
-            .map {
-                Pair(it.selectFirst("label")!!.text(), it.selectFirst("input")!!.attr("value"))
-            }
+    private fun parseGenres(document: Document): List<Pair<String, String>> = document
+        .select("li:has(input[name=\"genre[]\"])")
+        .map {
+            Pair(it.selectFirst("label")!!.text(), it.selectFirst("input")!!.attr("value"))
+        }
 }

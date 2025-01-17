@@ -50,22 +50,20 @@ class WebNovel : HttpSource() {
     private val json: Json by injectLazy()
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(
-            page = page,
-            query = "",
-            filters = FilterList(SortByFilter(default = 1)),
-        )
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page = page,
+        query = "",
+        filters = FilterList(SortByFilter(default = 1)),
+    )
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(
-            page = page,
-            query = "",
-            filters = FilterList(SortByFilter(default = 5)),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page = page,
+        query = "",
+        filters = FilterList(SortByFilter(default = 5)),
+    )
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -96,15 +94,14 @@ class WebNovel : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        if (response.request.url
-                .toString()
-                .contains(QUERY_SEARCH_PATH)
-        ) {
-            response.parseAsForWebNovel<QuerySearchResponse>().toMangasPage(::getCoverUrl)
-        } else {
-            response.parseAsForWebNovel<FilterSearchResponse>().toMangasPage(::getCoverUrl)
-        }
+    override fun searchMangaParse(response: Response): MangasPage = if (response.request.url
+            .toString()
+            .contains(QUERY_SEARCH_PATH)
+    ) {
+        response.parseAsForWebNovel<QuerySearchResponse>().toMangasPage(::getCoverUrl)
+    } else {
+        response.parseAsForWebNovel<FilterSearchResponse>().toMangasPage(::getCoverUrl)
+    }
 
     // Manga details
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.getId}"
@@ -169,13 +166,12 @@ class WebNovel : HttpSource() {
         return "$baseUrl/comic/$comicId/$chapterId"
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client
-            .newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .map { response ->
-                pageListParse(response)
-            }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client
+        .newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .map { response ->
+            pageListParse(response)
+        }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val (comicId, chapterId) = chapter.getMangaAndChapterId
@@ -211,14 +207,13 @@ class WebNovel : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            ContentStatusFilter(),
-            SortByFilter(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        ContentStatusFilter(),
+        SortByFilter(),
+        GenreFilter(),
+    )
 
     private val SManga.getId: String
         get() {
@@ -297,17 +292,15 @@ class WebNovel : HttpSource() {
         return Date().time - urlGenerationTime <= 570000
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString<T>(it.body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString<T>(it.body.string())
+    }
 
-    private inline fun <reified T> Response.parseAsForWebNovel(): T =
-        use {
-            val parsed = parseAs<ResponseWrapper<T>>()
-            if (parsed.code != 0) error("Error ${parsed.code}: ${parsed.msg}")
-            requireNotNull(parsed.data) { "Received response data was null" }
-        }
+    private inline fun <reified T> Response.parseAsForWebNovel(): T = use {
+        val parsed = parseAs<ResponseWrapper<T>>()
+        if (parsed.code != 0) error("Error ${parsed.code}: ${parsed.msg}")
+        requireNotNull(parsed.data) { "Received response data was null" }
+    }
 
     private inline fun <reified T> List<*>.firstInstanceOrNull() = firstOrNull { it is T } as? T
 

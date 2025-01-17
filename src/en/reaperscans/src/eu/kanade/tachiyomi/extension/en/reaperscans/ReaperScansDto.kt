@@ -21,15 +21,14 @@ class ReaperPageDataDto(
     private val images: List<String>? = emptyList(),
     private val files: List<ReaperPageFileDto>? = emptyList(),
 ) {
-    fun images(): List<String> =
-        if (images.isNullOrEmpty()) {
-            files
-                ?.map {
-                    it.url
-                }.orEmpty()
-        } else {
-            images
-        }
+    fun images(): List<String> = if (images.isNullOrEmpty()) {
+        files
+            ?.map {
+                it.url
+            }.orEmpty()
+    } else {
+        images
+    }
 }
 
 @Serializable

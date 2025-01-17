@@ -79,25 +79,24 @@ class LuraToon :
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val data = response.parseAs<Manga>()
-            title = data.titulo
-            author = data.autor
-            artist = data.artista
-            genre = data.generos.joinToString(", ") { it.name }
-            status =
-                when (data.status) {
-                    "Em Lançamento" -> SManga.ONGOING
-                    "Finalizado" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            thumbnail_url = "$baseUrl${data.capa}"
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val data = response.parseAs<Manga>()
+        title = data.titulo
+        author = data.autor
+        artist = data.artista
+        genre = data.generos.joinToString(", ") { it.name }
+        status =
+            when (data.status) {
+                "Em Lançamento" -> SManga.ONGOING
+                "Finalizado" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        thumbnail_url = "$baseUrl${data.capa}"
 
-            val category = data.tipo
-            val synopsis = data.sinopse
-            description = "Tipo: $category\n\n$synopsis"
-        }
+        val category = data.tipo
+        val synopsis = data.sinopse
+        description = "Tipo: $category\n\n$synopsis"
+    }
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<T>(body.string())
 
@@ -116,13 +115,12 @@ class LuraToon :
         return MangasPage(mangas, document.lancamentos.isNotEmpty())
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservable()
-            .map { response ->
-                chapterListParse(manga, response)
-            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(chapterListRequest(manga))
+        .asObservable()
+        .map { response ->
+            chapterListParse(manga, response)
+        }
 
     fun chapterListParse(
         manga: SManga,

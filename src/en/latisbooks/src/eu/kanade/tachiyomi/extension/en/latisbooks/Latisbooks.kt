@@ -31,24 +31,22 @@ class Latisbooks : HttpSource() {
 
     private fun String.image() = textToImageURL + "&text=" + encode(this)
 
-    private fun createManga(response: Response): SManga =
-        SManga.create().apply {
-            initialized = true
-            title = "Bodysuit 23"
-            url = "/archive/"
-            thumbnail_url =
-                "https://images.squarespace-cdn.com/content/v1/56595108e4b01110e1cf8735/1511856223610-NSB8O5OJ1F6KPQL0ZGBH/image-asset.jpeg"
-        }
+    private fun createManga(response: Response): SManga = SManga.create().apply {
+        initialized = true
+        title = "Bodysuit 23"
+        url = "/archive/"
+        thumbnail_url =
+            "https://images.squarespace-cdn.com/content/v1/56595108e4b01110e1cf8735/1511856223610-NSB8O5OJ1F6KPQL0ZGBH/image-asset.jpeg"
+    }
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        client
-            .newCall(popularMangaRequest(page))
-            .asObservableSuccess()
-            .map { response ->
-                MangasPage(listOf(createManga(response)), false)
-            }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client
+        .newCall(popularMangaRequest(page))
+        .asObservableSuccess()
+        .map { response ->
+            MangasPage(listOf(createManga(response)), false)
+        }
 
     override fun popularMangaRequest(page: Int): Request = (GET("$baseUrl/archive/", headers))
 
@@ -78,13 +76,12 @@ class Latisbooks : HttpSource() {
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                createManga(response)
-            }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            createManga(response)
+        }
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
@@ -108,18 +105,17 @@ class Latisbooks : HttpSource() {
     // Pages
 
     // Adapted from the xkcd source's wordWrap function
-    private fun wordWrap(text: String) =
-        buildString {
-            var charCount = 0
-            text.replace("\r\n", " ").split(' ').forEach { w ->
-                if (charCount > 25) {
-                    append("\n")
-                    charCount = 0
-                }
-                append(w).append(' ')
-                charCount += w.length + 1
+    private fun wordWrap(text: String) = buildString {
+        var charCount = 0
+        text.replace("\r\n", " ").split(' ').forEach { w ->
+            if (charCount > 25) {
+                append("\n")
+                charCount = 0
             }
+            append(w).append(' ')
+            charCount += w.length + 1
         }
+    }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 

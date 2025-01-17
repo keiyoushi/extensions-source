@@ -41,10 +41,9 @@ class Hentaidexy : HttpSource() {
             .rateLimitHost(apiUrl.toHttpUrl(), 1)
             .build()
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("Referer", "$baseUrl/")
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("Referer", "$baseUrl/")
+    }
 
     // popular
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/api/v1/mangas?page=$page&limit=100&sort=-views", headers)
@@ -161,35 +160,31 @@ class Hentaidexy : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Helpers
-    private fun toSManga(manga: Manga): SManga =
-        SManga.create().apply {
-            url = manga._id
-            title = manga.title
-            author = manga.authors?.joinToString { it.trim() }
-            artist = author
-            description = manga.summary.trim() + "\n\nAlternative Names: ${manga.altTitles?.joinToString { it.trim() }}"
-            genre = manga.genres?.joinToString { it.trim() }
-            status = manga.status.parseStatus()
-            thumbnail_url = manga.coverImage
-        }
+    private fun toSManga(manga: Manga): SManga = SManga.create().apply {
+        url = manga._id
+        title = manga.title
+        author = manga.authors?.joinToString { it.trim() }
+        artist = author
+        description = manga.summary.trim() + "\n\nAlternative Names: ${manga.altTitles?.joinToString { it.trim() }}"
+        genre = manga.genres?.joinToString { it.trim() }
+        status = manga.status.parseStatus()
+        thumbnail_url = manga.coverImage
+    }
 
-    private fun String.parseStatus(): Int =
-        when {
-            this.contains("ongoing", true) -> SManga.ONGOING
-            this.contains("complete", true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.parseStatus(): Int = when {
+        this.contains("ongoing", true) -> SManga.ONGOING
+        this.contains("complete", true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
-    private fun Float.parseChapterNumber(): String =
-        if (this.toInt().toFloat() == this) {
-            this.toInt().toString()
-        } else {
-            this.toString()
-        }
+    private fun Float.parseChapterNumber(): String = if (this.toInt().toFloat() == this) {
+        this.toInt().toString()
+    } else {
+        this.toString()
+    }
 
-    private fun String.parseDate(): Long =
-        runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
+    private fun String.parseDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private val DATE_FORMATTER by lazy {

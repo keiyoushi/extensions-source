@@ -44,12 +44,11 @@ class ManhwaXXL : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "a.comic-tmb"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            title = element.attr("title")
-            thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.attr("title")
+        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+    }
 
     override fun popularMangaNextPageSelector() = "ul.pagination li.active:not(:last-child)"
 
@@ -94,18 +93,17 @@ class ManhwaXXL : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            author = document.selectFirst("div.comic-details__item_links span")?.ownText()
-            description = document.selectFirst("section#post-decription h2 + p")?.text()
-            genre = document.select("div.comic-details__item a[href*=genre]").joinToString { it.text() }
-            status =
-                when (document.selectFirst("div.card h5")?.text()) {
-                    "Completed" -> SManga.ONGOING
-                    "Ongoing" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        author = document.selectFirst("div.comic-details__item_links span")?.ownText()
+        description = document.selectFirst("section#post-decription h2 + p")?.text()
+        genre = document.select("div.comic-details__item a[href*=genre]").joinToString { it.text() }
+        status =
+            when (document.selectFirst("div.card h5")?.text()) {
+                "Completed" -> SManga.ONGOING
+                "Ongoing" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     // Manga details page have paginated chapter list. We sacrifice `date_upload`
     // but we save a bunch of calls, since each page is like 12 chapters.
@@ -144,30 +142,27 @@ class ManhwaXXL : ParsedHttpSource() {
         }
     }
 
-    private fun JsonElement?.getContent(key: String): String =
-        this
-            ?.jsonObject
-            ?.get(key)
-            ?.jsonPrimitive
-            ?.content
-            ?: throw Exception("Key $key not found")
+    private fun JsonElement?.getContent(key: String): String = this
+        ?.jsonObject
+        ?.get(key)
+        ?.jsonPrimitive
+        ?.content
+        ?: throw Exception("Key $key not found")
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("section#viewer img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("section#viewer img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.absUrl("src"))
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Ignored if using text search"),
-            GenreFilter(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Ignored if using text search"),
+        GenreFilter(getGenreList()),
+    )
 
     private data class Genre(
         val name: String,
@@ -182,22 +177,21 @@ class ManhwaXXL : ParsedHttpSource() {
 
     // If you want to add new genres just add the name and id. (eg. https://hentaitnt.net/genre/action) action is the id
     // You can search more here: https://hentaitnt.net/genres
-    private fun getGenreList() =
-        arrayOf(
-            Genre("All", ""),
-            Genre("Action", "action"),
-            Genre("Adult", "adult"),
-            Genre("BL", "bl"),
-            Genre("Comedy", "comedy"),
-            Genre("Doujinshi", "doujinshi"),
-            Genre("Harem", "harem"),
-            Genre("Horror", "horror"),
-            Genre("Manga", "manga"),
-            Genre("Manhwa", "manhwa"),
-            Genre("Mature", "mature"),
-            Genre("NTR", "ntr"),
-            Genre("Romance", "romance"),
-            Genre("Uncensore", "uncensore"),
-            Genre("Webtoon", "webtoon"),
-        )
+    private fun getGenreList() = arrayOf(
+        Genre("All", ""),
+        Genre("Action", "action"),
+        Genre("Adult", "adult"),
+        Genre("BL", "bl"),
+        Genre("Comedy", "comedy"),
+        Genre("Doujinshi", "doujinshi"),
+        Genre("Harem", "harem"),
+        Genre("Horror", "horror"),
+        Genre("Manga", "manga"),
+        Genre("Manhwa", "manhwa"),
+        Genre("Mature", "mature"),
+        Genre("NTR", "ntr"),
+        Genre("Romance", "romance"),
+        Genre("Uncensore", "uncensore"),
+        Genre("Webtoon", "webtoon"),
+    )
 }

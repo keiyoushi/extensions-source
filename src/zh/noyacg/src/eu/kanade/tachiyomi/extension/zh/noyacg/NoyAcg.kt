@@ -34,10 +34,9 @@ class NoyAcg :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).imageCdn
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val body =
@@ -152,14 +151,13 @@ class NoyAcg :
 
     private val json: Json by injectLazy()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        try {
-            json.decodeFromStream(body.byteStream())
-        } catch (e: Throwable) {
-            throw Exception("请在 WebView 中登录")
-        } finally {
-            close()
-        }
+    private inline fun <reified T> Response.parseAs(): T = try {
+        json.decodeFromStream(body.byteStream())
+    } catch (e: Throwable) {
+        throw Exception("请在 WebView 中登录")
+    } finally {
+        close()
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferencesInternal(screen.context).forEach(screen::addPreference)

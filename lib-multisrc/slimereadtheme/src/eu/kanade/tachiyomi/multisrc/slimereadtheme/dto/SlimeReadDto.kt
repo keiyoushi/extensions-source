@@ -18,14 +18,13 @@ data class LatestResponseDto(
     val data: List<PopularMangaDto>,
 )
 
-fun List<PopularMangaDto>.toSMangaList(): List<SManga> =
-    map { item ->
-        SManga.create().apply {
-            thumbnail_url = item.thumbnail_url
-            title = item.name
-            url = "/book/${item.id}"
-        }
+fun List<PopularMangaDto>.toSMangaList(): List<SManga> = map { item ->
+    SManga.create().apply {
+        thumbnail_url = item.thumbnail_url
+        title = item.name
+        url = "/book/${item.id}"
     }
+}
 
 @Serializable
 data class MangaInfoDto(

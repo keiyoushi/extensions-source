@@ -111,23 +111,21 @@ abstract class EHentai(
         return MangasPage(parsedMangas, hasNextPage)
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    url = manga.url
-                    name = "Chapter"
-                    chapter_number = 1f
-                },
-            ),
-        )
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                url = manga.url
+                name = "Chapter"
+                chapter_number = 1f
+            },
+        ),
+    )
 
-    override fun fetchPageList(chapter: SChapter) =
-        fetchChapterPage(chapter, "$baseUrl/${chapter.url}").map {
-            it.mapIndexed { i, s ->
-                Page(i, s)
-            }
-        }!!
+    override fun fetchPageList(chapter: SChapter) = fetchChapterPage(chapter, "$baseUrl/${chapter.url}").map {
+        it.mapIndexed { i, s ->
+            Page(i, s)
+        }
+    }!!
 
     /**
      * Recursively fetch chapter pages
@@ -147,31 +145,28 @@ abstract class EHentai(
         }
     }
 
-    private fun parseChapterPage(response: Element) =
-        with(response) {
-            select("#gdt a").map {
-                it.attr("href")
-            }
+    private fun parseChapterPage(response: Element) = with(response) {
+        select("#gdt a").map {
+            it.attr("href")
         }
+    }
 
     private fun chapterPageCall(np: String) = client.newCall(chapterPageRequest(np)).asObservableSuccess()
 
     private fun chapterPageRequest(np: String) = exGet(np, null, headers)
 
-    private fun nextPageUrl(element: Element) =
-        element.select("a[onclick=return false]").last()?.let {
-            if (it.text() == ">") it.attr("href") else null
-        }
+    private fun nextPageUrl(element: Element) = element.select("a[onclick=return false]").last()?.let {
+        if (it.text() == ">") it.attr("href") else null
+    }
 
     private fun languageTag(enforceLanguageFilter: Boolean = false): String =
         if (enforceLanguageFilter || getEnforceLanguagePref()) "language:$ehLang" else ""
 
-    override fun popularMangaRequest(page: Int) =
-        if (isLangNatural()) {
-            exGet("$baseUrl/?f_search=${languageTag()}&f_srdd=5&f_sr=on", page)
-        } else {
-            latestUpdatesRequest(page)
-        }
+    override fun popularMangaRequest(page: Int) = if (isLangNatural()) {
+        exGet("$baseUrl/?f_search=${languageTag()}&f_srdd=5&f_sr=on", page)
+    } else {
+        latestUpdatesRequest(page)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -270,113 +265,112 @@ abstract class EHentai(
      * Parse gallery page to metadata model
      */
     @SuppressLint("DefaultLocale")
-    override fun mangaDetailsParse(response: Response) =
-        with(response.asJsoup()) {
-            with(ExGalleryMetadata()) {
-                url = response.request.url.encodedPath
-                title = select("#gn").text().nullIfBlank()?.trim()
+    override fun mangaDetailsParse(response: Response) = with(response.asJsoup()) {
+        with(ExGalleryMetadata()) {
+            url = response.request.url.encodedPath
+            title = select("#gn").text().nullIfBlank()?.trim()
 
-                altTitle = select("#gj").text().nullIfBlank()?.trim()
+            altTitle = select("#gj").text().nullIfBlank()?.trim()
 
-                // Thumbnail is set as background of element in style attribute
-                thumbnailUrl =
-                    select("#gd1 div").attr("style").nullIfBlank()?.let {
-                        it.substring(it.indexOf('(') + 1 until it.lastIndexOf(')'))
-                    }
-                genre =
-                    select("#gdc div")
-                        .text()
-                        .nullIfBlank()
-                        ?.trim()
-                        ?.lowercase()
+            // Thumbnail is set as background of element in style attribute
+            thumbnailUrl =
+                select("#gd1 div").attr("style").nullIfBlank()?.let {
+                    it.substring(it.indexOf('(') + 1 until it.lastIndexOf(')'))
+                }
+            genre =
+                select("#gdc div")
+                    .text()
+                    .nullIfBlank()
+                    ?.trim()
+                    ?.lowercase()
 
-                uploader = select("#gdn").text().nullIfBlank()?.trim()
+            uploader = select("#gdn").text().nullIfBlank()?.trim()
 
-                // Parse the table
-                select("#gdd tr").forEach {
-                    it
-                        .select(".gdt1")
-                        .text()
-                        .nullIfBlank()
-                        ?.trim()
-                        ?.let { left ->
-                            it
-                                .select(".gdt2")
-                                .text()
-                                .nullIfBlank()
-                                ?.trim()
-                                ?.let { right ->
-                                    ignore {
-                                        when (
-                                            left
-                                                .removeSuffix(":")
-                                                .lowercase()
-                                        ) {
-                                            "posted" -> datePosted = EX_DATE_FORMAT.parse(right)?.time ?: 0
-                                            "visible" -> visible = right.nullIfBlank()
-                                            "language" -> {
-                                                language = right.removeSuffix(TR_SUFFIX).trim().nullIfBlank()
-                                                translated = right.endsWith(TR_SUFFIX, true)
-                                            }
-                                            "file size" -> size = parseHumanReadableByteCount(right)?.toLong()
-                                            "length" ->
-                                                length =
-                                                    right
-                                                        .removeSuffix("pages")
-                                                        .trim()
-                                                        .nullIfBlank()
-                                                        ?.toInt()
-                                            "favorited" ->
-                                                favorites =
-                                                    right
-                                                        .removeSuffix("times")
-                                                        .trim()
-                                                        .nullIfBlank()
-                                                        ?.toInt()
+            // Parse the table
+            select("#gdd tr").forEach {
+                it
+                    .select(".gdt1")
+                    .text()
+                    .nullIfBlank()
+                    ?.trim()
+                    ?.let { left ->
+                        it
+                            .select(".gdt2")
+                            .text()
+                            .nullIfBlank()
+                            ?.trim()
+                            ?.let { right ->
+                                ignore {
+                                    when (
+                                        left
+                                            .removeSuffix(":")
+                                            .lowercase()
+                                    ) {
+                                        "posted" -> datePosted = EX_DATE_FORMAT.parse(right)?.time ?: 0
+                                        "visible" -> visible = right.nullIfBlank()
+                                        "language" -> {
+                                            language = right.removeSuffix(TR_SUFFIX).trim().nullIfBlank()
+                                            translated = right.endsWith(TR_SUFFIX, true)
                                         }
+                                        "file size" -> size = parseHumanReadableByteCount(right)?.toLong()
+                                        "length" ->
+                                            length =
+                                                right
+                                                    .removeSuffix("pages")
+                                                    .trim()
+                                                    .nullIfBlank()
+                                                    ?.toInt()
+                                        "favorited" ->
+                                            favorites =
+                                                right
+                                                    .removeSuffix("times")
+                                                    .trim()
+                                                    .nullIfBlank()
+                                                    ?.toInt()
                                     }
                                 }
-                        }
-                }
+                            }
+                    }
+            }
 
-                // Parse ratings
-                ignore {
-                    averageRating =
-                        select("#rating_label")
-                            .text()
-                            .removePrefix("Average:")
-                            .trim()
-                            .nullIfBlank()
-                            ?.toDouble()
-                    ratingCount =
-                        select("#rating_count")
-                            .text()
-                            .trim()
-                            .nullIfBlank()
-                            ?.toInt()
-                }
+            // Parse ratings
+            ignore {
+                averageRating =
+                    select("#rating_label")
+                        .text()
+                        .removePrefix("Average:")
+                        .trim()
+                        .nullIfBlank()
+                        ?.toDouble()
+                ratingCount =
+                    select("#rating_count")
+                        .text()
+                        .trim()
+                        .nullIfBlank()
+                        ?.toInt()
+            }
 
-                // Parse tags
-                tags.clear()
-                select("#taglist tr").forEach {
-                    val namespace = it.select(".tc").text().removeSuffix(":")
-                    val currentTags =
-                        it.select("div").map { element ->
-                            Tag(
-                                element.text().trim(),
-                                element.hasClass("gtl"),
-                            )
-                        }
-                    tags[namespace] = currentTags
-                }
+            // Parse tags
+            tags.clear()
+            select("#taglist tr").forEach {
+                val namespace = it.select(".tc").text().removeSuffix(":")
+                val currentTags =
+                    it.select("div").map { element ->
+                        Tag(
+                            element.text().trim(),
+                            element.hasClass("gtl"),
+                        )
+                    }
+                tags[namespace] = currentTags
+            }
 
-                // Copy metadata to manga
-                SManga.create().apply {
-                    copyTo(this)
-                    update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                }
+            // Copy metadata to manga
+            SManga.create().apply {
+                copyTo(this)
+                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }
+    }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/g/$id", headers)
 
@@ -393,16 +387,15 @@ abstract class EHentai(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client
-                .newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client
+            .newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
@@ -445,10 +438,9 @@ abstract class EHentai(
 
     private fun buildSettings(settings: List<String?>) = settings.filterNotNull().joinToString(separator = "-")
 
-    private fun buildCookies(cookies: Map<String, String>) =
-        cookies.entries.joinToString(separator = "; ", postfix = ";") {
-            "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
-        }
+    private fun buildCookies(cookies: Map<String, String>) = cookies.entries.joinToString(separator = "; ", postfix = ";") {
+        "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
+    }
 
     @Suppress("SameParameterValue")
     private fun addParam(
@@ -478,20 +470,19 @@ abstract class EHentai(
             }.build()
 
     // Filters
-    override fun getFilterList() =
-        FilterList(
-            EnforceLanguageFilter(getEnforceLanguagePref()),
-            Favorites(),
-            Watched(),
-            GenreGroup(),
-            Filter.Header("Separate tags with commas (,)"),
-            Filter.Header("Prepend with dash (-) to exclude"),
-            Filter.Header("Use 'Female Tags' or 'Male Tags' for specific categories. 'Tags' searches all categories."),
-            TextFilter("Tags", "tag"),
-            TextFilter("Female Tags", "female"),
-            TextFilter("Male Tags", "male"),
-            AdvancedGroup(),
-        )
+    override fun getFilterList() = FilterList(
+        EnforceLanguageFilter(getEnforceLanguagePref()),
+        Favorites(),
+        Watched(),
+        GenreGroup(),
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        Filter.Header("Use 'Female Tags' or 'Male Tags' for specific categories. 'Tags' searches all categories."),
+        TextFilter("Tags", "tag"),
+        TextFilter("Female Tags", "female"),
+        TextFilter("Male Tags", "male"),
+        AdvancedGroup(),
+    )
 
     internal open class TextFilter(
         name: String,

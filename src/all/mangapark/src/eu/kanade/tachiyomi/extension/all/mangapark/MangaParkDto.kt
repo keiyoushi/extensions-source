@@ -45,49 +45,48 @@ class MangaParkComic(
     @SerialName("urlCoverOri") private val cover: String? = null,
     private val urlPath: String,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            url = "$urlPath#$id"
-            title = name
-            thumbnail_url = cover
-            author = authors?.joinToString()
-            artist = artists?.joinToString()
-            description =
-                buildString {
-                    val desc = summary?.let { Jsoup.parse(it).text() }
-                    val names =
-                        altNames
-                            ?.takeUnless { it.isEmpty() }
-                            ?.joinToString("\n") { "• ${it.trim()}" }
+    fun toSManga() = SManga.create().apply {
+        url = "$urlPath#$id"
+        title = name
+        thumbnail_url = cover
+        author = authors?.joinToString()
+        artist = artists?.joinToString()
+        description =
+            buildString {
+                val desc = summary?.let { Jsoup.parse(it).text() }
+                val names =
+                    altNames
+                        ?.takeUnless { it.isEmpty() }
+                        ?.joinToString("\n") { "• ${it.trim()}" }
 
-                    if (desc.isNullOrEmpty()) {
-                        if (!names.isNullOrEmpty()) {
-                            append("Alternative Names:\n", names)
-                        }
+                if (desc.isNullOrEmpty()) {
+                    if (!names.isNullOrEmpty()) {
+                        append("Alternative Names:\n", names)
+                    }
+                } else {
+                    append(desc)
+                    if (!names.isNullOrEmpty()) {
+                        append("\n\nAlternative Names:\n", names)
+                    }
+                }
+            }
+        genre = genres?.joinToString { it.replace("_", " ").toCamelCase() }
+        status =
+            when (originalStatus) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> {
+                    if (uploadStatus == "ongoing") {
+                        SManga.PUBLISHING_FINISHED
                     } else {
-                        append(desc)
-                        if (!names.isNullOrEmpty()) {
-                            append("\n\nAlternative Names:\n", names)
-                        }
+                        SManga.COMPLETED
                     }
                 }
-            genre = genres?.joinToString { it.replace("_", " ").toCamelCase() }
-            status =
-                when (originalStatus) {
-                    "ongoing" -> SManga.ONGOING
-                    "completed" -> {
-                        if (uploadStatus == "ongoing") {
-                            SManga.PUBLISHING_FINISHED
-                        } else {
-                            SManga.COMPLETED
-                        }
-                    }
-                    "hiatus" -> SManga.ON_HIATUS
-                    "cancelled" -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-            initialized = true
-        }
+                "hiatus" -> SManga.ON_HIATUS
+                "cancelled" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+        initialized = true
+    }
 
     companion object {
         private fun String.toCamelCase(): String {
@@ -125,17 +124,16 @@ class MangaParkChapter(
     private val userNode: Data<Name>? = null,
     val dupChapters: List<Data<MangaParkChapter>> = emptyList(),
 ) {
-    fun toSChapter() =
-        SChapter.create().apply {
-            url = "$urlPath#$id"
-            name =
-                buildString {
-                    append(displayName)
-                    title?.let { append(": ", it) }
-                }
-            date_upload = dateModify ?: dateCreate ?: 0L
-            scanlator = userNode?.data?.name ?: srcTitle ?: "Unknown"
-        }
+    fun toSChapter() = SChapter.create().apply {
+        url = "$urlPath#$id"
+        name =
+            buildString {
+                append(displayName)
+                title?.let { append(": ", it) }
+            }
+        date_upload = dateModify ?: dateCreate ?: 0L
+        scanlator = userNode?.data?.name ?: srcTitle ?: "Unknown"
+    }
 }
 
 @Serializable

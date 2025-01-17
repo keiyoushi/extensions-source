@@ -49,22 +49,20 @@ class ScanManga : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Accept-Language", "fr-FR")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Accept-Language", "fr-FR")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-22.html", headers)
 
     override fun popularMangaSelector() = "div.image_manga a[href]"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("img").attr("title")
-            setUrlWithoutDomain(element.attr("href"))
-            thumbnail_url = element.select("img").attr("data-original")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("img").attr("title")
+        setUrlWithoutDomain(element.attr("href"))
+        thumbnail_url = element.select("img").attr("data-original")
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -73,16 +71,15 @@ class ScanManga : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = "#content_news .listing"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("a.nom_manga").text()
-            setUrlWithoutDomain(element.select("a.nom_manga").attr("href"))
-            // Better not use it, width is too large, which results in terrible image
-            // thumbnail_url = element.select(".logo_manga img").let {
-            //    if (it.hasAttr("data-original"))
-            //        it.attr("data-original") else it.attr("src")
-            // }
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("a.nom_manga").text()
+        setUrlWithoutDomain(element.select("a.nom_manga").attr("href"))
+        // Better not use it, width is too large, which results in terrible image
+        // thumbnail_url = element.select(".logo_manga img").let {
+        //    if (it.hasAttr("data-original"))
+        //        it.attr("data-original") else it.attr("src")
+        // }
+    }
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
@@ -123,24 +120,22 @@ class ScanManga : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        client
-            .newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
+    ): Observable<MangasPage> = client
+        .newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map { response ->
+            searchMangaParse(response, query)
+        }
 
     private fun searchMangaParse(
         response: Response,
         query: String,
-    ): MangasPage =
-        MangasPage(
-            parseMangaFromJson(response).mangas.filter {
-                it.title.contains(query, ignoreCase = true)
-            },
-            false,
-        )
+    ): MangasPage = MangasPage(
+        parseMangaFromJson(response).mangas.filter {
+            it.title.contains(query, ignoreCase = true)
+        },
+        false,
+    )
 
     private fun parseMangaFromJson(response: Response): MangasPage {
         val jsonRaw = response.body.string()
@@ -189,13 +184,12 @@ class ScanManga : ParsedHttpSource() {
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select("h2[itemprop=\"name\"]").text()
-            author = document.select("li[itemprop=\"author\"] a").joinToString { it.text() }
-            description = document.select("p[itemprop=\"description\"]").text()
-            thumbnail_url = document.select(".contenu_fiche_technique .image_manga img").attr("src")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("h2[itemprop=\"name\"]").text()
+        author = document.select("li[itemprop=\"author\"] a").joinToString { it.text() }
+        description = document.select("p[itemprop=\"description\"]").text()
+        thumbnail_url = document.select(".contenu_fiche_technique .image_manga img").attr("src")
+    }
 
     // Chapters
     override fun chapterListSelector() = throw UnsupportedOperationException()

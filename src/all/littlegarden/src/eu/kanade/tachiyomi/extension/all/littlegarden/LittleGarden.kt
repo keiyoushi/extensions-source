@@ -43,17 +43,16 @@ class LittleGarden : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select(".item-title .name").text().trim()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url =
-                element
-                    .select(".thumb")
-                    .attr("style")
-                    .substringAfter("(")
-                    .substringBefore(")")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select(".item-title .name").text().trim()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url =
+            element
+                .select(".thumb")
+                .attr("style")
+                .substringAfter("(")
+                .substringBefore(")")
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = GET(baseUrl)
@@ -62,17 +61,16 @@ class LittleGarden : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("h3")!!.text().trim()
-            setUrlWithoutDomain(element.select("a").attr("href").substringBeforeLast("/"))
-            thumbnail_url =
-                element
-                    .select(".img.image-item")
-                    .attr("style")
-                    .substringAfter("(")
-                    .substringBefore(")")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h3")!!.text().trim()
+        setUrlWithoutDomain(element.select("a").attr("href").substringBeforeLast("/"))
+        thumbnail_url =
+            element
+                .select(".img.image-item")
+                .attr("style")
+                .substringAfter("(")
+                .substringBefore(")")
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()

@@ -52,12 +52,11 @@ class VizImageInterceptor : Interceptor {
             .build()
     }
 
-    private fun imageUrlParse(response: Response): String =
-        response
-            .use { json.decodeFromString<VizPageUrlDto>(it.body.string()) }
-            .data
-            ?.values
-            ?.firstOrNull() ?: throw IOException(FAILED_TO_FETCH_PAGE_URL)
+    private fun imageUrlParse(response: Response): String = response
+        .use { json.decodeFromString<VizPageUrlDto>(it.body.string()) }
+        .data
+        ?.values
+        ?.firstOrNull() ?: throw IOException(FAILED_TO_FETCH_PAGE_URL)
 
     private fun imageRequest(url: String): Request {
         val headers =
@@ -174,27 +173,26 @@ class VizImageInterceptor : Interceptor {
         drawBitmap(from, srcRect, dstRect, null)
     }
 
-    private fun ByteArrayInputStream.getImageData(): Result<ImageData?> =
-        runCatching {
-            val metadata = ImageMetadataReader.readMetadata(this)
+    private fun ByteArrayInputStream.getImageData(): Result<ImageData?> = runCatching {
+        val metadata = ImageMetadataReader.readMetadata(this)
 
-            val keyDir =
-                metadata.directories
-                    .firstOrNull { it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID) }
-            val metaUniqueId =
-                keyDir?.getString(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID)
-                    ?: return@runCatching null
+        val keyDir =
+            metadata.directories
+                .firstOrNull { it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID) }
+        val metaUniqueId =
+            keyDir?.getString(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID)
+                ?: return@runCatching null
 
-            val sizeDir =
-                metadata.directories.firstOrNull {
-                    it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_WIDTH) &&
-                        it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_HEIGHT)
-                }
-            val metaWidth = sizeDir?.getInt(ExifSubIFDDirectory.TAG_IMAGE_WIDTH) ?: COMMON_WIDTH
-            val metaHeight = sizeDir?.getInt(ExifSubIFDDirectory.TAG_IMAGE_HEIGHT) ?: COMMON_HEIGHT
+        val sizeDir =
+            metadata.directories.firstOrNull {
+                it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_WIDTH) &&
+                    it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_HEIGHT)
+            }
+        val metaWidth = sizeDir?.getInt(ExifSubIFDDirectory.TAG_IMAGE_WIDTH) ?: COMMON_WIDTH
+        val metaHeight = sizeDir?.getInt(ExifSubIFDDirectory.TAG_IMAGE_HEIGHT) ?: COMMON_HEIGHT
 
-            ImageData(metaWidth, metaHeight, metaUniqueId)
-        }
+        ImageData(metaWidth, metaHeight, metaUniqueId)
+    }
 
     private data class ImageData(
         val width: Int,

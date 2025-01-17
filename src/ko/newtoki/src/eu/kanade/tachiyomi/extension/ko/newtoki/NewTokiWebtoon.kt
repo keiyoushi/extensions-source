@@ -143,14 +143,13 @@ object NewTokiWebtoon : NewToki("NewToki", "webtoon", newTokiPreferences) {
             Selection(0, false),
         )
 
-    override fun getFilterList() =
-        FilterList(
-            SearchTargetTypeList(),
-            SearchSortTypeList(),
-            Filter.Separator(),
-            Filter.Header(ignoredForTextSearch()),
-            SearchYoilTypeList(),
-            SearchJaumTypeList(),
-            SearchGenreTypeList(),
-        )
+    override fun getFilterList() = FilterList(
+        SearchTargetTypeList(),
+        SearchSortTypeList(),
+        Filter.Separator(),
+        Filter.Header(ignoredForTextSearch()),
+        SearchYoilTypeList(),
+        SearchJaumTypeList(),
+        SearchGenreTypeList(),
+    )
 }

@@ -28,21 +28,19 @@ class Comiplex :
 
     override fun popularMangaSelector(): String = "ul.series-items li.series-item > a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("h4.item-series-title")!!.text()
-            thumbnail_url =
-                element
-                    .selectFirst("div.series-item-thumb img")!!
-                    .attr("data-src")
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h4.item-series-title")!!.text()
+        thumbnail_url =
+            element
+                .selectFirst("div.series-item-thumb img")!!
+                .attr("data-src")
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
-    override fun getCollections(): List<Collection> =
-        listOf(
-            Collection("ヒーローズ", "heros"),
-            Collection("ふらっとヒーローズ", "flat"),
-            Collection("わいるどヒーローズ", "wild"),
-            Collection("読切作品", "oneshot"),
-        )
+    override fun getCollections(): List<Collection> = listOf(
+        Collection("ヒーローズ", "heros"),
+        Collection("ふらっとヒーローズ", "flat"),
+        Collection("わいるどヒーローズ", "wild"),
+        Collection("読切作品", "oneshot"),
+    )
 }

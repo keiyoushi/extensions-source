@@ -72,23 +72,22 @@ class NineHentai : HttpSource() {
         return POST("$baseUrl$SEARCH_URL", headers, jsonString.toRequestBody(MEDIA_TYPE))
     }
 
-    private fun parseSearchResponse(response: Response): MangasPage =
-        response.use {
-            val page = json.decodeFromString<SearchRequestPayload>(it.request.bodyString).search.page
-            json.decodeFromString<SearchResponse>(it.body.string()).let { searchResponse ->
-                MangasPage(
-                    searchResponse.results.map {
-                        SManga.create().apply {
-                            url = "/g/${it.id}"
-                            title = it.title
-                            // Cover is the compressed first page (cover might change if page count changes)
-                            thumbnail_url = "${it.image_server}${it.id}/1.jpg?${it.total_page}"
-                        }
-                    },
-                    searchResponse.totalCount - 1 > page,
-                )
-            }
+    private fun parseSearchResponse(response: Response): MangasPage = response.use {
+        val page = json.decodeFromString<SearchRequestPayload>(it.request.bodyString).search.page
+        json.decodeFromString<SearchResponse>(it.body.string()).let { searchResponse ->
+            MangasPage(
+                searchResponse.results.map {
+                    SManga.create().apply {
+                        url = "/g/${it.id}"
+                        title = it.title
+                        // Cover is the compressed first page (cover might change if page count changes)
+                        thumbnail_url = "${it.image_server}${it.id}/1.jpg?${it.total_page}"
+                    }
+                },
+                searchResponse.totalCount - 1 > page,
+            )
         }
+    }
 
     // Builds request for /api/getBookById endpoint
     private fun buildDetailRequest(id: Int): Request {
@@ -192,26 +191,25 @@ class NineHentai : HttpSource() {
 
     // Manga Details
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        SManga.create().apply {
-            response.asJsoup().selectFirst("div#bigcontainer")!!.let { info ->
-                title = info.select("h1").text()
-                thumbnail_url = info.selectFirst("div#cover v-lazy-image")!!.attr("abs:src")
-                status = SManga.COMPLETED
-                artist = info.selectTextOrNull("div.field-name:contains(Artist:) a.tag")
-                author = info.selectTextOrNull("div.field-name:contains(Group:) a.tag") ?: "Unknown circle"
-                genre = info.selectTextOrNull("div.field-name:contains(Tag:) a.tag")
-                // Additional details
-                description =
-                    listOf(
-                        Pair("Alternative Title", info.selectTextOrNull("h2")),
-                        Pair("Pages", info.selectTextOrNull("div#info > div:contains(pages)")),
-                        Pair("Parody", info.selectTextOrNull("div.field-name:contains(Parody:) a.tag")),
-                        Pair("Category", info.selectTextOrNull("div.field-name:contains(Category:) a.tag")),
-                        Pair("Language", info.selectTextOrNull("div.field-name:contains(Language:) a.tag")),
-                    ).filterNot { it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
-            }
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        response.asJsoup().selectFirst("div#bigcontainer")!!.let { info ->
+            title = info.select("h1").text()
+            thumbnail_url = info.selectFirst("div#cover v-lazy-image")!!.attr("abs:src")
+            status = SManga.COMPLETED
+            artist = info.selectTextOrNull("div.field-name:contains(Artist:) a.tag")
+            author = info.selectTextOrNull("div.field-name:contains(Group:) a.tag") ?: "Unknown circle"
+            genre = info.selectTextOrNull("div.field-name:contains(Tag:) a.tag")
+            // Additional details
+            description =
+                listOf(
+                    Pair("Alternative Title", info.selectTextOrNull("h2")),
+                    Pair("Pages", info.selectTextOrNull("div#info > div:contains(pages)")),
+                    Pair("Parody", info.selectTextOrNull("div.field-name:contains(Parody:) a.tag")),
+                    Pair("Category", info.selectTextOrNull("div.field-name:contains(Category:) a.tag")),
+                    Pair("Language", info.selectTextOrNull("div.field-name:contains(Language:) a.tag")),
+                ).filterNot { it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
         }
+    }
 
     // Ensures no exceptions are thrown when scraping additional details
     private fun Element.selectTextOrNull(selector: String): String? {
@@ -322,19 +320,18 @@ class NineHentai : HttpSource() {
     private fun getTags(
         queries: String,
         type: Int,
-    ): List<Tag> =
-        queries
-            .split(",")
-            .map(String::trim)
-            .filterNot(String::isBlank)
-            .mapNotNull { query ->
-                val jsonString =
-                    buildJsonObject {
-                        put("tag_name", query)
-                        put("tag_type", type)
-                    }.toString()
-                lookupTags(jsonString)
-            }
+    ): List<Tag> = queries
+        .split(",")
+        .map(String::trim)
+        .filterNot(String::isBlank)
+        .mapNotNull { query ->
+            val jsonString =
+                buildJsonObject {
+                    put("tag_name", query)
+                    put("tag_type", type)
+                }.toString()
+            lookupTags(jsonString)
+        }
 
     // Based on HentaiHand ext
     private fun lookupTags(request: String): Tag? {
@@ -397,21 +394,20 @@ class NineHentai : HttpSource() {
 
     private class CategoryFilter : Filter.Text("Category")
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Search by id with \"id:\" in front of query"),
-            Filter.Separator(),
-            SortFilter(),
-            MinPagesFilter(),
-            MaxPagesFilter(),
-            IncludedFilter(),
-            ExcludedFilter(),
-            ArtistFilter(),
-            GroupFilter(),
-            ParodyFilter(),
-            CharacterFilter(),
-            CategoryFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Search by id with \"id:\" in front of query"),
+        Filter.Separator(),
+        SortFilter(),
+        MinPagesFilter(),
+        MaxPagesFilter(),
+        IncludedFilter(),
+        ExcludedFilter(),
+        ArtistFilter(),
+        GroupFilter(),
+        ParodyFilter(),
+        CharacterFilter(),
+        CategoryFilter(),
+    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

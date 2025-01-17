@@ -50,11 +50,10 @@ abstract class ToomicsGlobal(
             .writeTimeout(1, TimeUnit.MINUTES)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", "$baseUrl/$siteLang")
-            .add("User-Agent", USER_AGENT)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", "$baseUrl/$siteLang")
+        .add("User-Agent", USER_AGENT)
 
     // ================================== Popular =======================================
 
@@ -62,20 +61,19 @@ abstract class ToomicsGlobal(
 
     override fun popularMangaSelector(): String = "li > div.visual a:has(img)"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("h4[class$=title]").first()!!.ownText()
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("h4[class$=title]").first()!!.ownText()
 
-            thumbnail_url =
-                element.selectFirst("img")?.let { img ->
-                    when {
-                        img.hasAttr("data-original") -> img.attr("data-original")
-                        else -> img.attr("src")
-                    }
+        thumbnail_url =
+            element.selectFirst("img")?.let { img ->
+                when {
+                    img.hasAttr("data-original") -> img.attr("data-original")
+                    else -> img.attr("src")
                 }
-            // The path segment '/search/Y' bypasses the age check and prevents redirection to the chapter
-            setUrlWithoutDomain("${element.absUrl("href")}/search/Y")
-        }
+            }
+        // The path segment '/search/Y' bypasses the age check and prevents redirection to the chapter
+        setUrlWithoutDomain("${element.absUrl("href")}/search/Y")
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -106,22 +104,21 @@ abstract class ToomicsGlobal(
 
     override fun searchMangaSelector(): String = "#search-list-items li"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("strong")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("strong")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
 
-            element.selectFirst("a.relative")!!.attr("href").let {
-                val href = it.substringAfter("Base.setFamilyMode('N', '").substringBefore("'")
-                val url =
-                    when {
-                        href.contains(baseUrl, true) -> href.toHttpUrl()
-                        else -> "$baseUrl${URLDecoder.decode(href, "UTF-8")}".toHttpUrl()
-                    }
-                // The path segment '/search/Y' bypasses the age check and prevents redirection to the chapter
-                setUrlWithoutDomain("$baseUrl/$siteLang/webtoon/episode/toon/${url.queryParameter("toon")}/search/Y")
-            }
+        element.selectFirst("a.relative")!!.attr("href").let {
+            val href = it.substringAfter("Base.setFamilyMode('N', '").substringBefore("'")
+            val url =
+                when {
+                    href.contains(baseUrl, true) -> href.toHttpUrl()
+                    else -> "$baseUrl${URLDecoder.decode(href, "UTF-8")}".toHttpUrl()
+                }
+            // The path segment '/search/Y' bypasses the age check and prevents redirection to the chapter
+            setUrlWithoutDomain("$baseUrl/$siteLang/webtoon/episode/toon/${url.queryParameter("toon")}/search/Y")
         }
+    }
 
     override fun searchMangaNextPageSelector(): String? = null
 
@@ -134,48 +131,45 @@ abstract class ToomicsGlobal(
 
     // ================================== Manga Details ================================
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val header = document.selectFirst("#glo_contents section.relative:has(img[src*=thumb])")!!
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val header = document.selectFirst("#glo_contents section.relative:has(img[src*=thumb])")!!
 
-            title = header.selectFirst("h2")!!.text()
-            header.selectFirst(".mb-0.text-xs.font-normal")?.let {
-                val info = it.text().split("|")
-                artist = info.first()
-                author = info.last()
-            }
-
-            genre = header.selectFirst("dt:contains(genres) + dd")?.text()?.replace("/", ",")
-            description = header.selectFirst(".break-noraml.text-xs")?.text()
-            thumbnail_url = document.selectFirst("head meta[property='og:image']")?.attr("content")
+        title = header.selectFirst("h2")!!.text()
+        header.selectFirst(".mb-0.text-xs.font-normal")?.let {
+            val info = it.text().split("|")
+            artist = info.first()
+            author = info.last()
         }
+
+        genre = header.selectFirst("dt:contains(genres) + dd")?.text()?.replace("/", ",")
+        description = header.selectFirst(".break-noraml.text-xs")?.text()
+        thumbnail_url = document.selectFirst("head meta[property='og:image']")?.attr("content")
+    }
 
     // ================================== Chapters =====================================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        super
-            .fetchChapterList(manga)
-            .map { it.reversed() }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = super
+        .fetchChapterList(manga)
+        .map { it.reversed() }
 
     // coin-type1 - free chapter, coin-type6 - already read chapter
     override fun chapterListSelector(): String = "li.normal_ep:has(.coin-type1, .coin-type6)"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val num = element.selectFirst("div.cell-num")!!.text()
-            val numText = if (num.isNotEmpty()) "$num - " else ""
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val num = element.selectFirst("div.cell-num")!!.text()
+        val numText = if (num.isNotEmpty()) "$num - " else ""
 
-            name = numText + (element.selectFirst("div.cell-title strong")?.ownText() ?: "")
-            chapter_number = num.toFloatOrNull() ?: -1f
-            date_upload = parseChapterDate(element.select("div.cell-time time").text())
-            scanlator = "Toomics"
-            url =
-                element
-                    .selectFirst("a")!!
-                    .attr("onclick")
-                    .substringAfter("href='")
-                    .substringBefore("'")
-        }
+        name = numText + (element.selectFirst("div.cell-title strong")?.ownText() ?: "")
+        chapter_number = num.toFloatOrNull() ?: -1f
+        date_upload = parseChapterDate(element.select("div.cell-time time").text())
+        scanlator = "Toomics"
+        url =
+            element
+                .selectFirst("a")!!
+                .attr("onclick")
+                .substringAfter("href='")
+                .substringBefore("'")
+    }
 
     // ================================== Pages ========================================
 
@@ -216,21 +210,19 @@ abstract class ToomicsGlobal(
         )
     }
 
-    private fun parseChapterDate(date: String): Long =
-        try {
-            dateFormat.parse(date)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun parseChapterDate(date: String): Long = try {
+        dateFormat.parse(date)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
+    }
 
     fun String.clearHtml(): String = this.unicode().replace(ESCAPE_CHAR_REGEX, "")
 
-    fun String.unicode(): String =
-        UNICODE_REGEX.replace(this) { match ->
-            val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
-            val value = hex.toInt(16)
-            value.toChar().toString()
-        }
+    fun String.unicode(): String = UNICODE_REGEX.replace(this) { match ->
+        val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
+        val value = hex.toInt(16)
+        value.toChar().toString()
+    }
 
     companion object {
         private const val USER_AGENT =

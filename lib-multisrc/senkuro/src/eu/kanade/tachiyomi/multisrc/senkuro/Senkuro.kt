@@ -33,11 +33,10 @@ abstract class Senkuro(
     ConfigurableSource {
     override val supportsLatest = false
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
-            .add("Content-Type", "application/json")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
+        .add("Content-Type", "application/json")
 
     override val client: OkHttpClient =
         network.client
@@ -45,10 +44,9 @@ abstract class Senkuro(
             .rateLimit(3)
             .build()
 
-    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-        json
-            .encodeToString(this)
-            .toRequestBody(JSON_MEDIA_TYPE)
+    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody = json
+        .encodeToString(this)
+        .toRequestBody(JSON_MEDIA_TYPE)
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -228,15 +226,14 @@ abstract class Senkuro(
     }
 
     // Details
-    private fun parseStatus(status: String?): Int =
-        when (status) {
-            "FINISHED" -> SManga.COMPLETED
-            "ONGOING" -> SManga.ONGOING
-            "HIATUS" -> SManga.ON_HIATUS
-            "ANNOUNCE" -> SManga.ONGOING
-            "CANCELLED" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?): Int = when (status) {
+        "FINISHED" -> SManga.COMPLETED
+        "ONGOING" -> SManga.ONGOING
+        "HIATUS" -> SManga.ON_HIATUS
+        "ANNOUNCE" -> SManga.ONGOING
+        "CANCELLED" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     private fun MangaTachiyomiInfoDto.toSManga(): SManga {
         val o = this
@@ -296,13 +293,12 @@ abstract class Senkuro(
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response, manga)
-            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response, manga)
+        }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
@@ -476,52 +472,47 @@ abstract class Senkuro(
     private var genresList: List<FilterersTri> = listOf()
     private var tagsList: List<FilterersTri> = listOf()
 
-    private fun getTypeList() =
-        listOf(
-            FilterersTri("Манга", "MANGA"),
-            FilterersTri("Манхва", "MANHWA"),
-            FilterersTri("Маньхуа", "MANHUA"),
-            FilterersTri("Комикс", "COMICS"),
-            FilterersTri("OEL Манга", "OEL_MANGA"),
-            FilterersTri("РуМанга", "RU_MANGA"),
-        )
+    private fun getTypeList() = listOf(
+        FilterersTri("Манга", "MANGA"),
+        FilterersTri("Манхва", "MANHWA"),
+        FilterersTri("Маньхуа", "MANHUA"),
+        FilterersTri("Комикс", "COMICS"),
+        FilterersTri("OEL Манга", "OEL_MANGA"),
+        FilterersTri("РуМанга", "RU_MANGA"),
+    )
 
-    private fun getStatList() =
-        listOf(
-            FilterersTri("Анонс", "ANNOUNCE"),
-            FilterersTri("Онгоинг", "ONGOING"),
-            FilterersTri("Выпущено", "FINISHED"),
-            FilterersTri("Приостановлено", "HIATUS"),
-            FilterersTri("Отменено", "CANCELLED"),
-        )
+    private fun getStatList() = listOf(
+        FilterersTri("Анонс", "ANNOUNCE"),
+        FilterersTri("Онгоинг", "ONGOING"),
+        FilterersTri("Выпущено", "FINISHED"),
+        FilterersTri("Приостановлено", "HIATUS"),
+        FilterersTri("Отменено", "CANCELLED"),
+    )
 
-    private fun getStatTranslateList() =
-        listOf(
-            FilterersTri("Переводится", "IN_PROGRESS"),
-            FilterersTri("Завершён", "FINISHED"),
-            FilterersTri("Заморожен", "FROZEN"),
-            FilterersTri("Заброшен", "ABANDONED"),
-        )
+    private fun getStatTranslateList() = listOf(
+        FilterersTri("Переводится", "IN_PROGRESS"),
+        FilterersTri("Завершён", "FINISHED"),
+        FilterersTri("Заморожен", "FROZEN"),
+        FilterersTri("Заброшен", "ABANDONED"),
+    )
 
-    private fun getAgeList() =
-        listOf(
-            FilterersTri("0+", "GENERAL"),
-            FilterersTri("12+", "SENSITIVE"),
-            FilterersTri("16+", "QUESTIONABLE"),
-            FilterersTri("18+", "EXPLICIT"),
-        )
+    private fun getAgeList() = listOf(
+        FilterersTri("0+", "GENERAL"),
+        FilterersTri("12+", "SENSITIVE"),
+        FilterersTri("16+", "QUESTIONABLE"),
+        FilterersTri("18+", "EXPLICIT"),
+    )
 
-    private fun getFormatList() =
-        listOf(
-            FilterersTri("Сборник", "DIGEST"),
-            FilterersTri("Додзинси", "DOUJINSHI"),
-            FilterersTri("В цвете", "IN_COLOR"),
-            FilterersTri("Сингл", "SINGLE"),
-            FilterersTri("Веб", "WEB"),
-            FilterersTri("Вебтун", "WEBTOON"),
-            FilterersTri("Ёнкома", "YONKOMA"),
-            FilterersTri("Short", "SHORT"),
-        )
+    private fun getFormatList() = listOf(
+        FilterersTri("Сборник", "DIGEST"),
+        FilterersTri("Додзинси", "DOUJINSHI"),
+        FilterersTri("В цвете", "IN_COLOR"),
+        FilterersTri("Сингл", "SINGLE"),
+        FilterersTri("Веб", "WEB"),
+        FilterersTri("Вебтун", "WEBTOON"),
+        FilterersTri("Ёнкома", "YONKOMA"),
+        FilterersTri("Short", "SHORT"),
+    )
 
     companion object {
         private const val OFFSET_COUNT = 20

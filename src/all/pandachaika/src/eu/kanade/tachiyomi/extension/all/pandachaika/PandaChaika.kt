@@ -84,83 +84,82 @@ class PandaChaika(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val id = query.removePrefix(PREFIX_ID_SEARCH).toInt()
-                client
-                    .newCall(GET("$baseUrl/api?archive=$id", headers))
-                    .asObservable()
-                    .map { response ->
-                        searchMangaByIdParse(response, id)
-                    }
-            }
-            query.startsWith(PREFIX_EHEN_ID_SEARCH) -> {
-                val id = query.removePrefix(PREFIX_EHEN_ID_SEARCH).replace(ehentaiRegex, "")
-                val baseLink = "https://e-hentai.org/g/"
-                val fullLink =
-                    baseSearchUrl
-                        .toHttpUrl()
-                        .newBuilder()
-                        .apply {
-                            addQueryParameter("qsearch", baseLink + id)
-                            addQueryParameter("json", "")
-                        }.build()
-                client
-                    .newCall(GET(fullLink, headers))
-                    .asObservableSuccess()
-                    .map {
-                        val archive =
-                            it
-                                .parseAs<ArchiveResponse>()
-                                .archives
-                                .getOrNull(0)
-                                ?.toSManga() ?: throw Exception("Not Found")
-                        MangasPage(listOf(archive), false)
-                    }
-            }
-            query.startsWith(PREFIX_FAK_ID_SEARCH) -> {
-                val slug = query.removePrefix(PREFIX_FAK_ID_SEARCH).replace(fakkuRegex, "")
-                val baseLink = "https://www.fakku.net/hentai/"
-                val fullLink =
-                    baseSearchUrl
-                        .toHttpUrl()
-                        .newBuilder()
-                        .apply {
-                            addQueryParameter("qsearch", baseLink + slug)
-                            addQueryParameter("json", "")
-                        }.build()
-                client
-                    .newCall(GET(fullLink, headers))
-                    .asObservableSuccess()
-                    .map {
-                        val archive =
-                            it
-                                .parseAs<ArchiveResponse>()
-                                .archives
-                                .getOrNull(0)
-                                ?.toSManga() ?: throw Exception("Not Found")
-                        MangasPage(listOf(archive), false)
-                    }
-            }
-            query.startsWith(PREFIX_SOURCE_SEARCH) -> {
-                val url = query.removePrefix(PREFIX_SOURCE_SEARCH)
-                client
-                    .newCall(GET("$baseSearchUrl/?qsearch=$url&json=", headers))
-                    .asObservableSuccess()
-                    .map {
-                        val archive =
-                            it
-                                .parseAs<ArchiveResponse>()
-                                .archives
-                                .getOrNull(0)
-                                ?.toSManga() ?: throw Exception("Not Found")
-                        MangasPage(listOf(archive), false)
-                    }
-            }
-
-            else -> super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val id = query.removePrefix(PREFIX_ID_SEARCH).toInt()
+            client
+                .newCall(GET("$baseUrl/api?archive=$id", headers))
+                .asObservable()
+                .map { response ->
+                    searchMangaByIdParse(response, id)
+                }
         }
+        query.startsWith(PREFIX_EHEN_ID_SEARCH) -> {
+            val id = query.removePrefix(PREFIX_EHEN_ID_SEARCH).replace(ehentaiRegex, "")
+            val baseLink = "https://e-hentai.org/g/"
+            val fullLink =
+                baseSearchUrl
+                    .toHttpUrl()
+                    .newBuilder()
+                    .apply {
+                        addQueryParameter("qsearch", baseLink + id)
+                        addQueryParameter("json", "")
+                    }.build()
+            client
+                .newCall(GET(fullLink, headers))
+                .asObservableSuccess()
+                .map {
+                    val archive =
+                        it
+                            .parseAs<ArchiveResponse>()
+                            .archives
+                            .getOrNull(0)
+                            ?.toSManga() ?: throw Exception("Not Found")
+                    MangasPage(listOf(archive), false)
+                }
+        }
+        query.startsWith(PREFIX_FAK_ID_SEARCH) -> {
+            val slug = query.removePrefix(PREFIX_FAK_ID_SEARCH).replace(fakkuRegex, "")
+            val baseLink = "https://www.fakku.net/hentai/"
+            val fullLink =
+                baseSearchUrl
+                    .toHttpUrl()
+                    .newBuilder()
+                    .apply {
+                        addQueryParameter("qsearch", baseLink + slug)
+                        addQueryParameter("json", "")
+                    }.build()
+            client
+                .newCall(GET(fullLink, headers))
+                .asObservableSuccess()
+                .map {
+                    val archive =
+                        it
+                            .parseAs<ArchiveResponse>()
+                            .archives
+                            .getOrNull(0)
+                            ?.toSManga() ?: throw Exception("Not Found")
+                    MangasPage(listOf(archive), false)
+                }
+        }
+        query.startsWith(PREFIX_SOURCE_SEARCH) -> {
+            val url = query.removePrefix(PREFIX_SOURCE_SEARCH)
+            client
+                .newCall(GET("$baseSearchUrl/?qsearch=$url&json=", headers))
+                .asObservableSuccess()
+                .map {
+                    val archive =
+                        it
+                            .parseAs<ArchiveResponse>()
+                            .archives
+                            .getOrNull(0)
+                            ?.toSManga() ?: throw Exception("Not Found")
+                    MangasPage(listOf(archive), false)
+                }
+        }
+
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     private fun searchMangaByIdParse(
         response: Response,

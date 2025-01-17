@@ -28,19 +28,18 @@ class SeitaCelestial :
             .rateLimit(1, 2, TimeUnit.SECONDS)
             .build()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservable()
-            .map { response ->
-                if (!response.isSuccessful) {
-                    throw Exception(
-                        """
-                        Obra não encontrada.
-                        Realize a migração do título para atualizar.
-                        """.trimIndent(),
-                    )
-                }
-                chapterListParse(response)
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(chapterListRequest(manga))
+        .asObservable()
+        .map { response ->
+            if (!response.isSuccessful) {
+                throw Exception(
+                    """
+                    Obra não encontrada.
+                    Realize a migração do título para atualizar.
+                    """.trimIndent(),
+                )
             }
+            chapterListParse(response)
+        }
 }

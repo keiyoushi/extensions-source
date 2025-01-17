@@ -21,41 +21,40 @@ class WestManga : MangaThemesia("West Manga", "https://westmanga.fun", "id") {
     override val seriesDetailsSelector = ".seriestucontent"
     override val seriesTypeSelector = ".infotable tr:contains(Type) td:last-child"
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            document.selectFirst(seriesDetailsSelector)!!.let { seriesDetails ->
-                title = document.selectFirst("div.postbody h1")!!.text()
-                artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
-                author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
-                description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
-                // Add alternative name to manga description
-                val altName = document.selectFirst(".seriestualt")?.ownText().takeIf { it.isNullOrBlank().not() }
-                altName?.let {
-                    description = "$description\n\n$altNamePrefix$altName".trim()
-                }
-                val genres = seriesDetails.select(seriesGenreSelector).map { it.text() }.toMutableList()
-                // Add series type (manga/manhwa/manhua/other) to genre
-                seriesDetails
-                    .selectFirst(seriesTypeSelector)
-                    ?.ownText()
-                    .takeIf { it.isNullOrBlank().not() }
-                    ?.let { genres.add(it) }
-                genre =
-                    genres
-                        .map { genre ->
-                            genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
-                                if (char.isLowerCase()) {
-                                    char.titlecase(Locale.forLanguageTag(lang))
-                                } else {
-                                    char.toString()
-                                }
-                            }
-                        }.joinToString { it.trim() }
-
-                status = seriesDetails.selectFirst(seriesStatusSelector)?.text().parseStatus()
-                thumbnail_url = seriesDetails.select(seriesThumbnailSelector).imgAttr()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.selectFirst(seriesDetailsSelector)!!.let { seriesDetails ->
+            title = document.selectFirst("div.postbody h1")!!.text()
+            artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
+            author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
+            description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
+            // Add alternative name to manga description
+            val altName = document.selectFirst(".seriestualt")?.ownText().takeIf { it.isNullOrBlank().not() }
+            altName?.let {
+                description = "$description\n\n$altNamePrefix$altName".trim()
             }
+            val genres = seriesDetails.select(seriesGenreSelector).map { it.text() }.toMutableList()
+            // Add series type (manga/manhwa/manhua/other) to genre
+            seriesDetails
+                .selectFirst(seriesTypeSelector)
+                ?.ownText()
+                .takeIf { it.isNullOrBlank().not() }
+                ?.let { genres.add(it) }
+            genre =
+                genres
+                    .map { genre ->
+                        genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
+                            if (char.isLowerCase()) {
+                                char.titlecase(Locale.forLanguageTag(lang))
+                            } else {
+                                char.toString()
+                            }
+                        }
+                    }.joinToString { it.trim() }
+
+            status = seriesDetails.selectFirst(seriesStatusSelector)?.text().parseStatus()
+            thumbnail_url = seriesDetails.select(seriesThumbnailSelector).imgAttr()
         }
+    }
 
     override val hasProjectPage = true
 }

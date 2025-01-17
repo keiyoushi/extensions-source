@@ -30,47 +30,45 @@ class Manga(
     private val seriesStatus: String? = null,
     val genres: List<Genre> = emptyList(),
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            url = "$slug#$id"
-            title = postTitle
-            thumbnail_url = featuredImage
-            author = this@Manga.author?.takeUnless { it.isEmpty() }
-            artist = this@Manga.artist?.takeUnless { it.isEmpty() }
-            description =
-                buildString {
-                    postContent?.takeUnless { it.isEmpty() }?.let { desc ->
-                        val tmpDesc = desc.replace("\n", "<br>")
+    fun toSManga() = SManga.create().apply {
+        url = "$slug#$id"
+        title = postTitle
+        thumbnail_url = featuredImage
+        author = this@Manga.author?.takeUnless { it.isEmpty() }
+        artist = this@Manga.artist?.takeUnless { it.isEmpty() }
+        description =
+            buildString {
+                postContent?.takeUnless { it.isEmpty() }?.let { desc ->
+                    val tmpDesc = desc.replace("\n", "<br>")
 
-                        append(Jsoup.parse(tmpDesc).text())
-                    }
-                    alternativeTitles?.takeUnless { it.isEmpty() }?.let { altName ->
-                        append("\n\n")
-                        append("Alternative Names: ")
-                        append(altName)
-                    }
-                }.trim()
-            genre = getGenres()
-            status =
-                when (seriesStatus) {
-                    "ONGOING", "COMING_SOON" -> SManga.ONGOING
-                    "COMPLETED" -> SManga.COMPLETED
-                    "CANCELLED", "DROPPED" -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
+                    append(Jsoup.parse(tmpDesc).text())
                 }
-            initialized = true
-        }
-
-    fun getGenres() =
-        buildList {
-            when (seriesType) {
-                "MANGA" -> add("Manga")
-                "MANHUA" -> add("Manhua")
-                "MANHWA" -> add("Manhwa")
-                else -> {}
+                alternativeTitles?.takeUnless { it.isEmpty() }?.let { altName ->
+                    append("\n\n")
+                    append("Alternative Names: ")
+                    append(altName)
+                }
+            }.trim()
+        genre = getGenres()
+        status =
+            when (seriesStatus) {
+                "ONGOING", "COMING_SOON" -> SManga.ONGOING
+                "COMPLETED" -> SManga.COMPLETED
+                "CANCELLED", "DROPPED" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
             }
-            genres.forEach { add(it.name) }
-        }.distinct().joinToString()
+        initialized = true
+    }
+
+    fun getGenres() = buildList {
+        when (seriesType) {
+            "MANGA" -> add("Manga")
+            "MANHUA" -> add("Manhua")
+            "MANHWA" -> add("Manhwa")
+            else -> {}
+        }
+        genres.forEach { add(it.name) }
+    }.distinct().joinToString()
 }
 
 @Serializable
@@ -111,19 +109,18 @@ class Chapter(
 
     fun isAccessible() = isAccessible
 
-    fun toSChapter(mangaSlug: String?) =
-        SChapter.create().apply {
-            val seriesSlug = mangaSlug ?: mangaPost.slug
-            url = "/series/$seriesSlug/$slug#$id"
-            name = "Chapter $number"
-            scanlator = createdBy.name
-            date_upload =
-                try {
-                    dateFormat.parse(createdAt)!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
-        }
+    fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
+        val seriesSlug = mangaSlug ?: mangaPost.slug
+        url = "/series/$seriesSlug/$slug#$id"
+        name = "Chapter $number"
+        scanlator = createdBy.name
+        date_upload =
+            try {
+                dateFormat.parse(createdAt)!!.time
+            } catch (_: ParseException) {
+                0L
+            }
+    }
 }
 
 @Serializable

@@ -148,13 +148,12 @@ abstract class LectorTmo(
     }
 
     // Marks erotic content as false and excludes: Ecchi(6), GirlsLove(17), BoysLove(18), Harem(19), Trap(94) genders
-    private fun getSFWUrlPart(): String =
-        if (getSFWModePref()) {
-            "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18" +
-                "&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false"
-        } else {
-            ""
-        }
+    private fun getSFWUrlPart(): String = if (getSFWModePref()) {
+        "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18" +
+            "&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false"
+    } else {
+        ""
+    }
 
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/library?order_item=likes_count&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
@@ -163,19 +162,18 @@ abstract class LectorTmo(
 
     override fun popularMangaSelector() = "div.element"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.select("div.element > a").let {
-                setUrlWithoutDomain(it.attr("href").substringAfter(" "))
-                title = it.select("h4.text-truncate").text()
-                thumbnail_url =
-                    it
-                        .select("style")
-                        .toString()
-                        .substringAfter("('")
-                        .substringBeforeLast("')")
-            }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.select("div.element > a").let {
+            setUrlWithoutDomain(it.attr("href").substringAfter(" "))
+            title = it.select("h4.text-truncate").text()
+            thumbnail_url =
+                it
+                    .select("style")
+                    .toString()
+                    .substringAfter("('")
+                    .substringBeforeLast("')")
         }
+    }
 
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/library?order_item=creation&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
@@ -190,26 +188,25 @@ abstract class LectorTmo(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
 
-            client
-                .newCall(searchMangaBySlugRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$PREFIX_LIBRARY/$realQuery"
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+        client
+            .newCall(searchMangaBySlugRequest(realQuery))
+            .asObservableSuccess()
+            .map { response ->
+                val details = mangaDetailsParse(response)
+                details.url = "/$PREFIX_LIBRARY/$realQuery"
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
+    }
 
     private fun searchMangaBySlugRequest(slug: String) = GET("$baseUrl/$PREFIX_LIBRARY/$slug", tmoHeaders)
 
@@ -287,28 +284,26 @@ abstract class LectorTmo(
 
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url, tmoHeaders)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.select("h2.element-subtitle").text()
-            document.select("h5.card-title").let {
-                author = it.first()?.attr("title")?.substringAfter(", ")
-                artist = it.last()?.attr("title")?.substringAfter(", ")
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.select("h2.element-subtitle").text()
+        document.select("h5.card-title").let {
+            author = it.first()?.attr("title")?.substringAfter(", ")
+            artist = it.last()?.attr("title")?.substringAfter(", ")
+        }
+        genre =
+            document.select("a.py-2").joinToString(", ") {
+                it.text()
             }
-            genre =
-                document.select("a.py-2").joinToString(", ") {
-                    it.text()
-                }
-            description = document.select("p.element-description").text()
-            status = parseStatus(document.select("span.book-status").text())
-            thumbnail_url = document.select(".book-thumbnail").attr("src")
-        }
+        description = document.select("p.element-description").text()
+        status = parseStatus(document.select("span.book-status").text())
+        thumbnail_url = document.select(".book-thumbnail").attr("src")
+    }
 
-    protected fun parseStatus(status: String) =
-        when {
-            status.contains("Publicándose") -> SManga.ONGOING
-            status.contains("Finalizado") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    protected fun parseStatus(status: String) = when {
+        status.contains("Publicándose") -> SManga.ONGOING
+        status.contains("Finalizado") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     protected open val oneShotChapterName = "One Shot"
 
@@ -366,10 +361,9 @@ abstract class LectorTmo(
         } ?: 0
     }
 
-    protected open fun parseChapterDate(date: String): Long =
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            .parse(date)
-            ?.time ?: 0
+    protected open fun parseChapterDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        .parse(date)
+        ?.time ?: 0
 
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, tmoHeaders)
 
@@ -505,43 +499,39 @@ abstract class LectorTmo(
         return document
     }
 
-    private fun Element.imgAttr(): String =
-        when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            else -> this.attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        this.hasAttr("data-src") -> this.attr("abs:data-src")
+        else -> this.attr("abs:src")
+    }
 
-    private fun String.unescapeUrl(): String =
-        if (this.startsWith("http:\\/\\/") || this.startsWith("https:\\/\\/")) {
-            this.replace("\\/", "/")
-        } else {
-            this
-        }
+    private fun String.unescapeUrl(): String = if (this.startsWith("http:\\/\\/") || this.startsWith("https:\\/\\/")) {
+        this.replace("\\/", "/")
+    } else {
+        this
+    }
 
-    override fun imageRequest(page: Page) =
-        GET(
-            url = page.imageUrl!! + "#imagereq",
-            headers =
-                headers
-                    .newBuilder()
-                    .set("Referer", page.url.substringBefore("news/"))
-                    .build(),
-        )
+    override fun imageRequest(page: Page) = GET(
+        url = page.imageUrl!! + "#imagereq",
+        headers =
+            headers
+                .newBuilder()
+                .set("Referer", page.url.substringBefore("news/"))
+                .build(),
+    )
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            FilterBy(),
-            Filter.Separator(),
-            SortBy(),
-            Filter.Separator(),
-            Types(),
-            Demography(),
-            ContentTypeList(getContentTypeList()),
-            Filter.Separator(),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        FilterBy(),
+        Filter.Separator(),
+        SortBy(),
+        Filter.Separator(),
+        Types(),
+        Demography(),
+        ContentTypeList(getContentTypeList()),
+        Filter.Separator(),
+        GenreList(getGenreList()),
+    )
 
     private class FilterBy :
         UriPartFilter(
@@ -588,70 +578,68 @@ abstract class LectorTmo(
             ),
         )
 
-    private fun getContentTypeList() =
-        listOf(
-            ContentType("Webcomic", "webcomic"),
-            ContentType("Yonkoma", "yonkoma"),
-            ContentType("Amateur", "amateur"),
-            ContentType("Erótico", "erotic"),
-        )
+    private fun getContentTypeList() = listOf(
+        ContentType("Webcomic", "webcomic"),
+        ContentType("Yonkoma", "yonkoma"),
+        ContentType("Amateur", "amateur"),
+        ContentType("Erótico", "erotic"),
+    )
 
     // Array.from(document.querySelectorAll('#books-genders .col-auto .custom-control'))
     // .map(a => `Genre("${a.querySelector('label').innerText}", "${a.querySelector('input').value}")`).join(',\n')
     // on ${baseUrl}/library
     // Last revision 02/04/2024 (mm/dd/yyyy)
-    private fun getGenreList() =
-        listOf(
-            Genre("Acción", "1"),
-            Genre("Aventura", "2"),
-            Genre("Comedia", "3"),
-            Genre("Drama", "4"),
-            Genre("Recuentos de la vida", "5"),
-            Genre("Ecchi", "6"),
-            Genre("Fantasia", "7"),
-            Genre("Magia", "8"),
-            Genre("Sobrenatural", "9"),
-            Genre("Horror", "10"),
-            Genre("Misterio", "11"),
-            Genre("Psicológico", "12"),
-            Genre("Romance", "13"),
-            Genre("Ciencia Ficción", "14"),
-            Genre("Thriller", "15"),
-            Genre("Deporte", "16"),
-            Genre("Girls Love", "17"),
-            Genre("Boys Love", "18"),
-            Genre("Harem", "19"),
-            Genre("Mecha", "20"),
-            Genre("Supervivencia", "21"),
-            Genre("Reencarnación", "22"),
-            Genre("Gore", "23"),
-            Genre("Apocalíptico", "24"),
-            Genre("Tragedia", "25"),
-            Genre("Vida Escolar", "26"),
-            Genre("Historia", "27"),
-            Genre("Militar", "28"),
-            Genre("Policiaco", "29"),
-            Genre("Crimen", "30"),
-            Genre("Superpoderes", "31"),
-            Genre("Vampiros", "32"),
-            Genre("Artes Marciales", "33"),
-            Genre("Samurái", "34"),
-            Genre("Género Bender", "35"),
-            Genre("Realidad Virtual", "36"),
-            Genre("Ciberpunk", "37"),
-            Genre("Musica", "38"),
-            Genre("Parodia", "39"),
-            Genre("Animación", "40"),
-            Genre("Demonios", "41"),
-            Genre("Familia", "42"),
-            Genre("Extranjero", "43"),
-            Genre("Niños", "44"),
-            Genre("Realidad", "45"),
-            Genre("Telenovela", "46"),
-            Genre("Guerra", "47"),
-            Genre("Oeste", "48"),
-            Genre("Trap", "94"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Acción", "1"),
+        Genre("Aventura", "2"),
+        Genre("Comedia", "3"),
+        Genre("Drama", "4"),
+        Genre("Recuentos de la vida", "5"),
+        Genre("Ecchi", "6"),
+        Genre("Fantasia", "7"),
+        Genre("Magia", "8"),
+        Genre("Sobrenatural", "9"),
+        Genre("Horror", "10"),
+        Genre("Misterio", "11"),
+        Genre("Psicológico", "12"),
+        Genre("Romance", "13"),
+        Genre("Ciencia Ficción", "14"),
+        Genre("Thriller", "15"),
+        Genre("Deporte", "16"),
+        Genre("Girls Love", "17"),
+        Genre("Boys Love", "18"),
+        Genre("Harem", "19"),
+        Genre("Mecha", "20"),
+        Genre("Supervivencia", "21"),
+        Genre("Reencarnación", "22"),
+        Genre("Gore", "23"),
+        Genre("Apocalíptico", "24"),
+        Genre("Tragedia", "25"),
+        Genre("Vida Escolar", "26"),
+        Genre("Historia", "27"),
+        Genre("Militar", "28"),
+        Genre("Policiaco", "29"),
+        Genre("Crimen", "30"),
+        Genre("Superpoderes", "31"),
+        Genre("Vampiros", "32"),
+        Genre("Artes Marciales", "33"),
+        Genre("Samurái", "34"),
+        Genre("Género Bender", "35"),
+        Genre("Realidad Virtual", "36"),
+        Genre("Ciberpunk", "37"),
+        Genre("Musica", "38"),
+        Genre("Parodia", "39"),
+        Genre("Animación", "40"),
+        Genre("Demonios", "41"),
+        Genre("Familia", "42"),
+        Genre("Extranjero", "43"),
+        Genre("Niños", "44"),
+        Genre("Realidad", "45"),
+        Genre("Telenovela", "46"),
+        Genre("Guerra", "47"),
+        Genre("Oeste", "48"),
+        Genre("Trap", "94"),
+    )
 
     protected fun getScanlatorPref(): Boolean = preferences.getBoolean(SCANLATOR_PREF, SCANLATOR_PREF_DEFAULT_VALUE)
 

@@ -66,12 +66,11 @@ val tags =
         Tag(id = 99, name = "Yaoi"),
     )
 
-fun parseDate(dateStr: String): Long =
-    try {
-        dateFormat.parse(dateStr)!!.time
-    } catch (_: ParseException) {
-        0L
-    }
+fun parseDate(dateStr: String): Long = try {
+    dateFormat.parse(dateStr)!!.time
+} catch (_: ParseException) {
+    0L
+}
 
 private val dateFormat by lazy {
     SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)

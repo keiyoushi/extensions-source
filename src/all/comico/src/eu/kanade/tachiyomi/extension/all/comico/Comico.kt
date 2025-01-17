@@ -75,20 +75,18 @@ open class Comico(
                         cookieManager.setCookie(url.toString(), it.toString())
                     }
 
-                    override fun loadForRequest(url: HttpUrl) =
-                        cookieManager
-                            .getCookie(url.toString())
-                            ?.split("; ")
-                            ?.mapNotNull { Cookie.parse(url, it) } ?: emptyList()
+                    override fun loadForRequest(url: HttpUrl) = cookieManager
+                        .getCookie(url.toString())
+                        ?.split("; ")
+                        ?.mapNotNull { Cookie.parse(url, it) } ?: emptyList()
                 },
             ).build()
 
-    override fun headersBuilder() =
-        Headers
-            .Builder()
-            .set("Accept-Language", langCode)
-            .set("User-Agent", userAgent)
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = Headers
+        .Builder()
+        .set("Accept-Language", langCode)
+        .set("User-Agent", userAgent)
+        .set("Referer", "$baseUrl/")
 
     override fun latestUpdatesRequest(page: Int) = paginate("all_comic/daily/$day", page)
 
@@ -157,19 +155,17 @@ open class Comico(
             }.reversed()
     }
 
-    override fun pageListParse(response: Response) =
-        response.data["chapter"].map<ChapterImage, Page>("images") {
-            Page(it.sort, "", it.url.decrypt() + "?" + it.parameter)
-        }
+    override fun pageListParse(response: Response) = response.data["chapter"].map<ChapterImage, Page>("images") {
+        Page(it.sort, "", it.url.decrypt() + "?" + it.parameter)
+    }
 
     override fun fetchMangaDetails(manga: SManga) = rx.Observable.just(manga.apply { initialized = true })!!
 
-    override fun fetchPageList(chapter: SChapter) =
-        if (!chapter.name.endsWith(LOCK)) {
-            super.fetchPageList(chapter)
-        } else {
-            throw Error("You are not authorized to view this!")
-        }
+    override fun fetchPageList(chapter: SChapter) = if (!chapter.name.endsWith(LOCK)) {
+        super.fetchPageList(chapter)
+    } else {
+        throw Error("You are not authorized to view this!")
+    }
 
     private fun search(
         query: String,
@@ -243,32 +239,30 @@ open class Comico(
             }
         }
 
-        fun sha256(timestamp: Long) =
-            buildString(64) {
-                SHA256
-                    .digest((WEB_KEY + ANON_IP + timestamp).toByteArray())
-                    .joinTo(this, "") { "%02x".format(it) }
-                SHA256.reset()
-            }
+        fun sha256(timestamp: Long) = buildString(64) {
+            SHA256
+                .digest((WEB_KEY + ANON_IP + timestamp).toByteArray())
+                .joinTo(this, "") { "%02x".format(it) }
+            SHA256.reset()
+        }
 
-        private fun status(code: Int) =
-            when (code) {
-                400 -> "Bad Request"
-                401 -> "Unauthorized"
-                402 -> "Payment Required"
-                403 -> "Forbidden"
-                404 -> "Not Found"
-                408 -> "Request Timeout"
-                409 -> "Conflict"
-                410 -> "DormantAccount"
-                417 -> "Expectation Failed"
-                426 -> "Upgrade Required"
-                428 -> "성인 on/off 권한"
-                429 -> "Too Many Requests"
-                500 -> "Internal Server Error"
-                503 -> "Service Unavailable"
-                451 -> "성인 인증"
-                else -> "Error $code"
-            }
+        private fun status(code: Int) = when (code) {
+            400 -> "Bad Request"
+            401 -> "Unauthorized"
+            402 -> "Payment Required"
+            403 -> "Forbidden"
+            404 -> "Not Found"
+            408 -> "Request Timeout"
+            409 -> "Conflict"
+            410 -> "DormantAccount"
+            417 -> "Expectation Failed"
+            426 -> "Upgrade Required"
+            428 -> "성인 on/off 권한"
+            429 -> "Too Many Requests"
+            500 -> "Internal Server Error"
+            503 -> "Service Unavailable"
+            451 -> "성인 인증"
+            else -> "Error $code"
+        }
     }
 }

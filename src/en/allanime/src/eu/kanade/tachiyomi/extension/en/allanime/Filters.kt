@@ -122,9 +122,8 @@ private val genreList: List<String> =
         "Zombies",
     )
 
-fun getFilters() =
-    FilterList(
-        SortFilter("Sort", sortList),
-        CountryFilter("Countries", countryList),
-        GenreFilter("Genres", genreList),
-    )
+fun getFilters() = FilterList(
+    SortFilter("Sort", sortList),
+    CountryFilter("Countries", countryList),
+    GenreFilter("Genres", genreList),
+)

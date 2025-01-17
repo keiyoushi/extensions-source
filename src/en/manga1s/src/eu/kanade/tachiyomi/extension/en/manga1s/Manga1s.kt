@@ -34,12 +34,11 @@ class Manga1s : ParsedHttpSource() {
 
     override fun popularMangaSelector() = ".novel-wrap"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("h2 > a").attr("href"))
-            title = element.select("h2 > a").text()
-            thumbnail_url = element.select("img").attr("abs:data-src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("h2 > a").attr("href"))
+        title = element.select("h2 > a").text()
+        thumbnail_url = element.select("img").attr("abs:data-src")
+    }
 
     override fun popularMangaNextPageSelector() = "ul.pagination > li:last-child > a"
 
@@ -154,48 +153,45 @@ class Manga1s : ParsedHttpSource() {
         }
     }
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Filters ignore text search"),
-            Filter.Separator(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Filters ignore text search"),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
     // Details
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.select(".novel-name > h1").text()
-            author = document.select(".novel-authors a").text()
-            description = document.select("#manga-description").text().trim()
-            genre = document.select(".novel-categories > a").joinToString { it.text() }
-            status =
-                when (
-                    document
-                        .select(".novel-info i.fa-flag")[0]
-                        .parent()!!
-                        .parent()!!
-                        .select("span")
-                        .text()
-                ) {
-                    "On-going" -> SManga.ONGOING
-                    "Completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            thumbnail_url = document.select(".novel-thumbnail > img").attr("abs:data-src")
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.select(".novel-name > h1").text()
+        author = document.select(".novel-authors a").text()
+        description = document.select("#manga-description").text().trim()
+        genre = document.select(".novel-categories > a").joinToString { it.text() }
+        status =
+            when (
+                document
+                    .select(".novel-info i.fa-flag")[0]
+                    .parent()!!
+                    .parent()!!
+                    .select("span")
+                    .text()
+            ) {
+                "On-going" -> SManga.ONGOING
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        thumbnail_url = document.select(".novel-thumbnail > img").attr("abs:data-src")
+    }
 
     // Chapters
     override fun chapterListSelector() = ".chapter-name a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.text()
-            chapter_number = element
-                .text()
-                .substringAfter(" ")
-                .toFloatOrNull() ?: -1f
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.text()
+        chapter_number = element
+            .text()
+            .substringAfter(" ")
+            .toFloatOrNull() ?: -1f
+    }
 
     // Pages
     override fun pageListParse(document: Document): List<Page> =

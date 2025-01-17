@@ -27,10 +27,9 @@ class ManhwasNet : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder()
@@ -42,12 +41,11 @@ class ManhwasNet : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = "ul.pagination a.page-link[rel=next]"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            title = element.selectFirst(".title")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.selectFirst(".title")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -55,12 +53,11 @@ class ManhwasNet : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = null
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("a").last()!!.attr("abs:href"))
-            title = element.selectFirst(".title")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a").last()!!.attr("abs:href"))
+        title = element.selectFirst(".title")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -107,38 +104,34 @@ class ManhwasNet : ParsedHttpSource() {
 
     override fun chapterListSelector() = "ul.episodes-list > li"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            name = element.selectFirst("a > div > p > span")!!.text()
-            date_upload = parseRelativeDate(element.selectFirst("a > div > span")!!.text())
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        name = element.selectFirst("a > div > p > span")!!.text()
+        date_upload = parseRelativeDate(element.selectFirst("a > div > span")!!.text())
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("#chapter_imgs img[src][src!=\"\"]").mapIndexed { i, img ->
-            val url = img.attr("abs:src")
-            Page(i, imageUrl = url)
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#chapter_imgs img[src][src!=\"\"]").mapIndexed { i, img ->
+        val url = img.attr("abs:src")
+        Page(i, imageUrl = url)
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Los filtros no se pueden combinar:"),
-            Filter.Header("Prioridad:   Texto > Géneros > Estado"),
-            Filter.Separator(),
-            GenreFilter(),
-            OrderFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Los filtros no se pueden combinar:"),
+        Filter.Header("Prioridad:   Texto > Géneros > Estado"),
+        Filter.Separator(),
+        GenreFilter(),
+        OrderFilter(),
+    )
 
-    private fun parseStatus(status: String): Int =
-        when (status) {
-            "Publicándose" -> SManga.ONGOING
-            "Finalizado" -> SManga.COMPLETED
-            "Cancelado" -> SManga.CANCELLED
-            "Pausado" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String): Int = when (status) {
+        "Publicándose" -> SManga.ONGOING
+        "Finalizado" -> SManga.COMPLETED
+        "Cancelado" -> SManga.CANCELLED
+        "Pausado" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     private fun parseRelativeDate(date: String): Long {
         val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0

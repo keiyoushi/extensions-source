@@ -273,15 +273,14 @@ class IkigaiMangas :
         return FilterList(filters)
     }
 
-    private fun getSortProperties(): List<SortProperty> =
-        listOf(
-            SortProperty("Nombre", "name"),
-            SortProperty("Creado en", "created_at"),
-            SortProperty("Actualización más reciente", "last_chapter_date"),
-            SortProperty("Número de favoritos", "bookmark_count"),
-            SortProperty("Número de valoración", "rating_count"),
-            SortProperty("Número de vistas", "view_count"),
-        )
+    private fun getSortProperties(): List<SortProperty> = listOf(
+        SortProperty("Nombre", "name"),
+        SortProperty("Creado en", "created_at"),
+        SortProperty("Actualización más reciente", "last_chapter_date"),
+        SortProperty("Número de favoritos", "bookmark_count"),
+        SortProperty("Número de valoración", "rating_count"),
+        SortProperty("Número de vistas", "view_count"),
+    )
 
     private fun getGenreFilters(): List<Genre> = genresList.map { Genre(it.first, it.second) }
 

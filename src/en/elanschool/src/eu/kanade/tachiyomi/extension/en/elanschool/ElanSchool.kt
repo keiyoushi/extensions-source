@@ -43,9 +43,8 @@ class ElanSchool : HttpSource() {
         filters: FilterList,
     ) = fetchPopularManga(page)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        fetchPopularManga(1)
-            .map { it.mangas.first().apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
+        .map { it.mangas.first().apply { initialized = true } }
 
     private fun chapterNextPageSelector() = "a.next"
 
@@ -78,11 +77,10 @@ class ElanSchool : HttpSource() {
 
     private fun chapterListSelector() = "div.listing-item > a.title"
 
-    private fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.text()
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.text()
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()

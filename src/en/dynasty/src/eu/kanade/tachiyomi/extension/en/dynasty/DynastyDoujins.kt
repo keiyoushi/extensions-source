@@ -20,17 +20,16 @@ class DynastyDoujins : DynastyScans() {
 
     override fun popularMangaInitialUrl() = ""
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        super.popularMangaFromElement(element).apply {
-            thumbnail_url =
-                element.select("img").attr("abs:src").let {
-                    if (it.contains("cover_missing")) {
-                        null
-                    } else {
-                        it
-                    }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        thumbnail_url =
+            element.select("img").attr("abs:src").let {
+                if (it.contains("cover_missing")) {
+                    null
+                } else {
+                    it
                 }
-        }
+            }
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -56,12 +55,11 @@ class DynastyDoujins : DynastyScans() {
 
     override fun chapterListSelector() = "div#main > dl.chapter-list > dd"
 
-    private fun doujinChapterParse(document: Document): List<SChapter> =
-        try {
-            document.select(chapterListSelector()).map { chapterFromElement(it) }
-        } catch (e: IndexOutOfBoundsException) {
-            emptyList()
-        }
+    private fun doujinChapterParse(document: Document): List<SChapter> = try {
+        document.select(chapterListSelector()).map { chapterFromElement(it) }
+    } catch (e: IndexOutOfBoundsException) {
+        emptyList()
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -110,14 +108,13 @@ class DynastyDoujins : DynastyScans() {
         return chapters
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        if (document.location().endsWith("/images")) {
-            document.select("a.thumbnail").mapIndexed { i, element ->
-                Page(i, element.attr("abs:href"))
-            }
-        } else {
-            super.pageListParse(document)
+    override fun pageListParse(document: Document): List<Page> = if (document.location().endsWith("/images")) {
+        document.select("a.thumbnail").mapIndexed { i, element ->
+            Page(i, element.attr("abs:href"))
         }
+    } else {
+        super.pageListParse(document)
+    }
 
     override fun imageUrlParse(document: Document): String = document.select("div.image img").attr("abs:src")
 }

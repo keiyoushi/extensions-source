@@ -215,25 +215,22 @@ class Buttsmithy : HttpSource() {
     private fun decideAlfieStatusFromTitle(
         chapTitle: String,
         mostRecentChapTitle: String,
-    ): Int =
-        if (chapTitle == mostRecentChapTitle) {
-            SManga.UNKNOWN
-        } else {
-            SManga.COMPLETED
-        }
+    ): Int = if (chapTitle == mostRecentChapTitle) {
+        SManga.UNKNOWN
+    } else {
+        SManga.COMPLETED
+    }
 
-    private fun extractChapterTitleFromPageDoc(doc: Document): String =
-        doc
-            .select(".comic-chapter a")
-            .first()!!
-            .text()
-            .lowercase()
+    private fun extractChapterTitleFromPageDoc(doc: Document): String = doc
+        .select(".comic-chapter a")
+        .first()!!
+        .text()
+        .lowercase()
 
-    private fun chapterTitleToChapterUrlName(chapTitle: String): String =
-        when (chapTitle.lowercase()) {
-            "chapter 1" -> "chapter-1v2"
-            else -> chapTitle.replace(" ", "-").replace(".", "-")
-        }
+    private fun chapterTitleToChapterUrlName(chapTitle: String): String = when (chapTitle.lowercase()) {
+        "chapter 1" -> "chapter-1v2"
+        else -> chapTitle.replace(" ", "-").replace(".", "-")
+    }
 
     private fun convertMenuElementToSManga(menuElement: Elements): List<SManga> {
         val comicLinkSelector = ".menu-item-type-custom a[href]"
@@ -275,26 +272,25 @@ class Buttsmithy : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        Observable.just(
-            if (manga.title.contains(alfieTitle)) {
-                val pageDoc = client.newCall(GET(baseUrlAlfie, headers)).execute().asJsoup()
-                val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
-                val chapTitle = manga.title.substringAfter("Alfie - ").trim()
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(
+        if (manga.title.contains(alfieTitle)) {
+            val pageDoc = client.newCall(GET(baseUrlAlfie, headers)).execute().asJsoup()
+            val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
+            val chapTitle = manga.title.substringAfter("Alfie - ").trim()
 
-                SManga.create().apply {
-                    url = "$chapterOverviewBaseUrl/${chapterTitleToChapterUrlName(chapTitle)}"
-                    title = "$alfieTitle - $chapTitle"
-                    author = inCase
-                    artist = inCase
-                    status = decideAlfieStatusFromTitle(chapTitle, mostRecentChapTitle)
-                    genre = "fantasy, NSFW"
-                    thumbnail_url = generateImageUrlWithText(alfieTitle)
-                }
-            } else {
-                manga
-            },
-        )
+            SManga.create().apply {
+                url = "$chapterOverviewBaseUrl/${chapterTitleToChapterUrlName(chapTitle)}"
+                title = "$alfieTitle - $chapTitle"
+                author = inCase
+                artist = inCase
+                status = decideAlfieStatusFromTitle(chapTitle, mostRecentChapTitle)
+                genre = "fantasy, NSFW"
+                thumbnail_url = generateImageUrlWithText(alfieTitle)
+            }
+        } else {
+            manga
+        },
+    )
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 

@@ -61,24 +61,22 @@ abstract class ColaManga(
             ).addInterceptor(ColaMangaImageInterceptor())
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
 
     override fun popularMangaSelector() = "li.fed-list-item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("a.fed-list-title")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-            thumbnail_url = element.selectFirst("a.fed-list-pics")?.absUrl("data-original")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("a.fed-list-title")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+        thumbnail_url = element.selectFirst("a.fed-list-pics")?.absUrl("data-original")
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/show?orderBy=update&page=$page", headers)
 
@@ -129,16 +127,15 @@ abstract class ColaManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
-            val url = "/$slug/"
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+        val url = "/$slug/"
 
-            fetchMangaDetails(SManga.create().apply { this.url = url })
-                .map { MangasPage(listOf(it.apply { this.url = url }), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+        fetchMangaDetails(SManga.create().apply { this.url = url })
+            .map { MangasPage(listOf(it.apply { this.url = url }), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaSelector() = "dl.fed-deta-info, ${popularMangaSelector()}"
 
@@ -165,31 +162,29 @@ abstract class ColaManga(
     protected abstract val statusOngoing: String
     protected abstract val statusCompleted: String
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1.fed-part-eone")!!.text()
-            thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
-            author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
-            genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
-            description =
-                document
-                    .selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")
-                    ?.ownText()
-            status =
-                when (document.selectFirst("span.fed-text-muted:contains($statusTitle) + a")?.text()) {
-                    statusOngoing -> SManga.ONGOING
-                    statusCompleted -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1.fed-part-eone")!!.text()
+        thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
+        author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
+        genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
+        description =
+            document
+                .selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")
+                ?.ownText()
+        status =
+            when (document.selectFirst("span.fed-text-muted:contains($statusTitle) + a")?.text()) {
+                statusOngoing -> SManga.ONGOING
+                statusCompleted -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     override fun chapterListSelector(): String = "div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.attr("title")
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.attr("title")
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {
@@ -270,10 +265,9 @@ abstract class ColaManga(
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            SearchTypeFilter(intl),
-        )
+    override fun getFilterList() = FilterList(
+        SearchTypeFilter(intl),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context)
@@ -316,14 +310,13 @@ abstract class ColaManga(
         keyMappingRegex.findAll(readJs).associate { it.groups["keyType"]!!.value to it.groups["key"]!!.value }
     }
 
-    private fun randomString() =
-        buildString(15) {
-            val charPool = ('a'..'z') + ('A'..'Z')
+    private fun randomString() = buildString(15) {
+        val charPool = ('a'..'z') + ('A'..'Z')
 
-            for (i in 0 until 15) {
-                append(charPool.random())
-            }
+        for (i in 0 until 15) {
+            append(charPool.random())
         }
+    }
 
     @Suppress("UNUSED")
     private class JsInterface(

@@ -15,15 +15,14 @@ class YDComics :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        super.searchMangaRequest(page, query, filters).let {
-            it
-                .newBuilder()
-                .url(
-                    it.url
-                        .newBuilder()
-                        .encodedPath("$mangaUrlDirectory/")
-                        .build(),
-                ).build()
-        }
+    ): Request = super.searchMangaRequest(page, query, filters).let {
+        it
+            .newBuilder()
+            .url(
+                it.url
+                    .newBuilder()
+                    .encodedPath("$mangaUrlDirectory/")
+                    .build(),
+            ).build()
+    }
 }

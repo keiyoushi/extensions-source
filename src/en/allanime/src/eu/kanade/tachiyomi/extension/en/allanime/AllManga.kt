@@ -48,10 +48,9 @@ class AllManga :
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -175,13 +174,12 @@ class AllManga :
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     // Chapters
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response, manga)
-            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response, manga)
+        }
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.split("/")[2]

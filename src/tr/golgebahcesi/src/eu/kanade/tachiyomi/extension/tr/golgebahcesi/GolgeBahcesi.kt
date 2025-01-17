@@ -16,9 +16,8 @@ class GolgeBahcesi :
     ) {
     private var captchaUrl: String? = null
 
-    override fun getMangaUrl(manga: SManga): String =
-        captchaUrl?.also { captchaUrl = null }
-            ?: super.getMangaUrl(manga)
+    override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null }
+        ?: super.getMangaUrl(manga)
 
     override fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst("#readerarea form, #readerarea input[value=Doğrula]") != null) {

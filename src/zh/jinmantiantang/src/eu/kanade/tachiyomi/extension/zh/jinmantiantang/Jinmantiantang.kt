@@ -77,17 +77,16 @@ class Jinmantiantang :
         }
     }
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            val children = element.children()
-            if (children[0].tagName() == "a") children.removeFirst()
-            title = children[1].text()
-            setUrlWithoutDomain(children[0].selectFirst("a")!!.attr("href"))
-            val img = children[0].selectFirst("img")!!
-            thumbnail_url = img.extractThumbnailUrl().substringBeforeLast('?')
-            author = children[2].select("a").joinToString(", ") { it.text() }
-            genre = children[3].select("a").joinToString(", ") { it.text() }
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        val children = element.children()
+        if (children[0].tagName() == "a") children.removeFirst()
+        title = children[1].text()
+        setUrlWithoutDomain(children[0].selectFirst("a")!!.attr("href"))
+        val img = children[0].selectFirst("img")!!
+        thumbnail_url = img.extractThumbnailUrl().substringBeforeLast('?')
+        author = children[2].select("a").joinToString(", ") { it.text() }
+        genre = children[3].select("a").joinToString(", ") { it.text() }
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val page = super.popularMangaParse(response)
@@ -124,16 +123,15 @@ class Jinmantiantang :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID_SEARCH_NO_COLON, true) || query.toIntOrNull() != null) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH_NO_COLON).removePrefix(":")
-            client
-                .newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH_NO_COLON, true) || query.toIntOrNull() != null) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH_NO_COLON).removePrefix(":")
+        client
+            .newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     // 查询信息
     override fun searchMangaRequest(
@@ -181,32 +179,30 @@ class Jinmantiantang :
 
     // 漫画详情
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            // keep thumbnail_url same as the one in popularMangaFromElement()
-            thumbnail_url = document.selectFirst(".thumb-overlay > img")!!.extractThumbnailUrl().substringBeforeLast('.') + "_3x4.jpg"
-            author = selectAuthor(document)
-            genre = selectDetailsStatusAndGenre(document, 0).trim().split(" ").joinToString(", ")
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        // keep thumbnail_url same as the one in popularMangaFromElement()
+        thumbnail_url = document.selectFirst(".thumb-overlay > img")!!.extractThumbnailUrl().substringBeforeLast('.') + "_3x4.jpg"
+        author = selectAuthor(document)
+        genre = selectDetailsStatusAndGenre(document, 0).trim().split(" ").joinToString(", ")
 
-            // When the index passed by the "selectDetailsStatusAndGenre(document: Document, index: Int)" index is 1,
-            // it will definitely return a String type of 0, 1 or 2. This warning can be ignored
-            status = selectDetailsStatusAndGenre(document, 1).trim().toInt()
-            description =
-                document
-                    .selectFirst("#intro-block .p-t-5.p-b-5")!!
-                    .text()
-                    .substringAfter("敘述：")
-                    .trim()
-        }
+        // When the index passed by the "selectDetailsStatusAndGenre(document: Document, index: Int)" index is 1,
+        // it will definitely return a String type of 0, 1 or 2. This warning can be ignored
+        status = selectDetailsStatusAndGenre(document, 1).trim().toInt()
+        description =
+            document
+                .selectFirst("#intro-block .p-t-5.p-b-5")!!
+                .text()
+                .substringAfter("敘述：")
+                .trim()
+    }
 
-    private fun Element.extractThumbnailUrl(): String =
-        when {
-            hasAttr("data-original") -> attr("data-original")
-            hasAttr("src") -> attr("src")
-            hasAttr("data-cfsrc") -> attr("data-cfsrc")
-            else -> ""
-        }
+    private fun Element.extractThumbnailUrl(): String = when {
+        hasAttr("data-original") -> attr("data-original")
+        hasAttr("src") -> attr("src")
+        hasAttr("data-cfsrc") -> attr("data-cfsrc")
+        else -> ""
+    }
 
     // 查询作者信息
     private fun selectAuthor(document: Document): String {
@@ -254,12 +250,11 @@ class Jinmantiantang :
 
     private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            url = element.select("a").attr("href")
-            name = element.select("a li").first()!!.ownText()
-            date_upload = sdf.parse(element.select("a li span.hidden-xs").text().trim())?.time ?: 0
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        url = element.select("a").attr("href")
+        name = element.select("a li").first()!!.ownText()
+        date_upload = sdf.parse(element.select("a li span.hidden-xs").text().trim())?.time ?: 0
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -325,12 +320,11 @@ class Jinmantiantang :
     // Filters
     // 按照类别信息进行检索
 
-    override fun getFilterList() =
-        FilterList(
-            CategoryGroup(),
-            SortFilter(),
-            TimeFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        CategoryGroup(),
+        SortFilter(),
+        TimeFilter(),
+    )
 
     private class CategoryGroup :
         UriPartFilter(

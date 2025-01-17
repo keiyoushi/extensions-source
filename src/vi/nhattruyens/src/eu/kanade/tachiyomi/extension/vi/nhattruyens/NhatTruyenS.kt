@@ -42,16 +42,15 @@ class NhatTruyenS :
     }
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            document.select("article#item-detail").let { info ->
-                author = info.select("li.author p.col-xs-8").text()
-                status = info.select("li.status p.col-xs-8").text().toStatus()
-                genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-                val otherName = info.select("h2.other-name").text()
-                description = info.select("div.detail-content div.summary").text() +
-                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
-                thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.select("article#item-detail").let { info ->
+            author = info.select("li.author p.col-xs-8").text()
+            status = info.select("li.status p.col-xs-8").text().toStatus()
+            genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
+            val otherName = info.select("h2.other-name").text()
+            description = info.select("div.detail-content div.summary").text() +
+                if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
+            thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
         }
+    }
 }

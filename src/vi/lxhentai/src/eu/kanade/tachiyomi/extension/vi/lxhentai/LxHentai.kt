@@ -63,16 +63,15 @@ class LxHentai :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val slug = query.substringAfter(PREFIX_ID_SEARCH)
-                val mangaUrl = "/truyen/$slug"
-                fetchMangaDetails(SManga.create().apply { url = mangaUrl })
-                    .map { MangasPage(listOf(it), false) }
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val slug = query.substringAfter(PREFIX_ID_SEARCH)
+            val mangaUrl = "/truyen/$slug"
+            fetchMangaDetails(SManga.create().apply { url = mangaUrl })
+                .map { MangasPage(listOf(it), false) }
         }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -125,76 +124,72 @@ class LxHentai :
 
     override fun searchMangaSelector(): String = "div.grid div.manga-vertical"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("div.p-2.truncate a").first()!!.attr("href"))
-            title = element.select("div.p-2.truncate a").first()!!.text()
-            thumbnail_url = element.selectFirst("div.cover")?.absUrl("data-bg")
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select("div.p-2.truncate a").first()!!.attr("href"))
+        title = element.select("div.p-2.truncate a").first()!!.text()
+        thumbnail_url = element.selectFirst("div.cover")?.absUrl("data-bg")
+    }
 
     override fun searchMangaNextPageSelector() = "li:contains(Cuối)"
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.select("div.mb-4 span").first()!!.text()
-            author = document.selectFirst("div.grow div.mt-2 > span:contains(Tác giả:) + span a")?.text()
-            genre =
-                document
-                    .selectFirst("div.grow div.mt-2 > span:contains(Thể loại:) + span")!!
-                    .select("a")
-                    .joinToString { it.text().trim(',', ' ') }
-            description =
-                document
-                    .select("p:contains(Tóm tắt) ~ p")
-                    .joinToString("\n") {
-                        it.run {
-                            select(Evaluator.Tag("br")).prepend("\\n")
-                            this.text().replace("\\n", "\n").replace("\n ", "\n")
-                        }
-                    }.trim()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.select("div.mb-4 span").first()!!.text()
+        author = document.selectFirst("div.grow div.mt-2 > span:contains(Tác giả:) + span a")?.text()
+        genre =
+            document
+                .selectFirst("div.grow div.mt-2 > span:contains(Thể loại:) + span")!!
+                .select("a")
+                .joinToString { it.text().trim(',', ' ') }
+        description =
+            document
+                .select("p:contains(Tóm tắt) ~ p")
+                .joinToString("\n") {
+                    it.run {
+                        select(Evaluator.Tag("br")).prepend("\\n")
+                        this.text().replace("\\n", "\n").replace("\n ", "\n")
+                    }
+                }.trim()
 
-            thumbnail_url =
-                document.selectFirst(".cover")?.attr("style")?.let {
-                    IMAGE_REGEX
-                        .find(it)
-                        ?.groups
-                        ?.get("img")
-                        ?.value
-                }
+        thumbnail_url =
+            document.selectFirst(".cover")?.attr("style")?.let {
+                IMAGE_REGEX
+                    .find(it)
+                    ?.groups
+                    ?.get("img")
+                    ?.value
+            }
 
-            val statusString = document.select("div.grow div.mt-2:contains(Tình trạng) a").first()!!.text()
-            status =
-                when (statusString) {
-                    "Đã hoàn thành" -> SManga.COMPLETED
-                    "Đang tiến hành" -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
+        val statusString = document.select("div.grow div.mt-2:contains(Tình trạng) a").first()!!.text()
+        status =
+            when (statusString) {
+                "Đã hoàn thành" -> SManga.COMPLETED
+                "Đang tiến hành" -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
 
-            setUrlWithoutDomain(document.location())
-        }
+        setUrlWithoutDomain(document.location())
+    }
 
     override fun chapterListSelector(): String = "ul.overflow-y-auto.overflow-x-hidden > a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.select("span.text-ellipsis").text()
-            date_upload = runCatching {
-                dateFormat.parse(element.select("span.timeago").attr("datetime"))?.time
-            }.getOrNull() ?: 0L
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.select("span.text-ellipsis").text()
+        date_upload = runCatching {
+            dateFormat.parse(element.select("span.timeago").attr("datetime"))?.time
+        }.getOrNull() ?: 0L
 
-            val match = CHAPTER_NUMBER_REGEX.findAll(name)
-            chapter_number = if (match.count() > 1 && name.lowercase().startsWith("vol")) {
-                match.elementAt(1)
-            } else {
-                match.elementAtOrNull(0)
-            }?.value?.toFloat() ?: -1f
-        }
+        val match = CHAPTER_NUMBER_REGEX.findAll(name)
+        chapter_number = if (match.count() > 1 && name.lowercase().startsWith("vol")) {
+            match.elementAt(1)
+        } else {
+            match.elementAtOrNull(0)
+        }?.value?.toFloat() ?: -1f
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select("div.text-center div.lazy")
-            .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:data-src")) }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select("div.text-center div.lazy")
+        .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:data-src")) }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -246,85 +241,83 @@ class LxHentai :
 
     private class Doujinshi : Filter.Text("Doujinshi", "")
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            SortBy(3),
-            GenreList(getGenreList()),
-            Filter.Header("Không dùng được với nhau và với tìm tựa đề"),
-            Author(),
-            Doujinshi(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        SortBy(3),
+        GenreList(getGenreList()),
+        Filter.Header("Không dùng được với nhau và với tìm tựa đề"),
+        Author(),
+        Doujinshi(),
+    )
 
     // console.log([...document.querySelectorAll("label.ml-3.inline-flex.items-center.cursor-pointer")].map(e => `Genre("${e.querySelector(".truncate").innerText}", ${e.getAttribute("@click").replace('toggleGenre(\'', '').replace('\')', '')}),`).join("\n"))
-    private fun getGenreList(): List<Genre> =
-        listOf(
-            Genre("Mature", 1),
-            Genre("Manhwa", 2),
-            Genre("Group", 3),
-            Genre("Housewife", 4),
-            Genre("NTR", 5),
-            Genre("Adult", 6),
-            Genre("Series", 7),
-            Genre("Complete", 8),
-            Genre("Ngực Lớn", 9),
-            Genre("Lãng Mạn", 10),
-            Genre("Truyện Màu", 11),
-            Genre("Mind Break", 12),
-            Genre("Mắt Kính", 13),
-            Genre("Ngực Nhỏ", 14),
-            Genre("Fantasy", 15),
-            Genre("Ecchi", 16),
-            Genre("Bạo Dâm", 17),
-            Genre("Harem", 18),
-            Genre("Hài Hước", 19),
-            Genre("Cosplay", 20),
-            Genre("Hầu Gái", 21),
-            Genre("Loli", 22),
-            Genre("Shota", 23),
-            Genre("Gangbang", 24),
-            Genre("Doujinshi", 25),
-            Genre("Guro", 26),
-            Genre("Virgin", 27),
-            Genre("OneShot", 28),
-            Genre("Chơi Hai Lỗ", 29),
-            Genre("Hậu Môn", 30),
-            Genre("Nữ Sinh", 31),
-            Genre("Mang Thai", 32),
-            Genre("Giáo Viên", 33),
-            Genre("Loạn Luân", 34),
-            Genre("Truyện Không Che", 35),
-            Genre("Futanari", 36),
-            Genre("Yuri", 37),
-            Genre("Nô Lệ", 38),
-            Genre("Đồ Bơi", 39),
-            Genre("Thể Thao", 40),
-            Genre("Truyện Ngắn", 41),
-            Genre("Lão Gìa Dâm", 42),
-            Genre("Hãm Hiếp", 43),
-            Genre("Monster Girl", 44),
-            Genre("Y Tá", 45),
-            Genre("Supernatural", 46),
-            Genre("3D", 47),
-            Genre("Truyện Comic", 48),
-            Genre("Animal girl", 49),
-            Genre("Thú Vật", 50),
-            Genre("Kinh Dị", 51),
-            Genre("Quái Vật", 52),
-            Genre("Xúc Tua", 53),
-            Genre("Gender Bender", 54),
-            Genre("Yaoi", 55),
-            Genre("CG", 56),
-            Genre("Trap", 57),
-            Genre("Furry", 58),
-            Genre("Mind Control", 59),
-            Genre("Elf", 60),
-            Genre("Côn Trùng", 61),
-            Genre("Kogal", 62),
-            Genre("Artist", 63),
-            Genre("Scat", 64),
-            Genre("Milf", 65),
-            Genre("LXHENTAI", 66),
-        )
+    private fun getGenreList(): List<Genre> = listOf(
+        Genre("Mature", 1),
+        Genre("Manhwa", 2),
+        Genre("Group", 3),
+        Genre("Housewife", 4),
+        Genre("NTR", 5),
+        Genre("Adult", 6),
+        Genre("Series", 7),
+        Genre("Complete", 8),
+        Genre("Ngực Lớn", 9),
+        Genre("Lãng Mạn", 10),
+        Genre("Truyện Màu", 11),
+        Genre("Mind Break", 12),
+        Genre("Mắt Kính", 13),
+        Genre("Ngực Nhỏ", 14),
+        Genre("Fantasy", 15),
+        Genre("Ecchi", 16),
+        Genre("Bạo Dâm", 17),
+        Genre("Harem", 18),
+        Genre("Hài Hước", 19),
+        Genre("Cosplay", 20),
+        Genre("Hầu Gái", 21),
+        Genre("Loli", 22),
+        Genre("Shota", 23),
+        Genre("Gangbang", 24),
+        Genre("Doujinshi", 25),
+        Genre("Guro", 26),
+        Genre("Virgin", 27),
+        Genre("OneShot", 28),
+        Genre("Chơi Hai Lỗ", 29),
+        Genre("Hậu Môn", 30),
+        Genre("Nữ Sinh", 31),
+        Genre("Mang Thai", 32),
+        Genre("Giáo Viên", 33),
+        Genre("Loạn Luân", 34),
+        Genre("Truyện Không Che", 35),
+        Genre("Futanari", 36),
+        Genre("Yuri", 37),
+        Genre("Nô Lệ", 38),
+        Genre("Đồ Bơi", 39),
+        Genre("Thể Thao", 40),
+        Genre("Truyện Ngắn", 41),
+        Genre("Lão Gìa Dâm", 42),
+        Genre("Hãm Hiếp", 43),
+        Genre("Monster Girl", 44),
+        Genre("Y Tá", 45),
+        Genre("Supernatural", 46),
+        Genre("3D", 47),
+        Genre("Truyện Comic", 48),
+        Genre("Animal girl", 49),
+        Genre("Thú Vật", 50),
+        Genre("Kinh Dị", 51),
+        Genre("Quái Vật", 52),
+        Genre("Xúc Tua", 53),
+        Genre("Gender Bender", 54),
+        Genre("Yaoi", 55),
+        Genre("CG", 56),
+        Genre("Trap", 57),
+        Genre("Furry", 58),
+        Genre("Mind Control", 59),
+        Genre("Elf", 60),
+        Genre("Côn Trùng", 61),
+        Genre("Kogal", 62),
+        Genre("Artist", 63),
+        Genre("Scat", 64),
+        Genre("Milf", 65),
+        Genre("LXHENTAI", 66),
+    )
 
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)

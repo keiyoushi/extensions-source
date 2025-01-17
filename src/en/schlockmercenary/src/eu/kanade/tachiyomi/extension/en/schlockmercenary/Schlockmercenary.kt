@@ -212,12 +212,11 @@ class Schlockmercenary : ParsedHttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-    private fun parseDate(date: String): Long =
-        try {
-            dateFormat.parse(date)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseDate(date: String): Long = try {
+        dateFormat.parse(date)!!.time
+    } catch (_: ParseException) {
+        0L
+    }
 
     companion object {
         const val DEFAULT_THUMBNAIL = "/static/img/logo.b6dacbb8.jpg"

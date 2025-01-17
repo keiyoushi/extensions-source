@@ -27,16 +27,15 @@ class TraducoesDoLipe :
 
     override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup()
-            title = document.selectFirst("meta[property='og:description']")!!.attr("content").trim()
-            description = document.selectFirst(".synopsis")?.text()
-            thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
-            genre = document.select(".genres a").joinToString { it.text() }
-            status = parseStatus(document.selectFirst(".status")!!.ownText().trim())
-            setUrlWithoutDomain(document.location())
-        }
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        title = document.selectFirst("meta[property='og:description']")!!.attr("content").trim()
+        description = document.selectFirst(".synopsis")?.text()
+        thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
+        genre = document.select(".genres a").joinToString { it.text() }
+        status = parseStatus(document.selectFirst(".status")!!.ownText().trim())
+        setUrlWithoutDomain(document.location())
+    }
 
     override fun getChapterFeedUrl(doc: Document): String {
         val feed =

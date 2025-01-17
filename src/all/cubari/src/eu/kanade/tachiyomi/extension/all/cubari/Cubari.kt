@@ -52,27 +52,25 @@ open class Cubari(
                 chain.proceed(request.newBuilder().headers(headers).build())
             }.build()
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add(
-                "User-Agent",
-                "(Android ${Build.VERSION.RELEASE}; " +
-                    "${Build.MANUFACTURER} ${Build.MODEL}) " +
-                    "Tachiyomi/${AppInfo.getVersionName()} " +
-                    Build.ID,
-            )
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add(
+            "User-Agent",
+            "(Android ${Build.VERSION.RELEASE}; " +
+                "${Build.MANUFACTURER} ${Build.MODEL}) " +
+                "Tachiyomi/${AppInfo.getVersionName()} " +
+                Build.ID,
+        )
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/", headers)
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        client
-            .newBuilder()
-            .addInterceptor(RemoteStorageUtils.HomeInterceptor())
-            .build()
-            .newCall(latestUpdatesRequest(page))
-            .asObservableSuccess()
-            .map { response -> latestUpdatesParse(response) }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = client
+        .newBuilder()
+        .addInterceptor(RemoteStorageUtils.HomeInterceptor())
+        .build()
+        .newCall(latestUpdatesRequest(page))
+        .asObservableSuccess()
+        .map { response -> latestUpdatesParse(response) }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = json.parseToJsonElement(response.body.string()).jsonArray
@@ -81,25 +79,23 @@ open class Cubari(
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/", headers)
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        client
-            .newBuilder()
-            .addInterceptor(RemoteStorageUtils.HomeInterceptor())
-            .build()
-            .newCall(popularMangaRequest(page))
-            .asObservableSuccess()
-            .map { response -> popularMangaParse(response) }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client
+        .newBuilder()
+        .addInterceptor(RemoteStorageUtils.HomeInterceptor())
+        .build()
+        .newCall(popularMangaRequest(page))
+        .asObservableSuccess()
+        .map { response -> popularMangaParse(response) }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.parseToJsonElement(response.body.string()).jsonArray
         return parseMangaList(result, SortType.PINNED)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response -> mangaDetailsParse(response, manga) }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response -> mangaDetailsParse(response, manga) }
 
     // Called when the series is loaded, or when opening in browser
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
@@ -114,11 +110,10 @@ open class Cubari(
         return parseManga(result, manga)
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservable()
-            .map { response -> chapterListParse(response, manga) }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(chapterListRequest(manga))
+        .asObservable()
+        .map { response -> chapterListParse(response, manga) }
 
     // Gets the chapter list based on the series being viewed
     override fun chapterListRequest(manga: SManga): Request {
@@ -140,39 +135,37 @@ open class Cubari(
         return parseChapterList(res, manga)
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        when {
-            chapter.url.contains("/chapter/") -> {
-                client
-                    .newCall(pageListRequest(chapter))
-                    .asObservableSuccess()
-                    .map { response ->
-                        directPageListParse(response)
-                    }
-            }
-            else -> {
-                client
-                    .newCall(pageListRequest(chapter))
-                    .asObservableSuccess()
-                    .map { response ->
-                        seriesJsonPageListParse(response, chapter)
-                    }
-            }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = when {
+        chapter.url.contains("/chapter/") -> {
+            client
+                .newCall(pageListRequest(chapter))
+                .asObservableSuccess()
+                .map { response ->
+                    directPageListParse(response)
+                }
         }
-
-    override fun pageListRequest(chapter: SChapter): Request =
-        when {
-            chapter.url.contains("/chapter/") -> {
-                GET("$baseUrl${chapter.url}", headers)
-            }
-            else -> {
-                val url = chapter.url.split("/")
-                val source = url[2]
-                val slug = url[3]
-
-                GET("$baseUrl/read/api/$source/series/$slug/", headers)
-            }
+        else -> {
+            client
+                .newCall(pageListRequest(chapter))
+                .asObservableSuccess()
+                .map { response ->
+                    seriesJsonPageListParse(response, chapter)
+                }
         }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request = when {
+        chapter.url.contains("/chapter/") -> {
+            GET("$baseUrl${chapter.url}", headers)
+        }
+        else -> {
+            val url = chapter.url.split("/")
+            val source = url[2]
+            val slug = url[3]
+
+            GET("$baseUrl/read/api/$source/series/$slug/", headers)
+        }
+    }
 
     private fun directPageListParse(response: Response): List<Page> {
         val res = response.body.string()
@@ -241,36 +234,35 @@ open class Cubari(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PROXY_PREFIX) -> {
-                val trimmedQuery = query.removePrefix(PROXY_PREFIX)
-                // Only tag for recently read on search
-                client
-                    .newBuilder()
-                    .addInterceptor(RemoteStorageUtils.TagInterceptor())
-                    .build()
-                    .newCall(proxySearchRequest(trimmedQuery))
-                    .asObservableSuccess()
-                    .map { response ->
-                        proxySearchParse(response, trimmedQuery)
-                    }
-            }
-            else -> {
-                client
-                    .newBuilder()
-                    .addInterceptor(RemoteStorageUtils.HomeInterceptor())
-                    .build()
-                    .newCall(searchMangaRequest(page, query, filters))
-                    .asObservableSuccess()
-                    .map { response ->
-                        searchMangaParse(response, query)
-                    }.map { mangasPage ->
-                        require(mangasPage.mangas.isNotEmpty()) { SEARCH_FALLBACK_MSG }
-                        mangasPage
-                    }
-            }
+    ): Observable<MangasPage> = when {
+        query.startsWith(PROXY_PREFIX) -> {
+            val trimmedQuery = query.removePrefix(PROXY_PREFIX)
+            // Only tag for recently read on search
+            client
+                .newBuilder()
+                .addInterceptor(RemoteStorageUtils.TagInterceptor())
+                .build()
+                .newCall(proxySearchRequest(trimmedQuery))
+                .asObservableSuccess()
+                .map { response ->
+                    proxySearchParse(response, trimmedQuery)
+                }
         }
+        else -> {
+            client
+                .newBuilder()
+                .addInterceptor(RemoteStorageUtils.HomeInterceptor())
+                .build()
+                .newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    searchMangaParse(response, query)
+                }.map { mangasPage ->
+                    require(mangasPage.mangas.isNotEmpty()) { SEARCH_FALLBACK_MSG }
+                    mangasPage
+                }
+        }
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -426,26 +418,25 @@ open class Cubari(
     private fun parseManga(
         jsonObj: JsonObject,
         mangaReference: SManga? = null,
-    ): SManga =
-        SManga.create().apply {
-            title = jsonObj["title"]!!.jsonPrimitive.content
-            artist = jsonObj["artist"]?.jsonPrimitive?.content ?: ARTIST_FALLBACK
-            author = jsonObj["author"]?.jsonPrimitive?.content ?: AUTHOR_FALLBACK
+    ): SManga = SManga.create().apply {
+        title = jsonObj["title"]!!.jsonPrimitive.content
+        artist = jsonObj["artist"]?.jsonPrimitive?.content ?: ARTIST_FALLBACK
+        author = jsonObj["author"]?.jsonPrimitive?.content ?: AUTHOR_FALLBACK
 
-            val descriptionFull = jsonObj["description"]?.jsonPrimitive?.content
-            description = descriptionFull?.substringBefore("Tags: ") ?: DESCRIPTION_FALLBACK
-            genre = descriptionFull?.let {
-                if (it.contains("Tags: ")) {
-                    it.substringAfter("Tags: ")
-                } else {
-                    ""
-                }
-            } ?: ""
+        val descriptionFull = jsonObj["description"]?.jsonPrimitive?.content
+        description = descriptionFull?.substringBefore("Tags: ") ?: DESCRIPTION_FALLBACK
+        genre = descriptionFull?.let {
+            if (it.contains("Tags: ")) {
+                it.substringAfter("Tags: ")
+            } else {
+                ""
+            }
+        } ?: ""
 
-            url = mangaReference?.url ?: jsonObj["url"]!!.jsonPrimitive.content
-            thumbnail_url = jsonObj["coverUrl"]?.jsonPrimitive?.content
-                ?: jsonObj["cover"]?.jsonPrimitive?.content ?: ""
-        }
+        url = mangaReference?.url ?: jsonObj["url"]!!.jsonPrimitive.content
+        thumbnail_url = jsonObj["coverUrl"]?.jsonPrimitive?.content
+            ?: jsonObj["cover"]?.jsonPrimitive?.content ?: ""
+    }
 
     // ----------------- Things we aren't supporting -----------------
 

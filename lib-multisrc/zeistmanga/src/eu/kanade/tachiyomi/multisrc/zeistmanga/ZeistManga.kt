@@ -31,10 +31,9 @@ abstract class ZeistManga(
 
     private val intl by lazy { ZeistMangaIntl(lang) }
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -315,12 +314,11 @@ abstract class ZeistManga(
 
     protected open val mangaCategory: String = "Series"
 
-    open fun apiUrl(feed: String = mangaCategory): HttpUrl.Builder =
-        "$baseUrl/feeds/posts/default/-/"
-            .toHttpUrl()
-            .newBuilder()
-            .addPathSegment(feed)
-            .addQueryParameter("alt", "json")
+    open fun apiUrl(feed: String = mangaCategory): HttpUrl.Builder = "$baseUrl/feeds/posts/default/-/"
+        .toHttpUrl()
+        .newBuilder()
+        .addPathSegment(feed)
+        .addQueryParameter("alt", "json")
 
     protected open val hasFilters = false
 
@@ -347,78 +345,74 @@ abstract class ZeistManga(
         return FilterList(filterList)
     }
 
-    protected open fun getStatusList(): List<Status> =
-        listOf(
-            Status(intl.all, ""),
-            Status(intl.statusOngoing, "Ongoing"),
-            Status(intl.statusCompleted, "Completed"),
-            Status(intl.statusDropped, "Dropped"),
-            Status(intl.statusUpcoming, "Upcoming"),
-            Status(intl.statusHiatus, "Hiatus"),
-            Status(intl.statusCancelled, "Cancelled"),
-        )
+    protected open fun getStatusList(): List<Status> = listOf(
+        Status(intl.all, ""),
+        Status(intl.statusOngoing, "Ongoing"),
+        Status(intl.statusCompleted, "Completed"),
+        Status(intl.statusDropped, "Dropped"),
+        Status(intl.statusUpcoming, "Upcoming"),
+        Status(intl.statusHiatus, "Hiatus"),
+        Status(intl.statusCancelled, "Cancelled"),
+    )
 
-    protected open fun getTypeList(): List<Type> =
-        listOf(
-            Type(intl.all, ""),
-            Type(intl.typeManga, "Manga"),
-            Type(intl.typeManhua, "Manhua"),
-            Type(intl.typeManhwa, "Manhwa"),
-            Type(intl.typeNovel, "Novel"),
-            Type(intl.typeWebNovelJP, "Web Novel (JP)"),
-            Type(intl.typeWebNovelKR, "Web Novel (KR)"),
-            Type(intl.typeWebNovelCN, "Web Novel (CN)"),
-            Type(intl.typeDoujinshi, "Doujinshi"),
-        )
+    protected open fun getTypeList(): List<Type> = listOf(
+        Type(intl.all, ""),
+        Type(intl.typeManga, "Manga"),
+        Type(intl.typeManhua, "Manhua"),
+        Type(intl.typeManhwa, "Manhwa"),
+        Type(intl.typeNovel, "Novel"),
+        Type(intl.typeWebNovelJP, "Web Novel (JP)"),
+        Type(intl.typeWebNovelKR, "Web Novel (KR)"),
+        Type(intl.typeWebNovelCN, "Web Novel (CN)"),
+        Type(intl.typeDoujinshi, "Doujinshi"),
+    )
 
-    protected open fun getGenreList(): List<Genre> =
-        listOf(
-            Genre("Action", "Action"),
-            Genre("Adventurer", "Adventurer"),
-            Genre("Comedy", "Comedy"),
-            Genre("Dementia", "Dementia"),
-            Genre("Drama", "Drama"),
-            Genre("Ecchi", "Ecchi"),
-            Genre("Fantasy", "Fantasy"),
-            Genre("Game", "Game"),
-            Genre("Harem", "Harem"),
-            Genre("Historical", "Historical"),
-            Genre("Horror", "Horror"),
-            Genre("Josei", "Josei"),
-            Genre("Magic", "Magic"),
-            Genre("Martial Arts", "Martial Arts"),
-            Genre("Mecha", "Mecha"),
-            Genre("Military", "Military"),
-            Genre("Music", "Music"),
-            Genre("Mystery", "Mystery"),
-            Genre("Parody", "Parody"),
-            Genre("Police", "Police"),
-            Genre("Psychological", "Psychological"),
-            Genre("Romance", "Romance"),
-            Genre("Samurai", "Samurai"),
-            Genre("School", "School"),
-            Genre("Sci-fi", "Sci-fi"),
-            Genre("Seinen", "Seinen"),
-            Genre("Shoujo", "Shoujo"),
-            Genre("Shoujo Ai", "Shoujo Ai"),
-            Genre("Shounen", "Shounen"),
-            Genre("Slice of Life", "Slice of Life"),
-            Genre("Space", "Space"),
-            Genre("Sports", "Sports"),
-            Genre("Super Power", "Super Power"),
-            Genre("SuperNatural", "SuperNatural"),
-            Genre("Thriller", "Thriller"),
-            Genre("Vampire", "Vampire"),
-            Genre("Work Life", "Work Life"),
-            Genre("Yuri", "Yuri"),
-        )
+    protected open fun getGenreList(): List<Genre> = listOf(
+        Genre("Action", "Action"),
+        Genre("Adventurer", "Adventurer"),
+        Genre("Comedy", "Comedy"),
+        Genre("Dementia", "Dementia"),
+        Genre("Drama", "Drama"),
+        Genre("Ecchi", "Ecchi"),
+        Genre("Fantasy", "Fantasy"),
+        Genre("Game", "Game"),
+        Genre("Harem", "Harem"),
+        Genre("Historical", "Historical"),
+        Genre("Horror", "Horror"),
+        Genre("Josei", "Josei"),
+        Genre("Magic", "Magic"),
+        Genre("Martial Arts", "Martial Arts"),
+        Genre("Mecha", "Mecha"),
+        Genre("Military", "Military"),
+        Genre("Music", "Music"),
+        Genre("Mystery", "Mystery"),
+        Genre("Parody", "Parody"),
+        Genre("Police", "Police"),
+        Genre("Psychological", "Psychological"),
+        Genre("Romance", "Romance"),
+        Genre("Samurai", "Samurai"),
+        Genre("School", "School"),
+        Genre("Sci-fi", "Sci-fi"),
+        Genre("Seinen", "Seinen"),
+        Genre("Shoujo", "Shoujo"),
+        Genre("Shoujo Ai", "Shoujo Ai"),
+        Genre("Shounen", "Shounen"),
+        Genre("Slice of Life", "Slice of Life"),
+        Genre("Space", "Space"),
+        Genre("Sports", "Sports"),
+        Genre("Super Power", "Super Power"),
+        Genre("SuperNatural", "SuperNatural"),
+        Genre("Thriller", "Thriller"),
+        Genre("Vampire", "Vampire"),
+        Genre("Work Life", "Work Life"),
+        Genre("Yuri", "Yuri"),
+    )
 
-    protected open fun getLanguageList(): List<Language> =
-        listOf(
-            Language(intl.all, ""),
-            Language("Indonesian", "Indonesian"),
-            Language("English", "English"),
-        )
+    protected open fun getLanguageList(): List<Language> = listOf(
+        Language(intl.all, ""),
+        Language("Indonesian", "Indonesian"),
+        Language("English", "English"),
+    )
 
     protected open val statusOnGoingList =
         listOf(
@@ -453,14 +447,13 @@ abstract class ZeistManga(
             "cancelado",
         )
 
-    protected open fun parseStatus(element: String): Int =
-        when (element.lowercase().trim()) {
-            in statusOnGoingList -> SManga.ONGOING
-            in statusCompletedList -> SManga.COMPLETED
-            in statusHiatusList -> SManga.ON_HIATUS
-            in statusCancelledList -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    protected open fun parseStatus(element: String): Int = when (element.lowercase().trim()) {
+        in statusOnGoingList -> SManga.ONGOING
+        in statusCompletedList -> SManga.COMPLETED
+        in statusHiatusList -> SManga.ON_HIATUS
+        in statusCancelledList -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     private fun String.replaceLast(
         oldValue: String,

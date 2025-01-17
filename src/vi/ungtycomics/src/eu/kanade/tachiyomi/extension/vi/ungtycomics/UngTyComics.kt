@@ -86,23 +86,21 @@ class UngTyComics :
         return this
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/truyen-hot?page=$page", headers)
 
     override fun popularMangaSelector() = "div.item-comics"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst(".content-title a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-            thumbnail_url = element.selectFirst(".content-image img")?.absUrl("data-src")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".content-title a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+        thumbnail_url = element.selectFirst(".content-image img")?.absUrl("data-src")
+    }
 
     override fun popularMangaNextPageSelector() = "ul.pagination li:has(.fa-angle-double-right):not(.disabled)"
 
@@ -152,21 +150,20 @@ class UngTyComics :
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val statusText = document.selectFirst(".comics-info .meta_label:contains(Trạng thái) + .meta_info")?.text()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val statusText = document.selectFirst(".comics-info .meta_label:contains(Trạng thái) + .meta_info")?.text()
 
-            title = document.selectFirst(".title-heading")!!.text()
-            author = document.selectFirst(".comics-info .meta_label:contains(Tác giả) + .meta_info")?.text()
-            genre = document.selectFirst(".comics-info .meta_label:contains(Thể loại) + .meta_info")?.text()
-            status =
-                when (statusText) {
-                    "Đang tiến hành" -> SManga.ONGOING
-                    "Đã đủ bộ" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            thumbnail_url = document.selectFirst(".comics-thumbnail img")?.absUrl("src")
-        }
+        title = document.selectFirst(".title-heading")!!.text()
+        author = document.selectFirst(".comics-info .meta_label:contains(Tác giả) + .meta_info")?.text()
+        genre = document.selectFirst(".comics-info .meta_label:contains(Thể loại) + .meta_info")?.text()
+        status =
+            when (statusText) {
+                "Đang tiến hành" -> SManga.ONGOING
+                "Đã đủ bộ" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        thumbnail_url = document.selectFirst(".comics-thumbnail img")?.absUrl("src")
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         var document = response.asJsoup()
@@ -195,36 +192,33 @@ class UngTyComics :
 
     override fun chapterListSelector() = ".list-comics-chapter .item-chapter"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            element.selectFirst(".episode-title a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                name = it.text()
-            }
-            date_upload =
-                try {
-                    val date = element.selectFirst(".episode-date span")!!.text()
-
-                    DATE_FORMAT.parse(date)!!.time
-                } catch (_: Exception) {
-                    0L
-                }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst(".episode-title a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            name = it.text()
         }
+        date_upload =
+            try {
+                val date = element.selectFirst(".episode-date span")!!.text()
+
+                DATE_FORMAT.parse(date)!!.time
+            } catch (_: Exception) {
+                0L
+            }
+    }
 
     private fun chapterNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun pageListParse(document: Document) =
-        document.select("img.chapter-img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("data-src"))
-        }
+    override fun pageListParse(document: Document) = document.select("img.chapter-img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.absUrl("data-src"))
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Không dùng được khi tìm kiếm bằng chữ"),
-            GenreFilter(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Không dùng được khi tìm kiếm bằng chữ"),
+        GenreFilter(getGenreList()),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context)
@@ -266,43 +260,42 @@ private class Genre(
 // copy([...document.querySelectorAll(".item-category a")].map((e) => `Genre("${e.textContent.trim()}", "${new URL(e.href).pathname.replace("/", "")}"),`).join("\n"))
 // removed the Truyện Chữ genre since this is not a light novel reader. there's nothing in that genre
 // anyways.
-private fun getGenreList() =
-    listOf(
-        Genre("Tất cả", "truyen-tranh"),
-        Genre("Truyện hot", "truyen-hot"),
-        Genre("Giới giải trí", "gioi-giai-tri.html"),
-        Genre("Ngôn Tình", "ngon-tinh.html"),
-        Genre("Cổ Trang", "co-trang.html"),
-        Genre("Lãng Mạn", "lang-man.html"),
-        Genre("Đam Mỹ", "dam-my.html"),
-        Genre("Boys Love", "boys-love.html"),
-        Genre("Manhua", "manhua.html"),
-        Genre("Romance", "romance.html"),
-        Genre("Ngược", "nguoc.html"),
-        Genre("Sủng", "sung.html"),
-        Genre("Cung Đấu", "cung-dau.html"),
-        Genre("Drama", "drama.html"),
-        Genre("Trinh Thám", "trinh-tham.html"),
-        Genre("Học Đường", "hoc-duong.html"),
-        Genre("Xuyên Không", "xuyen-khong.html"),
-        Genre("Trọng Sinh", "trong-sinh.html"),
-        Genre("School Life", "school-life.html"),
-        Genre("Hiện Đại", "hien-dai.html"),
-        Genre("Võng Du", "vong-du.html"),
-        Genre("Báo Thù", "bao-thu.html"),
-        Genre("Tổng Tài", "tong-tai.html"),
-        Genre("ABO", "abo.html"),
-        Genre("Hài Hước", "hai-huoc.html"),
-        Genre("Niên Hạ", "nien-ha.html"),
-        Genre("Hiện Thực", "hien-thuc.html"),
-        Genre("Xuyên Nhanh", "xuyen-nhanh.html"),
-        Genre("Sư Đồ Luyến", "su-do-luyen.html"),
-        Genre("Hệ Thống", "he-thong.html"),
-        Genre("Huyết Tộc", "huyet-toc.html"),
-        Genre("Hắc Bang", "hac-bang.html"),
-        Genre("Full Trọn Bộ", "full-tron-bo.html"),
-        Genre("Phá Án", "pha-an.html"),
-        Genre("Linh Dị", "linh-di.html"),
-        Genre("Tu Tiên", "tu-tien.html"),
-        Genre("eSports", "esports.html"),
-    )
+private fun getGenreList() = listOf(
+    Genre("Tất cả", "truyen-tranh"),
+    Genre("Truyện hot", "truyen-hot"),
+    Genre("Giới giải trí", "gioi-giai-tri.html"),
+    Genre("Ngôn Tình", "ngon-tinh.html"),
+    Genre("Cổ Trang", "co-trang.html"),
+    Genre("Lãng Mạn", "lang-man.html"),
+    Genre("Đam Mỹ", "dam-my.html"),
+    Genre("Boys Love", "boys-love.html"),
+    Genre("Manhua", "manhua.html"),
+    Genre("Romance", "romance.html"),
+    Genre("Ngược", "nguoc.html"),
+    Genre("Sủng", "sung.html"),
+    Genre("Cung Đấu", "cung-dau.html"),
+    Genre("Drama", "drama.html"),
+    Genre("Trinh Thám", "trinh-tham.html"),
+    Genre("Học Đường", "hoc-duong.html"),
+    Genre("Xuyên Không", "xuyen-khong.html"),
+    Genre("Trọng Sinh", "trong-sinh.html"),
+    Genre("School Life", "school-life.html"),
+    Genre("Hiện Đại", "hien-dai.html"),
+    Genre("Võng Du", "vong-du.html"),
+    Genre("Báo Thù", "bao-thu.html"),
+    Genre("Tổng Tài", "tong-tai.html"),
+    Genre("ABO", "abo.html"),
+    Genre("Hài Hước", "hai-huoc.html"),
+    Genre("Niên Hạ", "nien-ha.html"),
+    Genre("Hiện Thực", "hien-thuc.html"),
+    Genre("Xuyên Nhanh", "xuyen-nhanh.html"),
+    Genre("Sư Đồ Luyến", "su-do-luyen.html"),
+    Genre("Hệ Thống", "he-thong.html"),
+    Genre("Huyết Tộc", "huyet-toc.html"),
+    Genre("Hắc Bang", "hac-bang.html"),
+    Genre("Full Trọn Bộ", "full-tron-bo.html"),
+    Genre("Phá Án", "pha-an.html"),
+    Genre("Linh Dị", "linh-di.html"),
+    Genre("Tu Tiên", "tu-tien.html"),
+    Genre("eSports", "esports.html"),
+)

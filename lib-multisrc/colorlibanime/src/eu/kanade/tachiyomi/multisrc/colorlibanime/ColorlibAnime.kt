@@ -50,12 +50,11 @@ abstract class ColorlibAnime(
 
     override fun searchMangaSelector(): String = ".product__page__content > [style]:has(.col-6) .product__item"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("a.img-link").attr("abs:href"))
-            title = element.select("h5").text()
-            thumbnail_url = element.toThumbnail()
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a.img-link").attr("abs:href"))
+        title = element.select("h5").text()
+        thumbnail_url = element.toThumbnail()
+    }
 
     override fun searchMangaNextPageSelector(): String? = ".fa-angle-right"
 
@@ -118,27 +117,24 @@ abstract class ColorlibAnime(
 
     override fun chapterListSelector(): String = ".anime__details__episodes a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            name = element.text()
-            date_upload = 0L
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        name = element.text()
+        date_upload = 0L
+    }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(".container .read-img > img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".container .read-img > img").mapIndexed { i, element ->
+        Page(i, "", element.attr("abs:src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList() =
-        FilterList(
-            OrderFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        OrderFilter(),
+    )
 
     class OrderFilter(
         state: Int = 0,

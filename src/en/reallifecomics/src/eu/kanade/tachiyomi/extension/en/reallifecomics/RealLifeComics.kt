@@ -25,15 +25,14 @@ class RealLifeComics : ParsedHttpSource() {
 
     // Helper
 
-    private fun createManga(year: Int): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain("/archivepage.php?year=$year")
-            title = "$name ($year)"
-            thumbnail_url = "$baseUrl$LOGO"
-            author = AUTHOR
-            status = if (year != currentYear) SManga.COMPLETED else SManga.ONGOING
-            description = "$SUMMARY $year"
-        }
+    private fun createManga(year: Int): SManga = SManga.create().apply {
+        setUrlWithoutDomain("/archivepage.php?year=$year")
+        title = "$name ($year)"
+        thumbnail_url = "$baseUrl$LOGO"
+        author = AUTHOR
+        status = if (year != currentYear) SManga.COMPLETED else SManga.ONGOING
+        description = "$SUMMARY $year"
+    }
 
     // Popular
 
@@ -52,19 +51,17 @@ class RealLifeComics : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        fetchPopularManga(1).map { mangaList ->
-            mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
-        }
+    ): Observable<MangasPage> = fetchPopularManga(1).map { mangaList ->
+        mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
+    }
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga) =
-        Observable.just(
-            manga.apply {
-                initialized = true
-            },
-        )!!
+    override fun fetchMangaDetails(manga: SManga) = Observable.just(
+        manga.apply {
+            initialized = true
+        },
+    )!!
 
     // Chapters
 
@@ -75,30 +72,29 @@ class RealLifeComics : ParsedHttpSource() {
 
     override fun chapterListSelector() = ".calendar tbody tr td a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            url = element.attr("href")
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        url = element.attr("href")
 
-            // entries between 1999-2014 do not have dates in the link
-            // but all entries are placed in a calendar class which has the month & year as heading
-            // figure out a date using the calendar
-            // perhaps there might be a better way to get this but for now this works
-            val monthYear =
-                element
-                    .parent()!!
-                    .parent()!!
-                    .parent()!!
-                    .parent()!!
-                    .firstElementSibling()
-                    .text()
+        // entries between 1999-2014 do not have dates in the link
+        // but all entries are placed in a calendar class which has the month & year as heading
+        // figure out a date using the calendar
+        // perhaps there might be a better way to get this but for now this works
+        val monthYear =
+            element
+                .parent()!!
+                .parent()!!
+                .parent()!!
+                .parent()!!
+                .firstElementSibling()
+                .text()
 
-            val date = "$monthYear ${element.text()}"
-            val parsedDate = SimpleDateFormat("MMMM yyyy dd", Locale.US).parse(date)
-            date_upload = parsedDate?.time ?: 0L
+        val date = "$monthYear ${element.text()}"
+        val parsedDate = SimpleDateFormat("MMMM yyyy dd", Locale.US).parse(date)
+        date_upload = parsedDate?.time ?: 0L
 
-            // chapter names are kept the same as what the site has
-            name = SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.US).format(parsedDate ?: 0L)
-        }
+        // chapter names are kept the same as what the site has
+        name = SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.US).format(parsedDate ?: 0L)
+    }
 
     // Page
 

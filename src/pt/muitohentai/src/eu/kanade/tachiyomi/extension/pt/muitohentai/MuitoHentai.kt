@@ -38,10 +38,9 @@ class MuitoHentai : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", "$baseUrl/")
 
     // The source does not have a popular list page, so we use the list instead.
     override fun popularMangaRequest(page: Int): Request {
@@ -56,12 +55,11 @@ class MuitoHentai : ParsedHttpSource() {
 
     override fun popularMangaSelector(): String = "#archive-content article.tvshows"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("div.data h3 a")!!.text()
-            thumbnail_url = element.selectFirst("div.poster img")!!.attr("abs:src")
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("div.data h3 a")!!.text()
+        thumbnail_url = element.selectFirst("div.poster img")!!.attr("abs:src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun popularMangaNextPageSelector() = "#paginacao a:last-child:contains(»)"
 
@@ -69,12 +67,11 @@ class MuitoHentai : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = "ul.lancamento-cap2 > li"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("h2")!!.text()
-            thumbnail_url = element.selectFirst("div.capaMangaHentai img")!!.attr("abs:src")
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h2")!!.text()
+        thumbnail_url = element.selectFirst("div.capaMangaHentai img")!!.attr("abs:src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+    }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -99,28 +96,26 @@ class MuitoHentai : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            author = document.selectFirst("div:has(strong:contains(Autor))")?.ownText()
-            genre =
-                document.select("a.genero_btn").joinToString {
-                    it
-                        .text()
-                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(LOCALE) else it.toString() }
-                }
-            description = document.selectFirst("div.backgroundpost:contains(Sinopse)")?.ownText()
-            thumbnail_url = document.selectFirst("#capaAnime img")?.attr("src")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        author = document.selectFirst("div:has(strong:contains(Autor))")?.ownText()
+        genre =
+            document.select("a.genero_btn").joinToString {
+                it
+                    .text()
+                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(LOCALE) else it.toString() }
+            }
+        description = document.selectFirst("div.backgroundpost:contains(Sinopse)")?.ownText()
+        thumbnail_url = document.selectFirst("#capaAnime img")?.attr("src")
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterListSelector(): String = "div.backgroundpost:contains(Capítulos de) h3 > a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.ownText().trim()
-            setUrlWithoutDomain(element.attr("abs:href"))
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.ownText().trim()
+        setUrlWithoutDomain(element.attr("abs:href"))
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val newHeader =
@@ -131,16 +126,15 @@ class MuitoHentai : ParsedHttpSource() {
         return GET(baseUrl + chapter.url, newHeader)
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .selectFirst("script:containsData(numeroImgAtual)")
-            ?.data()
-            ?.substringAfter("var arr = ")
-            ?.substringBefore(";")
-            ?.let { json.parseToJsonElement(it).jsonArray }
-            ?.mapIndexed { i, el ->
-                Page(i, document.location(), el.jsonPrimitive.content)
-            }.orEmpty()
+    override fun pageListParse(document: Document): List<Page> = document
+        .selectFirst("script:containsData(numeroImgAtual)")
+        ?.data()
+        ?.substringAfter("var arr = ")
+        ?.substringBefore(";")
+        ?.let { json.parseToJsonElement(it).jsonArray }
+        ?.mapIndexed { i, el ->
+            Page(i, document.location(), el.jsonPrimitive.content)
+        }.orEmpty()
 
     override fun imageUrlParse(document: Document) = ""
 

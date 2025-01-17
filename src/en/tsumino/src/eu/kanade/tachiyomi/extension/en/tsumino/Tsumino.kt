@@ -172,16 +172,15 @@ class Tsumino : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client
-                .newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client
+            .newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
@@ -250,24 +249,23 @@ class Tsumino : HttpSource() {
         val exclude: Boolean,
     )
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Separate tags with commas (,)"),
-            Filter.Header("Prepend with dash (-) to exclude"),
-            TagFilter(),
-            CategoryFilter(),
-            CollectionFilter(),
-            GroupFilter(),
-            ArtistFilter(),
-            ParodyFilter(),
-            CharactersFilter(),
-            UploaderFilter(),
-            Filter.Separator(),
-            SortFilter(),
-            LengthFilter(),
-            MinimumRatingFilter(),
-            ExcludeParodiesFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        TagFilter(),
+        CategoryFilter(),
+        CollectionFilter(),
+        GroupFilter(),
+        ArtistFilter(),
+        ParodyFilter(),
+        CharactersFilter(),
+        UploaderFilter(),
+        Filter.Separator(),
+        SortFilter(),
+        LengthFilter(),
+        MinimumRatingFilter(),
+        ExcludeParodiesFilter(),
+    )
 
     class TagFilter : AdvSearchEntryFilter("Tags", 1)
 

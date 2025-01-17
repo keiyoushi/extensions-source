@@ -28,21 +28,19 @@ class KurageBunch :
 
     override fun popularMangaSelector(): String = "ul.page-series-list li div.item-box"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("a.series-data-container h4")!!.text()
-            thumbnail_url = element.selectFirst("a.series-thumb img")!!.attr("data-src")
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("a.series-data-container h4")!!.text()
+        thumbnail_url = element.selectFirst("a.series-thumb img")!!.attr("data-src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun chapterListSelector(): String = "li.episode"
 
-    override fun getCollections(): List<Collection> =
-        listOf(
-            Collection("くらげバンチ", "kuragebunch"),
-            Collection("読切", "oneshot"),
-            Collection("月刊コミックバンチ", "comicbunch"),
-            Collection("Bバンチ", "bbunch"),
-            Collection("ututu", "ututu"),
-        )
+    override fun getCollections(): List<Collection> = listOf(
+        Collection("くらげバンチ", "kuragebunch"),
+        Collection("読切", "oneshot"),
+        Collection("月刊コミックバンチ", "comicbunch"),
+        Collection("Bバンチ", "bbunch"),
+        Collection("ututu", "ututu"),
+    )
 }

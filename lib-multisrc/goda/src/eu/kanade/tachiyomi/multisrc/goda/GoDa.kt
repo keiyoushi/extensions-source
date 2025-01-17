@@ -83,44 +83,42 @@ open class GoDa(
 
     private fun Element.getMangaId() = selectFirst("#mangachapters")!!.attr("data-mid")
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup().selectFirst("main")!!
-            val titleElement = document.selectFirst("h1")!!
-            val elements = titleElement.parent()!!.parent()!!.children()
-            check(elements.size == 6)
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup().selectFirst("main")!!
+        val titleElement = document.selectFirst("h1")!!
+        val elements = titleElement.parent()!!.parent()!!.children()
+        check(elements.size == 6)
 
-            title = titleElement.ownText()
-            status =
-                when (titleElement.child(0).text()) {
-                    "連載中", "Ongoing" -> SManga.ONGOING
-                    "完結" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            author = Entities.unescape(elements[1].children().drop(1).joinToString { it.text().removeSuffix(" ,") })
-            genre =
-                buildList {
-                    elements[2].children().drop(1).mapTo(this) { it.text().removeSuffix(" ,") }
-                    elements[3].children().mapTo(this) { it.text().removePrefix("#") }
-                }.joinToString()
-            description = (elements[4].text() + "\n\nID: ${document.getMangaId()}").trim()
-            thumbnail_url = document.selectFirst("img.object-cover")!!.attr("src")
-        }
+        title = titleElement.ownText()
+        status =
+            when (titleElement.child(0).text()) {
+                "連載中", "Ongoing" -> SManga.ONGOING
+                "完結" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        author = Entities.unescape(elements[1].children().drop(1).joinToString { it.text().removeSuffix(" ,") })
+        genre =
+            buildList {
+                elements[2].children().drop(1).mapTo(this) { it.text().removeSuffix(" ,") }
+                elements[3].children().mapTo(this) { it.text().removePrefix("#") }
+            }.joinToString()
+        description = (elements[4].text() + "\n\nID: ${document.getMangaId()}").trim()
+        thumbnail_url = document.selectFirst("img.object-cover")!!.attr("src")
+    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.fromCallable {
-            val mangaId =
-                manga.description
-                    ?.substringAfterLast("ID: ", "")
-                    ?.takeIf { it.toIntOrNull() != null }
-                    ?: client
-                        .newCall(mangaDetailsRequest(manga))
-                        .execute()
-                        .asJsoup()
-                        .getMangaId()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val mangaId =
+            manga.description
+                ?.substringAfterLast("ID: ", "")
+                ?.takeIf { it.toIntOrNull() != null }
+                ?: client
+                    .newCall(mangaDetailsRequest(manga))
+                    .execute()
+                    .asJsoup()
+                    .getMangaId()
 
-            fetchChapterList(mangaId)
-        }
+        fetchChapterList(mangaId)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
@@ -172,19 +170,18 @@ open class GoDa(
             }
     }
 
-    override fun getFilterList(): FilterList =
-        if (!enableGenres) {
-            FilterList()
-        } else if (genres.isEmpty()) {
-            FilterList(listOf(Filter.Header(if (lang == "zh") "点击“重置”刷新分类" else "Tap 'Reset' to load genres")))
-        } else {
-            val list =
-                listOf(
-                    Filter.Header(if (lang == "zh") "分类（搜索文本时无效）" else "Filters are ignored when using text search."),
-                    UriPartFilter(if (lang == "zh") "分类" else "Genre", genres),
-                )
-            FilterList(list)
-        }
+    override fun getFilterList(): FilterList = if (!enableGenres) {
+        FilterList()
+    } else if (genres.isEmpty()) {
+        FilterList(listOf(Filter.Header(if (lang == "zh") "点击“重置”刷新分类" else "Tap 'Reset' to load genres")))
+    } else {
+        val list =
+            listOf(
+                Filter.Header(if (lang == "zh") "分类（搜索文本时无效）" else "Filters are ignored when using text search."),
+                UriPartFilter(if (lang == "zh") "分类" else "Genre", genres),
+            )
+        FilterList(list)
+    }
 
     class UriPartFilter(
         displayName: String,

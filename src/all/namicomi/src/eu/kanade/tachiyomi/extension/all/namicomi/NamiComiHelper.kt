@@ -49,14 +49,13 @@ class NamiComiHelper(
      */
     fun getMangaListOffset(page: Int): String = (NamiComiConstants.mangaLimit * (page - 1)).toString()
 
-    private fun getPublicationStatus(mangaDataDto: MangaDataDto): Int =
-        when (mangaDataDto.attributes!!.publicationStatus) {
-            StatusDto.ONGOING -> SManga.ONGOING
-            StatusDto.CANCELLED -> SManga.CANCELLED
-            StatusDto.COMPLETED -> SManga.COMPLETED
-            StatusDto.HIATUS -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun getPublicationStatus(mangaDataDto: MangaDataDto): Int = when (mangaDataDto.attributes!!.publicationStatus) {
+        StatusDto.ONGOING -> SManga.ONGOING
+        StatusDto.CANCELLED -> SManga.CANCELLED
+        StatusDto.COMPLETED -> SManga.COMPLETED
+        StatusDto.HIATUS -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     private fun parseDate(dateAsString: String): Long = NamiComiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
 
@@ -171,21 +170,20 @@ class NamiComiHelper(
         }
     }
 
-    fun titleToSlug(title: String) =
-        title
-            .trim()
-            .lowercase(Locale.US)
-            .replace(titleSpecialCharactersRegex, "-")
-            .replace(trailingHyphenRegex, "")
-            .split("-")
-            .reduce { accumulator, element ->
-                val currentSlug = "$accumulator-$element"
-                if (currentSlug.length > 100) {
-                    accumulator
-                } else {
-                    currentSlug
-                }
+    fun titleToSlug(title: String) = title
+        .trim()
+        .lowercase(Locale.US)
+        .replace(titleSpecialCharactersRegex, "-")
+        .replace(trailingHyphenRegex, "")
+        .split("-")
+        .reduce { accumulator, element ->
+            val currentSlug = "$accumulator-$element"
+            if (currentSlug.length > 100) {
+                accumulator
+            } else {
+                currentSlug
             }
+        }
 
     companion object {
         val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()

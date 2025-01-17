@@ -52,13 +52,12 @@ class Nikkangecchan : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        super
-            .fetchSearchManga(page, query, filters)
-            .map {
-                val filtered = it.mangas.filter { e -> e.title.contains(query, true) }
-                MangasPage(filtered, false)
-            }
+    ): Observable<MangasPage> = super
+        .fetchSearchManga(page, query, filters)
+        .map {
+            val filtered = it.mangas.filter { e -> e.title.contains(query, true) }
+            MangasPage(filtered, false)
+        }
 
     // Does not have search, use complete list (in popular) instead.
     override fun searchMangaRequest(

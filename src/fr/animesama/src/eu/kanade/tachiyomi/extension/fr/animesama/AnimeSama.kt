@@ -31,22 +31,20 @@ class AnimeSama : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Accept-Language", "fr-FR")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Accept-Language", "fr-FR")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/catalogue/", headers)
 
     override fun popularMangaSelector() = ".cardListAnime.Scans"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("h1").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("h1").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.select("img").attr("src")
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -79,21 +77,19 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("h1").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("h1").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.select("img").attr("src")
+    }
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
-            genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
-            title = document.select("#titreOeuvre").text()
-            thumbnail_url = document.select("#coverOeuvre").attr("src")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
+        genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
+        title = document.select("#titreOeuvre").text()
+        thumbnail_url = document.select("#coverOeuvre").attr("src")
+    }
 
     // Chapters
     override fun chapterListSelector() = throw UnsupportedOperationException()

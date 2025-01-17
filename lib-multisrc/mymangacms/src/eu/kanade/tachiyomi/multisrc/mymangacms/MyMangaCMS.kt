@@ -53,14 +53,13 @@ abstract class MyMangaCMS(
                 writeTimeout(1, TimeUnit.MINUTES)
             }.build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers.Builder().apply {
-            add("Referer", "$baseUrl/")
-            add(
-                "User-Agent",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0",
-            )
-        }
+    override fun headersBuilder(): Headers.Builder = Headers.Builder().apply {
+        add("Referer", "$baseUrl/")
+        add(
+            "User-Agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0",
+        )
+    }
 
     //region Source settings
 
@@ -88,45 +87,42 @@ abstract class MyMangaCMS(
 
     //region Popular
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET(
-            baseUrl
-                .toHttpUrl()
-                .newBuilder()
-                .apply {
-                    addPathSegment("tim-kiem")
-                    addQueryParameter("sort", "top")
-                    addQueryParameter("page", page.toString())
-                }.build()
-                .toString(),
-        )
+    override fun popularMangaRequest(page: Int): Request = GET(
+        baseUrl
+            .toHttpUrl()
+            .newBuilder()
+            .apply {
+                addPathSegment("tim-kiem")
+                addQueryParameter("sort", "top")
+                addQueryParameter("page", page.toString())
+            }.build()
+            .toString(),
+    )
 
     override fun popularMangaSelector(): String = "div.thumb-item-flow.col-6.col-md-2"
 
     override fun popularMangaNextPageSelector(): String? = "div.pagination_wrap a.paging_item:last-of-type:not(.disabled)"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("a").first()!!.attr("abs:href"))
-            title = element.select("div.thumb_attr.series-title a[title]").first()!!.text()
-            thumbnail_url = element.select("div[data-bg]").first()!!.attr("data-bg")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a").first()!!.attr("abs:href"))
+        title = element.select("div.thumb_attr.series-title a[title]").first()!!.text()
+        thumbnail_url = element.select("div[data-bg]").first()!!.attr("data-bg")
+    }
     //endregion
 
     //region Latest
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET(
-            baseUrl
-                .toHttpUrl()
-                .newBuilder()
-                .apply {
-                    addPathSegment("tim-kiem")
-                    addQueryParameter("sort", "update")
-                    addQueryParameter("page", page.toString())
-                }.build()
-                .toString(),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = GET(
+        baseUrl
+            .toHttpUrl()
+            .newBuilder()
+            .apply {
+                addPathSegment("tim-kiem")
+                addQueryParameter("sort", "update")
+                addQueryParameter("page", page.toString())
+            }.build()
+            .toString(),
+    )
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
 
@@ -141,66 +137,64 @@ abstract class MyMangaCMS(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PREFIX_URL_SEARCH) -> {
-                fetchMangaDetails(
-                    SManga.create().apply {
-                        url = query.removePrefix(PREFIX_URL_SEARCH).trim().replace(baseUrl, "")
-                    },
-                ).map { MangasPage(listOf(it), false) }
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_URL_SEARCH) -> {
+            fetchMangaDetails(
+                SManga.create().apply {
+                    url = query.removePrefix(PREFIX_URL_SEARCH).trim().replace(baseUrl, "")
+                },
+            ).map { MangasPage(listOf(it), false) }
         }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        GET(
-            baseUrl
-                .toHttpUrl()
-                .newBuilder()
-                .apply {
-                    val genres = mutableListOf<Int>()
-                    val genresEx = mutableListOf<Int>()
-                    addPathSegment("tim-kiem")
-                    addQueryParameter("page", page.toString())
-                    (if (filters.isEmpty()) getFilterList() else filters).forEach {
-                        when (it) {
-                            is GenreList ->
-                                it.state.forEach { genre ->
-                                    when (genre.state) {
-                                        Filter.TriState.STATE_INCLUDE -> genres.add(genre.id)
-                                        Filter.TriState.STATE_EXCLUDE -> genresEx.add(genre.id)
-                                        else -> {}
-                                    }
+    ): Request = GET(
+        baseUrl
+            .toHttpUrl()
+            .newBuilder()
+            .apply {
+                val genres = mutableListOf<Int>()
+                val genresEx = mutableListOf<Int>()
+                addPathSegment("tim-kiem")
+                addQueryParameter("page", page.toString())
+                (if (filters.isEmpty()) getFilterList() else filters).forEach {
+                    when (it) {
+                        is GenreList ->
+                            it.state.forEach { genre ->
+                                when (genre.state) {
+                                    Filter.TriState.STATE_INCLUDE -> genres.add(genre.id)
+                                    Filter.TriState.STATE_EXCLUDE -> genresEx.add(genre.id)
+                                    else -> {}
                                 }
-                            is Author ->
-                                if (it.state.isNotEmpty()) {
-                                    addQueryParameter("artist", it.state)
-                                }
-                            is Sort -> addQueryParameter("sort", it.toUriPart())
-                            is Status ->
-                                if (it.state != 0) {
-                                    addQueryParameter("status", it.state.toString())
-                                }
-                            else -> {}
-                        }
+                            }
+                        is Author ->
+                            if (it.state.isNotEmpty()) {
+                                addQueryParameter("artist", it.state)
+                            }
+                        is Sort -> addQueryParameter("sort", it.toUriPart())
+                        is Status ->
+                            if (it.state != 0) {
+                                addQueryParameter("status", it.state.toString())
+                            }
+                        else -> {}
                     }
-                    if (genresEx.isNotEmpty()) {
-                        addQueryParameter("reject_genres", genresEx.joinToString(","))
-                    }
-                    if (genres.isNotEmpty()) {
-                        addQueryParameter("accept_genres", genres.joinToString(","))
-                    }
-                    if (query.isNotEmpty()) {
-                        addQueryParameter("q", query)
-                    }
-                }.build()
-                .toString(),
-        )
+                }
+                if (genresEx.isNotEmpty()) {
+                    addQueryParameter("reject_genres", genresEx.joinToString(","))
+                }
+                if (genres.isNotEmpty()) {
+                    addQueryParameter("accept_genres", genres.joinToString(","))
+                }
+                if (query.isNotEmpty()) {
+                    addQueryParameter("q", query)
+                }
+            }.build()
+            .toString(),
+    )
 
     override fun searchMangaSelector(): String = popularMangaSelector()
 
@@ -213,97 +207,96 @@ abstract class MyMangaCMS(
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}")
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(
-                document
-                    .select(".series-name-group a")
-                    .first()!!
-                    .attr("abs:href"),
-            )
-            title =
-                document
-                    .select(".series-name")
-                    .first()!!
-                    .text()
-                    .trim()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        setUrlWithoutDomain(
+            document
+                .select(".series-name-group a")
+                .first()!!
+                .attr("abs:href"),
+        )
+        title =
+            document
+                .select(".series-name")
+                .first()!!
+                .text()
+                .trim()
 
-            var alternativeNames: String = ""
-            document.select(".info-item").forEach {
-                val value = it.select(".info-value")
-                when (it.select(".info-name").text().trim()) {
-                    "$parseAlternativeNameString:" ->
-                        alternativeNames +=
-                            value.joinToString(", ") { name ->
-                                removeGenericWords(name.text()).trim() + ", "
-                            }
-                    "$parseAlternative2ndNameString:" ->
-                        alternativeNames +=
-                            value.joinToString(", ") { name ->
-                                removeGenericWords(name.text()).trim() + ", "
-                            }
-                    "$parseAuthorString:" ->
-                        author =
-                            value.joinToString(", ") { auth ->
-                                auth.text().trim()
-                            }
-                    "$parseStatusString:" ->
-                        status =
-                            when (
-                                value
-                                    .first()!!
-                                    .text()
-                                    .lowercase()
-                                    .trim()
-                            ) {
-                                parseStatusOngoingStringLowerCase -> SManga.ONGOING
-                                parseStatusOnHoldStringLowerCase -> SManga.ON_HIATUS
-                                parseStatusCompletedStringLowerCase -> SManga.COMPLETED
-                                else -> SManga.UNKNOWN
-                            }
-                }
+        var alternativeNames: String = ""
+        document.select(".info-item").forEach {
+            val value = it.select(".info-value")
+            when (it.select(".info-name").text().trim()) {
+                "$parseAlternativeNameString:" ->
+                    alternativeNames +=
+                        value.joinToString(", ") { name ->
+                            removeGenericWords(name.text()).trim() + ", "
+                        }
+                "$parseAlternative2ndNameString:" ->
+                    alternativeNames +=
+                        value.joinToString(", ") { name ->
+                            removeGenericWords(name.text()).trim() + ", "
+                        }
+                "$parseAuthorString:" ->
+                    author =
+                        value.joinToString(", ") { auth ->
+                            auth.text().trim()
+                        }
+                "$parseStatusString:" ->
+                    status =
+                        when (
+                            value
+                                .first()!!
+                                .text()
+                                .lowercase()
+                                .trim()
+                        ) {
+                            parseStatusOngoingStringLowerCase -> SManga.ONGOING
+                            parseStatusOnHoldStringLowerCase -> SManga.ON_HIATUS
+                            parseStatusCompletedStringLowerCase -> SManga.COMPLETED
+                            else -> SManga.UNKNOWN
+                        }
             }
-
-            val descElem = document.select(".summary-content")
-            description =
-                if (descElem.select("p").any()) {
-                    descElem
-                        .select("p")
-                        .joinToString("\n") {
-                            it.run {
-                                select(Evaluator.Tag("br")).prepend("\\n")
-                                this
-                                    .text()
-                                    .replace("\\n", "\n")
-                                    .replace("\n ", "\n")
-                            }
-                        }.trim()
-                } else {
-                    descElem.text().trim()
-                }
-
-            if (alternativeNames.isNotEmpty()) {
-                description = "$parseAlternativeNameString: ${alternativeNames}\n\n" + description
-            }
-
-            genre =
-                document
-                    .select("a[href*=the-loai] span.badge")
-                    .joinToString(", ") { it.text().trim() }
-
-            thumbnail_url =
-                document
-                    .select("div.content.img-in-ratio")
-                    .first()!!
-                    .attr("style")
-                    .let {
-                        backgroundImageRegex
-                            .find(it)
-                            ?.groups
-                            ?.get(1)
-                            ?.value
-                    }
         }
+
+        val descElem = document.select(".summary-content")
+        description =
+            if (descElem.select("p").any()) {
+                descElem
+                    .select("p")
+                    .joinToString("\n") {
+                        it.run {
+                            select(Evaluator.Tag("br")).prepend("\\n")
+                            this
+                                .text()
+                                .replace("\\n", "\n")
+                                .replace("\n ", "\n")
+                        }
+                    }.trim()
+            } else {
+                descElem.text().trim()
+            }
+
+        if (alternativeNames.isNotEmpty()) {
+            description = "$parseAlternativeNameString: ${alternativeNames}\n\n" + description
+        }
+
+        genre =
+            document
+                .select("a[href*=the-loai] span.badge")
+                .joinToString(", ") { it.text().trim() }
+
+        thumbnail_url =
+            document
+                .select("div.content.img-in-ratio")
+                .first()!!
+                .attr("style")
+                .let {
+                    backgroundImageRegex
+                        .find(it)
+                        ?.groups
+                        ?.get(1)
+                        ?.value
+                }
+    }
 
     private fun removeGenericWords(name: String): String {
         val locale = Locale.forLanguageTag(lang)
@@ -326,24 +319,23 @@ abstract class MyMangaCMS(
     private fun chapterFromElement(
         element: Element,
         scanlator: String?,
-    ): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            name = element.select("div.chapter-name").first()!!.text()
-            date_upload =
-                dateUpdatedParser(
-                    element.select("div.chapter-time").first()!!.text(),
-                )
+    ): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        name = element.select("div.chapter-name").first()!!.text()
+        date_upload =
+            dateUpdatedParser(
+                element.select("div.chapter-time").first()!!.text(),
+            )
 
-            val match = floatingNumberRegex.find(name)
-            chapter_number = if (name.lowercase().startsWith("vol")) {
-                match?.groups?.get(2)
-            } else {
-                match?.groups?.get(1)
-            }?.value?.toFloat() ?: -1f
+        val match = floatingNumberRegex.find(name)
+        chapter_number = if (name.lowercase().startsWith("vol")) {
+            match?.groups?.get(2)
+        } else {
+            match?.groups?.get(1)
+        }?.value?.toFloat() ?: -1f
 
-            this.scanlator = scanlator
-        }
+        this.scanlator = scanlator
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -369,11 +361,10 @@ abstract class MyMangaCMS(
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}")
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select("div#chapter-content img")
-            .filterNot { it.attr("abs:data-src").isNullOrEmpty() }
-            .mapIndexed { index, elem -> Page(index, "", elem.attr("abs:data-src")) }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select("div#chapter-content img")
+        .filterNot { it.attr("abs:data-src").isNullOrEmpty() }
+        .mapIndexed { index, elem -> Page(index, "", elem.attr("abs:data-src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
     //endregion
@@ -438,13 +429,12 @@ abstract class MyMangaCMS(
         displayName: String = "Thể loại",
     ) : Filter.Group<Genre>(displayName, genres)
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Author(),
-            Status(),
-            Sort(),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Author(),
+        Status(),
+        Sort(),
+        GenreList(getGenreList()),
+    )
 
     // To populate this list:
     // console.log([...document.querySelectorAll("div.search-gerne_item")].map(elem => `Genre("${elem.textContent.trim()}", ${elem.querySelector("label").getAttribute("data-genre-id")}),`).join("\n"))

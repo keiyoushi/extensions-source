@@ -36,12 +36,11 @@ class Twi4 : HttpSource() {
 
     private fun getUrlDomain(): String = baseUrl.substring(0, 22)
 
-    private fun getChromeHeaders(): Headers =
-        headersBuilder()
-            .add(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.54 Safari/537.36",
-            ).build()
+    private fun getChromeHeaders(): Headers = headersBuilder()
+        .add(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.54 Safari/537.36",
+        ).build()
 
     // Both latest and popular only lists 4 manga in total
     // As the full catalog is consists of less than 50 manga, it is not worth implementing

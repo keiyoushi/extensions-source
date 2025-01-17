@@ -81,10 +81,9 @@ class Manhuaren :
     private fun randomString(
         length: Int,
         pool: String,
-    ): String =
-        (1..length)
-            .map { Random.nextInt(0, pool.length).let { pool[it] } }
-            .joinToString("")
+    ): String = (1..length)
+        .map { Random.nextInt(0, pool.length).let { pool[it] } }
+        .joinToString("")
 
     private fun randomNumber(length: Int): String = randomString(length, "0123456789")
 
@@ -326,16 +325,15 @@ class Manhuaren :
     private fun myPost(
         url: HttpUrl,
         body: RequestBody?,
-    ): Request =
-        myRequest(url, "POST", body)
-            .newBuilder()
-            .cacheControl(
-                CacheControl
-                    .Builder()
-                    .noCache()
-                    .noStore()
-                    .build(),
-            ).build()
+    ): Request = myRequest(url, "POST", body)
+        .newBuilder()
+        .cacheControl(
+            CacheControl
+                .Builder()
+                .noCache()
+                .noStore()
+                .build(),
+        ).build()
 
     private fun myGet(url: HttpUrl): Request {
         val authorization = token
@@ -417,12 +415,11 @@ class Manhuaren :
         return result.toString()
     }
 
-    private fun urlEncode(str: String?): String =
-        URLEncoder
-            .encode(str ?: "", "UTF-8")
-            .replace("+", "%20")
-            .replace("%7E", "~")
-            .replace("*", "%2A")
+    private fun urlEncode(str: String?): String = URLEncoder
+        .encode(str ?: "", "UTF-8")
+        .replace("+", "%20")
+        .replace("%7E", "~")
+        .replace("*", "%2A")
 
     private fun mangasFromJSONArray(arr: JSONArray): MangasPage {
         val ret = ArrayList<SManga>(arr.length())
@@ -530,50 +527,49 @@ class Manhuaren :
         )
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val res = response.body.string()
-            val obj = JSONObject(res).getJSONObject("response")
-            title = obj.getString("mangaName")
-            thumbnail_url = ""
-            obj.optString("mangaCoverimageUrl").let {
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val res = response.body.string()
+        val obj = JSONObject(res).getJSONObject("response")
+        title = obj.getString("mangaName")
+        thumbnail_url = ""
+        obj.optString("mangaCoverimageUrl").let {
+            if (it != "") {
+                thumbnail_url = it
+            }
+        }
+        if (thumbnail_url == "" || thumbnail_url == "http://mhfm5.tel.cdndm5.com/tag/category/nopic.jpg") {
+            obj.optString("mangaPicimageUrl").let {
                 if (it != "") {
                     thumbnail_url = it
                 }
             }
-            if (thumbnail_url == "" || thumbnail_url == "http://mhfm5.tel.cdndm5.com/tag/category/nopic.jpg") {
-                obj.optString("mangaPicimageUrl").let {
-                    if (it != "") {
-                        thumbnail_url = it
-                    }
-                }
-            }
-            if (thumbnail_url == "") {
-                obj.optString("shareIcon").let {
-                    if (it != "") {
-                        thumbnail_url = it
-                    }
-                }
-            }
-
-            val arr = obj.getJSONArray("mangaAuthors")
-            val tmparr = ArrayList<String>(arr.length())
-            for (i in 0 until arr.length()) {
-                tmparr.add(arr.getString(i))
-            }
-            author = tmparr.joinToString(", ")
-
-            genre = obj.getString("mangaTheme").replace(" ", ", ")
-
-            status =
-                when (obj.getInt("mangaIsOver")) {
-                    1 -> SManga.COMPLETED
-                    0 -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
-
-            description = obj.getString("mangaIntro")
         }
+        if (thumbnail_url == "") {
+            obj.optString("shareIcon").let {
+                if (it != "") {
+                    thumbnail_url = it
+                }
+            }
+        }
+
+        val arr = obj.getJSONArray("mangaAuthors")
+        val tmparr = ArrayList<String>(arr.length())
+        for (i in 0 until arr.length()) {
+            tmparr.add(arr.getString(i))
+        }
+        author = tmparr.joinToString(", ")
+
+        genre = obj.getString("mangaTheme").replace(" ", ", ")
+
+        status =
+            when (obj.getInt("mangaIsOver")) {
+                1 -> SManga.COMPLETED
+                0 -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
+
+        description = obj.getString("mangaIntro")
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request = myGet((baseUrl + manga.url).toHttpUrl())
 
@@ -659,60 +655,59 @@ class Manhuaren :
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(
-                "状态",
-                arrayOf(
-                    Pair("热门", "0"),
-                    Pair("更新", "1"),
-                    Pair("新作", "2"),
-                    Pair("完结", "3"),
-                ),
+    override fun getFilterList() = FilterList(
+        SortFilter(
+            "状态",
+            arrayOf(
+                Pair("热门", "0"),
+                Pair("更新", "1"),
+                Pair("新作", "2"),
+                Pair("完结", "3"),
             ),
-            CategoryFilter(
-                "分类",
-                arrayOf(
-                    Category("全部", "0", "0"),
-                    Category("热血", "0", "31"),
-                    Category("恋爱", "0", "26"),
-                    Category("校园", "0", "1"),
-                    Category("百合", "0", "3"),
-                    Category("耽美", "0", "27"),
-                    Category("伪娘", "0", "5"),
-                    Category("冒险", "0", "2"),
-                    Category("职场", "0", "6"),
-                    Category("后宫", "0", "8"),
-                    Category("治愈", "0", "9"),
-                    Category("科幻", "0", "25"),
-                    Category("励志", "0", "10"),
-                    Category("生活", "0", "11"),
-                    Category("战争", "0", "12"),
-                    Category("悬疑", "0", "17"),
-                    Category("推理", "0", "33"),
-                    Category("搞笑", "0", "37"),
-                    Category("奇幻", "0", "14"),
-                    Category("魔法", "0", "15"),
-                    Category("恐怖", "0", "29"),
-                    Category("神鬼", "0", "20"),
-                    Category("萌系", "0", "21"),
-                    Category("历史", "0", "4"),
-                    Category("美食", "0", "7"),
-                    Category("同人", "0", "30"),
-                    Category("运动", "0", "34"),
-                    Category("绅士", "0", "36"),
-                    Category("机甲", "0", "40"),
-                    Category("限制级", "0", "61"),
-                    Category("少年向", "1", "1"),
-                    Category("少女向", "1", "2"),
-                    Category("青年向", "1", "3"),
-                    Category("港台", "2", "35"),
-                    Category("日韩", "2", "36"),
-                    Category("大陆", "2", "37"),
-                    Category("欧美", "2", "52"),
-                ),
+        ),
+        CategoryFilter(
+            "分类",
+            arrayOf(
+                Category("全部", "0", "0"),
+                Category("热血", "0", "31"),
+                Category("恋爱", "0", "26"),
+                Category("校园", "0", "1"),
+                Category("百合", "0", "3"),
+                Category("耽美", "0", "27"),
+                Category("伪娘", "0", "5"),
+                Category("冒险", "0", "2"),
+                Category("职场", "0", "6"),
+                Category("后宫", "0", "8"),
+                Category("治愈", "0", "9"),
+                Category("科幻", "0", "25"),
+                Category("励志", "0", "10"),
+                Category("生活", "0", "11"),
+                Category("战争", "0", "12"),
+                Category("悬疑", "0", "17"),
+                Category("推理", "0", "33"),
+                Category("搞笑", "0", "37"),
+                Category("奇幻", "0", "14"),
+                Category("魔法", "0", "15"),
+                Category("恐怖", "0", "29"),
+                Category("神鬼", "0", "20"),
+                Category("萌系", "0", "21"),
+                Category("历史", "0", "4"),
+                Category("美食", "0", "7"),
+                Category("同人", "0", "30"),
+                Category("运动", "0", "34"),
+                Category("绅士", "0", "36"),
+                Category("机甲", "0", "40"),
+                Category("限制级", "0", "61"),
+                Category("少年向", "1", "1"),
+                Category("少女向", "1", "2"),
+                Category("青年向", "1", "3"),
+                Category("港台", "2", "35"),
+                Category("日韩", "2", "36"),
+                Category("大陆", "2", "37"),
+                Category("欧美", "2", "52"),
             ),
-        )
+        ),
+    )
 
     private data class Category(
         val name: String,

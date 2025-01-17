@@ -29,10 +29,9 @@ class Twicomi : HttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -93,39 +92,37 @@ class Twicomi : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        when (
-            response.request.url
-                .toString()
-                .removePrefix(apiUrl)
-                .split("/")[1]
-        ) {
-            "author" -> {
-                val data = response.parseAs<TwicomiResponse<AuthorListWithCount>>()
-                val manga = data.response.authorList.map { it.author.toSManga() }
+    override fun searchMangaParse(response: Response): MangasPage = when (
+        response.request.url
+            .toString()
+            .removePrefix(apiUrl)
+            .split("/")[1]
+    ) {
+        "author" -> {
+            val data = response.parseAs<TwicomiResponse<AuthorListWithCount>>()
+            val manga = data.response.authorList.map { it.author.toSManga() }
 
-                val currentPage =
-                    response.request.url
-                        .queryParameter("page_no")!!
-                        .toInt()
-                val pageLimit =
-                    response.request.url
-                        .queryParameter("page_limit")
-                        ?.toInt() ?: 10
-                val hasNextPage = currentPage * pageLimit < data.response.totalCount
+            val currentPage =
+                response.request.url
+                    .queryParameter("page_no")!!
+                    .toInt()
+            val pageLimit =
+                response.request.url
+                    .queryParameter("page_limit")
+                    ?.toInt() ?: 10
+            val hasNextPage = currentPage * pageLimit < data.response.totalCount
 
-                MangasPage(manga, hasNextPage)
-            }
-            "manga" -> popularMangaParse(response)
-            else -> throw IllegalArgumentException()
+            MangasPage(manga, hasNextPage)
         }
+        "manga" -> popularMangaParse(response)
+        else -> throw IllegalArgumentException()
+    }
 
-    override fun getMangaUrl(manga: SManga): String =
-        when (manga.url.split("/")[1]) {
-            "author" -> baseUrl + manga.url + "/page/1"
-            "manga" -> baseUrl + manga.url.substringBefore("#")
-            else -> throw IllegalArgumentException()
-        }
+    override fun getMangaUrl(manga: SManga): String = when (manga.url.split("/")[1]) {
+        "author" -> baseUrl + manga.url + "/page/1"
+        "manga" -> baseUrl + manga.url.substringBefore("#")
+        else -> throw IllegalArgumentException()
+    }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
@@ -135,12 +132,11 @@ class Twicomi : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore("#")
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        when (manga.url.split("/")[1]) {
-            "manga" -> Observable.just(listOf(dummyChapterFromManga(manga)))
-            "author" -> super.fetchChapterList(manga)
-            else -> throw IllegalArgumentException()
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = when (manga.url.split("/")[1]) {
+        "manga" -> Observable.just(listOf(dummyChapterFromManga(manga)))
+        "author" -> super.fetchChapterList(manga)
+        else -> throw IllegalArgumentException()
+    }
 
     override fun chapterListRequest(manga: SManga): Request {
         val splitUrl = manga.url.split("/")
@@ -196,16 +192,15 @@ class Twicomi : HttpSource() {
         page: Int,
     ) = GET("$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=500")
 
-    private fun dummyChapterFromManga(manga: SManga) =
-        SChapter.create().apply {
-            url = manga.url
-            name = "Tweet"
-            date_upload =
-                manga.url
-                    .substringAfter("#")
-                    .substringBefore(",")
-                    .toLong()
-        }
+    private fun dummyChapterFromManga(manga: SManga) = SChapter.create().apply {
+        url = manga.url
+        name = "Tweet"
+        date_upload =
+            manga.url
+                .substringAfter("#")
+                .substringBefore(",")
+                .toLong()
+    }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val urls =
@@ -222,12 +217,11 @@ class Twicomi : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            TypeSelect(),
-            MangaSortFilter(),
-            AuthorSortFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        TypeSelect(),
+        MangaSortFilter(),
+        AuthorSortFilter(),
+    )
 
     private class TypeSelect : Filter.Select<String>("Search for", arrayOf("Tweet", "Author"))
 

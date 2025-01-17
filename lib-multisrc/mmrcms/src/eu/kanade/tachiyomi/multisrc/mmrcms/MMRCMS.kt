@@ -67,10 +67,9 @@ abstract class MMRCMS
 
         override val client = network.cloudflareClient
 
-        override fun headersBuilder() =
-            super
-                .headersBuilder()
-                .add("Referer", "$baseUrl/")
+        override fun headersBuilder() = super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
         protected val json: Json by injectLazy()
 
@@ -135,19 +134,18 @@ abstract class MMRCMS
             page: Int,
             query: String,
             filters: FilterList,
-        ): Observable<MangasPage> =
-            if (query.isNotEmpty()) {
-                if (page == 1) {
-                    client
-                        .newCall(searchMangaRequest(page, query, filters))
-                        .asObservableSuccess()
-                        .map { searchMangaParse(it) }
-                } else {
-                    Observable.just(parseSearchDirectory(page))
-                }
+        ): Observable<MangasPage> = if (query.isNotEmpty()) {
+            if (page == 1) {
+                client
+                    .newCall(searchMangaRequest(page, query, filters))
+                    .asObservableSuccess()
+                    .map { searchMangaParse(it) }
             } else {
-                super.fetchSearchManga(page, query, filters)
+                Observable.just(parseSearchDirectory(page))
             }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
 
         override fun searchMangaRequest(
             page: Int,
@@ -216,14 +214,13 @@ abstract class MMRCMS
 
         override fun searchMangaSelector() = "div.media"
 
-        override fun searchMangaFromElement(element: Element) =
-            SManga.create().apply {
-                val anchor = element.selectFirst(".media-heading a, .manga-heading a")!!
+        override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+            val anchor = element.selectFirst(".media-heading a, .manga-heading a")!!
 
-                setUrlWithoutDomain(anchor.attr("href"))
-                title = anchor.text()
-                thumbnail_url = guessCover(url, element.selectFirst("img")?.imgAttr())
-            }
+            setUrlWithoutDomain(anchor.attr("href"))
+            title = anchor.text()
+            thumbnail_url = guessCover(url, element.selectFirst("img")?.imgAttr())
+        }
 
         override fun searchMangaNextPageSelector(): String? = ".pagination a[rel=next]"
 
@@ -293,40 +290,39 @@ abstract class MMRCMS
         protected val detailStatusDropped = hashSetOf("dropped")
 
         @SuppressLint("DefaultLocale")
-        override fun mangaDetailsParse(document: Document) =
-            SManga.create().apply {
-                title = document.selectFirst(detailsTitleSelector)!!.text()
-                thumbnail_url =
-                    guessCover(
-                        document.location(),
-                        document.selectFirst(".row img.img-responsive")?.imgAttr(),
-                    )
-                description =
-                    document.select(".row .well").let {
-                        it.select("h5").remove()
-                        it.textWithNewlines()
-                    }
+        override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+            title = document.selectFirst(detailsTitleSelector)!!.text()
+            thumbnail_url =
+                guessCover(
+                    document.location(),
+                    document.selectFirst(".row img.img-responsive")?.imgAttr(),
+                )
+            description =
+                document.select(".row .well").let {
+                    it.select("h5").remove()
+                    it.textWithNewlines()
+                }
 
-                document.select(".row .dl-horizontal dt").forEach { element ->
-                    when (element.text().lowercase().removeSuffix(":")) {
-                        in detailAuthor -> author = element.nextElementSibling()!!.text()
-                        in detailArtist -> artist = element.nextElementSibling()!!.text()
-                        in detailGenre ->
-                            genre =
-                                element.nextElementSibling()!!.select("a").joinToString {
-                                    it.text()
-                                }
-                        in detailStatus ->
-                            status =
-                                when (element.nextElementSibling()!!.text().lowercase()) {
-                                    in detailStatusComplete -> SManga.COMPLETED
-                                    in detailStatusOngoing -> SManga.ONGOING
-                                    in detailStatusDropped -> SManga.CANCELLED
-                                    else -> SManga.UNKNOWN
-                                }
-                    }
+            document.select(".row .dl-horizontal dt").forEach { element ->
+                when (element.text().lowercase().removeSuffix(":")) {
+                    in detailAuthor -> author = element.nextElementSibling()!!.text()
+                    in detailArtist -> artist = element.nextElementSibling()!!.text()
+                    in detailGenre ->
+                        genre =
+                            element.nextElementSibling()!!.select("a").joinToString {
+                                it.text()
+                            }
+                    in detailStatus ->
+                        status =
+                            when (element.nextElementSibling()!!.text().lowercase()) {
+                                in detailStatusComplete -> SManga.COMPLETED
+                                in detailStatusOngoing -> SManga.ONGOING
+                                in detailStatusDropped -> SManga.CANCELLED
+                                else -> SManga.UNKNOWN
+                            }
                 }
             }
+        }
 
         override fun chapterListParse(response: Response): List<SChapter> {
             val document = response.asJsoup()
@@ -379,10 +375,9 @@ abstract class MMRCMS
             }
         }
 
-        override fun pageListParse(document: Document) =
-            document.select("#all > img.img-responsive").mapIndexed { i, it ->
-                Page(i, imageUrl = it.imgAttr())
-            }
+        override fun pageListParse(document: Document) = document.select("#all > img.img-responsive").mapIndexed { i, it ->
+            Page(i, imageUrl = it.imgAttr())
+        }
 
         override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -558,27 +553,24 @@ abstract class MMRCMS
         protected fun guessCover(
             mangaUrl: String,
             url: String?,
-        ): String =
-            if (url == null || url.endsWith("no-image.png")) {
-                "$baseUrl/uploads/manga/${mangaUrl.substringAfterLast('/')}/cover/cover_250x350.jpg"
-            } else {
-                url
-            }
+        ): String = if (url == null || url.endsWith("no-image.png")) {
+            "$baseUrl/uploads/manga/${mangaUrl.substringAfterLast('/')}/cover/cover_250x350.jpg"
+        } else {
+            url
+        }
 
-        protected fun Element.imgAttr(): String =
-            when {
-                hasAttr("data-background-image") -> absUrl("data-background-image")
-                hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
-                hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-                hasAttr("data-src") -> absUrl("data-src")
-                else -> absUrl("src")
-            }
+        protected fun Element.imgAttr(): String = when {
+            hasAttr("data-background-image") -> absUrl("data-background-image")
+            hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
+            hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
+            hasAttr("data-src") -> absUrl("data-src")
+            else -> absUrl("src")
+        }
 
-        protected fun Elements.textWithNewlines() =
-            run {
-                select("p, br").prepend("\\n")
-                text().replace("\\n", "\n").replace("\n ", "\n")
-            }
+        protected fun Elements.textWithNewlines() = run {
+            select("p, br").prepend("\\n")
+            text().replace("\\n", "\n").replace("\n ", "\n")
+        }
     }
 
 private enum class FetchFilterStatus {

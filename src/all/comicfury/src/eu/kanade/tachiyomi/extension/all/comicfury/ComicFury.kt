@@ -75,21 +75,19 @@ class ComicFury(
     private val nextArchivePageSelector = "#scroll-content > .onsite-viewer-back-link + .archive-pages a"
     private lateinit var currentPage: org.jsoup.nodes.Document
 
-    private fun Element.toSManga(): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(this@toSManga.attr("abs:href"))
-            name = this@toSManga.select(".archive-comic-title").text()
-            date_upload = this@toSManga.select(".archive-comic-date").text().toDate()
-        }
+    private fun Element.toSManga(): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(this@toSManga.attr("abs:href"))
+        name = this@toSManga.select(".archive-comic-title").text()
+        date_upload = this@toSManga.select(".archive-comic-date").text().toDate()
+    }
 
-    private fun collect(url: String): List<SChapter> =
-        client
-            .newCall(GET(url, headers))
-            .execute()
-            .asJsoup()
-            .also { currentPage = it }
-            .select(chapterSelector)
-            .map { element -> element.toSManga() }
+    private fun collect(url: String): List<SChapter> = client
+        .newCall(GET(url, headers))
+        .execute()
+        .asJsoup()
+        .also { currentPage = it }
+        .select(chapterSelector)
+        .map { element -> element.toSManga() }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val jsp = response.asJsoup()
@@ -219,12 +217,11 @@ class ComicFury(
         return Request.Builder().url(req.build()).build()
     }
 
-    private fun Boolean.toInt(): Int =
-        if (this) {
-            0
-        } else {
-            1
-        }
+    private fun Boolean.toInt(): Int = if (this) {
+        0
+    } else {
+        1
+    }
 
     // START OF AUTHOR NOTES //
     private val preferences: SharedPreferences by lazy {
@@ -252,21 +249,20 @@ class ComicFury(
     // START OF FILTERS //
     override fun getFilterList(): FilterList = getFilterList(0)
 
-    private fun getFilterList(sortIndex: Int): FilterList =
-        FilterList(
-            TagsFilter(),
-            Filter.Separator(),
-            SortFilter(sortIndex),
-            Filter.Separator(),
-            LastUpdatedFilter(),
-            CompletedComicFilter(),
-            Filter.Separator(),
-            Filter.Header("Flags"),
-            ViolenceFilter(),
-            NudityFilter(),
-            StrongLangFilter(),
-            SexualFilter(),
-        )
+    private fun getFilterList(sortIndex: Int): FilterList = FilterList(
+        TagsFilter(),
+        Filter.Separator(),
+        SortFilter(sortIndex),
+        Filter.Separator(),
+        LastUpdatedFilter(),
+        CompletedComicFilter(),
+        Filter.Separator(),
+        Filter.Header("Flags"),
+        ViolenceFilter(),
+        NudityFilter(),
+        StrongLangFilter(),
+        SexualFilter(),
+    )
 
     internal class SortFilter(
         index: Int,

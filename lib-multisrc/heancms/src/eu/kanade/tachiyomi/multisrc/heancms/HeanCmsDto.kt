@@ -66,30 +66,29 @@ class HeanCmsSeriesDto(
         cdnUrl: String,
         coverPath: String,
         mangaSubDirectory: String,
-    ): SManga =
-        SManga.create().apply {
-            val descriptionBody = this@HeanCmsSeriesDto.description?.let(Jsoup::parseBodyFragment)
+    ): SManga = SManga.create().apply {
+        val descriptionBody = this@HeanCmsSeriesDto.description?.let(Jsoup::parseBodyFragment)
 
-            title = this@HeanCmsSeriesDto.title
-            author = this@HeanCmsSeriesDto.author?.trim()
-            artist = this@HeanCmsSeriesDto.studio?.trim()
-            description =
-                descriptionBody
-                    ?.select("p")
-                    ?.joinToString("\n\n") { it.text() }
-                    ?.ifEmpty { descriptionBody.text().replace("\n", "\n\n") }
-            genre =
-                tags
-                    .orEmpty()
-                    .sortedBy(HeanCmsTagDto::name)
-                    .joinToString { it.name }
-            thumbnail_url =
-                thumbnail
-                    .ifEmpty { null }
-                    ?.toAbsoluteThumbnailUrl(cdnUrl, coverPath)
-            status = this@HeanCmsSeriesDto.status?.toStatus() ?: SManga.UNKNOWN
-            url = "/$mangaSubDirectory/$slug#$id"
-        }
+        title = this@HeanCmsSeriesDto.title
+        author = this@HeanCmsSeriesDto.author?.trim()
+        artist = this@HeanCmsSeriesDto.studio?.trim()
+        description =
+            descriptionBody
+                ?.select("p")
+                ?.joinToString("\n\n") { it.text() }
+                ?.ifEmpty { descriptionBody.text().replace("\n", "\n\n") }
+        genre =
+            tags
+                .orEmpty()
+                .sortedBy(HeanCmsTagDto::name)
+                .joinToString { it.name }
+        thumbnail_url =
+            thumbnail
+                .ifEmpty { null }
+                ?.toAbsoluteThumbnailUrl(cdnUrl, coverPath)
+        status = this@HeanCmsSeriesDto.status?.toStatus() ?: SManga.UNKNOWN
+        url = "/$mangaSubDirectory/$slug#$id"
+    }
 }
 
 @Serializable
@@ -121,27 +120,26 @@ class HeanCmsChapterDto(
         seriesSlug: String,
         mangaSubDirectory: String,
         dateFormat: SimpleDateFormat,
-    ): SChapter =
-        SChapter.create().apply {
-            name = this@HeanCmsChapterDto.name.trim()
+    ): SChapter = SChapter.create().apply {
+        name = this@HeanCmsChapterDto.name.trim()
 
-            if (title != null) {
-                name += " - ${title.trim()}"
-            }
-
-            if (price != 0) {
-                name += " \uD83D\uDD12"
-            }
-
-            date_upload =
-                try {
-                    dateFormat.parse(createdAt)?.time ?: 0L
-                } catch (_: Exception) {
-                    0L
-                }
-
-            url = "/$mangaSubDirectory/$seriesSlug/$slug#$id"
+        if (title != null) {
+            name += " - ${title.trim()}"
         }
+
+        if (price != 0) {
+            name += " \uD83D\uDD12"
+        }
+
+        date_upload =
+            try {
+                dateFormat.parse(createdAt)?.time ?: 0L
+            } catch (_: Exception) {
+                0L
+            }
+
+        url = "/$mangaSubDirectory/$seriesSlug/$slug#$id"
+    }
 }
 
 @Serializable
@@ -182,11 +180,10 @@ private fun String.toAbsoluteThumbnailUrl(
     coverPath: String,
 ): String = if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
 
-fun String.toStatus(): Int =
-    when (this) {
-        "Ongoing" -> SManga.ONGOING
-        "Hiatus" -> SManga.ON_HIATUS
-        "Dropped" -> SManga.CANCELLED
-        "Completed", "Finished" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+fun String.toStatus(): Int = when (this) {
+    "Ongoing" -> SManga.ONGOING
+    "Hiatus" -> SManga.ON_HIATUS
+    "Dropped" -> SManga.CANCELLED
+    "Completed", "Finished" -> SManga.COMPLETED
+    else -> SManga.UNKNOWN
+}

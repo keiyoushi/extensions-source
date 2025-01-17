@@ -68,9 +68,8 @@ class Shqqaa : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        fetchPopularManga(1)
-            .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
+    ): Observable<MangasPage> = fetchPopularManga(1)
+        .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
 
     override fun searchMangaRequest(
         page: Int,
@@ -104,13 +103,12 @@ class Shqqaa : ParsedHttpSource() {
         return manga
     }
 
-    private fun parseStatus(status: String?) =
-        when {
-            status == null -> SManga.UNKNOWN
-            status.contains("مستمر") -> SManga.ONGOING
-            status.contains("منتهي") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("مستمر") -> SManga.ONGOING
+        status.contains("منتهي") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
     override fun chapterListSelector() = "a.m-1"

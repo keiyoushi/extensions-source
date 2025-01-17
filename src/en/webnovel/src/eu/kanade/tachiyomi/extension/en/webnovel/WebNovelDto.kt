@@ -28,11 +28,10 @@ class BrowseResponse<T : ComicItem>(
     private val isLast: Int,
     @JsonNames("comicItems") private val items: List<T>,
 ) {
-    fun toMangasPage(coverUrl: (id: String, coverUpdatedAt: Long) -> String): MangasPage =
-        MangasPage(
-            mangas = items.map { it.toSManga(coverUrl) },
-            hasNextPage = isLast == 0,
-        )
+    fun toMangasPage(coverUrl: (id: String, coverUpdatedAt: Long) -> String): MangasPage = MangasPage(
+        mangas = items.map { it.toSManga(coverUrl) },
+        hasNextPage = isLast == 0,
+    )
 }
 
 @Serializable
@@ -42,13 +41,12 @@ class QuerySearchItem(
     @SerialName("categoryName") private val genre: String,
     @SerialName("CV") private val coverUpdatedAt: Long,
 ) : ComicItem {
-    override fun toSManga(coverUrl: (id: String, coverUpdatedAt: Long) -> String): SManga =
-        SManga.create().also {
-            it.url = id
-            it.title = title
-            it.genre = genre
-            it.thumbnail_url = coverUrl(id, coverUpdatedAt)
-        }
+    override fun toSManga(coverUrl: (id: String, coverUpdatedAt: Long) -> String): SManga = SManga.create().also {
+        it.url = id
+        it.title = title
+        it.genre = genre
+        it.thumbnail_url = coverUrl(id, coverUpdatedAt)
+    }
 }
 
 @Serializable
@@ -60,15 +58,14 @@ class FilterSearchItem(
     @SerialName("categoryName") private val genre: String,
     @SerialName("coverUpdateTime") private val coverUpdatedAt: Long,
 ) : ComicItem {
-    override fun toSManga(coverUrl: (id: String, coverUpdatedAt: Long) -> String): SManga =
-        SManga.create().also {
-            it.url = id
-            it.title = title
-            it.author = author
-            it.description = description
-            it.genre = genre
-            it.thumbnail_url = coverUrl(id, coverUpdatedAt)
-        }
+    override fun toSManga(coverUrl: (id: String, coverUpdatedAt: Long) -> String): SManga = SManga.create().also {
+        it.url = id
+        it.title = title
+        it.author = author
+        it.description = description
+        it.genre = genre
+        it.thumbnail_url = coverUrl(id, coverUpdatedAt)
+    }
 }
 
 @Serializable
@@ -89,29 +86,28 @@ data class ComicDetailInfo(
     @SerialName("actionStatus") private val status: Int,
     @SerialName("CV") private val coverUpdatedAt: Long,
 ) : ComicItem {
-    override fun toSManga(coverUrl: (id: String, coverUpdatedAt: Long) -> String): SManga =
-        SManga.create().also {
-            it.url = id
-            it.title = title
-            it.author = author
-            it.description =
-                buildString {
-                    append(description)
-                    if (status == ONGOING && updateCycle.isNotBlank()) {
-                        append("\n\nInformation:")
-                        append("\n• ${updateCycle.replaceFirstChar { c -> c.uppercase(Locale.ENGLISH) }}")
-                    }
+    override fun toSManga(coverUrl: (id: String, coverUpdatedAt: Long) -> String): SManga = SManga.create().also {
+        it.url = id
+        it.title = title
+        it.author = author
+        it.description =
+            buildString {
+                append(description)
+                if (status == ONGOING && updateCycle.isNotBlank()) {
+                    append("\n\nInformation:")
+                    append("\n• ${updateCycle.replaceFirstChar { c -> c.uppercase(Locale.ENGLISH) }}")
                 }
-            it.genre = genre
-            it.status =
-                when (status) {
-                    ONGOING -> SManga.ONGOING
-                    COMPLETED -> SManga.COMPLETED
-                    ON_HIATUS -> SManga.ON_HIATUS
-                    else -> SManga.UNKNOWN
-                }
-            it.thumbnail_url = coverUrl(id, coverUpdatedAt)
-        }
+            }
+        it.genre = genre
+        it.status =
+            when (status) {
+                ONGOING -> SManga.ONGOING
+                COMPLETED -> SManga.COMPLETED
+                ON_HIATUS -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+        it.thumbnail_url = coverUrl(id, coverUpdatedAt)
+    }
 
     companion object {
         private const val ONGOING = 1

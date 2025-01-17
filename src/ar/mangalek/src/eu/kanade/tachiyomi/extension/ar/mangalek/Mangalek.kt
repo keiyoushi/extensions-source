@@ -97,16 +97,15 @@ class Mangalek :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        POST(
-            "$baseUrl/wp-admin/admin-ajax.php",
-            headers,
-            FormBody
-                .Builder()
-                .add("action", "wp-manga-search-manga")
-                .add("title", query)
-                .build(),
-        )
+    ): Request = POST(
+        "$baseUrl/wp-admin/admin-ajax.php",
+        headers,
+        FormBody
+            .Builder()
+            .add("action", "wp-manga-search-manga")
+            .add("title", query)
+            .build(),
+    )
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 

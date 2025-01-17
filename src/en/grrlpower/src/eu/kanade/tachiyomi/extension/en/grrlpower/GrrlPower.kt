@@ -45,28 +45,27 @@ class GrrlPower(
             .addInterceptor(TextInterceptor())
             .build()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(
-            MangasPage(
-                listOf(
-                    SManga.create().apply {
-                        artist = comicAuthor
-                        author = comicAuthor
-                        description = "Grrl Power is a comic about a crazy nerdette that becomes a" +
-                            " superheroine. Humor, action, cheesecake, beefcake, 'splosions," +
-                            " and maybe some drama. Possibly ninjas. "
-                        genre = "superhero, humor, action"
-                        initialized = true
-                        status = SManga.ONGOING
-                        // Thumbnail Found On The TvTropes Page for the comic
-                        thumbnail_url = "https://static.tvtropes.org/pmwiki/pub/images/rsz_grrl_power.png"
-                        title = "Grrl Power"
-                        url = "/archive"
-                    },
-                ),
-                false,
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
+        MangasPage(
+            listOf(
+                SManga.create().apply {
+                    artist = comicAuthor
+                    author = comicAuthor
+                    description = "Grrl Power is a comic about a crazy nerdette that becomes a" +
+                        " superheroine. Humor, action, cheesecake, beefcake, 'splosions," +
+                        " and maybe some drama. Possibly ninjas. "
+                    genre = "superhero, humor, action"
+                    initialized = true
+                    status = SManga.ONGOING
+                    // Thumbnail Found On The TvTropes Page for the comic
+                    thumbnail_url = "https://static.tvtropes.org/pmwiki/pub/images/rsz_grrl_power.png"
+                    title = "Grrl Power"
+                    url = "/archive"
+                },
             ),
-        )!!
+            false,
+        ),
+    )!!
 
     /**
      There are separate pages for each year.

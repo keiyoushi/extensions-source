@@ -80,10 +80,9 @@ class Akaya : ParsedHttpSource() {
             .build()
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page", headers)
@@ -167,81 +166,76 @@ class Akaya : ParsedHttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Los filtros se ignorarán al hacer una búsqueda por texto"),
-            Filter.Separator(),
-            OrderFilter(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Los filtros se ignorarán al hacer una búsqueda por texto"),
+        Filter.Separator(),
+        OrderFilter(),
+        GenreFilter(),
+    )
 
     override fun searchMangaSelector() = "div.serie_items > div.library-grid-item"
 
     override fun searchMangaNextPageSelector() = "div.wrapper-navigation ul.pagination > li > a[rel=next]"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            title = element.selectFirst("span > h5 > strong")!!.text()
-            thumbnail_url = element
-                .selectFirst("div.inner-img")
-                ?.attr("style")
-                ?.substringAfter("url(")
-                ?.substringBefore(")")
-                ?: element.selectFirst("div.img-fluid")?.attr("abs:src")
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.selectFirst("span > h5 > strong")!!.text()
+        thumbnail_url = element
+            .selectFirst("div.inner-img")
+            ?.attr("style")
+            ?.substringAfter("url(")
+            ?.substringBefore(")")
+            ?: element.selectFirst("div.img-fluid")?.attr("abs:src")
+    }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            with(document.selectFirst("header.masthead > div.container > div.row")!!) {
-                title = selectFirst(".serie-head-title")!!.text()
-                author =
-                    selectFirst("ul.persons")!!.let { element ->
-                        element
-                            .select("li")
-                            .joinToString { it.text() }
-                            .ifEmpty { element.text() }
-                    }
-                genre =
-                    selectFirst("ul.categories")!!.let { element ->
-                        element
-                            .select("li")
-                            .joinToString { it.text() }
-                            .ifEmpty { element.text() }
-                    }
-            }
-            thumbnail_url =
-                document
-                    .selectFirst("meta[property=og:image]")!!
-                    .attr("content")
-                    .replace("/chapters/", "/content/")
-            description = document.selectFirst("section.main div.container div.sidebar > p")!!.text()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        with(document.selectFirst("header.masthead > div.container > div.row")!!) {
+            title = selectFirst(".serie-head-title")!!.text()
+            author =
+                selectFirst("ul.persons")!!.let { element ->
+                    element
+                        .select("li")
+                        .joinToString { it.text() }
+                        .ifEmpty { element.text() }
+                }
+            genre =
+                selectFirst("ul.categories")!!.let { element ->
+                    element
+                        .select("li")
+                        .joinToString { it.text() }
+                        .ifEmpty { element.text() }
+                }
         }
+        thumbnail_url =
+            document
+                .selectFirst("meta[property=og:image]")!!
+                .attr("content")
+                .replace("/chapters/", "/content/")
+        description = document.selectFirst("section.main div.container div.sidebar > p")!!.text()
+    }
 
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "?order_direction=desc", headers)
 
     override fun chapterListSelector() = "div.chapter-desktop div.chapter-item"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("div.text-left > .mt-1 > a")!!.attr("href"))
-            name = element.selectFirst("div.text-left > .mt-1 > a")!!.text()
-            date_upload = parseDate(element.selectFirst("p.date")!!.text())
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("div.text-left > .mt-1 > a")!!.attr("href"))
+        name = element.selectFirst("div.text-left > .mt-1 > a")!!.text()
+        date_upload = parseDate(element.selectFirst("p.date")!!.text())
 
-            element.selectFirst("i.ak-lock")?.let {
-                name = "🔒 $name"
-                url = "$url#lock"
-            }
+        element.selectFirst("i.ak-lock")?.let {
+            name = "🔒 $name"
+            url = "$url#lock"
         }
+    }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("es"))
 
-    private fun parseDate(date: String): Long =
-        try {
-            dateFormat.parse(date)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun parseDate(date: String): Long = try {
+        dateFormat.parse(date)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.substringAfterLast("#") == "lock") {

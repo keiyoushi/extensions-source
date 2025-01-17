@@ -70,11 +70,10 @@ abstract class GroupLe(
 
     private var uagent = preferences.getString(UAGENT_TITLE, UAGENT_DEFAULT)!!
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("User-Agent", uagent)
-            add("Referer", baseUrl)
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("User-Agent", uagent)
+        add("Referer", baseUrl)
+    }
 
     override fun popularMangaSelector() = "div.tile"
 
@@ -236,17 +235,16 @@ abstract class GroupLe(
         return manga
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        if (manga.status != SManga.LICENSED) {
-            client
-                .newCall(chapterListRequest(manga))
-                .asObservableSuccess()
-                .map { response ->
-                    chapterListParse(response, manga)
-                }
-        } else {
-            Observable.error(java.lang.Exception("Лицензировано - Нет глав"))
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = if (manga.status != SManga.LICENSED) {
+        client
+            .newCall(chapterListRequest(manga))
+            .asObservableSuccess()
+            .map { response ->
+                chapterListParse(response, manga)
+            }
+    } else {
+        Observable.error(java.lang.Exception("Лицензировано - Нет глав"))
+    }
 
     protected open fun getChapterSearchParams(document: Document): String = "?mtr=true"
 
@@ -442,25 +440,24 @@ abstract class GroupLe(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            client
-                .newCall(searchMangaByIdRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$realQuery"
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+        client
+            .newCall(searchMangaByIdRequest(realQuery))
+            .asObservableSuccess()
+            .map { response ->
+                val details = mangaDetailsParse(response)
+                details.url = "/$realQuery"
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
+    }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         screen.addPreference(screen.editTextPreference(UAGENT_TITLE, UAGENT_DEFAULT, uagent))
@@ -470,29 +467,28 @@ abstract class GroupLe(
         title: String,
         default: String,
         value: String,
-    ): androidx.preference.EditTextPreference =
-        androidx.preference.EditTextPreference(context).apply {
-            key = title
-            this.title = title
-            summary = value
-            this.setDefaultValue(default)
-            dialogTitle = title
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(title, newValue as String).commit()
-                    Toast
-                        .makeText(
-                            context,
-                            "Для смены User-Agent необходимо перезапустить приложение с полной остановкой.",
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+    ): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        key = title
+        this.title = title
+        summary = value
+        this.setDefaultValue(default)
+        dialogTitle = title
+        setOnPreferenceChangeListener { _, newValue ->
+            try {
+                val res = preferences.edit().putString(title, newValue as String).commit()
+                Toast
+                    .makeText(
+                        context,
+                        "Для смены User-Agent необходимо перезапустить приложение с полной остановкой.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                res
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
             }
         }
+    }
 
     companion object {
         private const val UAGENT_TITLE = "User-Agent(для некоторых стран)"

@@ -73,22 +73,21 @@ data class Comic(
             else -> SManga.UNKNOWN
         }
 
-    fun toSManga() =
-        SManga.create().apply {
-            url = "/comic/$id"
-            title = this@Comic.title
-            thumbnail_url = this@Comic.imageUrl
-            author = this@Comic.authors.joinToString { it.name }
-            genre = this@Comic.categories.joinToString { it.name }
-            description =
-                buildString {
-                    append("年份: $year | ")
-                    append("點閱: ${simplifyNumber(views)} | ")
-                    append("喜愛: ${simplifyNumber(favoriteCount)}\n")
-                }
-            status = parseStatus
-            initialized = true
-        }
+    fun toSManga() = SManga.create().apply {
+        url = "/comic/$id"
+        title = this@Comic.title
+        thumbnail_url = this@Comic.imageUrl
+        author = this@Comic.authors.joinToString { it.name }
+        genre = this@Comic.categories.joinToString { it.name }
+        description =
+            buildString {
+                append("年份: $year | ")
+                append("點閱: ${simplifyNumber(views)} | ")
+                append("喜愛: ${simplifyNumber(favoriteCount)}\n")
+            }
+        status = parseStatus
+        initialized = true
+    }
 }
 
 @Serializable

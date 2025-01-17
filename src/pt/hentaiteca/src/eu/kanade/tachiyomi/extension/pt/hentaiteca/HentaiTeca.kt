@@ -36,10 +36,9 @@ class HentaiTeca :
             ).rateLimit(1, 2, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .addCustomUA()
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .addCustomUA()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 

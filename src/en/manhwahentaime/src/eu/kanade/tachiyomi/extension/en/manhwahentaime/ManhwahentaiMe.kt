@@ -45,19 +45,17 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         return chapterElements.map(::chapterFromElement)
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = true)
-        } else {
-            GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = true)
+    } else {
+        GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
+    }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = false)
-        } else {
-            GET("$baseUrl/home/${searchPage(page)}", headers)
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = false)
+    } else {
+        GET("$baseUrl/home/${searchPage(page)}", headers)
+    }
 
     override fun searchRequest(
         page: Int,
@@ -134,17 +132,16 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         }
     }
 
-    private fun parseGenresMe(document: Document): List<Pair<String, String>> =
-        document
-            .selectFirst("div.genres")
-            ?.select("a")
-            .orEmpty()
-            .map { a ->
-                a.ownText() to
-                    a.attr("href").substringBeforeLast("/").substringAfterLast("/")
-            }.let {
-                listOf(("All" to "all")) + it
-            }
+    private fun parseGenresMe(document: Document): List<Pair<String, String>> = document
+        .selectFirst("div.genres")
+        ?.select("a")
+        .orEmpty()
+        .map { a ->
+            a.ownText() to
+                a.attr("href").substringBeforeLast("/").substringAfterLast("/")
+        }.let {
+            listOf(("All" to "all")) + it
+        }
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenresMe() }

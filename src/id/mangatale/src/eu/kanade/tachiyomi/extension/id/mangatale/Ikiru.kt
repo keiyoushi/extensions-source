@@ -35,10 +35,9 @@ class Ikiru : MangaThemesia("Ikiru", "https://ikiru.one", "id") {
 
     override val seriesTitleSelector = ".ts-breadcrumb span:last-child span"
 
-    override fun mangaDetailsParse(document: Document) =
-        super.mangaDetailsParse(document).apply {
-            thumbnail_url = document.selectFirst(seriesThumbnailSelector)?.imgAttr()
-        }
+    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
+        thumbnail_url = document.selectFirst(seriesThumbnailSelector)?.imgAttr()
+    }
 
     companion object {
         private const val IMG_CONTENT_TYPE = "image/jpeg"

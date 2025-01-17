@@ -46,16 +46,14 @@ class TaoSect : HttpSource() {
 
     private var latestIds: List<String> = emptyList()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", USER_AGENT)
-            .add("Origin", baseUrl)
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", USER_AGENT)
+        .add("Origin", baseUrl)
+        .add("Referer", baseUrl)
 
-    private fun apiHeadersBuilder(): Headers.Builder =
-        headersBuilder()
-            .add("Accept", ACCEPT_JSON)
+    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
+        .add("Accept", ACCEPT_JSON)
 
     override fun popularMangaRequest(page: Int): Request {
         val apiUrl =
@@ -88,12 +86,11 @@ class TaoSect : HttpSource() {
         return MangasPage(projectList, hasNextPage)
     }
 
-    private fun popularMangaFromObject(obj: TaoSectProjectDto): SManga =
-        SManga.create().apply {
-            title = Parser.unescapeEntities(obj.title!!.rendered, true)
-            thumbnail_url = obj.thumbnail
-            setUrlWithoutDomain(obj.link!!)
-        }
+    private fun popularMangaFromObject(obj: TaoSectProjectDto): SManga = SManga.create().apply {
+        title = Parser.unescapeEntities(obj.title!!.rendered, true)
+        thumbnail_url = obj.thumbnail
+        setUrlWithoutDomain(obj.link!!)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request {
         val apiUrl =
@@ -274,13 +271,12 @@ class TaoSect : HttpSource() {
     private fun chapterFromObject(
         obj: TaoSectChapterDto,
         projectSlug: String,
-    ): SChapter =
-        SChapter.create().apply {
-            name = obj.name
-            scanlator = this@TaoSect.name
-            date_upload = obj.date.toDate()
-            url = "/leitor-online/projeto/$projectSlug/${obj.slug}/"
-        }
+    ): SChapter = SChapter.create().apply {
+        name = obj.name
+        scanlator = this@TaoSect.name
+        date_upload = obj.date.toDate()
+        url = "/leitor-online/projeto/$projectSlug/${obj.slug}/"
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
@@ -391,80 +387,73 @@ class TaoSect : HttpSource() {
         return POST("$baseUrl/wp-admin/admin-ajax.php", newHeaders, formBody)
     }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            CountryFilter(getCountryList()),
-            StatusFilter(getStatusList()),
-            GenreFilter(getGenreList()),
-            SortFilter(SORT_LIST, DEFAULT_ORDERBY),
-            FeaturedFilter(),
-            NsfwFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        CountryFilter(getCountryList()),
+        StatusFilter(getStatusList()),
+        GenreFilter(getGenreList()),
+        SortFilter(SORT_LIST, DEFAULT_ORDERBY),
+        FeaturedFilter(),
+        NsfwFilter(),
+    )
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(it.body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(it.body.string())
+    }
 
-    private fun String.toDate(): Long =
-        runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
+    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
-    private fun String.toStatus() =
-        when (this) {
-            "Ativos" -> SManga.ONGOING
-            "Finalizados", "Oneshots" -> SManga.COMPLETED
-            "Cancelados" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toStatus() = when (this) {
+        "Ativos" -> SManga.ONGOING
+        "Finalizados", "Oneshots" -> SManga.COMPLETED
+        "Cancelados" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
-    private fun getCountryList(): List<Tag> =
-        listOf(
-            Tag("59", "China"),
-            Tag("60", "Coréia do Sul"),
-            Tag("13", "Japão"),
-        )
+    private fun getCountryList(): List<Tag> = listOf(
+        Tag("59", "China"),
+        Tag("60", "Coréia do Sul"),
+        Tag("13", "Japão"),
+    )
 
-    private fun getStatusList(): List<Tag> =
-        listOf(
-            Tag("3", "Ativo"),
-            Tag("5", "Cancelado"),
-            Tag("4", "Finalizado"),
-            Tag("6", "One-shot"),
-        )
+    private fun getStatusList(): List<Tag> = listOf(
+        Tag("3", "Ativo"),
+        Tag("5", "Cancelado"),
+        Tag("4", "Finalizado"),
+        Tag("6", "One-shot"),
+    )
 
-    private fun getGenreList(): List<Tag> =
-        listOf(
-            Tag("31", "4Koma"),
-            Tag("24", "Ação"),
-            Tag("84", "Adulto"),
-            Tag("21", "Artes Marciais"),
-            Tag("25", "Aventura"),
-            Tag("26", "Comédia"),
-            Tag("66", "Culinária"),
-            Tag("78", "Doujinshi"),
-            Tag("22", "Drama"),
-            Tag("12", "Ecchi"),
-            Tag("30", "Escolar"),
-            Tag("76", "Esporte"),
-            Tag("23", "Fantasia"),
-            Tag("29", "Harém"),
-            Tag("75", "Histórico"),
-            Tag("83", "Horror"),
-            Tag("18", "Isekai"),
-            Tag("20", "Light Novel"),
-            Tag("61", "Manhua"),
-            Tag("56", "Psicológico"),
-            Tag("7", "Romance"),
-            Tag("27", "Sci-fi"),
-            Tag("28", "Seinen"),
-            Tag("55", "Shoujo"),
-            Tag("54", "Shounen"),
-            Tag("19", "Slice of life"),
-            Tag("17", "Sobrenatural"),
-            Tag("57", "Tragédia"),
-            Tag("62", "Webtoon"),
-        )
+    private fun getGenreList(): List<Tag> = listOf(
+        Tag("31", "4Koma"),
+        Tag("24", "Ação"),
+        Tag("84", "Adulto"),
+        Tag("21", "Artes Marciais"),
+        Tag("25", "Aventura"),
+        Tag("26", "Comédia"),
+        Tag("66", "Culinária"),
+        Tag("78", "Doujinshi"),
+        Tag("22", "Drama"),
+        Tag("12", "Ecchi"),
+        Tag("30", "Escolar"),
+        Tag("76", "Esporte"),
+        Tag("23", "Fantasia"),
+        Tag("29", "Harém"),
+        Tag("75", "Histórico"),
+        Tag("83", "Horror"),
+        Tag("18", "Isekai"),
+        Tag("20", "Light Novel"),
+        Tag("61", "Manhua"),
+        Tag("56", "Psicológico"),
+        Tag("7", "Romance"),
+        Tag("27", "Sci-fi"),
+        Tag("28", "Seinen"),
+        Tag("55", "Shoujo"),
+        Tag("54", "Shounen"),
+        Tag("19", "Slice of life"),
+        Tag("17", "Sobrenatural"),
+        Tag("57", "Tragédia"),
+        Tag("62", "Webtoon"),
+    )
 
     private data class GoogleDriveResponse(
         val isValid: Boolean,

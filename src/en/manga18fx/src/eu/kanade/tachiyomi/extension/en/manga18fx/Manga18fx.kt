@@ -40,12 +40,11 @@ class Manga18fx :
         return MangasPage(mangas, false)
     }
 
-    private fun mangaFromElement(element: Element) =
-        SManga.create().apply {
-            url = element.attr("href")
-            title = element.attr("title")
-            thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("data-src")
-        }
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
+        url = element.attr("href")
+        title = element.attr("title")
+        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("data-src")
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page", headers)
 

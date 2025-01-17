@@ -13,12 +13,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Manhwa18CcFactory : SourceFactory {
-    override fun createSources(): List<Source> =
-        listOf(
-            Manhwa18CcEN(),
-            Manhwa18CcKO(),
-            Manhwa18CcALL(),
-        )
+    override fun createSources(): List<Source> = listOf(
+        Manhwa18CcEN(),
+        Manhwa18CcKO(),
+        Manhwa18CcALL(),
+    )
 }
 
 class Manhwa18CcALL : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "all")
@@ -78,14 +77,13 @@ abstract class Manhwa18Cc(
 
     override val pageListParseSelector = "div.read-content img"
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(pageListParseSelector).mapIndexed { index, element ->
-            Page(
-                index,
-                document.location(),
-                element?.let {
-                    it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
-                },
-            )
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListParseSelector).mapIndexed { index, element ->
+        Page(
+            index,
+            document.location(),
+            element?.let {
+                it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
+            },
+        )
+    }
 }

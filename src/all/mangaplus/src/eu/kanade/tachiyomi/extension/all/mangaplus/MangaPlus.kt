@@ -44,13 +44,12 @@ class MangaPlus(
 
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
-            .add("User-Agent", USER_AGENT)
-            .add("SESSION-TOKEN", UUID.randomUUID().toString())
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
+        .add("User-Agent", USER_AGENT)
+        .add("SESSION-TOKEN", UUID.randomUUID().toString())
 
     override val client: OkHttpClient =
         network.client
@@ -84,15 +83,14 @@ class MangaPlus(
     private val titleCache = mutableMapOf<Int, Title>()
     private lateinit var directory: List<Title>
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(popularMangaRequest(page))
-                .asObservableSuccess()
-                .map { popularMangaParse(it) }
-        } else {
-            Observable.just(parseDirectory(page))
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(popularMangaRequest(page))
+            .asObservableSuccess()
+            .map { popularMangaParse(it) }
+    } else {
+        Observable.just(parseDirectory(page))
+    }
 
     override fun popularMangaRequest(page: Int) =
         GET("$API_URL/title_list/rankingV2?lang=$internalLang&type=hottest&clang=$internalLang&format=json", headers)
@@ -124,15 +122,14 @@ class MangaPlus(
         return MangasPage(pageList.map(Title::toSManga), hasNextPage)
     }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(latestUpdatesRequest(page))
-                .asObservableSuccess()
-                .map { latestUpdatesParse(it) }
-        } else {
-            Observable.just(parseDirectory(page))
-        }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(latestUpdatesRequest(page))
+            .asObservableSuccess()
+            .map { latestUpdatesParse(it) }
+    } else {
+        Observable.just(parseDirectory(page))
+    }
 
     override fun latestUpdatesRequest(page: Int) =
         GET("$API_URL/web/web_homeV4?lang=$internalLang&clang=$internalLang&format=json", headers)
@@ -174,15 +171,14 @@ class MangaPlus(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it, query) }
-        } else {
-            Observable.just(parseDirectory(page))
-        }
+    ): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, query) }
+    } else {
+        Observable.just(parseDirectory(page))
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -452,10 +448,9 @@ class MangaPlus(
             .toByteArray()
     }
 
-    private fun Response.asMangaPlusResponse(): MangaPlusResponse =
-        use {
-            json.decodeFromString(body.string())
-        }
+    private fun Response.asMangaPlusResponse(): MangaPlusResponse = use {
+        json.decodeFromString(body.string())
+    }
 
     private fun SharedPreferences.imageQuality(): String = getString("${QUALITY_PREF_KEY}_$lang", QUALITY_PREF_DEFAULT_VALUE)!!
 

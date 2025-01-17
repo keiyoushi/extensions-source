@@ -47,10 +47,9 @@ class Baimangu :
                 TimeUnit.MILLISECONDS,
             ).build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", baseUrl)
 
     // The following images don't seem to work, hence we do not bother to retrieve them
     private val invalidCoverImageDomains = arrayOf("serial-online", "res.cocomanga.com")
@@ -77,12 +76,11 @@ class Baimangu :
     }
 
     // Popular Manga
-    override fun popularMangaRequest(page: Int): Request =
-        if (page <= 1) {
-            GET("$baseUrl/fenlei/4.html", headers)
-        } else {
-            GET("$baseUrl/fenlei/4-$page.html", headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (page <= 1) {
+        GET("$baseUrl/fenlei/4.html", headers)
+    } else {
+        GET("$baseUrl/fenlei/4-$page.html", headers)
+    }
 
     override fun popularMangaNextPageSelector() = commonNextPageSelector
 
@@ -118,43 +116,41 @@ class Baimangu :
 
     private class SortFilter : Filter.Select<String>("排序", arrayOf("按时间", "按人气", "按评分"), 0)
 
-    override fun getFilterList() =
-        FilterList(
-            ChannelFilter(),
-            SortFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        ChannelFilter(),
+        SortFilter(),
+    )
 
     // Search
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotBlank()) {
-            GET("$baseUrl/vodsearch/$query----------$page---", headers)
-        } else {
-            var channelValue = "4" // 漫画大全
-            var sortValue = "time" // 按时间
+    ): Request = if (query.isNotBlank()) {
+        GET("$baseUrl/vodsearch/$query----------$page---", headers)
+    } else {
+        var channelValue = "4" // 漫画大全
+        var sortValue = "time" // 按时间
 
-            filters.forEach { filter ->
-                when (filter) {
-                    is ChannelFilter -> {
-                        channelValue = arrayOf("1", "2", "3", "4")[filter.state]
-                    }
-                    is SortFilter -> {
-                        sortValue = arrayOf("time", "hits", "score")[filter.state]
-                    }
-                    else -> {}
+        filters.forEach { filter ->
+            when (filter) {
+                is ChannelFilter -> {
+                    channelValue = arrayOf("1", "2", "3", "4")[filter.state]
                 }
+                is SortFilter -> {
+                    sortValue = arrayOf("time", "hits", "score")[filter.state]
+                }
+                else -> {}
             }
-
-            // https://www.darpou.com/vodshow/2-----------.html
-            // https://www.darpou.com/vodshow/2--hits------3---.html
-
-            val url = "$baseUrl/vodshow/$channelValue--$sortValue------$page---"
-
-            GET(url, headers)
         }
+
+        // https://www.darpou.com/vodshow/2-----------.html
+        // https://www.darpou.com/vodshow/2--hits------3---.html
+
+        val url = "$baseUrl/vodshow/$channelValue--$sortValue------$page---"
+
+        GET(url, headers)
+    }
 
     override fun searchMangaNextPageSelector() = commonNextPageSelector
 
@@ -214,11 +210,10 @@ class Baimangu :
 
     override fun chapterListSelector(): String = "div.fed-play-item ul.fed-part-rows:last-child a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.text().trim()
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.text().trim()
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
     // Reverse the order of the chapter list
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()

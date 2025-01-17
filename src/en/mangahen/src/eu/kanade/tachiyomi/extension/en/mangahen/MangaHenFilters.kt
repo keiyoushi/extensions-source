@@ -3,15 +3,14 @@ package eu.kanade.tachiyomi.extension.en.mangahen
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        SortFilter("Sort by", getSortsList),
-        TypeFilter("Types", getTypesList),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Tags"),
-    )
+fun getFilters(): FilterList = FilterList(
+    SortFilter("Sort by", getSortsList),
+    TypeFilter("Types", getTypesList),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    TextFilter("Tags"),
+)
 
 internal open class TextFilter(
     name: String,

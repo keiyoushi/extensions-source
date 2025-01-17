@@ -21,41 +21,39 @@ class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.com", "id") {
     override val hasLanguageFilter = false
     override val hasTypeFilter = false
 
-    override fun getStatusList() =
-        listOf(
-            Status("Semua", ""),
-            Status("Ongoing", "Ongoing"),
-            Status("Completed", "Completed"),
-        )
+    override fun getStatusList() = listOf(
+        Status("Semua", ""),
+        Status("Ongoing", "Ongoing"),
+        Status("Completed", "Completed"),
+    )
 
-    override fun getGenreList() =
-        listOf(
-            Genre("Action", "Action"),
-            Genre("Adventure", "Adventure"),
-            Genre("Comedy", "Comedy"),
-            Genre("Dark Fantasy", "Dark Fantasy"),
-            Genre("Drama", "Drama"),
-            Genre("Fantasy", "Fantasy"),
-            Genre("Harem", "H4rem"),
-            Genre("Historical", "Historical"),
-            Genre("Horror", "Horror"),
-            Genre("Isekai", "Isekai"),
-            Genre("Magic", "Magic"),
-            Genre("Mecha", "Mecha"),
-            Genre("Military", "Military"),
-            Genre("Monsters", "Monsters"),
-            Genre("Mystery", "Mystery"),
-            Genre("Psychological", "Psychological"),
-            Genre("Romance", "Romance"),
-            Genre("School Life", "School Life"),
-            Genre("Sci-Fi", "Sci-Fi"),
-            Genre("Seinen", "Seinen"),
-            Genre("Shounen", "Shounen"),
-            Genre("Slice of Life", "Slice of Life"),
-            Genre("Supernatural", "Supernatural"),
-            Genre("Survival", "Survival"),
-            Genre("Tragedy", "Tragedy"),
-        )
+    override fun getGenreList() = listOf(
+        Genre("Action", "Action"),
+        Genre("Adventure", "Adventure"),
+        Genre("Comedy", "Comedy"),
+        Genre("Dark Fantasy", "Dark Fantasy"),
+        Genre("Drama", "Drama"),
+        Genre("Fantasy", "Fantasy"),
+        Genre("Harem", "H4rem"),
+        Genre("Historical", "Historical"),
+        Genre("Horror", "Horror"),
+        Genre("Isekai", "Isekai"),
+        Genre("Magic", "Magic"),
+        Genre("Mecha", "Mecha"),
+        Genre("Military", "Military"),
+        Genre("Monsters", "Monsters"),
+        Genre("Mystery", "Mystery"),
+        Genre("Psychological", "Psychological"),
+        Genre("Romance", "Romance"),
+        Genre("School Life", "School Life"),
+        Genre("Sci-Fi", "Sci-Fi"),
+        Genre("Seinen", "Seinen"),
+        Genre("Shounen", "Shounen"),
+        Genre("Slice of Life", "Slice of Life"),
+        Genre("Supernatural", "Supernatural"),
+        Genre("Survival", "Survival"),
+        Genre("Tragedy", "Tragedy"),
+    )
 
     // =========================== Manga Details ============================
     override val mangaDetailsSelector = "div.section#main div.widget:has(main)"

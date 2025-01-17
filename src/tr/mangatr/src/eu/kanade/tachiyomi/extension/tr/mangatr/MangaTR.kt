@@ -16,10 +16,9 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Accept-Language", "en-US,en;q=0.5")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Accept-Language", "en-US,en;q=0.5")
 
     override val client by lazy {
         super.client
@@ -54,29 +53,27 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            title = element.text()
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.text()
+    }
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val infoElement = document.selectFirst("div#tab1")!!
-            infoElement.selectFirst("table + table tr + tr")?.run {
-                author = selectFirst("td:nth-child(1) a")?.text()
-                artist = selectFirst("td:nth-child(2) a")?.text()
-                genre = selectFirst("td:nth-child(3)")?.text()
-            }
-            description = infoElement.selectFirst("div.well")?.ownText()?.trim()
-            thumbnail_url = document.selectFirst("img.thumbnail")?.absUrl("src")
-
-            status =
-                infoElement
-                    .selectFirst("tr:contains(Çeviri Durumu) + tr > td:nth-child(2)")
-                    .let { parseStatus(it?.text()) }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val infoElement = document.selectFirst("div#tab1")!!
+        infoElement.selectFirst("table + table tr + tr")?.run {
+            author = selectFirst("td:nth-child(1) a")?.text()
+            artist = selectFirst("td:nth-child(2) a")?.text()
+            genre = selectFirst("td:nth-child(3)")?.text()
         }
+        description = infoElement.selectFirst("div.well")?.ownText()?.trim()
+        thumbnail_url = document.selectFirst("img.thumbnail")?.absUrl("src")
+
+        status =
+            infoElement
+                .selectFirst("tr:contains(Çeviri Durumu) + tr > td:nth-child(2)")
+                .let { parseStatus(it?.text()) }
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListSelector() = "tr.table-bordered"

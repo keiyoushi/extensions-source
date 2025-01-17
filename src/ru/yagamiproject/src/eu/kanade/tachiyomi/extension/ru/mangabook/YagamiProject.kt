@@ -26,11 +26,10 @@ class YagamiProject : ParsedHttpSource() {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" +
             " (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36"
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", userAgent)
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", userAgent)
+        .add("Referer", baseUrl)
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list-new/$page", headers)
@@ -39,20 +38,19 @@ class YagamiProject : ParsedHttpSource() {
 
     override fun popularMangaSelector() = ".list .group"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select(".title a").first()!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                val baseTitle = it.attr("title")
-                title =
-                    if (baseTitle.isNullOrEmpty()) {
-                        it.text()
-                    } else {
-                        baseTitle.split(" / ").min()
-                    }
-            }
-            thumbnail_url = element.select(".cover_mini > img").attr("src").replace("thumb_", "")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select(".title a").first()!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            val baseTitle = it.attr("title")
+            title =
+                if (baseTitle.isNullOrEmpty()) {
+                    it.text()
+                } else {
+                    baseTitle.split(" / ").min()
+                }
         }
+        thumbnail_url = element.select(".cover_mini > img").attr("src").replace("thumb_", "")
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest/$page", headers)
@@ -177,65 +175,62 @@ class YagamiProject : ParsedHttpSource() {
     // Chapters
     override fun chapterListSelector(): String = ".list .element"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val chapter = element.select(".title a")
-            val chapterScanDate = element.select(".meta_r")
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val chapter = element.select(".title a")
+        val chapterScanDate = element.select(".meta_r")
 
-            name =
-                if (chapter.attr("title").isNullOrBlank()) {
-                    chapter.text()
-                } else {
-                    chapter.attr("title")
-                }
+        name =
+            if (chapter.attr("title").isNullOrBlank()) {
+                chapter.text()
+            } else {
+                chapter.attr("title")
+            }
 
-            chapter_number =
-                name
-                    .substringBefore(":")
-                    .substringAfterLast(" ")
-                    .substringAfterLast("№")
-                    .substringAfterLast("#")
+        chapter_number =
+            name
+                .substringBefore(":")
+                .substringAfterLast(" ")
+                .substringAfterLast("№")
+                .substringAfterLast("#")
+                .toFloatOrNull()
+                ?: chapter
+                    .attr("href")
+                    .substringBeforeLast("/")
+                    .substringAfterLast("/")
                     .toFloatOrNull()
-                    ?: chapter
-                        .attr("href")
-                        .substringBeforeLast("/")
-                        .substringAfterLast("/")
-                        .toFloatOrNull()
-                    ?: -1f
+                ?: -1f
 
-            setUrlWithoutDomain(chapter.attr("href"))
-            date_upload = parseDate(chapterScanDate.text().substringAfter(", "))
-            scanlator =
-                if (chapterScanDate.select("a").isNotEmpty()) {
-                    chapterScanDate.select("a").joinToString(" / ") { it.text() }
-                } else {
-                    null
-                }
-        }
+        setUrlWithoutDomain(chapter.attr("href"))
+        date_upload = parseDate(chapterScanDate.text().substringAfter(", "))
+        scanlator =
+            if (chapterScanDate.select("a").isNotEmpty()) {
+                chapterScanDate.select("a").joinToString(" / ") { it.text() }
+            } else {
+                null
+            }
+    }
 
-    private fun parseDate(date: String): Long =
-        when (date) {
-            "Сегодня" -> System.currentTimeMillis()
-            "Вчера" -> System.currentTimeMillis() - 24 * 60 * 60 * 1000
-            else -> SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(date)?.time ?: 0
-        }
+    private fun parseDate(date: String): Long = when (date) {
+        "Сегодня" -> System.currentTimeMillis()
+        "Вчера" -> System.currentTimeMillis() - 24 * 60 * 60 * 1000
+        else -> SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(date)?.time ?: 0
+    }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> =
-        mutableListOf<Page>().apply {
-            val defaultsel = document.select(".dropdown li a")
-            val webtoonsel = document.select(".web_pictures img.web_img")
+    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
+        val defaultsel = document.select(".dropdown li a")
+        val webtoonsel = document.select(".web_pictures img.web_img")
 
-            if (webtoonsel.isNullOrEmpty()) {
-                defaultsel.forEach {
-                    add(Page(it.text().substringAfter("Стр. ").toInt(), it.attr("href")))
-                }
-            } else {
-                webtoonsel.mapIndexed { i, img ->
-                    add(Page(i, "", img.attr("src")))
-                }
+        if (webtoonsel.isNullOrEmpty()) {
+            defaultsel.forEach {
+                add(Page(it.text().substringAfter("Стр. ").toInt(), it.attr("href")))
+            }
+        } else {
+            webtoonsel.mapIndexed { i, img ->
+                add(Page(i, "", img.attr("src")))
             }
         }
+    }
 
     override fun imageUrlParse(document: Document): String {
         val defaultimg = document.select("#page img").attr("src")
@@ -247,12 +242,11 @@ class YagamiProject : ParsedHttpSource() {
     }
 
     // Filters
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("ПРИМЕЧАНИЕ: Фильтры исключают другдруга!"),
-            CategoryList(categoriesName),
-            FormatList(formasName),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("ПРИМЕЧАНИЕ: Фильтры исключают другдруга!"),
+        CategoryList(categoriesName),
+        FormatList(formasName),
+    )
 
     private class FormatList(
         formas: Array<String>,
@@ -269,15 +263,14 @@ class YagamiProject : ParsedHttpSource() {
                 it.name
             }.toTypedArray()
 
-    private fun getFormatList() =
-        listOf(
-            FormUnit("Все", "not"),
-            FormUnit("Манга", "manga"),
-            FormUnit("Манхва", "manhva"),
-            FormUnit("Веб Манхва", "webtoon"),
-            FormUnit("Маньхуа", "manhua"),
-            FormUnit("Артбуки", "artbooks"),
-        )
+    private fun getFormatList() = listOf(
+        FormUnit("Все", "not"),
+        FormUnit("Манга", "manga"),
+        FormUnit("Манхва", "manhva"),
+        FormUnit("Веб Манхва", "webtoon"),
+        FormUnit("Маньхуа", "manhua"),
+        FormUnit("Артбуки", "artbooks"),
+    )
 
     private class CategoryList(
         categories: Array<String>,
@@ -293,38 +286,37 @@ class YagamiProject : ParsedHttpSource() {
                 it.name
             }.toTypedArray()
 
-    private fun getCategoryList() =
-        listOf(
-            CatUnit("Без категории"),
-            CatUnit("боевые искусства"),
-            CatUnit("гарем"),
-            CatUnit("гендерная интрига"),
-            CatUnit("дзёсэй"),
-            CatUnit("для взрослых"),
-            CatUnit("драма"),
-            CatUnit("зрелое"),
-            CatUnit("исторический"),
-            CatUnit("комедия"),
-            CatUnit("меха"),
-            CatUnit("мистика"),
-            CatUnit("научная фантастика"),
-            CatUnit("непристойности"),
-            CatUnit("постапокалиптика"),
-            CatUnit("повседневность"),
-            CatUnit("приключения"),
-            CatUnit("психология"),
-            CatUnit("романтика"),
-            CatUnit("сверхъестественное"),
-            CatUnit("сёдзё"),
-            CatUnit("сёнэн"),
-            CatUnit("спорт"),
-            CatUnit("сэйнэн"),
-            CatUnit("трагедия"),
-            CatUnit("ужасы"),
-            CatUnit("фэнтези"),
-            CatUnit("школьная жизнь"),
-            CatUnit("экшн"),
-            CatUnit("эротика"),
-            CatUnit("этти"),
-        )
+    private fun getCategoryList() = listOf(
+        CatUnit("Без категории"),
+        CatUnit("боевые искусства"),
+        CatUnit("гарем"),
+        CatUnit("гендерная интрига"),
+        CatUnit("дзёсэй"),
+        CatUnit("для взрослых"),
+        CatUnit("драма"),
+        CatUnit("зрелое"),
+        CatUnit("исторический"),
+        CatUnit("комедия"),
+        CatUnit("меха"),
+        CatUnit("мистика"),
+        CatUnit("научная фантастика"),
+        CatUnit("непристойности"),
+        CatUnit("постапокалиптика"),
+        CatUnit("повседневность"),
+        CatUnit("приключения"),
+        CatUnit("психология"),
+        CatUnit("романтика"),
+        CatUnit("сверхъестественное"),
+        CatUnit("сёдзё"),
+        CatUnit("сёнэн"),
+        CatUnit("спорт"),
+        CatUnit("сэйнэн"),
+        CatUnit("трагедия"),
+        CatUnit("ужасы"),
+        CatUnit("фэнтези"),
+        CatUnit("школьная жизнь"),
+        CatUnit("экшн"),
+        CatUnit("эротика"),
+        CatUnit("этти"),
+    )
 }

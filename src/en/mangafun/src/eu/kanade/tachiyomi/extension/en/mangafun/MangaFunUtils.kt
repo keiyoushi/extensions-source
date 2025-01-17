@@ -15,21 +15,19 @@ object MangaFunUtils {
 
     private fun String.slugify(): String = this.replace(notAlnumRegex, "").toKebabCase()
 
-    private fun publishedStatusToStatus(ps: Int) =
-        when (ps) {
-            0 -> SManga.ONGOING
-            1 -> SManga.COMPLETED
-            2 -> SManga.ON_HIATUS
-            3 -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun publishedStatusToStatus(ps: Int) = when (ps) {
+        0 -> SManga.ONGOING
+        1 -> SManga.COMPLETED
+        2 -> SManga.ON_HIATUS
+        3 -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
-    fun convertShortTime(value: Int): Int =
-        if (value < MangaFun.MANGAFUN_EPOCH) {
-            value + MangaFun.MANGAFUN_EPOCH
-        } else {
-            value
-        }
+    fun convertShortTime(value: Int): Int = if (value < MangaFun.MANGAFUN_EPOCH) {
+        value + MangaFun.MANGAFUN_EPOCH
+    } else {
+        value
+    }
 
     fun getImageUrlFromHash(hash: String?): String? {
         if (hash == null) {
@@ -39,36 +37,34 @@ object MangaFunUtils {
         return "$CDN_URL/${hash.substring(0, 2)}/${hash.substring(2, 5)}/${hash.substring(5)}.webp"
     }
 
-    fun MinifiedMangaDto.toSManga() =
-        SManga.create().apply {
-            url = "/title/$id-${name.slugify()}"
-            title = name
-            author = this@toSManga.author.joinToString()
-            thumbnail_url = getImageUrlFromHash(thumbnailUrl)
-            status = publishedStatusToStatus(publishedStatus)
-            genre =
-                buildList {
-                    titleTypeMap[titleType]?.let { add(it) }
-                    addAll(genres.mapNotNull { genresMap[it] })
-                }.joinToString()
-        }
+    fun MinifiedMangaDto.toSManga() = SManga.create().apply {
+        url = "/title/$id-${name.slugify()}"
+        title = name
+        author = this@toSManga.author.joinToString()
+        thumbnail_url = getImageUrlFromHash(thumbnailUrl)
+        status = publishedStatusToStatus(publishedStatus)
+        genre =
+            buildList {
+                titleTypeMap[titleType]?.let { add(it) }
+                addAll(genres.mapNotNull { genresMap[it] })
+            }.joinToString()
+    }
 
-    fun MangaDto.toSManga() =
-        SManga.create().apply {
-            url = "/title/$id-${name.slugify()}"
-            title = name
-            author = this@toSManga.author.filterNotNull().joinToString()
-            artist = this@toSManga.artist.filterNotNull().joinToString()
-            description = this@toSManga.description
-            genre = genres.mapNotNull { genresMap[it.id] }.joinToString()
-            status = publishedStatusToStatus(publishedStatus)
-            thumbnail_url = thumbnailURL
-            genre =
-                buildList {
-                    titleTypeMap[titleType]?.let { add(it) }
-                    addAll(genres.mapNotNull { genresMap[it.id] })
-                }.joinToString()
-        }
+    fun MangaDto.toSManga() = SManga.create().apply {
+        url = "/title/$id-${name.slugify()}"
+        title = name
+        author = this@toSManga.author.filterNotNull().joinToString()
+        artist = this@toSManga.artist.filterNotNull().joinToString()
+        description = this@toSManga.description
+        genre = genres.mapNotNull { genresMap[it.id] }.joinToString()
+        status = publishedStatusToStatus(publishedStatus)
+        thumbnail_url = thumbnailURL
+        genre =
+            buildList {
+                titleTypeMap[titleType]?.let { add(it) }
+                addAll(genres.mapNotNull { genresMap[it.id] })
+            }.joinToString()
+    }
 
     fun ChapterDto.toSChapter(
         mangaId: Int,

@@ -21,15 +21,14 @@ class DarkScience : HttpSource() {
     override val lang = "en"
     override val supportsLatest = false
 
-    private fun initTheManga(manga: SManga): SManga =
-        manga.apply {
-            url = "/category/darkscience/"
-            thumbnail_url = "https://dresdencodak.com/wp-content/uploads/2019/03/DC_CastIcon_Kimiko.png"
-            title = name
-            author = "Sen (A. Senna Diaz)"
-            artist = "Sen (A. Senna Diaz)"
-            description =
-                """Scientist Kimiko Ross has a problem:
+    private fun initTheManga(manga: SManga): SManga = manga.apply {
+        url = "/category/darkscience/"
+        thumbnail_url = "https://dresdencodak.com/wp-content/uploads/2019/03/DC_CastIcon_Kimiko.png"
+        title = name
+        author = "Sen (A. Senna Diaz)"
+        artist = "Sen (A. Senna Diaz)"
+        description =
+            """Scientist Kimiko Ross has a problem:
         | her money’s gone and a bank exploded her house. With no place
         | else to go, she travels to Nephilopolis, the city of giants –
         | built from the ruins of an ancient war and a fading memory of
@@ -37,19 +36,18 @@ class DarkScience : HttpSource() {
         | bureaucratic behemoth with a little “help” from her “friends.”
         | And what exactly is Dark Science anyway?\nSupport the comic on
         | Patreon: https://www.patreon.com/dresdencodak
-                """.trimMargin()
-            genre = "Science Fiction, Mystery, LGBT+"
-            status = SManga.ONGOING
-            initialized = true
-        }
+            """.trimMargin()
+        genre = "Science Fiction, Mystery, LGBT+"
+        status = SManga.ONGOING
+        initialized = true
+    }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(
-            MangasPage(
-                listOf(initTheManga(SManga.create())),
-                false,
-            ),
-        )
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
+        MangasPage(
+            listOf(initTheManga(SManga.create())),
+            false,
+        ),
+    )
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(initTheManga(manga))
 
@@ -107,28 +105,26 @@ class DarkScience : HttpSource() {
         return Observable.just(chapters)
     }
 
-    private fun getDate(url: String): Long =
-        try {
-            dateFormat
-                .parse(
-                    chapterDateRegex.find(url)!!.groupValues[1],
-                )!!
-                .time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun getDate(url: String): Long = try {
+        dateFormat
+            .parse(
+                chapterDateRegex.find(url)!!.groupValues[1],
+            )!!
+            .time
+    } catch (_: Exception) {
+        0L
+    }
 
-    override fun pageListParse(response: Response): List<Page> =
-        listOf(
-            Page(
-                0,
-                imageUrl =
-                    response
-                        .asJsoup()
-                        .selectFirst("article.post img.aligncenter")!!
-                        .attr("src"),
-            ),
-        )
+    override fun pageListParse(response: Response): List<Page> = listOf(
+        Page(
+            0,
+            imageUrl =
+                response
+                    .asJsoup()
+                    .selectFirst("article.post img.aligncenter")!!
+                    .attr("src"),
+        ),
+    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

@@ -18,16 +18,14 @@ class SushiScanFR :
     override val seriesAuthorSelector = ".imptdt:contains(Auteur) i, .fmed b:contains(Auteur)+span"
     override val seriesStatusSelector = ".imptdt:contains(Statut) i"
 
-    override fun String?.parseStatus(): Int =
-        when {
-            this == null -> SManga.UNKNOWN
-            this.contains("En Cours", ignoreCase = true) -> SManga.ONGOING
-            this.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    override fun String?.parseStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
+        this.contains("En Cours", ignoreCase = true) -> SManga.ONGOING
+        this.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            status = document.select(seriesStatusSelector).text().parseStatus()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        status = document.select(seriesStatusSelector).text().parseStatus()
+    }
 }

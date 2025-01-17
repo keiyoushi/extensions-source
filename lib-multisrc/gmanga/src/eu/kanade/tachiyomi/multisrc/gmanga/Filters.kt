@@ -30,13 +30,12 @@ private val DATE_FITLER_FORMAT =
         isLenient = false
     }
 
-private fun SimpleDateFormat.isValid(date: String): Boolean =
-    try {
-        parse(date)
-        true
-    } catch (e: ParseException) {
-        false
-    }
+private fun SimpleDateFormat.isValid(date: String): Boolean = try {
+    parse(date)
+    true
+} catch (e: ParseException) {
+    false
+}
 
 class DateFilter(
     val id: String,

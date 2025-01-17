@@ -77,10 +77,9 @@ open class AnimeH(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val payload =
@@ -102,16 +101,15 @@ open class AnimeH(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(SEARCH_PREFIX)) {
-            val mangaId = query.substringAfter(SEARCH_PREFIX)
-            client
-                .newCall(mangaFromIDRequest(mangaId))
-                .asObservableSuccess()
-                .map(::searchMangaFromIDParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(SEARCH_PREFIX)) {
+        val mangaId = query.substringAfter(SEARCH_PREFIX)
+        client
+            .newCall(mangaFromIDRequest(mangaId))
+            .asObservableSuccess()
+            .map(::searchMangaFromIDParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -271,15 +269,13 @@ open class AnimeH(
 
     private inline fun <reified T> List<*>.firstInstanceOrNull(): T? = filterIsInstance<T>().firstOrNull()
 
-    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-        json
-            .encodeToString(this)
-            .toRequestBody(JSON_MEDIA_TYPE)
+    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody = json
+        .encodeToString(this)
+        .toRequestBody(JSON_MEDIA_TYPE)
 
-    private fun String?.parseDate(): Long =
-        runCatching {
-            dateFormat.parse(this!!.trim())!!.time
-        }.getOrDefault(0L)
+    private fun String?.parseDate(): Long = runCatching {
+        dateFormat.parse(this!!.trim())!!.time
+    }.getOrDefault(0L)
 
     private inline fun <reified T : BrowseResponse> browseMangaParse(response: Response): MangasPage {
         val res = response.parseAs<Data<T>>()

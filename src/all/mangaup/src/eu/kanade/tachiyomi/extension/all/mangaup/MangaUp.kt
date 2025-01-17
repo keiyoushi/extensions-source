@@ -28,12 +28,11 @@ class MangaUp(
 
     override val supportsLatest = false
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Origin", baseUrl)
-            .add("Referer", baseUrl)
-            .add("User-Agent", USER_AGENT)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Origin", baseUrl)
+        .add("Referer", baseUrl)
+        .add("User-Agent", USER_AGENT)
 
     override val client: OkHttpClient =
         network.client
@@ -155,22 +154,20 @@ class MangaUp(
         return GET("$API_URL/manga/viewer?chapter_id=$chapterId&format=json", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response
-            .parseAs<MangaUpViewer>()
-            .pages
-            .mapIndexed { i, page -> Page(i, "", page.imageUrl) }
+    override fun pageListParse(response: Response): List<Page> = response
+        .parseAs<MangaUpViewer>()
+        .pages
+        .mapIndexed { i, page -> Page(i, "", page.imageUrl) }
 
     override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
 
     override fun imageUrlParse(response: Response): String = ""
 
     // Fetch all titles to get newer thumbnail URLs in the interceptor.
-    private fun fetchAllTitles() =
-        runCatching {
-            val popularResponse = client.newCall(popularMangaRequest(1)).execute()
-            titleList = popularResponse.parseAs<MangaUpSearch>().titles
-        }
+    private fun fetchAllTitles() = runCatching {
+        val popularResponse = client.newCall(popularMangaRequest(1)).execute()
+        titleList = popularResponse.parseAs<MangaUpSearch>().titles
+    }
 
     private fun thumbnailIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -198,10 +195,9 @@ class MangaUp(
         return response
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(body.string())
+    }
 
     companion object {
         private const val API_URL = "https://global-web-api.manga-up.com/api"

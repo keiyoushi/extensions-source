@@ -14,20 +14,19 @@ class MangaDexFilters {
         preferences: SharedPreferences,
         dexLang: String,
         intl: Intl,
-    ): FilterList =
-        FilterList(
-            HasAvailableChaptersFilter(intl),
-            OriginalLanguageList(intl, getOriginalLanguage(preferences, dexLang, intl)),
-            ContentRatingList(intl, getContentRating(preferences, dexLang, intl)),
-            DemographicList(intl, getDemographics(intl)),
-            StatusList(intl, getStatus(intl)),
-            SortFilter(intl, getSortables(intl)),
-            TagsFilter(intl, getTagFilters(intl)),
-            TagList(intl["content"], getContents(intl)),
-            TagList(intl["format"], getFormats(intl)),
-            TagList(intl["genre"], getGenres(intl)),
-            TagList(intl["theme"], getThemes(intl)),
-        )
+    ): FilterList = FilterList(
+        HasAvailableChaptersFilter(intl),
+        OriginalLanguageList(intl, getOriginalLanguage(preferences, dexLang, intl)),
+        ContentRatingList(intl, getContentRating(preferences, dexLang, intl)),
+        DemographicList(intl, getDemographics(intl)),
+        StatusList(intl, getStatus(intl)),
+        SortFilter(intl, getSortables(intl)),
+        TagsFilter(intl, getTagFilters(intl)),
+        TagList(intl["content"], getContents(intl)),
+        TagList(intl["format"], getFormats(intl)),
+        TagList(intl["genre"], getGenres(intl)),
+        TagList(intl["theme"], getThemes(intl)),
+    )
 
     private interface UrlQueryFilter {
         fun addQueryParameter(
@@ -191,14 +190,13 @@ class MangaDexFilters {
         }
     }
 
-    private fun getDemographics(intl: Intl) =
-        listOf(
-            Demographic(intl["publication_demographic_none"], PublicationDemographicDto.NONE.value),
-            Demographic(intl["publication_demographic_shounen"], PublicationDemographicDto.SHOUNEN.value),
-            Demographic(intl["publication_demographic_shoujo"], PublicationDemographicDto.SHOUJO.value),
-            Demographic(intl["publication_demographic_seinen"], PublicationDemographicDto.SEINEN.value),
-            Demographic(intl["publication_demographic_josei"], PublicationDemographicDto.JOSEI.value),
-        )
+    private fun getDemographics(intl: Intl) = listOf(
+        Demographic(intl["publication_demographic_none"], PublicationDemographicDto.NONE.value),
+        Demographic(intl["publication_demographic_shounen"], PublicationDemographicDto.SHOUNEN.value),
+        Demographic(intl["publication_demographic_shoujo"], PublicationDemographicDto.SHOUJO.value),
+        Demographic(intl["publication_demographic_seinen"], PublicationDemographicDto.SEINEN.value),
+        Demographic(intl["publication_demographic_josei"], PublicationDemographicDto.JOSEI.value),
+    )
 
     private class Status(
         name: String,
@@ -220,13 +218,12 @@ class MangaDexFilters {
         }
     }
 
-    private fun getStatus(intl: Intl) =
-        listOf(
-            Status(intl["status_ongoing"], StatusDto.ONGOING.value),
-            Status(intl["status_completed"], StatusDto.COMPLETED.value),
-            Status(intl["status_hiatus"], StatusDto.HIATUS.value),
-            Status(intl["status_cancelled"], StatusDto.CANCELLED.value),
-        )
+    private fun getStatus(intl: Intl) = listOf(
+        Status(intl["status_ongoing"], StatusDto.ONGOING.value),
+        Status(intl["status_completed"], StatusDto.COMPLETED.value),
+        Status(intl["status_hiatus"], StatusDto.HIATUS.value),
+        Status(intl["status_cancelled"], StatusDto.CANCELLED.value),
+    )
 
     data class Sortable(
         val title: String,
@@ -235,17 +232,16 @@ class MangaDexFilters {
         override fun toString(): String = title
     }
 
-    private fun getSortables(intl: Intl) =
-        arrayOf(
-            Sortable(intl["sort_alphabetic"], "title"),
-            Sortable(intl["sort_chapter_uploaded_at"], "latestUploadedChapter"),
-            Sortable(intl["sort_number_of_follows"], "followedCount"),
-            Sortable(intl["sort_content_created_at"], "createdAt"),
-            Sortable(intl["sort_content_info_updated_at"], "updatedAt"),
-            Sortable(intl["sort_relevance"], "relevance"),
-            Sortable(intl["sort_year"], "year"),
-            Sortable(intl["sort_rating"], "rating"),
-        )
+    private fun getSortables(intl: Intl) = arrayOf(
+        Sortable(intl["sort_alphabetic"], "title"),
+        Sortable(intl["sort_chapter_uploaded_at"], "latestUploadedChapter"),
+        Sortable(intl["sort_number_of_follows"], "followedCount"),
+        Sortable(intl["sort_content_created_at"], "createdAt"),
+        Sortable(intl["sort_content_info_updated_at"], "updatedAt"),
+        Sortable(intl["sort_relevance"], "relevance"),
+        Sortable(intl["sort_year"], "year"),
+        Sortable(intl["sort_rating"], "rating"),
+    )
 
     class SortFilter(
         intl: Intl,
@@ -411,11 +407,10 @@ class MangaDexFilters {
         override fun toString(): String = title
     }
 
-    private fun getTagModes(intl: Intl) =
-        arrayOf(
-            TagMode(intl["mode_and"], "AND"),
-            TagMode(intl["mode_or"], "OR"),
-        )
+    private fun getTagModes(intl: Intl) = arrayOf(
+        TagMode(intl["mode_and"], "AND"),
+        TagMode(intl["mode_or"], "OR"),
+    )
 
     private class TagInclusionMode(
         intl: Intl,
@@ -458,11 +453,10 @@ class MangaDexFilters {
         }
     }
 
-    private fun getTagFilters(intl: Intl): FilterList =
-        FilterList(
-            TagInclusionMode(intl, getTagModes(intl)),
-            TagExclusionMode(intl, getTagModes(intl)),
-        )
+    private fun getTagFilters(intl: Intl): FilterList = FilterList(
+        TagInclusionMode(intl, getTagModes(intl)),
+        TagExclusionMode(intl, getTagModes(intl)),
+    )
 
     internal fun addFiltersToUrl(
         url: HttpUrl.Builder,
@@ -476,12 +470,11 @@ class MangaDexFilters {
         return url.build()
     }
 
-    private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> =
-        apply {
-            if (intl.chosenLanguage == MangaDexIntl.ENGLISH) {
-                return this
-            }
-
-            return sortedWith(compareBy(intl.collator, Tag::name))
+    private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> = apply {
+        if (intl.chosenLanguage == MangaDexIntl.ENGLISH) {
+            return this
         }
+
+        return sortedWith(compareBy(intl.collator, Tag::name))
+    }
 }

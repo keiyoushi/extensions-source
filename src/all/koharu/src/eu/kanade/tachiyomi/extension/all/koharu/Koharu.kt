@@ -91,12 +91,11 @@ class Koharu(
             .build()
     }
 
-    private fun getManga(book: Entry) =
-        SManga.create().apply {
-            setUrlWithoutDomain("${book.id}/${book.public_key}")
-            title = if (remadd()) book.title.shortenTitle() else book.title
-            thumbnail_url = book.thumbnail.path
-        }
+    private fun getManga(book: Entry) = SManga.create().apply {
+        setUrlWithoutDomain("${book.id}/${book.public_key}")
+        title = if (remadd()) book.title.shortenTitle() else book.title
+        thumbnail_url = book.thumbnail.path
+    }
 
     private fun getImagesByMangaEntry(entry: MangaEntry): Pair<ImagesInfo, String> {
         val data = entry.data
@@ -107,11 +106,10 @@ class Koharu(
             alt2: DataKey?,
             alt3: DataKey?,
             alt4: DataKey?,
-        ): Pair<Int?, String?> =
-            Pair(
-                ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
-                ori?.public_key ?: alt1?.public_key ?: alt2?.public_key ?: alt3?.public_key ?: alt4?.public_key,
-            )
+        ): Pair<Int?, String?> = Pair(
+            ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
+            ori?.public_key ?: alt1?.public_key ?: alt2?.public_key ?: alt3?.public_key ?: alt4?.public_key,
+        )
         val (id, public_key) =
             when (quality()) {
                 "1600" -> getIPK(data.`1600`, data.`1280`, data.`0`, data.`980`, data.`780`)
@@ -148,21 +146,19 @@ class Koharu(
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET(
-            "$apiBooksUrl?page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "",
-            lazyHeaders,
-        )
+    override fun latestUpdatesRequest(page: Int) = GET(
+        "$apiBooksUrl?page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "",
+        lazyHeaders,
+    )
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) =
-        GET(
-            "$apiBooksUrl?sort=8&page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "",
-            lazyHeaders,
-        )
+    override fun popularMangaRequest(page: Int) = GET(
+        "$apiBooksUrl?sort=8&page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "",
+        lazyHeaders,
+    )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<Books>()
@@ -178,15 +174,14 @@ class Koharu(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
-                val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
-                val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
-                Observable.just(searchMangaParse2(response))
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
+            val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
+            val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
+            Observable.just(searchMangaParse2(response))
         }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -259,99 +254,96 @@ class Koharu(
 
     private val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
 
-    private fun MangaEntry.toSManga() =
-        SManga.create().apply {
-            val artists = mutableListOf<String>()
-            val circles = mutableListOf<String>()
-            val parodies = mutableListOf<String>()
-            val magazines = mutableListOf<String>()
-            val characters = mutableListOf<String>()
-            val cosplayers = mutableListOf<String>()
-            val females = mutableListOf<String>()
-            val males = mutableListOf<String>()
-            val mixed = mutableListOf<String>()
-            val other = mutableListOf<String>()
-            val uploaders = mutableListOf<String>()
-            val tags = mutableListOf<String>()
-            for (tag in this@toSManga.tags) {
-                when (tag.namespace) {
-                    1 -> artists.add(tag.name)
-                    2 -> circles.add(tag.name)
-                    3 -> parodies.add(tag.name)
-                    4 -> magazines.add(tag.name)
-                    5 -> characters.add(tag.name)
-                    6 -> cosplayers.add(tag.name)
-                    7 -> tag.name.takeIf { it != "anonymous" }?.let { uploaders.add(it) }
-                    8 -> males.add(tag.name + " ♂")
-                    9 -> females.add(tag.name + " ♀")
-                    10 -> mixed.add(tag.name)
-                    12 -> other.add(tag.name)
-                    else -> tags.add(tag.name)
-                }
-            }
-
-            var appended = false
-
-            fun List<String>.joinAndCapitalizeEach(): String? =
-                this.emptyToNull()?.joinToString { it.capitalizeEach() }?.apply {
-                    appended =
-                        true
-                }
-            title = if (remadd()) this@toSManga.title.shortenTitle() else this@toSManga.title
-
-            author = (circles.emptyToNull() ?: artists).joinToString { it.capitalizeEach() }
-            artist = artists.joinToString { it.capitalizeEach() }
-            genre = (tags + males + females + mixed + other).joinToString { it.capitalizeEach() }
-            description =
-                buildString {
-                    circles.joinAndCapitalizeEach()?.let {
-                        append("Circles: ", it, "\n")
-                    }
-                    uploaders.joinAndCapitalizeEach()?.let {
-                        append("Uploaders: ", it, "\n")
-                    }
-                    magazines.joinAndCapitalizeEach()?.let {
-                        append("Magazines: ", it, "\n")
-                    }
-                    cosplayers.joinAndCapitalizeEach()?.let {
-                        append("Cosplayers: ", it, "\n")
-                    }
-                    parodies.joinAndCapitalizeEach()?.let {
-                        append("Parodies: ", it, "\n")
-                    }
-                    characters.joinAndCapitalizeEach()?.let {
-                        append("Characters: ", it, "\n")
-                    }
-
-                    if (appended) append("\n")
-
-                    try {
-                        append("Posted: ", dateReformat.format(created_at), "\n")
-                    } catch (_: Exception) {
-                    }
-
-                    val dataKey =
-                        when (quality()) {
-                            "1600" -> data.`1600` ?: data.`1280` ?: data.`0`
-                            "1280" -> data.`1280` ?: data.`1600` ?: data.`0`
-                            "980" -> data.`980` ?: data.`1280` ?: data.`0`
-                            "780" -> data.`780` ?: data.`980` ?: data.`0`
-                            else -> data.`0`
-                        }
-                    append("Size: ", dataKey.readableSize(), "\n\n")
-                    append("Pages: ", thumbnails.entries.size, "\n\n")
-                }
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            initialized = true
-        }
-
-    private fun String.capitalizeEach() =
-        this.split(" ").joinToString(" ") { s ->
-            s.replaceFirstChar { sr ->
-                if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
+    private fun MangaEntry.toSManga() = SManga.create().apply {
+        val artists = mutableListOf<String>()
+        val circles = mutableListOf<String>()
+        val parodies = mutableListOf<String>()
+        val magazines = mutableListOf<String>()
+        val characters = mutableListOf<String>()
+        val cosplayers = mutableListOf<String>()
+        val females = mutableListOf<String>()
+        val males = mutableListOf<String>()
+        val mixed = mutableListOf<String>()
+        val other = mutableListOf<String>()
+        val uploaders = mutableListOf<String>()
+        val tags = mutableListOf<String>()
+        for (tag in this@toSManga.tags) {
+            when (tag.namespace) {
+                1 -> artists.add(tag.name)
+                2 -> circles.add(tag.name)
+                3 -> parodies.add(tag.name)
+                4 -> magazines.add(tag.name)
+                5 -> characters.add(tag.name)
+                6 -> cosplayers.add(tag.name)
+                7 -> tag.name.takeIf { it != "anonymous" }?.let { uploaders.add(it) }
+                8 -> males.add(tag.name + " ♂")
+                9 -> females.add(tag.name + " ♀")
+                10 -> mixed.add(tag.name)
+                12 -> other.add(tag.name)
+                else -> tags.add(tag.name)
             }
         }
+
+        var appended = false
+
+        fun List<String>.joinAndCapitalizeEach(): String? = this.emptyToNull()?.joinToString { it.capitalizeEach() }?.apply {
+            appended =
+                true
+        }
+        title = if (remadd()) this@toSManga.title.shortenTitle() else this@toSManga.title
+
+        author = (circles.emptyToNull() ?: artists).joinToString { it.capitalizeEach() }
+        artist = artists.joinToString { it.capitalizeEach() }
+        genre = (tags + males + females + mixed + other).joinToString { it.capitalizeEach() }
+        description =
+            buildString {
+                circles.joinAndCapitalizeEach()?.let {
+                    append("Circles: ", it, "\n")
+                }
+                uploaders.joinAndCapitalizeEach()?.let {
+                    append("Uploaders: ", it, "\n")
+                }
+                magazines.joinAndCapitalizeEach()?.let {
+                    append("Magazines: ", it, "\n")
+                }
+                cosplayers.joinAndCapitalizeEach()?.let {
+                    append("Cosplayers: ", it, "\n")
+                }
+                parodies.joinAndCapitalizeEach()?.let {
+                    append("Parodies: ", it, "\n")
+                }
+                characters.joinAndCapitalizeEach()?.let {
+                    append("Characters: ", it, "\n")
+                }
+
+                if (appended) append("\n")
+
+                try {
+                    append("Posted: ", dateReformat.format(created_at), "\n")
+                } catch (_: Exception) {
+                }
+
+                val dataKey =
+                    when (quality()) {
+                        "1600" -> data.`1600` ?: data.`1280` ?: data.`0`
+                        "1280" -> data.`1280` ?: data.`1600` ?: data.`0`
+                        "980" -> data.`980` ?: data.`1280` ?: data.`0`
+                        "780" -> data.`780` ?: data.`980` ?: data.`0`
+                        else -> data.`0`
+                    }
+                append("Size: ", dataKey.readableSize(), "\n\n")
+                append("Pages: ", thumbnails.entries.size, "\n\n")
+            }
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        initialized = true
+    }
+
+    private fun String.capitalizeEach() = this.split(" ").joinToString(" ") { s ->
+        s.replaceFirstChar { sr ->
+            if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
+        }
+    }
 
     private fun <T> Collection<T>.emptyToNull(): Collection<T>? = this.ifEmpty { null }
 

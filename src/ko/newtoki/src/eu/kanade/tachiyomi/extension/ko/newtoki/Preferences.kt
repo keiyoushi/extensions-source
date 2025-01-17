@@ -17,34 +17,33 @@ const val NEWTOKI_PREFIX = "newtoki"
 val manaTokiPreferences = getSharedPreferences(MANATOKI_ID).migrate()
 val newTokiPreferences = getSharedPreferences(NEWTOKI_ID).migrate()
 
-fun getPreferencesInternal(context: Context) =
-    arrayOf(
-        EditTextPreference(context).apply {
-            key = DOMAIN_NUMBER_PREF
-            title = domainNumberTitle()
-            summary = domainNumberSummary()
-            setOnPreferenceChangeListener { _, newValue ->
-                val value = newValue as String
-                if (value.isEmpty() || value != value.trim()) {
-                    false
-                } else {
-                    domainNumber = value
-                    true
-                }
+fun getPreferencesInternal(context: Context) = arrayOf(
+    EditTextPreference(context).apply {
+        key = DOMAIN_NUMBER_PREF
+        title = domainNumberTitle()
+        summary = domainNumberSummary()
+        setOnPreferenceChangeListener { _, newValue ->
+            val value = newValue as String
+            if (value.isEmpty() || value != value.trim()) {
+                false
+            } else {
+                domainNumber = value
+                true
             }
-        },
-        ListPreference(context).apply {
-            key = RATE_LIMIT_PERIOD_PREF
-            title = rateLimitTitle()
-            summary = "%s\n" + requiresAppRestart()
+        }
+    },
+    ListPreference(context).apply {
+        key = RATE_LIMIT_PERIOD_PREF
+        title = rateLimitTitle()
+        summary = "%s\n" + requiresAppRestart()
 
-            val values = Array(RATE_LIMIT_PERIOD_MAX) { (it + 1).toString() }
-            entries = Array(RATE_LIMIT_PERIOD_MAX) { rateLimitEntry(values[it]) }
-            entryValues = values
+        val values = Array(RATE_LIMIT_PERIOD_MAX) { (it + 1).toString() }
+        entries = Array(RATE_LIMIT_PERIOD_MAX) { rateLimitEntry(values[it]) }
+        entryValues = values
 
-            setDefaultValue(RATE_LIMIT_PERIOD_DEFAULT)
-        },
-    )
+        setDefaultValue(RATE_LIMIT_PERIOD_DEFAULT)
+    },
+)
 
 var SharedPreferences.domainNumber: String
     get() = getString(DOMAIN_NUMBER_PREF, "")!!

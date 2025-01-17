@@ -38,22 +38,21 @@ abstract class DbMultiverse(
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select("#balloonsimg")
-            .let { e ->
-                listOf(
-                    if (e.hasAttr("src")) {
-                        Page(1, "", e.attr("abs:src"))
-                    } else {
-                        e
-                            .attr("style")
-                            .substringAfter("(")
-                            .substringBefore(")")
-                            .let { Page(1, "", baseUrl + it) }
-                    },
-                )
-            }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select("#balloonsimg")
+        .let { e ->
+            listOf(
+                if (e.hasAttr("src")) {
+                    Page(1, "", e.attr("abs:src"))
+                } else {
+                    e
+                        .attr("style")
+                        .substringAfter("(")
+                        .substringBefore(")")
+                        .let { Page(1, "", baseUrl + it) }
+                },
+            )
+        }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         // site hosts three titles that can be read by the app
@@ -62,27 +61,25 @@ abstract class DbMultiverse(
             .let { Observable.just(MangasPage(it, hasNextPage = false)) }
     }
 
-    private fun createManga(type: String) =
-        SManga.create().apply {
-            title =
-                when (type) {
-                    "comic" -> "DB Multiverse"
-                    "namekseijin" -> "Namekseijin Densetsu"
-                    "strip" -> "Minicomic"
-                    else -> name
-                }
-            status = SManga.ONGOING
-            url = "/$internalLang/chapters.html?comic=$type"
-            description =
-                "Dragon Ball Multiverse (DBM) is a free online comic, made by a whole team of fans. It's our personal sequel to DBZ."
-            thumbnail_url = "$baseUrl/imgs/read/$type.jpg"
-        }
+    private fun createManga(type: String) = SManga.create().apply {
+        title =
+            when (type) {
+                "comic" -> "DB Multiverse"
+                "namekseijin" -> "Namekseijin Densetsu"
+                "strip" -> "Minicomic"
+                else -> name
+            }
+        status = SManga.ONGOING
+        url = "/$internalLang/chapters.html?comic=$type"
+        description =
+            "Dragon Ball Multiverse (DBM) is a free online comic, made by a whole team of fans. It's our personal sequel to DBZ."
+        thumbnail_url = "$baseUrl/imgs/read/$type.jpg"
+    }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        manga
-            .apply {
-                initialized = true
-            }.let { Observable.just(it) }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = manga
+        .apply {
+            initialized = true
+        }.let { Observable.just(it) }
 
     override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 

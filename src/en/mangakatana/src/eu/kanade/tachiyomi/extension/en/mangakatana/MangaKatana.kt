@@ -72,12 +72,11 @@ class MangaKatana :
 
     override fun latestUpdatesSelector() = "div#book_list > div.item"
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("div.text > h3 > a")!!.attr("href"))
-            title = element.selectFirst("div.text > h3 > a")!!.ownText()
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("div.text > h3 > a")!!.attr("href"))
+        title = element.selectFirst("div.text > h3 > a")!!.ownText()
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+    }
 
     override fun latestUpdatesNextPageSelector() = "a.next.page-numbers"
 
@@ -176,41 +175,38 @@ class MangaKatana :
 
     // Details
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            author = document.select(".author").eachText().joinToString()
-            description = document.select(".summary > p").text() +
-                (
-                    document
-                        .select(".alt_name")
-                        .text()
-                        .takeIf { it.isNotBlank() }
-                        ?.let { "\n\nAlt name(s): $it" } ?: ""
-                )
-            status = parseStatus(document.select(".value.status").text())
-            genre = document.select(".genres > a").joinToString { it.text() }
-            thumbnail_url = parseThumbnail(document)
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        author = document.select(".author").eachText().joinToString()
+        description = document.select(".summary > p").text() +
+            (
+                document
+                    .select(".alt_name")
+                    .text()
+                    .takeIf { it.isNotBlank() }
+                    ?.let { "\n\nAlt name(s): $it" } ?: ""
+            )
+        status = parseStatus(document.select(".value.status").text())
+        genre = document.select(".genres > a").joinToString { it.text() }
+        thumbnail_url = parseThumbnail(document)
+    }
 
     private fun parseThumbnail(document: Document) = document.select("div.media div.cover img").attr("abs:src")
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("Ongoing") -> SManga.ONGOING
-            status.contains("Completed") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("Ongoing") -> SManga.ONGOING
+        status.contains("Completed") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
 
     override fun chapterListSelector() = "tr:has(.chapter)"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            name = element.select("a").text()
-            date_upload = dateFormat.parse(element.select(".update_time").text())?.time ?: 0
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        name = element.select("a").text()
+        date_upload = dateFormat.parse(element.select(".update_time").text())?.time ?: 0
+    }
 
     private val imageArrayNameRegex = Regex("""data-src['"],\s*(\w+)""")
     private val imageUrlRegex = Regex("""'([^']*)'""")
@@ -263,20 +259,19 @@ class MangaKatana :
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            // MangaKarate does not support genre filtering and text search at the same time
-            Filter.Header("NOTE: Other filters ignored if using text search!"),
-            TypeFilter(),
-            Filter.Separator(),
-            GenreList(genres),
-            GenreInclusionMode(),
-            SortFilter(),
-            StatusFilter(),
-            Filter.Separator(),
-            Filter.Header("Input -1 to search for only oneshots"),
-            ChaptersFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        // MangaKarate does not support genre filtering and text search at the same time
+        Filter.Header("NOTE: Other filters ignored if using text search!"),
+        TypeFilter(),
+        Filter.Separator(),
+        GenreList(genres),
+        GenreInclusionMode(),
+        SortFilter(),
+        StatusFilter(),
+        Filter.Separator(),
+        Filter.Header("Input -1 to search for only oneshots"),
+        ChaptersFilter(),
+    )
 
     private class TypeFilter :
         UriPartFilter(

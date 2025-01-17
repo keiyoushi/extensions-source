@@ -15,23 +15,22 @@ class TemakiMangas :
     override val popularMangaSelectorTitle = "h3"
     override val popularMangaSelectorUrl = "h3 a"
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup()
-            val header = document.selectFirst("header")!!
-            description = document.selectFirst("#synopsis")?.text()
-            thumbnail_url = header.selectFirst(".thumb")?.absUrl("src")
-            title = header.selectFirst("h1")!!.text()
-            header.selectFirst("[data-status]")?.text()?.let {
-                status =
-                    when (it.lowercase()) {
-                        "dropado" -> SManga.CANCELLED
-                        "finalizada" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-            }
-            genre = document.select("dt:contains(Genre) + dd a").joinToString { it.ownText() }
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        val header = document.selectFirst("header")!!
+        description = document.selectFirst("#synopsis")?.text()
+        thumbnail_url = header.selectFirst(".thumb")?.absUrl("src")
+        title = header.selectFirst("h1")!!.text()
+        header.selectFirst("[data-status]")?.text()?.let {
+            status =
+                when (it.lowercase()) {
+                    "dropado" -> SManga.CANCELLED
+                    "finalizada" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
+        genre = document.select("dt:contains(Genre) + dd a").joinToString { it.ownText() }
+    }
 
     override val pageListSelector = "#reader div.separator"
 }

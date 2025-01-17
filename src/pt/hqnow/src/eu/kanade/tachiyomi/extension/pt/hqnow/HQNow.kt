@@ -43,12 +43,11 @@ class HQNow : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    private fun genericComicBookFromObject(comicBook: HqNowComicBookDto): SManga =
-        SManga.create().apply {
-            title = comicBook.name
-            url = "/hq/${comicBook.id}/${comicBook.name.toSlug()}"
-            thumbnail_url = comicBook.cover
-        }
+    private fun genericComicBookFromObject(comicBook: HqNowComicBookDto): SManga = SManga.create().apply {
+        title = comicBook.name
+        url = "/hq/${comicBook.id}/${comicBook.name.toSlug()}"
+        thumbnail_url = comicBook.cover
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         val query =
@@ -216,22 +215,21 @@ class HQNow : HttpSource() {
         )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        SManga.create().apply {
-            val result = json.parseToJsonElement(response.body.string()).jsonObject
-            val comicBook =
-                result["data"]!!
-                    .jsonObject["getHqsById"]!!
-                    .jsonArray[0]
-                    .jsonObject
-                    .let { json.decodeFromJsonElement<HqNowComicBookDto>(it) }
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val result = json.parseToJsonElement(response.body.string()).jsonObject
+        val comicBook =
+            result["data"]!!
+                .jsonObject["getHqsById"]!!
+                .jsonArray[0]
+                .jsonObject
+                .let { json.decodeFromJsonElement<HqNowComicBookDto>(it) }
 
-            title = comicBook.name
-            thumbnail_url = comicBook.cover
-            description = comicBook.synopsis.orEmpty()
-            author = comicBook.publisherName.orEmpty()
-            status = comicBook.status.orEmpty().toStatus()
-        }
+        title = comicBook.name
+        thumbnail_url = comicBook.cover
+        description = comicBook.synopsis.orEmpty()
+        author = comicBook.publisherName.orEmpty()
+        status = comicBook.status.orEmpty().toStatus()
+    }
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
@@ -252,13 +250,12 @@ class HQNow : HttpSource() {
     private fun chapterFromObject(
         chapter: HqNowChapterDto,
         comicBook: HqNowComicBookDto,
-    ): SChapter =
-        SChapter.create().apply {
-            name = "#" + chapter.number +
-                (if (chapter.name.isNotEmpty()) " - " + chapter.name else "")
-            url = "/hq-reader/${comicBook.id}/${comicBook.name.toSlug()}" +
-                "/chapter/${chapter.id}/page/1"
-        }
+    ): SChapter = SChapter.create().apply {
+        name = "#" + chapter.number +
+            (if (chapter.name.isNotEmpty()) " - " + chapter.name else "")
+        url = "/hq-reader/${comicBook.id}/${comicBook.name.toSlug()}" +
+            "/chapter/${chapter.id}/page/1"
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
@@ -340,21 +337,19 @@ class HQNow : HttpSource() {
         return POST(GRAPHQL_URL, newHeaders, body)
     }
 
-    private fun String.toSlug(): String =
-        Normalizer
-            .normalize(this, Normalizer.Form.NFD)
-            .replace("[^\\p{ASCII}]".toRegex(), "")
-            .replace("[^a-zA-Z0-9\\s]+".toRegex(), "")
-            .trim()
-            .replace("\\s+".toRegex(), "-")
-            .lowercase(Locale("pt", "BR"))
+    private fun String.toSlug(): String = Normalizer
+        .normalize(this, Normalizer.Form.NFD)
+        .replace("[^\\p{ASCII}]".toRegex(), "")
+        .replace("[^a-zA-Z0-9\\s]+".toRegex(), "")
+        .trim()
+        .replace("\\s+".toRegex(), "-")
+        .lowercase(Locale("pt", "BR"))
 
-    private fun String.toStatus(): Int =
-        when (this) {
-            "Concluído" -> SManga.COMPLETED
-            "Em Andamento" -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toStatus(): Int = when (this) {
+        "Concluído" -> SManga.COMPLETED
+        "Em Andamento" -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
 
     companion object {
         private const val STATIC_URL = "https://static.hq-now.com/"

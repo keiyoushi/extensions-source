@@ -37,33 +37,30 @@ class Tojimangas : ParsedHttpSource() {
     private fun makeMangaRequest(
         page: Int,
         addToBuilder: (HttpUrl.Builder) -> HttpUrl.Builder,
-    ): Request =
-        GET(
-            addToBuilder(
-                baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("page")
-                    addPathSegment(page.toString())
-                    addPathSegment("")
-                    addQueryParameter("post_type", "manga")
-                    addQueryParameter("s", "")
-                },
-            ).build(),
-            headers,
-        )
+    ): Request = GET(
+        addToBuilder(
+            baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("page")
+                addPathSegment(page.toString())
+                addPathSegment("")
+                addQueryParameter("post_type", "manga")
+                addQueryParameter("s", "")
+            },
+        ).build(),
+        headers,
+    )
 
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        makeMangaRequest(page) {
-            it.setQueryParameter("s", query)
-        }
+    ): Request = makeMangaRequest(page) {
+        it.setQueryParameter("s", query)
+    }
 
-    override fun popularMangaRequest(page: Int): Request =
-        makeMangaRequest(page) {
-            it.addQueryParameter("orderby", "popular")
-        }
+    override fun popularMangaRequest(page: Int): Request = makeMangaRequest(page) {
+        it.addQueryParameter("orderby", "popular")
+    }
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -77,52 +74,46 @@ class Tojimangas : ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            title = element.selectFirst("img")!!.attr("alt")
-            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.selectFirst("img")!!.attr("alt")
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+    }
 
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            title = element.selectFirst("img")!!.attr("alt")
-            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.selectFirst("img")!!.attr("alt")
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+    }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val content = document.selectFirst(".content")
-            thumbnail_url = content?.selectFirst("img")?.absUrl("src")
-            genre = document.select(".meta a").joinToString { it.text() }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val content = document.selectFirst(".content")
+        thumbnail_url = content?.selectFirst("img")?.absUrl("src")
+        genre = document.select(".meta a").joinToString { it.text() }
+    }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val a = element.selectFirst("a")
-            a?.absUrl("href")?.let { setUrlWithoutDomain(it) }
-            name = a?.text() ?: ""
-            date_upload = element
-                .selectFirst(".time")
-                ?.text()
-                ?.trim()
-                ?.parseDate() ?: 0
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val a = element.selectFirst("a")
+        a?.absUrl("href")?.let { setUrlWithoutDomain(it) }
+        name = a?.text() ?: ""
+        date_upload = element
+            .selectFirst(".time")
+            ?.text()
+            ?.trim()
+            ?.parseDate() ?: 0
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("#ch-images img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.absUrl("data-src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#ch-images img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.absUrl("data-src"))
+    }
 
-    private fun String.parseDate(): Long =
-        try {
-            parseRelativeDate(this)
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun String.parseDate(): Long = try {
+        parseRelativeDate(this)
+    } catch (_: ParseException) {
+        0L
+    }
 
     private fun parseRelativeDate(date: String): Long {
         val number = DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0

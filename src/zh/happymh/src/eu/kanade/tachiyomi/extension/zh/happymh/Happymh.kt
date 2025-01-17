@@ -154,17 +154,16 @@ class Happymh :
 
     // Details
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        SManga.create().apply {
-            val document = response.asJsoup()
-            title = document.selectFirst("div.mg-property > h2.mg-title")!!.text()
-            thumbnail_url = document.selectFirst("div.mg-cover > mip-img")!!.attr("abs:src")
-            author = document.selectFirst("div.mg-property > p.mg-sub-title:nth-of-type(2)")!!.text()
-            artist = author
-            genre = document.select("div.mg-property > p.mg-cate > a").eachText().joinToString(", ")
-            description =
-                document.selectFirst("div.manga-introduction > mip-showmore#showmore")!!.text()
-        }
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
+        title = document.selectFirst("div.mg-property > h2.mg-title")!!.text()
+        thumbnail_url = document.selectFirst("div.mg-cover > mip-img")!!.attr("abs:src")
+        author = document.selectFirst("div.mg-property > p.mg-sub-title:nth-of-type(2)")!!.text()
+        artist = author
+        genre = document.select("div.mg-property > p.mg-cate > a").eachText().joinToString(", ")
+        description =
+            document.selectFirst("div.manga-introduction > mip-showmore#showmore")!!.text()
+    }
 
     // Chapters
 
@@ -199,14 +198,13 @@ class Happymh :
     private fun fetchChapterByPageAsObservable(
         manga: SManga,
         page: Int,
-    ): Observable<Pair<Int, ChapterByPageResponseData>> =
-        Observable.just(fetchChapterByPage(manga, page)).concatMap {
-            if (it.isPageEnd()) {
-                Observable.just(page to it)
-            } else {
-                Observable.just(page to it).concatWith(fetchChapterByPageAsObservable(manga, page + 1))
-            }
+    ): Observable<Pair<Int, ChapterByPageResponseData>> = Observable.just(fetchChapterByPage(manga, page)).concatMap {
+        if (it.isPageEnd()) {
+            Observable.just(page to it)
+        } else {
+            Observable.just(page to it).concatWith(fetchChapterByPageAsObservable(manga, page + 1))
         }
+    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val comicId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
@@ -275,15 +273,14 @@ class Happymh :
         return GET(url, header)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response
-            .parseAs<PageListResponseDto>()
-            .data.scans
-            // If n == 1, the image is from next chapter
-            .filter { it.n == 0 }
-            .mapIndexed { index, it ->
-                Page(index, "", it.url)
-            }
+    override fun pageListParse(response: Response): List<Page> = response
+        .parseAs<PageListResponseDto>()
+        .data.scans
+        // If n == 1, the image is from next chapter
+        .filter { it.n == 0 }
+        .mapIndexed { index, it ->
+            Page(index, "", it.url)
+        }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -318,10 +315,9 @@ class Happymh :
             }.let(screen::addPreference)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream(it.body.byteStream())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
 
     private fun ChapterByPageResponseData.isPageEnd(): Boolean = isEnd == 1 || items.isEmpty()
 

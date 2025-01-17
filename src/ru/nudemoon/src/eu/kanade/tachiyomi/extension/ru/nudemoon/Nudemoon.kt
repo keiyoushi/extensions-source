@@ -36,13 +36,12 @@ class Nudemoon : ParsedHttpSource() {
 
     private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 10; SM-G980F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.$userAgentRandomizer Mobile Safari/537.36",
-            ).add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 10; SM-G980F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.$userAgentRandomizer Mobile Safari/537.36",
+        ).add("Referer", baseUrl)
 
     init {
         cookieManager.setCookie(baseUrl, "nm_mobile=1; Domain=" + baseUrl.split("//")[1])
@@ -55,10 +54,9 @@ class Nudemoon : ParsedHttpSource() {
         buildCookies(cookies)
     }
 
-    private fun buildCookies(cookies: Map<String, String>) =
-        cookies.entries.joinToString(separator = "; ", postfix = ";") {
-            "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
-        }
+    private fun buildCookies(cookies: Map<String, String>) = cookies.entries.joinToString(separator = "; ", postfix = ";") {
+        "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
+    }
 
     override val client =
         network.cloudflareClient
@@ -177,87 +175,84 @@ class Nudemoon : ParsedHttpSource() {
 
     override fun chapterListSelector() = popularMangaSelector()
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        mutableListOf<SChapter>().apply {
-            val document = response.asJsoup()
+    override fun chapterListParse(response: Response): List<SChapter> = mutableListOf<SChapter>().apply {
+        val document = response.asJsoup()
 
-            val allPageElement = document.select("td.button a:contains(Все главы)")
+        val allPageElement = document.select("td.button a:contains(Все главы)")
 
-            if (allPageElement.isEmpty()) {
-                add(
-                    SChapter.create().apply {
-                        val chapterName = document.select("table td.bg_style1 h1").text()
-                        val chapterUrl = response.request.url.toString()
-                        setUrlWithoutDomain(chapterUrl)
-                        name = "$chapterName Сингл"
-                        scanlator = document.select("table.news_pic2 a[href*=perevod]").text()
-                        date_upload =
-                            document.select("table.news_pic2 span.small2:contains(/)").text().let {
-                                try {
-                                    dateParseSlash.parse(it)?.time ?: 0L
-                                } catch (e: Exception) {
-                                    0
-                                }
+        if (allPageElement.isEmpty()) {
+            add(
+                SChapter.create().apply {
+                    val chapterName = document.select("table td.bg_style1 h1").text()
+                    val chapterUrl = response.request.url.toString()
+                    setUrlWithoutDomain(chapterUrl)
+                    name = "$chapterName Сингл"
+                    scanlator = document.select("table.news_pic2 a[href*=perevod]").text()
+                    date_upload =
+                        document.select("table.news_pic2 span.small2:contains(/)").text().let {
+                            try {
+                                dateParseSlash.parse(it)?.time ?: 0L
+                            } catch (e: Exception) {
+                                0
                             }
-                        chapter_number = 0F
-                    },
-                )
-            } else {
-                var pageListDocument: Document
-                val pageListLink = allPageElement.attr("href")
-                client
-                    .newCall(
-                        GET(baseUrl + pageListLink, headers),
-                    ).execute()
-                    .run {
-                        if (!isSuccessful) {
-                            close()
-                            throw Exception("HTTP error $code")
                         }
-                        pageListDocument = this.asJsoup()
+                    chapter_number = 0F
+                },
+            )
+        } else {
+            var pageListDocument: Document
+            val pageListLink = allPageElement.attr("href")
+            client
+                .newCall(
+                    GET(baseUrl + pageListLink, headers),
+                ).execute()
+                .run {
+                    if (!isSuccessful) {
+                        close()
+                        throw Exception("HTTP error $code")
                     }
-                pageListDocument
-                    .select(chapterListSelector())
-                    .forEach {
-                        add(chapterFromElement(it))
-                    }
-            }
+                    pageListDocument = this.asJsoup()
+                }
+            pageListDocument
+                .select(chapterListSelector())
+                .forEach {
+                    add(chapterFromElement(it))
+                }
         }
+    }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val nameAndUrl = element.select("tr[valign=top] a:has(h2)")
-            name = nameAndUrl.select("h2").text()
-            setUrlWithoutDomain(nameAndUrl.attr("abs:href"))
-            if (url.contains(baseUrl)) {
-                url = url.replace(baseUrl, "")
-            }
-            val informBlock = element.select("tr[valign=top] td[align=left]")
-            scanlator = informBlock.select("a[href*=perevod]").text()
-            date_upload =
-                informBlock
-                    .select("span.small2")
-                    .text()
-                    .replace("Май", "Мая")
-                    .let { textDate ->
-                        try {
-                            dateParseRu.parse(textDate)?.time ?: 0L
-                        } catch (e: Exception) {
-                            0
-                        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val nameAndUrl = element.select("tr[valign=top] a:has(h2)")
+        name = nameAndUrl.select("h2").text()
+        setUrlWithoutDomain(nameAndUrl.attr("abs:href"))
+        if (url.contains(baseUrl)) {
+            url = url.replace(baseUrl, "")
+        }
+        val informBlock = element.select("tr[valign=top] td[align=left]")
+        scanlator = informBlock.select("a[href*=perevod]").text()
+        date_upload =
+            informBlock
+                .select("span.small2")
+                .text()
+                .replace("Май", "Мая")
+                .let { textDate ->
+                    try {
+                        dateParseRu.parse(textDate)?.time ?: 0L
+                    } catch (e: Exception) {
+                        0
                     }
-            chapter_number = name.substringAfter("№").substringBefore(" ").toFloatOrNull() ?: -1f
-        }
+                }
+        chapter_number = name.substringAfter("№").substringBefore(" ").toFloatOrNull() ?: -1f
+    }
 
-    override fun pageListParse(response: Response): List<Page> =
-        mutableListOf<Page>().apply {
-            response.asJsoup().select("div.gallery-item img").mapIndexed { index, img ->
-                add(Page(index, imageUrl = img.attr("abs:data-src")))
-            }
-            if (size == 0 && cookieManager.getCookie(baseUrl).contains("fusion_user").not()) {
-                throw Exception("Страницы не найдены. Возможно необходима авторизация в WebView")
-            }
+    override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
+        response.asJsoup().select("div.gallery-item img").mapIndexed { index, img ->
+            add(Page(index, imageUrl = img.attr("abs:data-src")))
         }
+        if (size == 0 && cookieManager.getCookie(baseUrl).contains("fusion_user").not()) {
+            throw Exception("Страницы не найдены. Возможно необходима авторизация в WebView")
+        }
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -279,95 +274,93 @@ class Nudemoon : ParsedHttpSource() {
             Selection(1, false),
         )
 
-    override fun getFilterList() =
-        FilterList(
-            OrderBy(),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        OrderBy(),
+        GenreList(getGenreList()),
+    )
 
-    private fun getGenreList() =
-        listOf(
-            Genre("анал"),
-            Genre("без цензуры"),
-            Genre("беременные"),
-            Genre("близняшки"),
-            Genre("большие груди"),
-            Genre("в бассейне"),
-            Genre("в больнице"),
-            Genre("в ванной"),
-            Genre("в общественном месте"),
-            Genre("в первый раз"),
-            Genre("в транспорте"),
-            Genre("в туалете"),
-            Genre("гарем"),
-            Genre("гипноз"),
-            Genre("горничные"),
-            Genre("горячий источник"),
-            Genre("групповой секс"),
-            Genre("драма"),
-            Genre("запредельное"),
-            Genre("золотой дождь"),
-            Genre("зрелые женщины"),
-            Genre("идолы"),
-            Genre("извращение"),
-            Genre("измена"),
-            Genre("имеют парня"),
-            Genre("клизма"),
-            Genre("колготки"),
-            Genre("комиксы"),
-            Genre("комиксы 3D"),
-            Genre("косплей"),
-            Genre("мастурбация"),
-            Genre("мерзкий мужик"),
-            Genre("много спермы"),
-            Genre("молоко"),
-            Genre("монстры"),
-            Genre("на камеру"),
-            Genre("на природе"),
-            Genre("обычный секс"),
-            Genre("огромный член"),
-            Genre("пляж"),
-            Genre("подглядывание"),
-            Genre("принуждение"),
-            Genre("продажность"),
-            Genre("пьяные"),
-            Genre("рабыни"),
-            Genre("романтика"),
-            Genre("с ушками"),
-            Genre("секс игрушки"),
-            Genre("спящие"),
-            Genre("страпон"),
-            Genre("студенты"),
-            Genre("суккуб"),
-            Genre("тентакли"),
-            Genre("толстушки"),
-            Genre("трапы"),
-            Genre("ужасы"),
-            Genre("униформа"),
-            Genre("учитель и ученик"),
-            Genre("фемдом"),
-            Genre("фетиш"),
-            Genre("фурри"),
-            Genre("футанари"),
-            Genre("футфетиш"),
-            Genre("фэнтези"),
-            Genre("цветная"),
-            Genre("чикан"),
-            Genre("чулки"),
-            Genre("шимейл"),
-            Genre("эксгибиционизм"),
-            Genre("юмор"),
-            Genre("юри"),
-            Genre("ahegao"),
-            Genre("BDSM"),
-            Genre("ganguro"),
-            Genre("gender bender"),
-            Genre("megane"),
-            Genre("mind break"),
-            Genre("monstergirl"),
-            Genre("netorare"),
-            Genre("nipple penetration"),
-            Genre("titsfuck"),
-            Genre("x-ray"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("анал"),
+        Genre("без цензуры"),
+        Genre("беременные"),
+        Genre("близняшки"),
+        Genre("большие груди"),
+        Genre("в бассейне"),
+        Genre("в больнице"),
+        Genre("в ванной"),
+        Genre("в общественном месте"),
+        Genre("в первый раз"),
+        Genre("в транспорте"),
+        Genre("в туалете"),
+        Genre("гарем"),
+        Genre("гипноз"),
+        Genre("горничные"),
+        Genre("горячий источник"),
+        Genre("групповой секс"),
+        Genre("драма"),
+        Genre("запредельное"),
+        Genre("золотой дождь"),
+        Genre("зрелые женщины"),
+        Genre("идолы"),
+        Genre("извращение"),
+        Genre("измена"),
+        Genre("имеют парня"),
+        Genre("клизма"),
+        Genre("колготки"),
+        Genre("комиксы"),
+        Genre("комиксы 3D"),
+        Genre("косплей"),
+        Genre("мастурбация"),
+        Genre("мерзкий мужик"),
+        Genre("много спермы"),
+        Genre("молоко"),
+        Genre("монстры"),
+        Genre("на камеру"),
+        Genre("на природе"),
+        Genre("обычный секс"),
+        Genre("огромный член"),
+        Genre("пляж"),
+        Genre("подглядывание"),
+        Genre("принуждение"),
+        Genre("продажность"),
+        Genre("пьяные"),
+        Genre("рабыни"),
+        Genre("романтика"),
+        Genre("с ушками"),
+        Genre("секс игрушки"),
+        Genre("спящие"),
+        Genre("страпон"),
+        Genre("студенты"),
+        Genre("суккуб"),
+        Genre("тентакли"),
+        Genre("толстушки"),
+        Genre("трапы"),
+        Genre("ужасы"),
+        Genre("униформа"),
+        Genre("учитель и ученик"),
+        Genre("фемдом"),
+        Genre("фетиш"),
+        Genre("фурри"),
+        Genre("футанари"),
+        Genre("футфетиш"),
+        Genre("фэнтези"),
+        Genre("цветная"),
+        Genre("чикан"),
+        Genre("чулки"),
+        Genre("шимейл"),
+        Genre("эксгибиционизм"),
+        Genre("юмор"),
+        Genre("юри"),
+        Genre("ahegao"),
+        Genre("BDSM"),
+        Genre("ganguro"),
+        Genre("gender bender"),
+        Genre("megane"),
+        Genre("mind break"),
+        Genre("monstergirl"),
+        Genre("netorare"),
+        Genre("nipple penetration"),
+        Genre("titsfuck"),
+        Genre("x-ray"),
+    )
 }

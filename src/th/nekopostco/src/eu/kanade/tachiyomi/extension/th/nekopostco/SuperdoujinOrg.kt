@@ -18,8 +18,7 @@ class SuperdoujinOrg :
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        super.chapterListParse(response).also { chapters ->
-            if (chapters.size == 1) chapters[0].name = "Chapter"
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).also { chapters ->
+        if (chapters.size == 1) chapters[0].name = "Chapter"
+    }
 }

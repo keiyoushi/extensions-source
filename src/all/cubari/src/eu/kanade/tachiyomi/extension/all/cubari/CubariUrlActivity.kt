@@ -61,12 +61,11 @@ class CubariUrlActivity : Activity() {
         return null
     }
 
-    private fun fromCubari(pathSegments: MutableList<String>): String? =
-        if (pathSegments.size >= 3) {
-            val source = pathSegments[1]
-            val slug = pathSegments[2]
-            "${Cubari.PROXY_PREFIX}$source/$slug"
-        } else {
-            null
-        }
+    private fun fromCubari(pathSegments: MutableList<String>): String? = if (pathSegments.size >= 3) {
+        val source = pathSegments[1]
+        val slug = pathSegments[2]
+        "${Cubari.PROXY_PREFIX}$source/$slug"
+    } else {
+        null
+    }
 }

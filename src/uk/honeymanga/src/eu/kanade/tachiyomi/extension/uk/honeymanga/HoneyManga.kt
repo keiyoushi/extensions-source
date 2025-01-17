@@ -34,11 +34,10 @@ class HoneyManga : HttpSource() {
     override val lang = "uk"
     override val supportsLatest = true
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Origin", baseUrl)
-            .add("Referer", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Origin", baseUrl)
+        .add("Referer", baseUrl)
 
     override val client =
         network.client
@@ -84,25 +83,24 @@ class HoneyManga : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val mangaDto = response.asClass<CompleteHoneyMangaDto>()
-            title = mangaDto.title
-            thumbnail_url = "$IMAGE_STORAGE_URL/${mangaDto.posterId}"
-            url = "$baseUrl/book/${mangaDto.id}"
-            description = mangaDto.description
-            genre = mangaDto.genresAndTags?.joinToString()
-            artist = mangaDto.artists?.joinToString()
-            author = mangaDto.authors?.joinToString()
-            status =
-                when (mangaDto.titleStatus.orEmpty()) {
-                    "Онгоінг" -> SManga.ONGOING
-                    "Завершено" -> SManga.COMPLETED
-                    "Покинуто" -> SManga.CANCELLED
-                    "Призупинено" -> SManga.ON_HIATUS
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val mangaDto = response.asClass<CompleteHoneyMangaDto>()
+        title = mangaDto.title
+        thumbnail_url = "$IMAGE_STORAGE_URL/${mangaDto.posterId}"
+        url = "$baseUrl/book/${mangaDto.id}"
+        description = mangaDto.description
+        genre = mangaDto.genresAndTags?.joinToString()
+        artist = mangaDto.artists?.joinToString()
+        author = mangaDto.authors?.joinToString()
+        status =
+            when (mangaDto.titleStatus.orEmpty()) {
+                "Онгоінг" -> SManga.ONGOING
+                "Завершено" -> SManga.COMPLETED
+                "Покинуто" -> SManga.CANCELLED
+                "Призупинено" -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
@@ -173,18 +171,16 @@ class HoneyManga : HttpSource() {
         return POST("$API_URL/v2/manga/cursor-list", headers, body)
     }
 
-    private fun makeMangasPage(mangaList: List<HoneyMangaDto>): MangasPage =
-        MangasPage(
-            mangaList.map(::makeSManga),
-            mangaList.size == DEFAULT_PAGE_SIZE,
-        )
+    private fun makeMangasPage(mangaList: List<HoneyMangaDto>): MangasPage = MangasPage(
+        mangaList.map(::makeSManga),
+        mangaList.size == DEFAULT_PAGE_SIZE,
+    )
 
-    private fun makeSManga(mangaDto: HoneyMangaDto) =
-        SManga.create().apply {
-            title = mangaDto.title
-            thumbnail_url = "$IMAGE_STORAGE_URL/${mangaDto.posterId}"
-            url = "$baseUrl/book/${mangaDto.id}"
-        }
+    private fun makeSManga(mangaDto: HoneyMangaDto) = SManga.create().apply {
+        title = mangaDto.title
+        thumbnail_url = "$IMAGE_STORAGE_URL/${mangaDto.posterId}"
+        url = "$baseUrl/book/${mangaDto.id}"
+    }
 
     companion object {
         private const val API_URL = "https://data.api.honey-manga.com.ua"
@@ -201,15 +197,13 @@ class HoneyManga : HttpSource() {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
         }
 
-        private fun String.toDate(): Long =
-            runCatching { DATE_FORMATTER.parse(this)?.time }
-                .getOrNull() ?: 0L
+        private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+            .getOrNull() ?: 0L
 
         private val json: Json by injectLazy()
 
-        private inline fun <reified T> Response.asClass(): T =
-            use {
-                json.decodeFromStream(it.body.byteStream())
-            }
+        private inline fun <reified T> Response.asClass(): T = use {
+            json.decodeFromStream(it.body.byteStream())
+        }
     }
 }

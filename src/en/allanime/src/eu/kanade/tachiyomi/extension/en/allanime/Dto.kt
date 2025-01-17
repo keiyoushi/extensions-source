@@ -55,12 +55,11 @@ class SearchManga(
     private val thumbnail: String? = null,
     private val englishName: String? = null,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            title = englishName ?: name
-            url = "/manga/$id/${name.titleToSlug()}"
-            thumbnail_url = thumbnail?.parseThumbnailUrl()
-        }
+    fun toSManga() = SManga.create().apply {
+        title = englishName ?: name
+        url = "/manga/$id/${name.titleToSlug()}"
+        thumbnail_url = thumbnail?.parseThumbnailUrl()
+    }
 }
 
 // Details
@@ -82,30 +81,29 @@ class Manga(
     private val altNames: List<String>? = emptyList(),
     private val englishName: String? = null,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            title = englishName ?: name
-            url = "/manga/$id/${name.titleToSlug()}"
-            thumbnail_url = thumbnail?.parseThumbnailUrl()
-            description = this@Manga.description?.parseDescription()
-            if (!altNames.isNullOrEmpty()) {
-                if (description.isNullOrEmpty()) {
-                    description = "Alternative Titles:\n"
-                } else {
-                    description += "\n\nAlternative Titles:\n"
-                }
+    fun toSManga() = SManga.create().apply {
+        title = englishName ?: name
+        url = "/manga/$id/${name.titleToSlug()}"
+        thumbnail_url = thumbnail?.parseThumbnailUrl()
+        description = this@Manga.description?.parseDescription()
+        if (!altNames.isNullOrEmpty()) {
+            if (description.isNullOrEmpty()) {
+                description = "Alternative Titles:\n"
+            } else {
+                description += "\n\nAlternative Titles:\n"
+            }
 
-                description += altNames.joinToString("\n") { "• ${it.trim()}" }
-            }
-            if (authors?.isNotEmpty() == true) {
-                author = authors.first().trim()
-                artist = author
-            }
-            genre =
-                ((genres ?: emptyList()) + (tags ?: emptyList()))
-                    .joinToString { it.trim() }
-            status = this@Manga.status.parseStatus()
+            description += altNames.joinToString("\n") { "• ${it.trim()}" }
         }
+        if (authors?.isNotEmpty() == true) {
+            author = authors.first().trim()
+            artist = author
+        }
+        genre =
+            ((genres ?: emptyList()) + (tags ?: emptyList()))
+                .joinToString { it.trim() }
+        status = this@Manga.status.parseStatus()
+    }
 }
 
 // chapters details
@@ -120,15 +118,14 @@ class ChapterData(
     @SerialName("notes") val title: String? = null,
     private val uploadDates: DateDto? = null,
 ) {
-    fun toSChapter(mangaUrl: String) =
-        SChapter.create().apply {
-            name = "Chapter $chapterNum"
-            if (!title.isNullOrEmpty() && !title.contains(numberRegex)) {
-                name += ": $title"
-            }
-            url = "/read/$mangaUrl/chapter-$chapterNum-sub"
-            date_upload = uploadDates?.sub.parseDate()
+    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
+        name = "Chapter $chapterNum"
+        if (!title.isNullOrEmpty() && !title.contains(numberRegex)) {
+            name += ": $title"
         }
+        url = "/read/$mangaUrl/chapter-$chapterNum-sub"
+        date_upload = uploadDates?.sub.parseDate()
+    }
 
     companion object {
         private val numberRegex by lazy { Regex("\\d") }

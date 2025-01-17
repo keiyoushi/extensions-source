@@ -22,15 +22,14 @@ abstract class TriFilterGroup(
 
     abstract fun SeriesItem.getAttribute(): List<Int>
 
-    override fun applyFilter(list: List<SeriesItem>): List<SeriesItem> =
-        list.filter { series ->
-            included.all {
-                it in series.getAttribute()
-            } and
-                excluded.all {
-                    it !in series.getAttribute()
-                }
-        }
+    override fun applyFilter(list: List<SeriesItem>): List<SeriesItem> = list.filter { series ->
+        included.all {
+            it in series.getAttribute()
+        } and
+            excluded.all {
+                it !in series.getAttribute()
+            }
+    }
 }
 
 abstract class SelectFilter(
@@ -85,11 +84,10 @@ class Status :
         ),
     ),
     ListFilter {
-    override fun applyFilter(list: List<SeriesItem>): List<SeriesItem> =
-        when (selected) {
-            1, 0 -> list.filter { it.listIndex == selected }
-            else -> list
-        }
+    override fun applyFilter(list: List<SeriesItem>): List<SeriesItem> = when (selected) {
+        1, 0 -> list.filter { it.listIndex == selected }
+        else -> list
+    }
 }
 
 class Order :
@@ -101,19 +99,17 @@ class Order :
         ),
     ),
     ListFilter {
-    override fun applyFilter(list: List<SeriesItem>): List<SeriesItem> =
-        when (selected) {
-            0 -> list.sortedByDescending { it.updatedAt }
-            1 -> list.sortedByDescending { it.hot }
-            else -> list
-        }
+    override fun applyFilter(list: List<SeriesItem>): List<SeriesItem> = when (selected) {
+        0 -> list.sortedByDescending { it.updatedAt }
+        1 -> list.sortedByDescending { it.hot }
+        else -> list
+    }
 }
 
-fun getFilters() =
-    FilterList(
-        Order(),
-        Status(),
-        PlatformFilter(),
-        PublishDayFilter(),
-        TagFilter(),
-    )
+fun getFilters() = FilterList(
+    Order(),
+    Status(),
+    PlatformFilter(),
+    PublishDayFilter(),
+    TagFilter(),
+)

@@ -45,10 +45,9 @@ class TruyenGiHot : ParsedHttpSource() {
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -56,18 +55,17 @@ class TruyenGiHot : ParsedHttpSource() {
         const val PREFIX_ID_SEARCH = "id:"
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SortFilter(
-                    getSortItems(),
-                    Filter.Sort.Selection(2, false),
-                ),
-                CategoryFilter(0),
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortFilter(
+                getSortItems(),
+                Filter.Sort.Selection(2, false),
             ),
-        )
+            CategoryFilter(0),
+        ),
+    )
 
     override fun popularMangaSelector(): String = searchMangaSelector()
 
@@ -75,18 +73,17 @@ class TruyenGiHot : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SortFilter(
-                    getSortItems(),
-                    Filter.Sort.Selection(0, false),
-                ),
-                CategoryFilter(0),
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortFilter(
+                getSortItems(),
+                Filter.Sort.Selection(0, false),
             ),
-        )
+            CategoryFilter(0),
+        ),
+    )
 
     override fun latestUpdatesSelector(): String = searchMangaSelector()
 
@@ -98,25 +95,24 @@ class TruyenGiHot : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                var id = query.removePrefix(PREFIX_ID_SEARCH).trim()
-                if (!id.endsWith(".html")) {
-                    id += ".html"
-                }
-                if (!id.startsWith("/")) {
-                    id = "/$id"
-                }
-
-                fetchMangaDetails(
-                    SManga.create().apply {
-                        url = id
-                    },
-                ).map { MangasPage(listOf(it.apply { url = id }), false) }
+    ): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            var id = query.removePrefix(PREFIX_ID_SEARCH).trim()
+            if (!id.endsWith(".html")) {
+                id += ".html"
             }
-            else -> super.fetchSearchManga(page, query, filters)
+            if (!id.startsWith("/")) {
+                id = "/$id"
+            }
+
+            fetchMangaDetails(
+                SManga.create().apply {
+                    url = id
+                },
+            ).map { MangasPage(listOf(it.apply { url = id }), false) }
         }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -141,41 +137,39 @@ class TruyenGiHot : ParsedHttpSource() {
 
     override fun searchMangaSelector(): String = "ul.contentList li"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            val anchor = element.select("span.title a")
-            setUrlWithoutDomain(anchor.attr("href"))
-            title = anchor.text()
-            thumbnail_url = element.selectFirst("span.thumb img")?.imgAttr()
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        val anchor = element.select("span.title a")
+        setUrlWithoutDomain(anchor.attr("href"))
+        title = anchor.text()
+        thumbnail_url = element.selectFirst("span.thumb img")?.imgAttr()
+    }
 
     override fun searchMangaNextPageSelector(): String = "li.page-next"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select(".cover-title").text()
-            author = document.select("p.cover-artist:contains(Tác giả) a").joinToString { it.text() }
-            genre = document.select("a.manga-tags").joinToString { it.text().removePrefix("#") }
-            thumbnail_url = document.selectFirst("div.cover-image img")?.imgAttr()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select(".cover-title").text()
+        author = document.select("p.cover-artist:contains(Tác giả) a").joinToString { it.text() }
+        genre = document.select("a.manga-tags").joinToString { it.text().removePrefix("#") }
+        thumbnail_url = document.selectFirst("div.cover-image img")?.imgAttr()
 
-            val tags =
-                document.select("img.top-tags.top-tags-full").map {
-                    it.attr("src").substringAfterLast("/").substringBefore(".png")
-                }
-            status =
-                when {
-                    tags.contains("ongoing") -> SManga.ONGOING
-                    tags.contains("drop") -> SManga.CANCELLED
-                    tags.contains("full") -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
+        val tags =
+            document.select("img.top-tags.top-tags-full").map {
+                it.attr("src").substringAfterLast("/").substringBefore(".png")
+            }
+        status =
+            when {
+                tags.contains("ongoing") -> SManga.ONGOING
+                tags.contains("drop") -> SManga.CANCELLED
+                tags.contains("full") -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
 
-            description =
-                document.select("div.content div.textArea").run {
-                    select("p").first()?.prepend("|truyengihay-split|")
-                    textWithNewlines().substringAfter("|truyengihay-split|").substringBefore(" Xem thêm")
-                }
-        }
+        description =
+            document.select("div.content div.textArea").run {
+                select("p").first()?.prepend("|truyengihay-split|")
+                textWithNewlines().substringAfter("|truyengihay-split|").substringBefore(" Xem thêm")
+            }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -193,14 +187,13 @@ class TruyenGiHot : ParsedHttpSource() {
 
     override fun chapterListSelector(): String = "ul#episode_list li a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
 
-            val infoBlock = element.selectFirst("span.info")!!
-            name = infoBlock.select("span.no").text()
-            date_upload = TruyenGiHotUtils.parseChapterDate(infoBlock.select("span.date").text())
-        }
+        val infoBlock = element.selectFirst("span.info")!!
+        name = infoBlock.select("span.no").text()
+        date_upload = TruyenGiHotUtils.parseChapterDate(infoBlock.select("span.date").text())
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val tokenScript =

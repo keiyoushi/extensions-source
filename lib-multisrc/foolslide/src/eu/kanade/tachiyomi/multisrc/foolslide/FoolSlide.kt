@@ -62,24 +62,22 @@ abstract class FoolSlide(
         return GET("$baseUrl$urlModifier/latest/$page/")
     }
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.select("a[title]").first()!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-            element.select("img").first()?.let {
-                thumbnail_url = it.absUrl("src").replace("/thumb_", "/")
-            }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.select("a[title]").first()!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+        element.select("img").first()?.let {
+            thumbnail_url = it.absUrl("src").replace("/thumb_", "/")
+        }
+    }
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            element.select("a[title]").first()!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        element.select("a[title]").first()!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+    }
 
     override fun popularMangaNextPageSelector() = "div.next"
 
@@ -116,25 +114,23 @@ abstract class FoolSlide(
     protected fun getDetailsThumbnail(
         document: Document,
         urlSelector: String = chapterUrlSelector,
-    ): String? =
-        document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
-            ?: document
-                .select(chapterListSelector())
-                .last()!!
-                .select(urlSelector)
-                .attr("abs:href")
-                .let { url -> client.newCall(allowAdult(GET(url))).execute() }
-                .let { response -> pageListParse(response).first().imageUrl }
+    ): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
+        ?: document
+            .select(chapterListSelector())
+            .last()!!
+            .select(urlSelector)
+            .attr("abs:href")
+            .let { url -> client.newCall(allowAdult(GET(url))).execute() }
+            .let { response -> pageListParse(response).first().imageUrl }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            document.select(mangaDetailsInfoSelector).firstOrNull()?.html()?.let { infoHtml ->
-                author = Regex("""(?i)(Author|Autore)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
-                artist = Regex("""Artist</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(1)
-                description = Regex("""(?i)(Synopsis|Description|Trama)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
-            }
-            thumbnail_url = getDetailsThumbnail(document)
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.select(mangaDetailsInfoSelector).firstOrNull()?.html()?.let { infoHtml ->
+            author = Regex("""(?i)(Author|Autore)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
+            artist = Regex("""Artist</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(1)
+            description = Regex("""(?i)(Synopsis|Description|Trama)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
         }
+        thumbnail_url = getDetailsThumbnail(document)
+    }
 
     protected open val allowAdult: Boolean
         get() = preferences.getBoolean("adult", true)
@@ -152,14 +148,13 @@ abstract class FoolSlide(
 
     protected open val chapterUrlSelector = "a[title]"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            val urlElement = element.select(chapterUrlSelector).first()!!
-            val dateElement = element.select(chapterDateSelector).first()!!
-            setUrlWithoutDomain(urlElement.attr("href"))
-            name = urlElement.text()
-            date_upload = parseChapterDate(dateElement.text().substringAfter(", ")) ?: 0
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        val urlElement = element.select(chapterUrlSelector).first()!!
+        val dateElement = element.select(chapterDateSelector).first()!!
+        setUrlWithoutDomain(urlElement.attr("href"))
+        name = urlElement.text()
+        date_upload = parseChapterDate(dateElement.text().substringAfter(", ")) ?: 0
+    }
 
     protected open fun parseChapterDate(date: String): Long? {
         val lcDate = date.lowercase(Locale.ROOT)
@@ -264,12 +259,11 @@ abstract class FoolSlide(
         return now.timeInMillis
     }
 
-    private fun SimpleDateFormat.parseOrNull(string: String): Date? =
-        try {
-            parse(string)
-        } catch (e: ParseException) {
-            null
-        }
+    private fun SimpleDateFormat.parseOrNull(string: String): Date? = try {
+        parse(string)
+    } catch (e: ParseException) {
+        null
+    }
 
     override fun pageListRequest(chapter: SChapter) = allowAdult(super.pageListRequest(chapter))
 

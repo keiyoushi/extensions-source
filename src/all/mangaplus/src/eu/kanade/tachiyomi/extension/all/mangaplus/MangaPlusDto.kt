@@ -118,51 +118,49 @@ class TitleDetailView(
     private val isOnHiatus: Boolean
         get() = nonAppearanceInfo.contains(HIATUS_REGEX)
 
-    private fun createGenres(intl: Intl): List<String> =
-        buildList {
-            if (isSimulpub && !isReEdition && !isOneShot && !isCompleted) {
-                add("Simulrelease")
-            }
-
-            if (isOneShot) {
-                add("One-shot")
-            }
-
-            if (isReEdition) {
-                add("Re-edition")
-            }
-
-            if (isWebtoon) {
-                add("Webtoon")
-            }
-
-            if (label?.magazine != null) {
-                add(intl.format("serialization", label.magazine))
-            }
-
-            if (!isCompleted) {
-                val scheduleLabel = intl["schedule_" + titleLabels.releaseSchedule.toString().lowercase()]
-                add(intl.format("schedule", scheduleLabel))
-            }
-
-            val ratingLabel = intl["rating_" + rating.toString().lowercase()]
-            add(intl.format("rating", ratingLabel))
+    private fun createGenres(intl: Intl): List<String> = buildList {
+        if (isSimulpub && !isReEdition && !isOneShot && !isCompleted) {
+            add("Simulrelease")
         }
+
+        if (isOneShot) {
+            add("One-shot")
+        }
+
+        if (isReEdition) {
+            add("Re-edition")
+        }
+
+        if (isWebtoon) {
+            add("Webtoon")
+        }
+
+        if (label?.magazine != null) {
+            add(intl.format("serialization", label.magazine))
+        }
+
+        if (!isCompleted) {
+            val scheduleLabel = intl["schedule_" + titleLabels.releaseSchedule.toString().lowercase()]
+            add(intl.format("schedule", scheduleLabel))
+        }
+
+        val ratingLabel = intl["rating_" + rating.toString().lowercase()]
+        add(intl.format("rating", ratingLabel))
+    }
 
     private val viewingInformation: String?
         get() = viewingPeriodDescription.takeIf { !isCompleted }
 
-    fun toSManga(intl: Intl): SManga =
-        title.toSManga().apply {
-            description = "${overview.orEmpty()}\n\n${viewingInformation.orEmpty()}".trim()
-            status =
-                when {
-                    isCompleted -> SManga.COMPLETED
-                    isOnHiatus -> SManga.ON_HIATUS
-                    else -> SManga.ONGOING
-                }
-            genre = createGenres(intl).joinToString()
-        }
+    fun toSManga(intl: Intl): SManga = title.toSManga().apply {
+        description = "${overview.orEmpty()}\n\n${viewingInformation.orEmpty()}".trim()
+        status =
+            when {
+                isCompleted -> SManga.COMPLETED
+                isOnHiatus -> SManga.ON_HIATUS
+                else -> SManga.ONGOING
+            }
+        genre = createGenres(intl).joinToString()
+    }
 
     companion object {
         private val COMPLETED_REGEX = "completado|complete|completo".toRegex()
@@ -280,14 +278,13 @@ class Title(
     val viewCount: Int = 0,
     val language: Language? = Language.ENGLISH,
 ) {
-    fun toSManga(): SManga =
-        SManga.create().apply {
-            title = name
-            author = this@Title.author?.replace(" / ", ", ")
-            artist = author
-            thumbnail_url = portraitImageUrl
-            url = "#/titles/$titleId"
-        }
+    fun toSManga(): SManga = SManga.create().apply {
+        title = name
+        author = this@Title.author?.replace(" / ", ", ")
+        artist = author
+        thumbnail_url = portraitImageUrl
+        url = "#/titles/$titleId"
+    }
 }
 
 enum class Language {
@@ -332,19 +329,18 @@ class Chapter(
     val isExpired: Boolean
         get() = subTitle == null
 
-    fun toSChapter(subtitlePref: Boolean): SChapter =
-        SChapter.create().apply {
-            name =
-                if (subtitlePref && subTitle != null) {
-                    subTitle
-                } else {
-                    "${this@Chapter.name} - $subTitle"
-                }
-            date_upload = 1000L * startTimeStamp
-            url = "#/viewer/$chapterId"
-            chapter_number = this@Chapter.name.substringAfter("#").toFloatOrNull() ?: -1f
-            scanlator = "MANGA Plus"
-        }
+    fun toSChapter(subtitlePref: Boolean): SChapter = SChapter.create().apply {
+        name =
+            if (subtitlePref && subTitle != null) {
+                subTitle
+            } else {
+                "${this@Chapter.name} - $subTitle"
+            }
+        date_upload = 1000L * startTimeStamp
+        url = "#/viewer/$chapterId"
+        chapter_number = this@Chapter.name.substringAfter("#").toFloatOrNull() ?: -1f
+        scanlator = "MANGA Plus"
+    }
 }
 
 @Serializable

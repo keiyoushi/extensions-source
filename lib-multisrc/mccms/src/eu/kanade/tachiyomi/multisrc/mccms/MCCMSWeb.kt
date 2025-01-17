@@ -32,10 +32,9 @@ open class MCCMSWeb(
             .build()
     }
 
-    override fun headersBuilder() =
-        Headers
-            .Builder()
-            .add("User-Agent", System.getProperty("http.agent")!!)
+    override fun headersBuilder() = Headers
+        .Builder()
+        .add("User-Agent", System.getProperty("http.agent")!!)
 
     private fun parseListing(document: Document): MangasPage {
         parseGenres(document, config.genreData)
@@ -123,17 +122,16 @@ open class MCCMSWeb(
 
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url, pcHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        run {
-            SManga.create().apply {
-                val document = response.asJsoup().selectFirst(Evaluator.Class("de-info__box"))!!
-                title = document.selectFirst(Evaluator.Class("comic-title"))!!.ownText()
-                thumbnail_url = document.selectFirst(Evaluator.Tag("img"))!!.attr("src")
-                author = document.selectFirst(Evaluator.Class("name"))!!.text()
-                genre = document.selectFirst(Evaluator.Class("comic-status"))!!.select(Evaluator.Tag("a")).joinToString { it.ownText() }
-                description = document.selectFirst(Evaluator.Class("intro-total"))!!.text()
-            }
+    override fun mangaDetailsParse(response: Response): SManga = run {
+        SManga.create().apply {
+            val document = response.asJsoup().selectFirst(Evaluator.Class("de-info__box"))!!
+            title = document.selectFirst(Evaluator.Class("comic-title"))!!.ownText()
+            thumbnail_url = document.selectFirst(Evaluator.Tag("img"))!!.attr("src")
+            author = document.selectFirst(Evaluator.Class("name"))!!.text()
+            genre = document.selectFirst(Evaluator.Class("comic-status"))!!.select(Evaluator.Tag("a")).joinToString { it.ownText() }
+            description = document.selectFirst(Evaluator.Class("intro-total"))!!.text()
         }
+    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         if (manga.url == "/search") return Observable.just(emptyList())
@@ -142,20 +140,19 @@ open class MCCMSWeb(
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, pcHeaders)
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        run {
-            response
-                .asJsoup()
-                .selectFirst(Evaluator.Class("chapter__list-box"))!!
-                .children()
-                .map {
-                    val link = it.child(0)
-                    SChapter.create().apply {
-                        url = link.attr("href").removePathPrefix()
-                        name = link.ownText()
-                    }
-                }.asReversed()
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = run {
+        response
+            .asJsoup()
+            .selectFirst(Evaluator.Class("chapter__list-box"))!!
+            .children()
+            .map {
+                val link = it.child(0)
+                SChapter.create().apply {
+                    url = link.attr("href").removePathPrefix()
+                    name = link.ownText()
+                }
+            }.asReversed()
+    }
 
     override fun pageListRequest(chapter: SChapter): Request =
         GET(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders)

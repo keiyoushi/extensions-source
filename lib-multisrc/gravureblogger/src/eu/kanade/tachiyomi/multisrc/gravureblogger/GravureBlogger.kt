@@ -31,10 +31,9 @@ abstract class GravureBlogger(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -182,16 +181,15 @@ abstract class GravureBlogger(
 
     private var categories = emptyList<String>()
 
-    private fun apiUrlBuilder(page: Int) =
-        baseUrl.toHttpUrl().newBuilder().apply {
-            // Blogger indices start from 1
-            val startIndex = MAX_RESULTS * (page - 1) + 1
+    private fun apiUrlBuilder(page: Int) = baseUrl.toHttpUrl().newBuilder().apply {
+        // Blogger indices start from 1
+        val startIndex = MAX_RESULTS * (page - 1) + 1
 
-            addPathSegments("feeds/posts/default")
-            addQueryParameter("alt", "json")
-            addQueryParameter("max-results", MAX_RESULTS.toString())
-            addQueryParameter("start-index", startIndex.toString())
-        }
+        addPathSegments("feeds/posts/default")
+        addQueryParameter("alt", "json")
+        addQueryParameter("max-results", MAX_RESULTS.toString())
+        addQueryParameter("start-index", startIndex.toString())
+    }
 
     companion object {
         private const val MAX_RESULTS = 25

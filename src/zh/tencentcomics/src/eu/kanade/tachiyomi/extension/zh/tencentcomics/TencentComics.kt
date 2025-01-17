@@ -48,11 +48,10 @@ class TencentComics : ParsedHttpSource() {
 
     override fun chapterListSelector(): String = ".works-chapter-item"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("abs:href"))
-            name = (if (element.isLockedChapter()) "\uD83D\uDD12 " else "") + element.text().trim()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("abs:href"))
+        name = (if (element.isLockedChapter()) "\uD83D\uDD12 " else "") + element.text().trim()
+    }
 
     private fun Element.isLockedChapter(): Boolean = this.selectFirst(".ui-icon-pay") != null
 
@@ -60,14 +59,13 @@ class TencentComics : ParsedHttpSource() {
 
     override fun popularMangaSelector(): String = "ul.ret-search-list.clearfix > li"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            url = "/comic/index/" + element.select("div > a").attr("href").substringAfter("/Comic/comicInfo/")
-            title = element.select("div > a").attr("title").trim()
-            thumbnail_url = element.select("div > a > img").attr("data-original")
-            author = element.select("div > p.ret-works-author").text().trim()
-            description = element.select("div > p.ret-works-decs").text().trim()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        url = "/comic/index/" + element.select("div > a").attr("href").substringAfter("/Comic/comicInfo/")
+        title = element.select("div > a").attr("title").trim()
+        thumbnail_url = element.select("div > a > img").attr("data-original")
+        author = element.select("div > p.ret-works-author").text().trim()
+        description = element.select("div > p.ret-works-decs").text().trim()
+    }
 
     override fun popularMangaNextPageSelector() = throw java.lang.UnsupportedOperationException("Not used.")
 
@@ -98,21 +96,20 @@ class TencentComics : ParsedHttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request =
         GET("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/"), headers)
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            thumbnail_url = document.select("div.works-cover.ui-left > a > img").attr("src")
-            title = document.select("h2.works-intro-title.ui-left > strong").text().trim()
-            description = document.select("p.works-intro-short").text().trim()
-            author = document.select("p.works-intro-digi > span > em").text().trim()
-            status =
-                when (document.select("label.works-intro-status").text().trim()) {
-                    "连载中" -> SManga.ONGOING
-                    "已完结" -> SManga.COMPLETED
-                    "連載中" -> SManga.ONGOING
-                    "已完結" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = document.select("div.works-cover.ui-left > a > img").attr("src")
+        title = document.select("h2.works-intro-title.ui-left > strong").text().trim()
+        description = document.select("p.works-intro-short").text().trim()
+        author = document.select("p.works-intro-digi > span > em").text().trim()
+        status =
+            when (document.select("label.works-intro-status").text().trim()) {
+                "连载中" -> SManga.ONGOING
+                "已完结" -> SManga.COMPLETED
+                "連載中" -> SManga.ONGOING
+                "已完結" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     // convert url to desktop since some chapters are blocked on mobile
     override fun pageListRequest(chapter: SChapter): Request = GET(desktopUrl + chapter.url, headers)
@@ -179,19 +176,18 @@ class TencentComics : ParsedHttpSource() {
 
     override fun searchMangaSelector() = "ul > li.comic-item > a"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            url = element.attr("href")
-            title = element.select("div > strong").text().trim()
-            thumbnail_url = element.select("div > img").attr("src")
-            description = element.select("div > small.comic-desc").text().trim()
-            genre =
-                element
-                    .select("div > small.comic-tag")
-                    .text()
-                    .trim()
-                    .replace(" ", ", ")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        url = element.attr("href")
+        title = element.select("div > strong").text().trim()
+        thumbnail_url = element.select("div > img").attr("src")
+        description = element.select("div > small.comic-desc").text().trim()
+        genre =
+            element
+                .select("div > small.comic-tag")
+                .text()
+                .trim()
+                .replace(" ", ", ")
+    }
 
     override fun searchMangaNextPageSelector() = throw java.lang.UnsupportedOperationException("Not used.")
 
@@ -199,16 +195,15 @@ class TencentComics : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(ID_SEARCH_PREFIX)) {
-            val id = query.removePrefix(ID_SEARCH_PREFIX)
-            client
-                .newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(ID_SEARCH_PREFIX)) {
+        val id = query.removePrefix(ID_SEARCH_PREFIX)
+        client
+            .newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/comic/index/id/$id", headers)
 
@@ -279,14 +274,13 @@ class TencentComics : ParsedHttpSource() {
         }
     }
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("注意：不影響按標題搜索"),
-            PopularityFilter(),
-            VipFilter(),
-            StatusFilter(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("注意：不影響按標題搜索"),
+        PopularityFilter(),
+        VipFilter(),
+        StatusFilter(),
+        GenreFilter(),
+    )
 
     private open class UriPartFilter(
         displayName: String,

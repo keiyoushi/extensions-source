@@ -35,10 +35,9 @@ class MangasIn :
             .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/lasted?p=$page", headers)
 
@@ -96,16 +95,15 @@ class MangasIn :
         return parseSearchDirectory(1)
     }
 
-    override fun mangaDetailsParse(document: Document) =
-        super.mangaDetailsParse(document).apply {
-            status =
-                when (document.selectFirst("div.manga-name span.label")?.text()?.lowercase()) {
-                    in detailStatusComplete -> SManga.COMPLETED
-                    in detailStatusOngoing -> SManga.ONGOING
-                    in detailStatusDropped -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
+        status =
+            when (document.selectFirst("div.manga-name span.label")?.text()?.lowercase()) {
+                in detailStatusComplete -> SManga.COMPLETED
+                in detailStatusOngoing -> SManga.ONGOING
+                in detailStatusDropped -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     private var key = ""
 

@@ -32,10 +32,9 @@ class TMOManga : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/recomendados?page=$page", headers)
 
@@ -43,12 +42,11 @@ class TMOManga : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = "nav.navigation ul.pagination a[rel=next]"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.select(".manga-title-updated").text()
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
-            setUrlWithoutDomain(element.select("div.manga_biblioteca > a").attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.select(".manga-title-updated").text()
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
+        setUrlWithoutDomain(element.select("div.manga_biblioteca > a").attr("href"))
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
 
@@ -69,13 +67,12 @@ class TMOManga : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.select(".manga-title-updated").text()
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
-            val chapterUrl = element.selectFirst("a")!!.attr("href")
-            setUrlWithoutDomain(chapterUrl.substringBeforeLast("-").replace("/capitulo/", "/manga/"))
-        }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        title = element.select(".manga-title-updated").text()
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
+        val chapterUrl = element.selectFirst("a")!!.attr("href")
+        setUrlWithoutDomain(chapterUrl.substringBeforeLast("-").replace("/capitulo/", "/manga/"))
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -101,12 +98,11 @@ class TMOManga : ParsedHttpSource() {
         return GET(urlBuilder.build(), headers)
     }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Los filtros seran ignorados si se realiza una busqueda por texto"),
-            Filter.Separator(),
-            GenreFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Los filtros seran ignorados si se realiza una busqueda por texto"),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -114,35 +110,31 @@ class TMOManga : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.select("post-title > h1").text()
-            genre = document.select("div.summary_content a.tags_manga").joinToString { it.ownText() }
-            description = document.select("div.description-summary p").text()
-            thumbnail_url = document.select("div.summary_image img").imgAttr()
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.select("post-title > h1").text()
+        genre = document.select("div.summary_content a.tags_manga").joinToString { it.ownText() }
+        description = document.select("div.description-summary p").text()
+        thumbnail_url = document.select("div.summary_image img").imgAttr()
+    }
 
     override fun chapterListSelector() = "div.listing-chapters_wrap li.wp-manga-chapter"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            name = element.select("a").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.select("a").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div#images_chapter img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#images_chapter img").mapIndexed { i, img ->
+        Page(i, imageUrl = img.imgAttr())
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        else -> attr("abs:src")
+    }
 
     private fun Elements.imgAttr() = this.first()!!.imgAttr()
 }

@@ -29,11 +29,10 @@ class CatharsisFantasy :
 
     private val iframeSelector: String = "#mangaIframe"
 
-    override fun pageListParse(document: Document): List<Page> =
-        super.pageListParse(
-            document.takeIf { it.select(iframeSelector).isEmpty() }
-                ?: fetchIframeDocumentPageList(document),
-        )
+    override fun pageListParse(document: Document): List<Page> = super.pageListParse(
+        document.takeIf { it.select(iframeSelector).isEmpty() }
+            ?: fetchIframeDocumentPageList(document),
+    )
 
     private fun fetchIframeDocumentPageList(document: Document): Document {
         val pagesUrl =

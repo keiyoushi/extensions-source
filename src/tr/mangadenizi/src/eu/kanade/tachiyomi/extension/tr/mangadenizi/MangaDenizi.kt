@@ -32,12 +32,11 @@ class MangaDenizi : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga-list?page=$page", headers)
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            title = element.select("img").attr("alt")
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        title = element.select("img").attr("alt")
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector() = "[rel=next]"
 
@@ -46,11 +45,10 @@ class MangaDenizi : ParsedHttpSource() {
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest-release?page=$page", headers)
 
     // No thumbnail on latest releases page
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            title = element.text()
-        }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.text()
+    }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -93,34 +91,31 @@ class MangaDenizi : ParsedHttpSource() {
         return MangasPage(mangaList, false)
     }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            description = document.select(".well > p").text()
-            genre = document.select("dd > a[href*=category]").joinToString { it.text() }
-            status = parseStatus(document.select(".label.label-success").text())
-            thumbnail_url = document.select("img.img-responsive").attr("abs:src")
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        description = document.select(".well > p").text()
+        genre = document.select("dd > a[href*=category]").joinToString { it.text() }
+        status = parseStatus(document.select(".label.label-success").text())
+        thumbnail_url = document.select("img.img-responsive").attr("abs:src")
+    }
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("Devam Ediyor") -> SManga.ONGOING
-            status.contains("Tamamlandı") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("Devam Ediyor") -> SManga.ONGOING
+        status.contains("Tamamlandı") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = "ul.chapters li"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            name = "${element.select("a").text()}: ${element.select("em").text()}"
-            date_upload =
-                try {
-                    dateFormat.parse(element.select("div.date-chapter-title-rtl").text().trim())?.time ?: 0
-                } catch (_: Exception) {
-                    0
-                }
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        name = "${element.select("a").text()}: ${element.select("em").text()}"
+        date_upload =
+            try {
+                dateFormat.parse(element.select("div.date-chapter-title-rtl").text().trim())?.time ?: 0
+            } catch (_: Exception) {
+                0
+            }
+    }
 
     companion object {
         val dateFormat by lazy {
@@ -128,11 +123,10 @@ class MangaDenizi : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("img.img-responsive").mapIndexed { i, element ->
-            val url = if (element.hasAttr("data-src")) element.attr("abs:data-src") else element.attr("abs:src")
-            Page(i, "", url)
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img.img-responsive").mapIndexed { i, element ->
+        val url = if (element.hasAttr("data-src")) element.attr("abs:data-src") else element.attr("abs:src")
+        Page(i, "", url)
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

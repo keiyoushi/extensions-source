@@ -53,19 +53,17 @@ CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la ab
         return Observable.just(MangasPage(arrayListOf(manga), false))
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        fetchPopularManga(1)
-            .map { it.mangas.first().apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
+        .map { it.mangas.first().apply { initialized = true } }
 
     // Chapters are listed old to new.
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun chapterListSelector() =
-        "option.webcomic${if (lang == "en"){
-            1
-        }else {
-            2
-        }}-link"
+    override fun chapterListSelector() = "option.webcomic${if (lang == "en"){
+        1
+    }else {
+        2
+    }}-link"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()

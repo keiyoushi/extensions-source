@@ -34,27 +34,25 @@ class Mangainua : ParsedHttpSource() {
             .build()
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", baseUrl)
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET(baseUrl)
 
     override fun popularMangaSelector() = "div.owl-carousel div.card--big"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("h3.card__title a")!!.run {
-                setUrlWithoutDomain(attr("href"))
-                title = text()
-            }
-            thumbnail_url =
-                element.selectFirst("img")?.run {
-                    absUrl("data-src").ifEmpty { absUrl("src") }
-                }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("h3.card__title a")!!.run {
+            setUrlWithoutDomain(attr("href"))
+            title = text()
         }
+        thumbnail_url =
+            element.selectFirst("img")?.run {
+                absUrl("data-src").ifEmpty { absUrl("src") }
+            }
+    }
 
     override fun popularMangaNextPageSelector() = null
 
@@ -72,23 +70,22 @@ class Mangainua : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.length > 2) {
-            POST(
-                "$baseUrl/index.php?do=search",
-                body =
-                    FormBody
-                        .Builder()
-                        .add("do", "search")
-                        .add("subaction", "search")
-                        .add("story", query)
-                        .add("search_start", page.toString())
-                        .build(),
-                headers = headers,
-            )
-        } else {
-            throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
-        }
+    ): Request = if (query.length > 2) {
+        POST(
+            "$baseUrl/index.php?do=search",
+            body =
+                FormBody
+                    .Builder()
+                    .add("do", "search")
+                    .add("subaction", "search")
+                    .add("story", query)
+                    .add("search_start", page.toString())
+                    .build(),
+            headers = headers,
+        )
+    } else {
+        throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
+    }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
 
@@ -97,42 +94,41 @@ class Mangainua : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("span.UAname")!!.text()
-            description = document.selectFirst("div.item__full-description")!!.text()
-            thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.absUrl("src")
-            status =
-                when (document.getInfoElement("Статус перекладу:")?.text()?.trim()) {
-                    "Триває" -> SManga.ONGOING
-                    "Покинуто" -> SManga.CANCELLED
-                    "Закінчений" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("span.UAname")!!.text()
+        description = document.selectFirst("div.item__full-description")!!.text()
+        thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.absUrl("src")
+        status =
+            when (document.getInfoElement("Статус перекладу:")?.text()?.trim()) {
+                "Триває" -> SManga.ONGOING
+                "Покинуто" -> SManga.CANCELLED
+                "Закінчений" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
 
-            genre =
-                buildList {
-                    // genres
-                    addAll(
-                        document
-                            .getInfoElement("Жанри:")
-                            ?.select("a")
-                            ?.eachText()
-                            .orEmpty(),
-                    )
+        genre =
+            buildList {
+                // genres
+                addAll(
+                    document
+                        .getInfoElement("Жанри:")
+                        ?.select("a")
+                        ?.eachText()
+                        .orEmpty(),
+                )
 
-                    // additional
-                    val type =
-                        when (document.getInfoElement("Тип:")?.text()) {
-                            "ВЕБМАНХВА" -> "Manhwa"
-                            "МАНХВА" -> "Manhwa"
-                            "МАНЬХВА" -> "Manhua"
-                            "ВЕБМАНЬХВА" -> "Manhua"
-                            else -> "Manga"
-                        }
-                    add(type)
-                }.joinToString()
-        }
+                // additional
+                val type =
+                    when (document.getInfoElement("Тип:")?.text()) {
+                        "ВЕБМАНХВА" -> "Manhwa"
+                        "МАНХВА" -> "Manhwa"
+                        "МАНЬХВА" -> "Manhua"
+                        "ВЕБМАНЬХВА" -> "Manhua"
+                        else -> "Manga"
+                    }
+                add(type)
+            }.joinToString()
+    }
 
     private fun Document.getInfoElement(text: String): Element? =
         selectFirst("div.item__full-sideba--header:has(div:containsOwn($text)) span.item__full-sidebar--description")
@@ -221,9 +217,8 @@ class Mangainua : ParsedHttpSource() {
             SimpleDateFormat("dd.MM.yyyy", Locale.ENGLISH)
         }
 
-        private fun String.toDate(): Long =
-            runCatching { DATE_FORMATTER.parse(trim())?.time }
-                .getOrNull() ?: 0L
+        private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(trim())?.time }
+            .getOrNull() ?: 0L
 
         private const val SITE_LOGIN_HASH = "site_login_hash"
 

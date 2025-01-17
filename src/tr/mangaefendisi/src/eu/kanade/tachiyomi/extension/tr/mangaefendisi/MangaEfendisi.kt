@@ -17,12 +17,11 @@ class MangaEfendisi :
     override val seriesTypeSelector = ".tsinfo .imptdt:contains(Tip) a"
     override val seriesStatusSelector = ".tsinfo .imptdt:contains(Durum) i"
 
-    override fun String?.parseStatus(): Int =
-        when {
-            this == null -> SManga.UNKNOWN
-            listOf("güncel", "devam ediyor").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
-            this.contains("tamamlandı", ignoreCase = true) -> SManga.COMPLETED
-            this.contains("bırakıldı", ignoreCase = true) -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    override fun String?.parseStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
+        listOf("güncel", "devam ediyor").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
+        this.contains("tamamlandı", ignoreCase = true) -> SManga.COMPLETED
+        this.contains("bırakıldı", ignoreCase = true) -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 }

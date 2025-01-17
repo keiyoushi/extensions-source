@@ -44,15 +44,14 @@ data class Release(
     @Transient
     val timestamp = dateFormat.parse(releaseDate)?.time ?: 0L
 
-    override fun toString() =
-        buildString {
-            if (number > 0) {
-                if (volume > 0) append("Volume $volume ")
-                append("Chapter ${decimalFormat.format(number)}")
-                if (name.isNotEmpty()) append(": ")
-            }
-            append(name)
+    override fun toString() = buildString {
+        if (number > 0) {
+            if (volume > 0) append("Volume $volume ")
+            append("Chapter ${decimalFormat.format(number)}")
+            if (name.isNotEmpty()) append(": ")
         }
+        append(name)
+    }
 
     companion object {
         private const val ISO_DATE = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"

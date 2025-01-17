@@ -116,10 +116,9 @@ class SussyToons :
         }
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("scan-id", "1") // Required header for requests
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("scan-id", "1") // Required header for requests
 
     // ============================= Popular ==================================
 
@@ -201,44 +200,42 @@ class SussyToons :
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response
-            .parseAs<WrapperDto<WrapperChapterDto>>()
-            .results.chapters
-            .map {
-                SChapter.create().apply {
-                    name = it.name
-                    it.chapterNumber?.let {
-                        chapter_number = it
-                    }
-                    val chapterApiUrl =
-                        apiUrl
-                            .toHttpUrl()
-                            .newBuilder()
-                            .addEncodedPathSegments(chapterUrl!!)
-                            .addPathSegment(it.id.toString())
-                            .build()
-                    setUrlWithoutDomain(chapterApiUrl.toString())
-                    date_upload = it.updateAt.toDate()
+    override fun chapterListParse(response: Response): List<SChapter> = response
+        .parseAs<WrapperDto<WrapperChapterDto>>()
+        .results.chapters
+        .map {
+            SChapter.create().apply {
+                name = it.name
+                it.chapterNumber?.let {
+                    chapter_number = it
                 }
-            }.sortedBy(SChapter::chapter_number)
-            .reversed()
+                val chapterApiUrl =
+                    apiUrl
+                        .toHttpUrl()
+                        .newBuilder()
+                        .addEncodedPathSegments(chapterUrl!!)
+                        .addPathSegment(it.id.toString())
+                        .build()
+                setUrlWithoutDomain(chapterApiUrl.toString())
+                date_upload = it.updateAt.toDate()
+            }
+        }.sortedBy(SChapter::chapter_number)
+        .reversed()
 
     // ============================= Pages ====================================
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        super.pageListRequest(chapter).let { request ->
-            val url =
-                request.url
-                    .newBuilder()
-                    .fragment("$PAGE_IMAGE_PREFIX${chapter.url}")
-                    .build()
-
-            request
+    override fun pageListRequest(chapter: SChapter): Request = super.pageListRequest(chapter).let { request ->
+        val url =
+            request.url
                 .newBuilder()
-                .url(url)
+                .fragment("$PAGE_IMAGE_PREFIX${chapter.url}")
                 .build()
-        }
+
+        request
+            .newBuilder()
+            .url(url)
+            .build()
+    }
 
     private var pageUrlSegment: String? = null
 
@@ -382,14 +379,13 @@ class SussyToons :
         )
     }
 
-    private fun Interceptor.Chain.createBadGatewayResponse(request: Request): Response =
-        Response
-            .Builder()
-            .request(request)
-            .protocol(Protocol.HTTP_1_1)
-            .message("")
-            .code(HTTP_BAD_GATEWAY)
-            .build()
+    private fun Interceptor.Chain.createBadGatewayResponse(request: Request): Response = Response
+        .Builder()
+        .request(request)
+        .protocol(Protocol.HTTP_1_1)
+        .message("")
+        .code(HTTP_BAD_GATEWAY)
+        .build()
 
     private fun fetchApiUrl(chain: Interceptor.Chain): List<String> {
         val scripts =
@@ -583,9 +579,8 @@ class SussyToons :
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun fetchAllNextJsScriptUrls(baseRequest: Request): List<Pair<String, Headers>> {
-        fun WebResourceRequest.isNextJSUrl() =
-            this.url.toString().contains("_next", ignoreCase = true) &&
-                this.url.toString().contains(".js", ignoreCase = true)
+        fun WebResourceRequest.isNextJSUrl() = this.url.toString().contains("_next", ignoreCase = true) &&
+            this.url.toString().contains(".js", ignoreCase = true)
 
         return handlingWithWebResourceRequest(
             baseRequest,
@@ -658,10 +653,9 @@ class SussyToons :
         return state
     }
 
-    private fun Headers.Builder.fill(from: Map<String, String>): Headers.Builder =
-        from.entries.fold(this) { builder, entry ->
-            builder.set(entry.key, entry.value)
-        }
+    private fun Headers.Builder.fill(from: Map<String, String>): Headers.Builder = from.entries.fold(this) { builder, entry ->
+        builder.set(entry.key, entry.value)
+    }
 
     // ============================= Settings ====================================
 
@@ -736,29 +730,26 @@ class SussyToons :
         return sManga
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            return json.decodeFromStream(body.byteStream())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        return json.decodeFromStream(body.byteStream())
+    }
 
-    private fun String.toDate() =
-        try {
-            dateFormat.parse(this)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String.toDate() = try {
+        dateFormat.parse(this)!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     /**
      * Normalizes path segments:
      * Ex: [ "/a/b/", "/a/b", "a/b/", "a/b" ]
      * Result: "a/b"
      */
-    private fun String.toPathSegment() =
-        this
-            .trim()
-            .split("/")
-            .filter(String::isNotEmpty)
-            .joinToString("/")
+    private fun String.toPathSegment() = this
+        .trim()
+        .split("/")
+        .filter(String::isNotEmpty)
+        .joinToString("/")
 
     companion object {
         const val CDN_URL = "https://cdn.sussytoons.site"

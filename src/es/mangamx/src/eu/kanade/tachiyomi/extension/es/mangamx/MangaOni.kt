@@ -39,24 +39,22 @@ open class MangaOni :
 
     override val client = network.cloudflareClient
 
-    override fun popularMangaRequest(page: Int) =
-        GET(
-            url =
-                "$baseUrl/directorio?genero=false&estado=false&filtro=visitas&tipo=false" +
-                    "&adulto=${if (hideNSFWContent()) "0" else "false"}&orden=desc&p=$page",
-            headers = headers,
-        )
+    override fun popularMangaRequest(page: Int) = GET(
+        url =
+            "$baseUrl/directorio?genero=false&estado=false&filtro=visitas&tipo=false" +
+                "&adulto=${if (hideNSFWContent()) "0" else "false"}&orden=desc&p=$page",
+        headers = headers,
+    )
 
     override fun popularMangaNextPageSelector() = "ul.pagination a[rel=next]"
 
     override fun popularMangaSelector() = "#article-div a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            thumbnail_url = element.select("img").attr("data-src")
-            title = element.select("div:eq(1)").text().trim()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        thumbnail_url = element.select("img").attr("data-src")
+        title = element.select("div:eq(1)").text().trim()
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -80,14 +78,13 @@ open class MangaOni :
 
     override fun latestUpdatesSelector() = "div._1bJU3"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.select("img").attr("data-src")
-            element.select("div a").apply {
-                title = this.text().trim()
-                setUrlWithoutDomain(this.attr("href"))
-            }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.select("img").attr("data-src")
+        element.select("div a").apply {
+            title = this.text().trim()
+            setUrlWithoutDomain(this.attr("href"))
         }
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -153,14 +150,13 @@ open class MangaOni :
 
     override fun searchMangaSelector(): String = "#article-div > div"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.select("img").attr("src")
-            element.select("div a").apply {
-                title = this.text().trim()
-                setUrlWithoutDomain(this.attr("href"))
-            }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.select("img").attr("src")
+        element.select("div a").apply {
+            title = this.text().trim()
+            setUrlWithoutDomain(this.attr("href"))
         }
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (!response.isSuccessful) throw Exception("Búsqueda fallida ${response.code}")
@@ -207,13 +203,12 @@ open class MangaOni :
 
     override fun chapterListSelector(): String = "div#c_list a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.text().trim()
-            setUrlWithoutDomain(element.attr("href"))
-            chapter_number = element.select("span").attr("data-num").toFloat()
-            date_upload = parseDate(element.select("span").attr("datetime"))
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.text().trim()
+        setUrlWithoutDomain(element.attr("href"))
+        chapter_number = element.select("span").attr("data-num").toFloat()
+        date_upload = parseDate(element.select("span").attr("datetime"))
+    }
 
     private fun parseDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0
 

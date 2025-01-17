@@ -42,10 +42,9 @@ class RavenManga : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()
 
@@ -62,12 +61,11 @@ class RavenManga : ParsedHttpSource() {
         return MangasPage(distinctList, mangasPage.hasNextPage)
     }
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-            title = element.selectFirst("figcaption")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        title = element.selectFirst("figcaption")!!.text()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -75,12 +73,11 @@ class RavenManga : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-            title = element.selectFirst("figcaption")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        title = element.selectFirst("figcaption")!!.text()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -134,29 +131,26 @@ class RavenManga : ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-            title = element.selectFirst("figcaption")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        title = element.selectFirst("figcaption")!!.text()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            with(document.select("section#section-sinopsis")) {
-                description = select("p").text()
-                genre = select("div.flex:has(div:containsOwn(Géneros)) > div > a > span").joinToString { it.text() }
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        with(document.select("section#section-sinopsis")) {
+            description = select("p").text()
+            genre = select("div.flex:has(div:containsOwn(Géneros)) > div > a > span").joinToString { it.text() }
         }
+    }
 
     override fun chapterListSelector(): String = "section#section-list-cap div.grid > a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.selectFirst("div#name")!!.text()
-            date_upload = parseRelativeDate(element.selectFirst("time")!!.text())
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.selectFirst("div#name")!!.text()
+        date_upload = parseRelativeDate(element.selectFirst("time")!!.text())
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         var doc = document
@@ -177,10 +171,9 @@ class RavenManga : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Limpie la barra de búsqueda y haga click en 'Filtrar' para mostrar todas las series."),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Limpie la barra de búsqueda y haga click en 'Filtrar' para mostrar todas las series."),
+    )
 
     private fun parseRelativeDate(date: String): Long {
         val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0

@@ -98,23 +98,21 @@ abstract class LibGroup(
             }.build()
     }
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add(
-                "Accept",
-                "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-            )
-            add("Referer", baseUrl)
-            add("Site-Id", siteId.toString())
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add(
+            "Accept",
+            "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        )
+        add("Referer", baseUrl)
+        add("Site-Id", siteId.toString())
+    }
 
-    private fun imageHeader() =
-        Headers
-            .Builder()
-            .apply {
-                add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-                add("Referer", baseUrl)
-            }.build()
+    private fun imageHeader() = Headers
+        .Builder()
+        .apply {
+            add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            add("Referer", baseUrl)
+        }.build()
 
     private var constants: Constants? = null
 
@@ -315,25 +313,24 @@ abstract class LibGroup(
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Data<Manga>>().data.toSManga(isEng())
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(mangaDetailsRequest(manga))
-            .asObservable()
-            .doOnNext { response ->
-                if (!response.isSuccessful) {
-                    if (response.code ==
-                        404
-                    ) {
-                        throw Exception(
-                            "HTTP error ${response.code}. Для просмотра 18+ контента необходима авторизация через WebView\uD83C\uDF0E︎",
-                        )
-                    } else {
-                        throw Exception("HTTP error ${response.code}")
-                    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(mangaDetailsRequest(manga))
+        .asObservable()
+        .doOnNext { response ->
+            if (!response.isSuccessful) {
+                if (response.code ==
+                    404
+                ) {
+                    throw Exception(
+                        "HTTP error ${response.code}. Для просмотра 18+ контента необходима авторизация через WebView\uD83C\uDF0E︎",
+                    )
+                } else {
+                    throw Exception("HTTP error ${response.code}")
                 }
-            }.map { response ->
-                mangaDetailsParse(response)
             }
+        }.map { response ->
+            mangaDetailsParse(response)
+        }
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
@@ -354,12 +351,11 @@ abstract class LibGroup(
         return "$baseUrl/ru/$slugUrl/read/v$volume/c$number?$branchStr$userStr"
     }
 
-    private fun getDefaultBranch(id: String): List<Branch> =
-        client
-            .newCall(GET("$apiDomain/api/branches/$id", headers))
-            .execute()
-            .parseAs<Data<List<Branch>>>()
-            .data
+    private fun getDefaultBranch(id: String): List<Branch> = client
+        .newCall(GET("$apiDomain/api/branches/$id", headers))
+        .execute()
+        .parseAs<Data<List<Branch>>>()
+        .data
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slugUrl =
@@ -487,24 +483,23 @@ abstract class LibGroup(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
-            client
-                .newCall(GET("$apiDomain/api/manga/$realQuery", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
+        client
+            .newCall(GET("$apiDomain/api/manga/$realQuery", headers))
+            .asObservableSuccess()
+            .map { response ->
+                val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
+    }
 
     // Search
     override fun searchMangaRequest(
@@ -689,14 +684,13 @@ abstract class LibGroup(
             Selection(0, false),
         )
 
-    private fun getMyList() =
-        listOf(
-            SearchFilter("Читаю", "1"),
-            SearchFilter("В планах", "2"),
-            SearchFilter("Брошено", "3"),
-            SearchFilter("Прочитано", "4"),
-            SearchFilter("Любимые", "5"),
-        )
+    private fun getMyList() = listOf(
+        SearchFilter("Читаю", "1"),
+        SearchFilter("В планах", "2"),
+        SearchFilter("Брошено", "3"),
+        SearchFilter("Прочитано", "4"),
+        SearchFilter("Любимые", "5"),
+    )
 
     private class RequireChapters :
         Filter.Select<String>(
@@ -709,9 +703,8 @@ abstract class LibGroup(
 
     private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
 
-    private fun urlChangedError(sourceName: String): String =
-        "URL серии изменился. Перенесите/мигрируйте с $sourceName " +
-            "на $sourceName, чтобы список глав обновился."
+    private fun urlChangedError(sourceName: String): String = "URL серии изменился. Перенесите/мигрируйте с $sourceName " +
+        "на $sourceName, чтобы список глав обновился."
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -843,23 +836,22 @@ abstract class LibGroup(
         title: String,
         default: String,
         value: String,
-    ): androidx.preference.EditTextPreference =
-        androidx.preference.EditTextPreference(context).apply {
-            key = title
-            this.title = title
-            summary = value.replace("/", "\n")
-            this.setDefaultValue(default)
-            dialogTitle = title
-            setOnPreferenceChangeListener { _, _ ->
-                Toast
-                    .makeText(
-                        context,
-                        "Для обновления списка необходимо перезапустить приложение с полной остановкой.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                true
-            }
+    ): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        key = title
+        this.title = title
+        summary = value.replace("/", "\n")
+        this.setDefaultValue(default)
+        dialogTitle = title
+        setOnPreferenceChangeListener { _, _ ->
+            Toast
+                .makeText(
+                    context,
+                    "Для обновления списка необходимо перезапустить приложение с полной остановкой.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            true
         }
+    }
 
     // api changed id of servers, remap SERVER_PREF old("fourth") to new("secondary")
     private fun SharedPreferences.migrateOldImageServer(): SharedPreferences {

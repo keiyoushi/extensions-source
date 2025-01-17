@@ -42,25 +42,23 @@ class Hennojin(
 
     override fun popularMangaNextPageSelector() = ".paginate .next"
 
-    override fun popularMangaRequest(page: Int) =
-        httpUrl.request {
-            when (lang) {
-                "ja" -> {
-                    addEncodedPathSegments("page/$page/")
-                    addQueryParameter("archive", "raw")
-                }
-                else -> addEncodedPathSegments("page/$page")
+    override fun popularMangaRequest(page: Int) = httpUrl.request {
+        when (lang) {
+            "ja" -> {
+                addEncodedPathSegments("page/$page/")
+                addQueryParameter("archive", "raw")
             }
+            else -> addEncodedPathSegments("page/$page")
         }
+    }
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst(".title_link > a").let {
-                title = it!!.text()
-                setUrlWithoutDomain(it.absUrl("href"))
-            }
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".title_link > a").let {
+            title = it!!.text()
+            setUrlWithoutDomain(it.absUrl("href"))
         }
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -78,37 +76,36 @@ class Hennojin(
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            description =
-                document
-                    .select(
-                        ".manga-subtitle + p + p",
-                    ).joinToString("\n") {
-                        it
-                            .apply { select(Evaluator.Tag("br")).prepend("\\n") }
-                            .text()
-                            .replace("\\n", "\n")
-                            .replace("\n ", "\n")
-                    }.trim()
-            genre =
-                document
-                    .select(
-                        ".tags-list a[href*=/parody/]," +
-                            ".tags-list a[href*=/tags/]," +
-                            ".tags-list a[href*=/character/]",
-                    ).joinToString { it.text() }
-            artist =
-                document
-                    .selectFirst(
-                        ".tags-list a[href*=/artist/]",
-                    )?.text()
-            author = document
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        description =
+            document
+                .select(
+                    ".manga-subtitle + p + p",
+                ).joinToString("\n") {
+                    it
+                        .apply { select(Evaluator.Tag("br")).prepend("\\n") }
+                        .text()
+                        .replace("\\n", "\n")
+                        .replace("\n ", "\n")
+                }.trim()
+        genre =
+            document
+                .select(
+                    ".tags-list a[href*=/parody/]," +
+                        ".tags-list a[href*=/tags/]," +
+                        ".tags-list a[href*=/character/]",
+                ).joinToString { it.text() }
+        artist =
+            document
                 .selectFirst(
-                    ".tags-list a[href*=/group/]",
-                )?.text() ?: artist
-            status = SManga.COMPLETED
-        }
+                    ".tags-list a[href*=/artist/]",
+                )?.text()
+        author = document
+            .selectFirst(
+                ".tags-list a[href*=/group/]",
+            )?.text() ?: artist
+        status = SManga.COMPLETED
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup(response.body.string())
@@ -146,10 +143,9 @@ class Hennojin(
         }
     }
 
-    override fun pageListParse(document: Document) =
-        document
-            .select(".slideshow-container > img")
-            .mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
+    override fun pageListParse(document: Document) = document
+        .select(".slideshow-container > img")
+        .mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
 
     private inline fun HttpUrl.request(block: HttpUrl.Builder.() -> HttpUrl.Builder) = GET(newBuilder().block().build(), headers)
 

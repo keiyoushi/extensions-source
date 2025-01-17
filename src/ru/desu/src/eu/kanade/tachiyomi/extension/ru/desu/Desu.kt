@@ -54,11 +54,10 @@ class Desu :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("User-Agent", "Tachiyomi")
-            add("Referer", baseUrl)
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("User-Agent", "Tachiyomi")
+        add("Referer", baseUrl)
+    }
 
     override val client: OkHttpClient =
         network.cloudflareClient
@@ -192,37 +191,35 @@ class Desu :
     private fun titleDetailsRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/", headers)
 
     // Workaround to allow "Open in browser" use the real URL.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(titleDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(titleDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "/manga" + manga.url, headers)
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val responseString = response.body.string()
-            val series = json.decodeFromString<SeriesWrapperDto<MangaDetDto>>(responseString)
-            val genresStr =
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val responseString = response.body.string()
+        val series = json.decodeFromString<SeriesWrapperDto<MangaDetDto>>(responseString)
+        val genresStr =
+            json
+                .decodeFromString<SeriesWrapperDto<MangaDetGenresDto>>(
+                    responseString,
+                ).response.genres!!
+                .joinToString { it.russian }
+        val authorsStr =
+            if (responseString.contains("people_name")) {
                 json
-                    .decodeFromString<SeriesWrapperDto<MangaDetGenresDto>>(
-                        responseString,
-                    ).response.genres!!
-                    .joinToString { it.russian }
-            val authorsStr =
-                if (responseString.contains("people_name")) {
-                    json
-                        .decodeFromString<SeriesWrapperDto<MangaDetAuthorsDto>>(responseString)
-                        .response.authors!!
-                        .joinToString { it.people_name }
-                } else {
-                    null
-                }
-            return series.response.toSManga(genresStr, authorsStr)
-        }
+                    .decodeFromString<SeriesWrapperDto<MangaDetAuthorsDto>>(responseString)
+                    .response.authors!!
+                    .joinToString { it.people_name }
+            } else {
+                null
+            }
+        return series.response.toSManga(genresStr, authorsStr)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val obj =
@@ -291,25 +288,24 @@ class Desu :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            client
-                .newCall(searchMangaByIdRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$realQuery"
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+        client
+            .newCall(searchMangaByIdRequest(realQuery))
+            .asObservableSuccess()
+            .map { response ->
+                val details = mangaDetailsParse(response)
+                details.url = "/$realQuery"
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
+    }
 
     private class OrderBy :
         Filter.Select<String>(
@@ -335,70 +331,67 @@ class Desu :
         val id: String,
     ) : Filter.CheckBox(name)
 
-    override fun getFilterList() =
-        FilterList(
-            OrderBy(),
-            TypeList(getTypeList()),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        OrderBy(),
+        TypeList(getTypeList()),
+        GenreList(getGenreList()),
+    )
 
-    private fun getTypeList() =
-        listOf(
-            Type("Манга", "manga"),
-            Type("Манхва", "manhwa"),
-            Type("Маньхуа", "manhua"),
-            Type("Ваншот", "one_shot"),
-            Type("Комикс", "comics"),
-        )
+    private fun getTypeList() = listOf(
+        Type("Манга", "manga"),
+        Type("Манхва", "manhwa"),
+        Type("Маньхуа", "manhua"),
+        Type("Ваншот", "one_shot"),
+        Type("Комикс", "comics"),
+    )
 
-    private fun getGenreList() =
-        listOf(
-            Genre("Безумие", "Dementia"),
-            Genre("Боевые искусства", "Martial Arts"),
-            Genre("Вампиры", "Vampire"),
-            Genre("Военное", "Military"),
-            Genre("Гарем", "Harem"),
-            Genre("Демоны", "Demons"),
-            Genre("Детектив", "Mystery"),
-            Genre("Детское", "Kids"),
-            Genre("Дзёсей", "Josei"),
-            Genre("Додзинси", "Doujinshi"),
-            Genre("Драма", "Drama"),
-            Genre("Игры", "Game"),
-            Genre("Исторический", "Historical"),
-            Genre("Комедия", "Comedy"),
-            Genre("Космос", "Space"),
-            Genre("Магия", "Magic"),
-            Genre("Машины", "Cars"),
-            Genre("Меха", "Mecha"),
-            Genre("Музыка", "Music"),
-            Genre("Пародия", "Parody"),
-            Genre("Повседневность", "Slice of Life"),
-            Genre("Полиция", "Police"),
-            Genre("Приключения", "Adventure"),
-            Genre("Психологическое", "Psychological"),
-            Genre("Романтика", "Romance"),
-            Genre("Самураи", "Samurai"),
-            Genre("Сверхъестественное", "Supernatural"),
-            Genre("Сёдзе", "Shoujo"),
-            Genre("Сёдзе Ай", "Shoujo Ai"),
-            Genre("Сейнен", "Seinen"),
-            Genre("Сёнен", "Shounen"),
-            Genre("Сёнен Ай", "Shounen Ai"),
-            Genre("Смена пола", "Gender Bender"),
-            Genre("Спорт", "Sports"),
-            Genre("Супер сила", "Super Power"),
-            Genre("Триллер", "Thriller"),
-            Genre("Ужасы", "Horror"),
-            Genre("Фантастика", "Sci-Fi"),
-            Genre("Фэнтези", "Fantasy"),
-            Genre("Хентай", "Hentai"),
-            Genre("Школа", "School"),
-            Genre("Экшен", "Action"),
-            Genre("Этти", "Ecchi"),
-            Genre("Юри", "Yuri"),
-            Genre("Яой", "Yaoi"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Безумие", "Dementia"),
+        Genre("Боевые искусства", "Martial Arts"),
+        Genre("Вампиры", "Vampire"),
+        Genre("Военное", "Military"),
+        Genre("Гарем", "Harem"),
+        Genre("Демоны", "Demons"),
+        Genre("Детектив", "Mystery"),
+        Genre("Детское", "Kids"),
+        Genre("Дзёсей", "Josei"),
+        Genre("Додзинси", "Doujinshi"),
+        Genre("Драма", "Drama"),
+        Genre("Игры", "Game"),
+        Genre("Исторический", "Historical"),
+        Genre("Комедия", "Comedy"),
+        Genre("Космос", "Space"),
+        Genre("Магия", "Magic"),
+        Genre("Машины", "Cars"),
+        Genre("Меха", "Mecha"),
+        Genre("Музыка", "Music"),
+        Genre("Пародия", "Parody"),
+        Genre("Повседневность", "Slice of Life"),
+        Genre("Полиция", "Police"),
+        Genre("Приключения", "Adventure"),
+        Genre("Психологическое", "Psychological"),
+        Genre("Романтика", "Romance"),
+        Genre("Самураи", "Samurai"),
+        Genre("Сверхъестественное", "Supernatural"),
+        Genre("Сёдзе", "Shoujo"),
+        Genre("Сёдзе Ай", "Shoujo Ai"),
+        Genre("Сейнен", "Seinen"),
+        Genre("Сёнен", "Shounen"),
+        Genre("Сёнен Ай", "Shounen Ai"),
+        Genre("Смена пола", "Gender Bender"),
+        Genre("Спорт", "Sports"),
+        Genre("Супер сила", "Super Power"),
+        Genre("Триллер", "Thriller"),
+        Genre("Ужасы", "Horror"),
+        Genre("Фантастика", "Sci-Fi"),
+        Genre("Фэнтези", "Fantasy"),
+        Genre("Хентай", "Hentai"),
+        Genre("Школа", "School"),
+        Genre("Экшен", "Action"),
+        Genre("Этти", "Ecchi"),
+        Genre("Юри", "Yuri"),
+        Genre("Яой", "Yaoi"),
+    )
 
     private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
 

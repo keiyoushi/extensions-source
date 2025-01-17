@@ -24,14 +24,13 @@ class ReadAttackOnTitanShingekiNoKyojinManga :
 
     override fun chapterListSelector(): String = "div.w-full div.grid div.col-span-4"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val urlElement = element.selectFirst("a")!!
-            name =
-                listOfNotNull(
-                    urlElement.text(),
-                    element.selectFirst("div.text-xs")!!.text().takeUnless { it.isBlank() },
-                ).joinToString(" - ") { it.trim() }
-            url = urlElement.attr("abs:href")
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val urlElement = element.selectFirst("a")!!
+        name =
+            listOfNotNull(
+                urlElement.text(),
+                element.selectFirst("div.text-xs")!!.text().takeUnless { it.isBlank() },
+            ).joinToString(" - ") { it.trim() }
+        url = urlElement.attr("abs:href")
+    }
 }

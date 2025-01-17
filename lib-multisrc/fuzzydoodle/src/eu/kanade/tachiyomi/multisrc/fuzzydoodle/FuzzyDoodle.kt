@@ -34,10 +34,9 @@ abstract class FuzzyDoodle(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Popular
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga?page=$page", headers)
@@ -60,34 +59,31 @@ abstract class FuzzyDoodle(
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst("h2.text-sm")!!.text()
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst("h2.text-sm")!!.text()
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
+    }
 
     // latest
     protected open val latestFromHomePage = false
 
-    override fun latestUpdatesRequest(page: Int) =
-        if (latestFromHomePage) {
-            latestHomePageRequest(page)
-        } else {
-            latestPageRequest(page)
-        }
+    override fun latestUpdatesRequest(page: Int) = if (latestFromHomePage) {
+        latestHomePageRequest(page)
+    } else {
+        latestPageRequest(page)
+    }
 
     protected open fun latestHomePageRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
 
     protected open fun latestPageRequest(page: Int) = GET("$baseUrl/latest?page=$page", headers)
 
-    override fun latestUpdatesSelector() =
-        if (latestFromHomePage) {
-            "section:has(h2:containsOwn(Recent Chapters)) div#card-real," +
-                " section:has(h2:containsOwn(Chapitres récents)) div#card-real"
-        } else {
-            popularMangaSelector()
-        }
+    override fun latestUpdatesSelector() = if (latestFromHomePage) {
+        "section:has(h2:containsOwn(Recent Chapters)) div#card-real," +
+            " section:has(h2:containsOwn(Chapitres récents)) div#card-real"
+    } else {
+        popularMangaSelector()
+    }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -201,37 +197,36 @@ abstract class FuzzyDoodle(
     protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
 
     // details
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val genres = mutableListOf<String>()
-            with(document.selectFirst("main > section > div")!!) {
-                thumbnail_url = selectFirst("div.relative img")?.imgAttr()
-                title = selectFirst("div.flex > h1, div.flex > h2")!!.ownText()
-                genres.addAll(select("div.flex > a.inline-block").eachText())
-                description =
-                    buildString {
-                        selectFirst("div:has(> p#description)")?.let {
-                            it.selectFirst("span.font-semibold")?.remove()
-                            it.select("#show-more").remove()
-                            append(it.text())
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val genres = mutableListOf<String>()
+        with(document.selectFirst("main > section > div")!!) {
+            thumbnail_url = selectFirst("div.relative img")?.imgAttr()
+            title = selectFirst("div.flex > h1, div.flex > h2")!!.ownText()
+            genres.addAll(select("div.flex > a.inline-block").eachText())
+            description =
+                buildString {
+                    selectFirst("div:has(> p#description)")?.let {
+                        it.selectFirst("span.font-semibold")?.remove()
+                        it.select("#show-more").remove()
+                        append(it.text())
+                    }
+                    selectFirst("div.flex > h1 + div > span.text-sm, div.flex > h2 + div > span.text-sm")?.text()?.let {
+                        if (it.isNotEmpty()) {
+                            append("\n\n")
+                            append("Alternative Title: ")
+                            append(it.trim())
                         }
-                        selectFirst("div.flex > h1 + div > span.text-sm, div.flex > h2 + div > span.text-sm")?.text()?.let {
-                            if (it.isNotEmpty()) {
-                                append("\n\n")
-                                append("Alternative Title: ")
-                                append(it.trim())
-                            }
-                        }
-                    }.trim()
-            }
-            document.selectFirst("div#buttons + div.hidden, div:has(> div#buttons) + div.flex")?.run {
-                status = (getInfo("Status") ?: getInfo("Statut")).parseStatus()
-                artist = (getInfo("Artist") ?: getInfo("المؤلف") ?: getInfo("Artiste")).removePlaceHolder()
-                author = (getInfo("Author") ?: getInfo("الرسام") ?: getInfo("Auteur")).removePlaceHolder()
-                (getInfo("Type") ?: getInfo("النوع"))?.also { genres.add(0, it) }
-            }
-            genre = genres.joinToString()
+                    }
+                }.trim()
         }
+        document.selectFirst("div#buttons + div.hidden, div:has(> div#buttons) + div.flex")?.run {
+            status = (getInfo("Status") ?: getInfo("Statut")).parseStatus()
+            artist = (getInfo("Artist") ?: getInfo("المؤلف") ?: getInfo("Artiste")).removePlaceHolder()
+            author = (getInfo("Author") ?: getInfo("الرسام") ?: getInfo("Auteur")).removePlaceHolder()
+            (getInfo("Type") ?: getInfo("النوع"))?.also { genres.add(0, it) }
+        }
+        genre = genres.joinToString()
+    }
 
     protected open fun String?.parseStatus(): Int {
         this ?: return SManga.UNKNOWN
@@ -245,10 +240,9 @@ abstract class FuzzyDoodle(
         }
     }
 
-    protected fun Element.getInfo(text: String): String? =
-        selectFirst("p:has(span:containsOwn($text)) span.capitalize")
-            ?.ownText()
-            ?.trim()
+    protected fun Element.getInfo(text: String): String? = selectFirst("p:has(span:containsOwn($text)) span.capitalize")
+        ?.ownText()
+        ?.trim()
 
     protected fun String?.removePlaceHolder(): String? = takeUnless { it == "-" }
 
@@ -280,12 +274,11 @@ abstract class FuzzyDoodle(
 
     protected fun chapterListNextPageSelector() = latestUpdatesNextPageSelector()
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.selectFirst("#item-title, span")!!.ownText()
-            date_upload = element.selectFirst("span.text-gray-500")?.text().parseRelativeDate()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.selectFirst("#item-title, span")!!.ownText()
+        date_upload = element.selectFirst("span.text-gray-500")?.text().parseRelativeDate()
+    }
 
     // from madara
     protected open fun String?.parseRelativeDate(): Long {
@@ -321,19 +314,17 @@ abstract class FuzzyDoodle(
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div#chapter-container > img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#chapter-container > img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.imgAttr())
+    }
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("srcset") -> attr("srcset").substringBefore(" ")
-            hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
-            hasAttr("data-src") -> absUrl("data-src")
-            hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-            else -> absUrl("src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("srcset") -> attr("srcset").substringBefore(" ")
+        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
+        hasAttr("data-src") -> absUrl("data-src")
+        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
+        else -> absUrl("src")
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

@@ -62,10 +62,9 @@ class Akuma(
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private fun tokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -188,30 +187,28 @@ class Akuma(
         return MangasPage(mangas, !nextHash.isNullOrEmpty())
     }
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            title =
-                element.select(".overlay-title").text().replace("\"", "").let {
-                    if (displayFullTitle) it.trim() else it.shortenTitle()
-                }
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        title =
+            element.select(".overlay-title").text().replace("\"", "").let {
+                if (displayFullTitle) it.trim() else it.shortenTitle()
+            }
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID)) {
-            val url = "/g/${query.substringAfter(PREFIX_ID)}"
-            val manga = SManga.create().apply { this.url = url }
-            fetchMangaDetails(manga).map {
-                MangasPage(listOf(it.apply { this.url = url }), false)
-            }
-        } else {
-            super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID)) {
+        val url = "/g/${query.substringAfter(PREFIX_ID)}"
+        val manga = SManga.create().apply { this.url = url }
+        fetchMangaDetails(manga).map {
+            MangasPage(listOf(it.apply { this.url = url }), false)
         }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -271,56 +268,55 @@ class Akuma(
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) =
-        with(document) {
-            SManga.create().apply {
-                title =
-                    select(".entry-title").text().replace("\"", "").let {
-                        if (displayFullTitle) it.trim() else it.shortenTitle()
-                    }
-                thumbnail_url = select(".img-thumbnail").attr("abs:src")
+    override fun mangaDetailsParse(document: Document) = with(document) {
+        SManga.create().apply {
+            title =
+                select(".entry-title").text().replace("\"", "").let {
+                    if (displayFullTitle) it.trim() else it.shortenTitle()
+                }
+            thumbnail_url = select(".img-thumbnail").attr("abs:src")
 
-                author = select(".group~.value").eachText().joinToString()
-                artist = select(".artist~.value").eachText().joinToString()
+            author = select(".group~.value").eachText().joinToString()
+            artist = select(".artist~.value").eachText().joinToString()
 
-                val characters = select(".character~.value").eachText()
-                val parodies = select(".parody~.value").eachText()
-                val males =
-                    select(".male~.value")
-                        .map { "${it.text()} ♂" }
-                val females =
-                    select(".female~.value")
-                        .map { "${it.text()} ♀" }
-                val others =
-                    select(".other~.value")
-                        .map { "${it.text()} ◊" }
-                // show all in tags for quickly searching
+            val characters = select(".character~.value").eachText()
+            val parodies = select(".parody~.value").eachText()
+            val males =
+                select(".male~.value")
+                    .map { "${it.text()} ♂" }
+            val females =
+                select(".female~.value")
+                    .map { "${it.text()} ♀" }
+            val others =
+                select(".other~.value")
+                    .map { "${it.text()} ◊" }
+            // show all in tags for quickly searching
 
-                genre = (males + females + others).joinToString()
-                description =
-                    buildString {
-                        append(
-                            "Full English and Japanese title: \n",
-                            select(".entry-title").text(),
-                            "\n",
-                            select(".entry-title+span").text(),
-                            "\n\n",
-                        )
+            genre = (males + females + others).joinToString()
+            description =
+                buildString {
+                    append(
+                        "Full English and Japanese title: \n",
+                        select(".entry-title").text(),
+                        "\n",
+                        select(".entry-title+span").text(),
+                        "\n\n",
+                    )
 
-                        // translated should show up in the description
-                        append("Language: ", select(".language~.value").eachText().joinToString(), "\n")
-                        append("Pages: ", select(".pages .value").text(), "\n")
-                        append("Upload Date: ", select(".date .value>time").text().replace(" ", ", ") + " UTC", "\n")
-                        append("Categories: ", selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
+                    // translated should show up in the description
+                    append("Language: ", select(".language~.value").eachText().joinToString(), "\n")
+                    append("Pages: ", select(".pages .value").text(), "\n")
+                    append("Upload Date: ", select(".date .value>time").text().replace(" ", ", ") + " UTC", "\n")
+                    append("Categories: ", selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
 
-                        // show followings for easy to reference
-                        parodies.takeIf { it.isNotEmpty() }?.let { append("Parodies: ", parodies.joinToString(), "\n") }
-                        characters.takeIf { it.isNotEmpty() }?.let { append("Characters: ", characters.joinToString(), "\n") }
-                    }
-                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                status = SManga.UNKNOWN
-            }
+                    // show followings for easy to reference
+                    parodies.takeIf { it.isNotEmpty() }?.let { append("Parodies: ", parodies.joinToString(), "\n") }
+                    characters.takeIf { it.isNotEmpty() }?.let { append("Characters: ", characters.joinToString(), "\n") }
+                }
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.UNKNOWN
         }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()

@@ -21,10 +21,9 @@ class EveriaClubCom : HttpSource() {
     override val name = "EveriaClub (unoriginal)"
     override val supportsLatest = true
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val Element.imgSrc: String?
         get() =
@@ -36,14 +35,13 @@ class EveriaClubCom : HttpSource() {
                 else -> null
             }
 
-    private fun mangaFromElement(it: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(it.attr("abs:href").removePrefix(baseUrl))
-            with(it.selectFirst("img")!!) {
-                thumbnail_url = imgSrc
-                title = attr("title")
-            }
+    private fun mangaFromElement(it: Element) = SManga.create().apply {
+        setUrlWithoutDomain(it.attr("abs:href").removePrefix(baseUrl))
+        with(it.selectFirst("img")!!) {
+            thumbnail_url = imgSrc
+            title = attr("title")
         }
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
@@ -139,13 +137,12 @@ class EveriaClubCom : HttpSource() {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("NOTE: Only one filter will be applied!"),
-            Filter.Separator(),
-            TagFilter(),
-            CategoryFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Only one filter will be applied!"),
+        Filter.Separator(),
+        TagFilter(),
+        CategoryFilter(),
+    )
 
     open class UriPartFilter(
         displayName: String,

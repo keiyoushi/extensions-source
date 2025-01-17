@@ -199,16 +199,14 @@ abstract class MangaWorld(
             ?: runCatching { DATE_FORMATTER_2.parse(string)?.time }.getOrNull() ?: 0L
     }
 
-    protected fun parseChapterNumber(string: String): Float? =
-        CHAPTER_NUMBER_REGEX.find(string)?.let {
-            it.groups[1]?.value?.toFloat()
-        }
+    protected fun parseChapterNumber(string: String): Float? = CHAPTER_NUMBER_REGEX.find(string)?.let {
+        it.groups[1]?.value?.toFloat()
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div#page img.page-image").mapIndexed { index, it ->
-            val url = it.attr("src")
-            Page(index, imageUrl = url)
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#page img.page-image").mapIndexed { index, it ->
+        val url = it.attr("src")
+        Page(index, imageUrl = url)
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -226,14 +224,13 @@ abstract class MangaWorld(
         return GET(page.imageUrl!!, imgHeader)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            TextField("Anno di uscita", "year"),
-            SortBy(),
-            StatusList(getStatusList()),
-            GenreList(getGenreList()),
-            MTypeList(getTypesList()),
-        )
+    override fun getFilterList() = FilterList(
+        TextField("Anno di uscita", "year"),
+        SortBy(),
+        StatusList(getStatusList()),
+        GenreList(getGenreList()),
+        MTypeList(getTypesList()),
+    )
 
     private class SortBy :
         UriPartFilter(
@@ -281,64 +278,61 @@ abstract class MangaWorld(
         statuses: List<Status>,
     ) : Filter.Group<Status>("Stato", statuses)
 
-    protected fun getGenreList() =
-        listOf(
-            Genre("Adulti", "adulti"),
-            Genre("Arti Marziali", "arti-marziali"),
-            Genre("Avventura", "avventura"),
-            Genre("Azione", "azione"),
-            Genre("Commedia", "commedia"),
-            Genre("Doujinshi", "doujinshi"),
-            Genre("Drammatico", "drammatico"),
-            Genre("Ecchi", "ecchi"),
-            Genre("Fantasy", "fantasy"),
-            Genre("Gender Bender", "gender-bender"),
-            Genre("Harem", "harem"),
-            Genre("Hentai", "hentai"),
-            Genre("Horror", "horror"),
-            Genre("Josei", "josei"),
-            Genre("Lolicon", "lolicon"),
-            Genre("Maturo", "maturo"),
-            Genre("Mecha", "mecha"),
-            Genre("Mistero", "mistero"),
-            Genre("Psicologico", "psicologico"),
-            Genre("Romantico", "romantico"),
-            Genre("Sci-fi", "sci-fi"),
-            Genre("Scolastico", "scolastico"),
-            Genre("Seinen", "seinen"),
-            Genre("Shotacon", "shotacon"),
-            Genre("Shoujo", "shoujo"),
-            Genre("Shoujo Ai", "shoujo-ai"),
-            Genre("Shounen", "shounen"),
-            Genre("Shounen Ai", "shounen-ai"),
-            Genre("Slice of Life", "slice-of-life"),
-            Genre("Smut", "smut"),
-            Genre("Soprannaturale", "soprannaturale"),
-            Genre("Sport", "sport"),
-            Genre("Storico", "storico"),
-            Genre("Tragico", "tragico"),
-            Genre("Yaoi", "yaoi"),
-            Genre("Yuri", "yuri"),
-        )
+    protected fun getGenreList() = listOf(
+        Genre("Adulti", "adulti"),
+        Genre("Arti Marziali", "arti-marziali"),
+        Genre("Avventura", "avventura"),
+        Genre("Azione", "azione"),
+        Genre("Commedia", "commedia"),
+        Genre("Doujinshi", "doujinshi"),
+        Genre("Drammatico", "drammatico"),
+        Genre("Ecchi", "ecchi"),
+        Genre("Fantasy", "fantasy"),
+        Genre("Gender Bender", "gender-bender"),
+        Genre("Harem", "harem"),
+        Genre("Hentai", "hentai"),
+        Genre("Horror", "horror"),
+        Genre("Josei", "josei"),
+        Genre("Lolicon", "lolicon"),
+        Genre("Maturo", "maturo"),
+        Genre("Mecha", "mecha"),
+        Genre("Mistero", "mistero"),
+        Genre("Psicologico", "psicologico"),
+        Genre("Romantico", "romantico"),
+        Genre("Sci-fi", "sci-fi"),
+        Genre("Scolastico", "scolastico"),
+        Genre("Seinen", "seinen"),
+        Genre("Shotacon", "shotacon"),
+        Genre("Shoujo", "shoujo"),
+        Genre("Shoujo Ai", "shoujo-ai"),
+        Genre("Shounen", "shounen"),
+        Genre("Shounen Ai", "shounen-ai"),
+        Genre("Slice of Life", "slice-of-life"),
+        Genre("Smut", "smut"),
+        Genre("Soprannaturale", "soprannaturale"),
+        Genre("Sport", "sport"),
+        Genre("Storico", "storico"),
+        Genre("Tragico", "tragico"),
+        Genre("Yaoi", "yaoi"),
+        Genre("Yuri", "yuri"),
+    )
 
-    protected fun getTypesList() =
-        listOf(
-            MType("Manga", "manga"),
-            MType("Manhua", "manhua"),
-            MType("Manhwa", "manhwa"),
-            MType("Oneshot", "oneshot"),
-            MType("Thai", "thai"),
-            MType("Vietnamita", "vietnamese"),
-        )
+    protected fun getTypesList() = listOf(
+        MType("Manga", "manga"),
+        MType("Manhua", "manhua"),
+        MType("Manhwa", "manhwa"),
+        MType("Oneshot", "oneshot"),
+        MType("Thai", "thai"),
+        MType("Vietnamita", "vietnamese"),
+    )
 
-    protected fun getStatusList() =
-        listOf(
-            Status("In corso", "ongoing"),
-            Status("Finito", "completed"),
-            Status("Droppato", "dropped"),
-            Status("In pausa", "paused"),
-            Status("Cancellato", "canceled"),
-        )
+    protected fun getStatusList() = listOf(
+        Status("In corso", "ongoing"),
+        Status("Finito", "completed"),
+        Status("Droppato", "dropped"),
+        Status("In pausa", "paused"),
+        Status("Cancellato", "canceled"),
+    )
 
     private open class UriPartFilter(
         displayName: String,

@@ -92,50 +92,48 @@ open class MangaFire(
 
     override fun searchMangaSelector() = ".original.card-lg .unit .inner"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst(".info > a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.ownText()
-            }
-            element.selectFirst(Evaluator.Tag("img"))!!.let {
-                thumbnail_url = it.attr("src")
-            }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".info > a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.ownText()
         }
+        element.selectFirst(Evaluator.Tag("img"))!!.let {
+            thumbnail_url = it.attr("src")
+        }
+    }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val root = document.selectFirst(".info")!!
-            val mangaTitle = root.child(1).ownText()
-            title = mangaTitle
-            description =
-                document.run {
-                    val description = selectFirst(Evaluator.Class("description"))!!.ownText()
-                    when (val altTitle = root.child(2).ownText()) {
-                        "", mangaTitle -> description
-                        else -> "$description\n\nAlternative Title: $altTitle"
-                    }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val root = document.selectFirst(".info")!!
+        val mangaTitle = root.child(1).ownText()
+        title = mangaTitle
+        description =
+            document.run {
+                val description = selectFirst(Evaluator.Class("description"))!!.ownText()
+                when (val altTitle = root.child(2).ownText()) {
+                    "", mangaTitle -> description
+                    else -> "$description\n\nAlternative Title: $altTitle"
                 }
-            thumbnail_url =
-                document
-                    .selectFirst(".poster")!!
-                    .selectFirst("img")!!
-                    .attr("src")
-            status =
-                when (root.child(0).ownText()) {
-                    "Completed" -> SManga.COMPLETED
-                    "Releasing" -> SManga.ONGOING
-                    "On_hiatus" -> SManga.ON_HIATUS
-                    "Discontinued" -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-            with(document.selectFirst(Evaluator.Class("meta"))!!) {
-                author = selectFirst("span:contains(Author:) + span")?.text()
-                val type = selectFirst("span:contains(Type:) + span")?.text()
-                val genres = selectFirst("span:contains(Genres:) + span")?.text()
-                genre = listOfNotNull(type, genres).joinToString()
             }
+        thumbnail_url =
+            document
+                .selectFirst(".poster")!!
+                .selectFirst("img")!!
+                .attr("src")
+        status =
+            when (root.child(0).ownText()) {
+                "Completed" -> SManga.COMPLETED
+                "Releasing" -> SManga.ONGOING
+                "On_hiatus" -> SManga.ON_HIATUS
+                "Discontinued" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+        with(document.selectFirst(Evaluator.Class("meta"))!!) {
+            author = selectFirst("span:contains(Author:) + span")?.text()
+            val type = selectFirst("span:contains(Type:) + span")?.text()
+            val genres = selectFirst("span:contains(Genres:) + span")?.text()
+            genre = listOfNotNull(type, genres).joinToString()
         }
+    }
 
     override val chapterType get() = "chapter"
     override val volumeType get() = "volume"
@@ -245,15 +243,14 @@ open class MangaFire(
         val status: Int,
     )
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            TypeFilter(),
-            GenresFilter(),
-            StatusFilter(),
-            YearFilter(),
-            ChapterCountFilter(),
-            SortFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        TypeFilter(),
+        GenresFilter(),
+        StatusFilter(),
+        YearFilter(),
+        ChapterCountFilter(),
+        SortFilter(),
+    )
 }

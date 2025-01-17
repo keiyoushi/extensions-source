@@ -77,13 +77,12 @@ fun ExGalleryMetadata.copyTo(manga: SManga) {
             .joinToString(separator = "\n")
 }
 
-private fun buildTagsDescription(metadata: ExGalleryMetadata) =
-    StringBuilder("Tags:\n").apply {
-        // BiConsumer only available in Java 8, we have to use destructuring here
-        metadata.tags.forEach { (namespace, tags) ->
-            if (tags.isNotEmpty()) {
-                val joinedTags = tags.joinToString(separator = " ", transform = { "<${it.name}>" })
-                this += "▪ $namespace: $joinedTags\n"
-            }
+private fun buildTagsDescription(metadata: ExGalleryMetadata) = StringBuilder("Tags:\n").apply {
+    // BiConsumer only available in Java 8, we have to use destructuring here
+    metadata.tags.forEach { (namespace, tags) ->
+        if (tags.isNotEmpty()) {
+            val joinedTags = tags.joinToString(separator = " ", transform = { "<${it.name}>" })
+            this += "▪ $namespace: $joinedTags\n"
         }
     }
+}

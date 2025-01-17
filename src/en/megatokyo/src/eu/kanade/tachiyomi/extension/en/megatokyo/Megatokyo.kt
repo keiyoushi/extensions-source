@@ -46,9 +46,8 @@ class Megatokyo : ParsedHttpSource() {
         return Observable.just(MangasPage(arrayListOf(manga), false))
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        fetchPopularManga(1)
-            .map { it.mangas.first().apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
+        .map { it.mangas.first().apply { initialized = true } }
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
@@ -63,12 +62,11 @@ class Megatokyo : ParsedHttpSource() {
         return chapter
     }
 
-    override fun pageListParse(document: Document) =
-        document
-            .select("#strip img")
-            .mapIndexed { i, element ->
-                Page(i, "", "https://megatokyo.com/" + element.attr("src"))
-            }
+    override fun pageListParse(document: Document) = document
+        .select("#strip img")
+        .mapIndexed { i, element ->
+            Page(i, "", "https://megatokyo.com/" + element.attr("src"))
+        }
 
     // certificate wasn't trusted for some reason so trusted all certificates
     private fun getUnsafeOkHttpClient(): OkHttpClient {
@@ -145,8 +143,7 @@ class Megatokyo : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    private fun String.toDate(): Long =
-        runCatching { dateParser.parse(this.replace("(\\d+)(st|nd|rd|th)".toRegex(), "$1"))?.time }
-            .onFailure { print("Something wrong happened: ${it.message}") }
-            .getOrNull() ?: 0L
+    private fun String.toDate(): Long = runCatching { dateParser.parse(this.replace("(\\d+)(st|nd|rd|th)".toRegex(), "$1"))?.time }
+        .onFailure { print("Something wrong happened: ${it.message}") }
+        .getOrNull() ?: 0L
 }

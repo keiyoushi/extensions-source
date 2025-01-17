@@ -19,10 +19,9 @@ class Nicomanga : FMReader("Nicomanga", "https://nicomanga.com", "ja") {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // =========================== Manga Details ============================
 
@@ -46,18 +45,17 @@ class Nicomanga : FMReader("Nicomanga", "https://nicomanga.com", "ja") {
     override fun chapterFromElement(
         element: Element,
         mangaTitle: String,
-    ): SChapter =
-        SChapter.create().apply {
-            element.select(chapterUrlSelector).first()!!.let {
-                setUrlWithoutDomain("$baseUrl/${it.attr("href")}")
-                name = it.attr("title")
-            }
-
-            date_upload =
-                element
-                    .select(chapterTimeSelector)
-                    .let { if (it.hasText()) parseRelativeDate(it.text()) else 0 }
+    ): SChapter = SChapter.create().apply {
+        element.select(chapterUrlSelector).first()!!.let {
+            setUrlWithoutDomain("$baseUrl/${it.attr("href")}")
+            name = it.attr("title")
         }
+
+        date_upload =
+            element
+                .select(chapterTimeSelector)
+                .let { if (it.hasText()) parseRelativeDate(it.text()) else 0 }
+    }
 
     // =============================== Pages ================================
 
@@ -76,17 +74,16 @@ class Nicomanga : FMReader("Nicomanga", "https://nicomanga.com", "ja") {
 
     // ============================= Utilities ==============================
 
-    override fun getImgAttr(element: Element?): String? =
-        when {
-            element?.attr("style")?.contains("background-image") == true -> {
-                val url = thumbnailURLRegex.find(element.attr("style"))?.groupValues?.get(1)
-                when {
-                    url?.startsWith("/") == true -> baseUrl + url
-                    else -> url
-                }
+    override fun getImgAttr(element: Element?): String? = when {
+        element?.attr("style")?.contains("background-image") == true -> {
+            val url = thumbnailURLRegex.find(element.attr("style"))?.groupValues?.get(1)
+            when {
+                url?.startsWith("/") == true -> baseUrl + url
+                else -> url
             }
-            else -> super.getImgAttr(element)
         }
+        else -> super.getImgAttr(element)
+    }
 
     companion object {
         private val thumbnailURLRegex = Regex("background-image:[^;]?url\\s*\\(\\s*'?([^')]+?)'?(\\)|\$)")

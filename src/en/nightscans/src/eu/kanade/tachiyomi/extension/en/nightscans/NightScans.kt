@@ -24,9 +24,8 @@ class NightScans : MangaThemesiaAlt("NIGHT SCANS", "https://nightsup.net", "en",
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
-    override fun chapterListSelector(): String =
-        paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
-            super.chapterListSelector(),
-            preferences,
-        )
+    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+        super.chapterListSelector(),
+        preferences,
+    )
 }

@@ -73,13 +73,12 @@ class MangaDistrict :
         }
     }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            val urlKey = url.urlKey()
-            preferences.dates[urlKey]?.also {
-                date_upload = it
-            }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        val urlKey = url.urlKey()
+        preferences.dates[urlKey]?.also {
+            date_upload = it
         }
+    }
 
     private val pageListDate =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
@@ -130,22 +129,21 @@ class MangaDistrict :
         }
     }
 
-    private fun loadTagListFromPreferences(): Set<Pair<String, String>> =
-        preferences
-            .getStringSet(TAG_LIST_PREF, emptySet())
-            ?.mapNotNull {
-                it
-                    .split('|')
-                    .let { splits ->
-                        if (splits.size == 2) {
-                            splits[0] to splits[1]
-                        } else {
-                            null
-                        }
+    private fun loadTagListFromPreferences(): Set<Pair<String, String>> = preferences
+        .getStringSet(TAG_LIST_PREF, emptySet())
+        ?.mapNotNull {
+            it
+                .split('|')
+                .let { splits ->
+                    if (splits.size == 2) {
+                        splits[0] to splits[1]
+                    } else {
+                        null
                     }
-            }?.toSet()
-            // Create at least 1 tag to avoid excessively reading preferences
-            .let { if (it.isNullOrEmpty()) setOf("Manhwa" to "manhwa") else it }
+                }
+        }?.toSet()
+        // Create at least 1 tag to avoid excessively reading preferences
+        .let { if (it.isNullOrEmpty()) setOf("Manhwa" to "manhwa") else it }
 
     private var tagList: Set<Pair<String, String>> = loadTagListFromPreferences()
         set(value) {
@@ -174,10 +172,9 @@ class MangaDistrict :
         state: Int = 0,
     ) : UriPartFilter(title, options.toTypedArray(), state)
 
-    private fun String.urlKey(): String =
-        toHttpUrl().pathSegments.let { path ->
-            "${path[1]}/${path[2]}"
-        }
+    private fun String.urlKey(): String = toHttpUrl().pathSegments.let { path ->
+        "${path[1]}/${path[2]}"
+    }
 
     private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
 
@@ -219,11 +216,10 @@ class MangaDistrict :
             }.let(screen::addPreference)
     }
 
-    override fun imageFromElement(element: Element): String? =
-        when {
-            element.hasAttr("data-wpfc-original-src") -> element.attr("abs:data-wpfc-original-src")
-            else -> super.imageFromElement(element)
-        }
+    override fun imageFromElement(element: Element): String? = when {
+        element.hasAttr("data-wpfc-original-src") -> element.attr("abs:data-wpfc-original-src")
+        else -> super.imageFromElement(element)
+    }
 
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"

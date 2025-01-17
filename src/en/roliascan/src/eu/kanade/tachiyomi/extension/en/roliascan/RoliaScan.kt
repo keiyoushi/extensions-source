@@ -134,45 +134,43 @@ class RoliaScan : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = null
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            element.selectFirst("h6 a")!!.let {
-                title = it.text()
-                setUrlWithoutDomain(it.absUrl("href"))
-            }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        element.selectFirst("h6 a")!!.let {
+            title = it.text()
+            setUrlWithoutDomain(it.absUrl("href"))
         }
+    }
 
     // ======================== Details ======================================
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            thumbnail_url =
-                document
-                    .selectFirst("div.post-type-single-column img.wp-post-image")
-                    ?.absUrl("src")
-            description =
-                document
-                    .select("div.card-body:has(h5:contains(Synopsis)) p")
-                    .filter { p -> p.text().isNotBlank() }
-                    .joinToString("\n") { it.text() }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        thumbnail_url =
+            document
+                .selectFirst("div.post-type-single-column img.wp-post-image")
+                ?.absUrl("src")
+        description =
+            document
+                .select("div.card-body:has(h5:contains(Synopsis)) p")
+                .filter { p -> p.text().isNotBlank() }
+                .joinToString("\n") { it.text() }
 
-            genre =
-                document
-                    .select("a[href*=genres]")
-                    .joinToString { it.text() }
+        genre =
+            document
+                .select("a[href*=genres]")
+                .joinToString { it.text() }
 
-            document.selectFirst("tr:has(th:contains(Status)) > td")?.text()?.let {
-                status =
-                    when {
-                        it.contains("publishing", true) -> SManga.ONGOING
-                        it.contains("completed", true) -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-            }
-            setUrlWithoutDomain(document.location())
+        document.selectFirst("tr:has(th:contains(Status)) > td")?.text()?.let {
+            status =
+                when {
+                    it.contains("publishing", true) -> SManga.ONGOING
+                    it.contains("completed", true) -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
+        setUrlWithoutDomain(document.location())
+    }
 
     // ======================== Chapters =====================================
 
@@ -231,11 +229,10 @@ class RoliaScan : ParsedHttpSource() {
 
     override fun chapterListSelector() = "a.seenchapter"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            name = element.text()
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.text()
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     // ======================== Pages ========================================
 
@@ -344,11 +341,10 @@ class RoliaScan : ParsedHttpSource() {
             } ?: emptyList()
     }
 
-    private fun String.getDocumentFragmentFilter(pattern: Regex): Document? =
-        pattern.find(this)?.groups?.get("value")?.value?.let {
-            val fragment = json.decodeFromString<String>(it)
-            Jsoup.parseBodyFragment(fragment)
-        }
+    private fun String.getDocumentFragmentFilter(pattern: Regex): Document? = pattern.find(this)?.groups?.get("value")?.value?.let {
+        val fragment = json.decodeFromString<String>(it)
+        Jsoup.parseBodyFragment(fragment)
+    }
 
     private fun buildRegex(field: String) = """"(?<query>$field)":(?<value>"<[^,]+)""".toRegex()
 

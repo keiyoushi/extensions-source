@@ -3,15 +3,14 @@ package eu.kanade.tachiyomi.extension.en.manhwa18
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        Filter.Header(name = "The filter is ignored when using text search."),
-        CategoryFilter("Category", Categories),
-        StatusFilter("Status", Statuses),
-        SortFilter("Sort", getSortsList),
-        NationFilter("Nation", Nations),
-        GenreFilter("Type", getTypesList),
-    )
+fun getFilters(): FilterList = FilterList(
+    Filter.Header(name = "The filter is ignored when using text search."),
+    CategoryFilter("Category", Categories),
+    StatusFilter("Status", Statuses),
+    SortFilter("Sort", getSortsList),
+    NationFilter("Nation", Nations),
+    GenreFilter("Type", getTypesList),
+)
 
 /** Filters **/
 internal class CategoryFilter(

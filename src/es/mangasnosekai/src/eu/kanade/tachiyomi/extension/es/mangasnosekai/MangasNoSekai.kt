@@ -230,14 +230,13 @@ class MangasNoSekai :
         return chapterElements.map(::altChapterFromElement)
     }
 
-    private fun altChapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            name = element.select("div.text-sm").text()
-            date_upload = element.selectFirst("time")?.text()?.let {
-                parseChapterDate(it)
-            } ?: 0
-        }
+    private fun altChapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        name = element.select("div.text-sm").text()
+        date_upload = element.selectFirst("time")?.text()?.let {
+            parseChapterDate(it)
+        } ?: 0
+    }
 
     private fun chaptersFromJson(
         jsonString: String,

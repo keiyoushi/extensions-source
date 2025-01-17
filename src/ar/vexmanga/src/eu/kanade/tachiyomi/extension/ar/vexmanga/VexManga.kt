@@ -32,21 +32,19 @@ class VexManga :
     override val seriesTypeSelector =
         ".tsinfo .imptdt:contains(النوع) i, ${super.seriesTypeSelector}"
 
-    override fun String?.parseStatus() =
-        when {
-            this == null -> SManga.UNKNOWN
-            this.contains("مستمر", ignoreCase = true) -> SManga.ONGOING
-            this.contains("مكتمل", ignoreCase = true) -> SManga.COMPLETED
-            this.contains("متوقف", ignoreCase = true) -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    override fun String?.parseStatus() = when {
+        this == null -> SManga.UNKNOWN
+        this.contains("مستمر", ignoreCase = true) -> SManga.ONGOING
+        this.contains("مكتمل", ignoreCase = true) -> SManga.COMPLETED
+        this.contains("متوقف", ignoreCase = true) -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.select(".chapternum").text()
-            date_upload = element.select(".chapterdate").text().parseRelativeDate()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.select(".chapternum").text()
+        date_upload = element.select(".chapterdate").text().parseRelativeDate()
+    }
 
     private fun String.parseRelativeDate(): Long {
         val number = Regex("""(\d+)""").find(this)?.value?.toIntOrNull() ?: return 0

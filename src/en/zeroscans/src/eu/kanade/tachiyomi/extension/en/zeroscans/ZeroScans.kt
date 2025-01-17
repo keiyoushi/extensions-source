@@ -198,16 +198,15 @@ class ZeroScans : HttpSource() {
         return GET("$baseUrl/$API_PATH/comic/$mangaId/chapters?sort=desc&page=$page")
     }
 
-    private fun zsChapterListParse(response: Response): ZeroScansChapterPage =
-        response
-            .parseAs<ZeroScansResponseDto<ZeroScansChaptersResponseDto>>()
-            .data
-            .let {
-                ZeroScansChapterPage(
-                    it.data,
-                    it.currentPage < it.lastPage,
-                )
-            }
+    private fun zsChapterListParse(response: Response): ZeroScansChapterPage = response
+        .parseAs<ZeroScansResponseDto<ZeroScansChaptersResponseDto>>()
+        .data
+        .let {
+            ZeroScansChapterPage(
+                it.data,
+                it.currentPage < it.lastPage,
+            )
+        }
 
     class ZeroScansChapterPage(
         val chapters: List<ZeroScansChapterDto>,
@@ -337,10 +336,9 @@ class ZeroScans : HttpSource() {
         )
 
     // Helpers
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(it.body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(it.body.string())
+    }
 
     private fun comicsDataRequest(): Request = GET("$baseUrl/$API_PATH/comics")
 

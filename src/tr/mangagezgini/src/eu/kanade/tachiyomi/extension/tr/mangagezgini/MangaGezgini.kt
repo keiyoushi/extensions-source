@@ -23,9 +23,8 @@ class MangaGezgini :
 
     private var captchaUrl: String? = null
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
-            ?: super.mangaDetailsRequest(manga)
+    override fun mangaDetailsRequest(manga: SManga): Request = captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
+        ?: super.mangaDetailsRequest(manga)
 
     override fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst(".reading-content form, .reading-content input[value=Doğrula]") != null) {

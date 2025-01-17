@@ -44,20 +44,18 @@ class YugenMangas : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", "$baseUrl/")
 
     val apiHeaders by lazy { apiHeadersBuilder().build() }
 
-    private fun apiHeadersBuilder(): Headers.Builder =
-        headersBuilder()
-            .add("Accept", "application/json, text/plain, */*")
-            .add("Origin", baseUrl)
-            .add("Sec-Fetch-Dest", "empty")
-            .add("Sec-Fetch-Mode", "no-cors")
-            .add("Sec-Fetch-Site", "same-site")
+    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
+        .add("Accept", "application/json, text/plain, */*")
+        .add("Origin", baseUrl)
+        .add("Sec-Fetch-Dest", "empty")
+        .add("Sec-Fetch-Mode", "no-cors")
+        .add("Sec-Fetch-Site", "same-site")
 
     override fun popularMangaRequest(page: Int): Request {
         val url =
@@ -144,10 +142,9 @@ class YugenMangas : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<PageListDto>().images.mapIndexed { index, imageUrl ->
-            Page(index, baseUrl, "$BASE_MEDIA/$imageUrl")
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListDto>().images.mapIndexed { index, imageUrl ->
+        Page(index, baseUrl, "$BASE_MEDIA/$imageUrl")
+    }
 
     override fun imageUrlParse(response: Response) = ""
 
@@ -160,10 +157,9 @@ class YugenMangas : HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(it.body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(it.body.string())
+    }
 
     private inline fun <reified T> RequestBody.parseAs(): T {
         val jsonString = Buffer().also { writeTo(it) }.readUtf8()

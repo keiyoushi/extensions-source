@@ -34,10 +34,9 @@ class HeavenManga : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/top?orderby=views&page=$page", headers)
 
@@ -45,12 +44,11 @@ class HeavenManga : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = "ul.pagination a[rel=next]"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("div.manga-name").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("div.manga-name").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
 
@@ -79,15 +77,14 @@ class HeavenManga : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            with(element.selectFirst("a")!!) {
-                val mangaUrl = attr("href").substringBeforeLast("/")
-                setUrlWithoutDomain(mangaUrl)
-                title = select(".captitle").text()
-                thumbnail_url = mangaUrl.replace("/manga/", "/uploads/manga/") + "/cover/cover_250x350.jpg"
-            }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        with(element.selectFirst("a")!!) {
+            val mangaUrl = attr("href").substringBeforeLast("/")
+            setUrlWithoutDomain(mangaUrl)
+            title = select(".captitle").text()
+            thumbnail_url = mangaUrl.replace("/manga/", "/uploads/manga/") + "/cover/cover_250x350.jpg"
         }
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -138,36 +135,33 @@ class HeavenManga : ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        if (response.request.url.pathSegments
-                .contains("buscar")
-        ) {
-            super.searchMangaParse(response)
-        } else {
-            popularMangaParse(response)
-        }
+    override fun searchMangaParse(response: Response): MangasPage = if (response.request.url.pathSegments
+            .contains("buscar")
+    ) {
+        super.searchMangaParse(response)
+    } else {
+        popularMangaParse(response)
+    }
 
     override fun searchMangaSelector() = "div.c-tabs-item__content"
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.select("h4 a").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.select("img").attr("abs:data-src")
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        element.select("h4 a").let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        thumbnail_url = element.select("img").attr("abs:data-src")
+    }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            document.select("div.tab-summary").let { info ->
-                genre = info.select("div.genres-content a").joinToString { it.text() }
-                thumbnail_url = info.select("div.summary_image img").attr("abs:data-src")
-            }
-            description = document.select("div.description-summary p").text()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.select("div.tab-summary").let { info ->
+            genre = info.select("div.genres-content a").joinToString { it.text() }
+            thumbnail_url = info.select("div.summary_image img").attr("abs:data-src")
         }
+        description = document.select("div.description-summary p").text()
+    }
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaUrl =
@@ -373,16 +367,15 @@ class HeavenManga : ParsedHttpSource() {
             ),
         )
 
-    override fun getFilterList() =
-        FilterList(
-            // Search and filter don't work at the same time
-            Filter.Header("NOTA: Los filtros se ignoran si se utiliza la búsqueda de texto."),
-            Filter.Header("Sólo se puede utilizar un filtro a la vez."),
-            Filter.Separator(),
-            GenreFilter(),
-            AlphabeticoFilter(),
-            ListaCompletasFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        // Search and filter don't work at the same time
+        Filter.Header("NOTA: Los filtros se ignoran si se utiliza la búsqueda de texto."),
+        Filter.Header("Sólo se puede utilizar un filtro a la vez."),
+        Filter.Separator(),
+        GenreFilter(),
+        AlphabeticoFilter(),
+        ListaCompletasFilter(),
+    )
 
     private open class UriPartFilter(
         displayName: String,

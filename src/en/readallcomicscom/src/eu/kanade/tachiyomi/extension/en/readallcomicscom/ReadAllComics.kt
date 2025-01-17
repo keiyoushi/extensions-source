@@ -97,15 +97,14 @@ class ReadAllComics : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it) }
-        } else {
-            Observable.just(searchPageParse(page))
-        }
+    ): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it) }
+    } else {
+        Observable.just(searchPageParse(page))
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -144,45 +143,42 @@ class ReadAllComics : ParsedHttpSource() {
         return MangasPage(mangas, endRange < searchPageElements.lastIndex)
     }
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            title = element.text()
-            thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover%0AOn%20Search&font_size=62"
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.text()
+        thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover%0AOn%20Search&font_size=62"
+    }
 
     override fun searchMangaSelector() = ".categories a"
 
     override fun searchMangaNextPageSelector() = null
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            genre = document.select("p strong").joinToString { it.text() }
-            author = document.select("p > strong").last()?.text()
-            description =
-                buildString {
-                    document.select(".b > strong").forEach { element ->
-                        val vol = element.previousElementSibling()
-                        if (isNotBlank()) {
-                            append("\n\n")
-                        }
-                        if (vol?.tagName() == "span") {
-                            append(vol.text(), "\n")
-                        }
-                        append(element.text())
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        genre = document.select("p strong").joinToString { it.text() }
+        author = document.select("p > strong").last()?.text()
+        description =
+            buildString {
+                document.select(".b > strong").forEach { element ->
+                    val vol = element.previousElementSibling()
+                    if (isNotBlank()) {
+                        append("\n\n")
                     }
+                    if (vol?.tagName() == "span") {
+                        append(vol.text(), "\n")
+                    }
+                    append(element.text())
                 }
-            thumbnail_url = document.select("p img").attr("abs:src")
-        }
+            }
+        thumbnail_url = document.select("p img").attr("abs:src")
+    }
 
     override fun chapterListSelector() = ".list-story a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.attr("title")
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.attr("title")
+    }
 
     override fun pageListParse(document: Document): List<Page> =
         document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->

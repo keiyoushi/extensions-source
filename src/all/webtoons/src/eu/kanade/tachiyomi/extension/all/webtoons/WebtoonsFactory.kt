@@ -8,16 +8,15 @@ import java.util.GregorianCalendar
 import java.util.Locale
 
 class WebtoonsFactory : SourceFactory {
-    override fun createSources(): List<Source> =
-        listOf(
-            WebtoonsEN(),
-            WebtoonsID(),
-            WebtoonsTH(),
-            WebtoonsES(),
-            WebtoonsFR(),
-            WebtoonsZH(),
-            WebtoonsDE(),
-        )
+    override fun createSources(): List<Source> = listOf(
+        WebtoonsEN(),
+        WebtoonsID(),
+        WebtoonsTH(),
+        WebtoonsES(),
+        WebtoonsFR(),
+        WebtoonsZH(),
+        WebtoonsDE(),
+    )
 }
 
 class WebtoonsEN : WebtoonsSrc("Webtoons.com", "https://www.webtoons.com", "en")
@@ -82,12 +81,11 @@ class WebtoonsES : WebtoonsSrc("Webtoons.com", "https://www.webtoons.com", "es")
 
 class WebtoonsFR :
     WebtoonsSrc("Webtoons.com", "https://www.webtoons.com", "fr", dateFormat = SimpleDateFormat("d MMM yyyy", Locale.FRENCH)) {
-    override fun String.toStatus(): Int =
-        when {
-            contains("NOUVEAU") -> SManga.ONGOING
-            contains("TERMINÉ") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    override fun String.toStatus(): Int = when {
+        contains("NOUVEAU") -> SManga.ONGOING
+        contains("TERMINÉ") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 }
 
 class WebtoonsZH :

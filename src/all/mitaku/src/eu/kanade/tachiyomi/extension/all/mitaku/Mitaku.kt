@@ -28,14 +28,13 @@ class Mitaku : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.cm-primary article"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
 
-            title = element.selectFirst("a")!!.attr("title")
+        title = element.selectFirst("a")!!.attr("title")
 
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        }
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
 
     override fun popularMangaNextPageSelector() = "div.wp-pagenavi a.page.larger"
 
@@ -95,17 +94,16 @@ class Mitaku : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            with(document.selectFirst("article")!!) {
-                title = selectFirst("h1")!!.text()
-                val catGenres = select("span.cat-links a").joinToString { it.text() }
-                val tagGenres = select("span.tag-links a").joinToString { it.text() }
-                genre = listOf(catGenres, tagGenres).filter { it.isNotEmpty() }.joinToString()
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        with(document.selectFirst("article")!!) {
+            title = selectFirst("h1")!!.text()
+            val catGenres = select("span.cat-links a").joinToString { it.text() }
+            val tagGenres = select("span.tag-links a").joinToString { it.text() }
+            genre = listOf(catGenres, tagGenres).filter { it.isNotEmpty() }.joinToString()
         }
+    }
 
     // ============================== Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -155,13 +153,12 @@ class Mitaku : ParsedHttpSource() {
             ),
         )
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("NOTE: Only one tag search"),
-            Filter.Separator(),
-            CategoryFilter(),
-            TagFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Only one tag search"),
+        Filter.Separator(),
+        CategoryFilter(),
+        TagFilter(),
+    )
 
     class TagFilter : Filter.Text("Tag") {
         fun toUriPart(): String = state.trim().lowercase().replace(" ", "-")

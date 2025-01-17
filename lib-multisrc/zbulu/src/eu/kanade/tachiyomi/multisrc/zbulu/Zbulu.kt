@@ -34,10 +34,9 @@ abstract class Zbulu(
             .writeTimeout(1, TimeUnit.MINUTES)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Content-Encoding", "identity")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Content-Encoding", "identity")
 
     // Decreases calls, helps with Cloudflare
     private fun String.addTrailingSlash() = if (!this.endsWith("/")) "$this/" else this
@@ -48,14 +47,13 @@ abstract class Zbulu(
 
     override fun popularMangaSelector() = "div.comics-grid > div.entry"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("h3 a").let {
-                setUrlWithoutDomain(it.attr("href").addTrailingSlash())
-                title = it.text()
-            }
-            thumbnail_url = element.select("img").first()!!.attr("abs:src")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("h3 a").let {
+            setUrlWithoutDomain(it.attr("href").addTrailingSlash())
+            title = it.text()
         }
+        thumbnail_url = element.select("img").first()!!.attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector() = "a.next:has(i.fa-angle-right)"
 
@@ -115,13 +113,12 @@ abstract class Zbulu(
         }
     }
 
-    private fun parseStatus(status: String?) =
-        when {
-            status == null -> SManga.UNKNOWN
-            status.contains("Ongoing") -> SManga.ONGOING
-            status.contains("Completed") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("Ongoing") -> SManga.ONGOING
+        status.contains("Completed") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
 
@@ -143,12 +140,11 @@ abstract class Zbulu(
         return chapters
     }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            name = element.select("h2").text()
-            date_upload = element.select("div.chapter-date").text().toDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        name = element.select("h2").text()
+        date_upload = element.select("div.chapter-date").text().toDate()
+    }
 
     private fun String?.toDate(): Long {
         if (this.isNullOrEmpty()) return 0L
@@ -213,10 +209,9 @@ abstract class Zbulu(
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.chapter-content img").mapIndexed { i, img ->
-            Page(i, "", img.attr(if (img.hasAttr("data-src")) "abs:data-src" else "abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.chapter-content img").mapIndexed { i, img ->
+        Page(i, "", img.attr(if (img.hasAttr("data-src")) "abs:data-src" else "abs:src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -224,14 +219,13 @@ abstract class Zbulu(
 
     private class AuthorFilter : Filter.Text("Author")
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Cannot combine search types!"),
-            Filter.Header("Author name must be exact."),
-            Filter.Separator(),
-            AuthorFilter(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Cannot combine search types!"),
+        Filter.Header("Author name must be exact."),
+        Filter.Separator(),
+        AuthorFilter(),
+        GenreFilter(),
+    )
 
     // [...document.querySelectorAll('.sub-menu li a')].map(a => `Pair("${a.textContent}", "${a.getAttribute('href')}")`).join(',\n')
     // from $baseUrl

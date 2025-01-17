@@ -44,10 +44,9 @@ class Webcomics :
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
     override val client =
         network.cloudflareClient
@@ -66,12 +65,11 @@ class Webcomics :
 
     override fun popularMangaNextPageSelector() = ".page-list li:not([style*=none]) a.next"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst("h2")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h2")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     // ========================== Latest =====================================
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/genres/All/All/Latest_Updated/$page", headers)
@@ -115,17 +113,16 @@ class Webcomics :
 
     // ========================== Details ====================================
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val infoElement = document.selectFirst(".card-info")!!
-            title = infoElement.selectFirst("h5")!!.text()
-            description = infoElement.selectFirst(".book-detail > p")?.text()
-            genre = infoElement.select(".label-tag").joinToString { it.text() }
-            thumbnail_url = infoElement.selectFirst("img")?.absUrl("src")
-            document.selectFirst(".chapter-updateDetail")?.text()?.let {
-                status = if (it.contains("IDK")) SManga.COMPLETED else SManga.ONGOING
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val infoElement = document.selectFirst(".card-info")!!
+        title = infoElement.selectFirst("h5")!!.text()
+        description = infoElement.selectFirst(".book-detail > p")?.text()
+        genre = infoElement.select(".label-tag").joinToString { it.text() }
+        thumbnail_url = infoElement.selectFirst("img")?.absUrl("src")
+        document.selectFirst(".chapter-updateDetail")?.text()?.let {
+            status = if (it.contains("IDK")) SManga.COMPLETED else SManga.ONGOING
         }
+    }
 
     // ========================== Chapter ====================================
 
@@ -197,39 +194,35 @@ class Webcomics :
         fun selected() = genres[state]
     }
 
-    override fun getFilterList() =
-        FilterList(
-            GenreFilter(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        GenreFilter(getGenreList()),
+    )
 
-    private fun getGenreList() =
-        arrayOf(
-            "All",
-            "Romance",
-            "Fantasy",
-            "Action",
-            "Drama",
-            "BL",
-            "GL",
-            "Comedy",
-            "Horror",
-            "Mistery",
-        )
+    private fun getGenreList() = arrayOf(
+        "All",
+        "Romance",
+        "Fantasy",
+        "Action",
+        "Drama",
+        "BL",
+        "GL",
+        "Comedy",
+        "Horror",
+        "Mistery",
+    )
 
     // =============================== Utlis ====================================
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private fun String.toPathSegment(): String =
-        this
-            .replace(PUNCTUATION_REGEX, "")
-            .replace(WHITE_SPACE_REGEX, "-")
+    private fun String.toPathSegment(): String = this
+        .replace(PUNCTUATION_REGEX, "")
+        .replace(WHITE_SPACE_REGEX, "-")
 
-    fun String.unicode(): String =
-        UNICODE_REGEX.replace(this) { match ->
-            val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
-            val value = hex.toInt(16)
-            value.toChar().toString()
-        }
+    fun String.unicode(): String = UNICODE_REGEX.replace(this) { match ->
+        val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
+        val value = hex.toInt(16)
+        value.toChar().toString()
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)

@@ -16,31 +16,30 @@ class DoujinsLat :
     ) {
     override val seriesTypeSelector = ".tsinfo .imptdt:contains(Tipo) a"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            val excludeFields =
-                listOf(
-                    "Estatus",
-                    "Tipo",
-                    // "Circle",
-                    "Artista",
-                    // "Parodia",
-                    "Posteado por",
-                    "Posteado",
-                    "Actualizado",
-                )
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        val excludeFields =
+            listOf(
+                "Estatus",
+                "Tipo",
+                // "Circle",
+                "Artista",
+                // "Parodia",
+                "Posteado por",
+                "Posteado",
+                "Actualizado",
+            )
 
-            description =
-                buildString {
-                    description.orEmpty()
-                    if (isNotEmpty()) append("\n\n")
-                    document
-                        .select(".tsinfo > .imptdt")
-                        .map { Pair(it.ownText().removeSuffix(":"), it.selectFirst("> *")?.text()) }
-                        .filterNot { it.second.isNullOrEmpty() }
-                        .filterNot { excludeFields.contains(it.first) }
-                        .joinToString("\n") { "${it.first}: ${it.second}" }
-                        .also { append(it) }
-                }
-        }
+        description =
+            buildString {
+                description.orEmpty()
+                if (isNotEmpty()) append("\n\n")
+                document
+                    .select(".tsinfo > .imptdt")
+                    .map { Pair(it.ownText().removeSuffix(":"), it.selectFirst("> *")?.text()) }
+                    .filterNot { it.second.isNullOrEmpty() }
+                    .filterNot { excludeFields.contains(it.first) }
+                    .joinToString("\n") { "${it.first}: ${it.second}" }
+                    .also { append(it) }
+            }
+    }
 }

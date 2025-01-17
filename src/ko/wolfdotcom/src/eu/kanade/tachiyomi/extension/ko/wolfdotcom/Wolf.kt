@@ -199,17 +199,16 @@ open class Wolf(
                 }.chunked(20)
     }
 
-    private fun paginatedBrowsePage(index: Int): MangasPage =
-        MangasPage(
-            browseCache[index].map {
-                SManga.create().apply {
-                    url = it.id.toString()
-                    title = it.title
-                    thumbnail_url = it.cover
-                }
-            },
-            browseCache.lastIndex > index,
-        )
+    private fun paginatedBrowsePage(index: Int): MangasPage = MangasPage(
+        browseCache[index].map {
+            SManga.create().apply {
+                url = it.id.toString()
+                title = it.title
+                thumbnail_url = it.cover
+            }
+        },
+        browseCache.lastIndex > index,
+    )
 
     private val specialChars = Regex("""[^\p{InHangul_Syllables}0-9a-z ]""", RegexOption.IGNORE_CASE)
     private val styleImage = Regex("""background-image:url\(([^)]+)\)""")
@@ -254,13 +253,12 @@ open class Wolf(
             }
     }
 
-    override fun getMangaUrl(manga: SManga): String =
-        baseUrl
-            .toHttpUrl()
-            .newBuilder()
-            .addPathSegment(entryPath)
-            .addQueryParameter("toon", manga.url)
-            .toString()
+    override fun getMangaUrl(manga: SManga): String = baseUrl
+        .toHttpUrl()
+        .newBuilder()
+        .addPathSegment(entryPath)
+        .addQueryParameter("toon", manga.url)
+        .toString()
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 

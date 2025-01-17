@@ -31,10 +31,9 @@ class HentaiCosplay : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     private val dateCache = mutableMapOf<String, String>()
 
@@ -197,16 +196,15 @@ class HentaiCosplay : HttpSource() {
         options: List<Pair<String, String>>,
     ) : SelectFilter(name, options)
 
-    override fun getFilterList(): FilterList =
-        if (tagCache.isEmpty()) {
-            FilterList(Filter.Header("Press reset to attempt to load filters"))
-        } else {
-            FilterList(
-                Filter.Header("Ignored with text search"),
-                Filter.Separator(),
-                TagFilter("Ranked Tags", tagCache),
-            )
-        }
+    override fun getFilterList(): FilterList = if (tagCache.isEmpty()) {
+        FilterList(Filter.Header("Press reset to attempt to load filters"))
+    } else {
+        FilterList(
+            Filter.Header("Ignored with text search"),
+            Filter.Separator(),
+            TagFilter("Ranked Tags", tagCache),
+        )
+    }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -218,19 +216,18 @@ class HentaiCosplay : HttpSource() {
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.fromCallable {
-            SChapter
-                .create()
-                .apply {
-                    name = "Gallery"
-                    url = manga.url.removeSuffix("/").plus("/attachment/1/")
-                    date_upload =
-                        runCatching {
-                            dateFormat.parse(dateCache[manga.url]!!)!!.time
-                        }.getOrDefault(0L)
-                }.let(::listOf)
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        SChapter
+            .create()
+            .apply {
+                name = "Gallery"
+                url = manga.url.removeSuffix("/").plus("/attachment/1/")
+                date_upload =
+                    runCatching {
+                        dateFormat.parse(dateCache[manga.url]!!)!!.time
+                    }.getOrDefault(0L)
+            }.let(::listOf)
+    }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
@@ -259,12 +256,11 @@ class HentaiCosplay : HttpSource() {
 
     override fun imageUrlParse(response: Response) = imageUrlParse(response.asJsoup())
 
-    private fun imageUrlParse(document: Document): String =
-        document
-            .selectFirst("#display_image_detail img, #detail_list img")!!
-            .absUrl("src")
-            .replace("http://", "https://")
-            .replace(hdRegex, "/")
+    private fun imageUrlParse(document: Document): String = document
+        .selectFirst("#display_image_detail img, #detail_list img")!!
+        .absUrl("src")
+        .replace("http://", "https://")
+        .replace(hdRegex, "/")
 
     companion object {
         private val tagNumRegex = Regex("""(\(\d+\))""")

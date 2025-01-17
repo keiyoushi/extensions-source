@@ -95,13 +95,12 @@ class FuryoSquad : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        client
-            .newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
+    ): Observable<MangasPage> = client
+        .newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map { response ->
+            searchMangaParse(response, query)
+        }
 
     override fun searchMangaRequest(
         page: Int,
@@ -112,13 +111,12 @@ class FuryoSquad : ParsedHttpSource() {
     private fun searchMangaParse(
         response: Response,
         query: String,
-    ): MangasPage =
-        MangasPage(
-            popularMangaParse(response).mangas.filter {
-                it.title.contains(query, ignoreCase = true)
-            },
-            false,
-        )
+    ): MangasPage = MangasPage(
+        popularMangaParse(response).mangas.filter {
+            it.title.contains(query, ignoreCase = true)
+        },
+        false,
+    )
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 

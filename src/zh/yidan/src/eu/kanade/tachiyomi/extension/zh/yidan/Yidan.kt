@@ -44,10 +44,9 @@ class Yidan :
         baseUrl = "https://" + mirrors[index]
     }
 
-    override fun headersBuilder() =
-        Headers
-            .Builder()
-            .add("User-Agent", System.getProperty("http.agent")!!)
+    override fun headersBuilder() = Headers
+        .Builder()
+        .add("User-Agent", System.getProperty("http.agent")!!)
 
     private val json: Json by injectLazy()
 
@@ -121,18 +120,16 @@ class Yidan :
         return client.newCall(GET(url, headers)).asObservableSuccess().map { pageListParse(it) }
     }
 
-    override fun pageListParse(response: Response) =
-        response.parseAs<PageListDto>().images.mapIndexed { index, url ->
-            val imageUrl = if (url.startsWith("http")) url else baseUrl + url
-            Page(index, imageUrl = imageUrl)
-        }
+    override fun pageListParse(response: Response) = response.parseAs<PageListDto>().images.mapIndexed { index, url ->
+        val imageUrl = if (url.startsWith("http")) url else baseUrl + url
+        Page(index, imageUrl = imageUrl)
+    }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream<ResponseDto<T>>(body.byteStream()).data
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream<ResponseDto<T>>(body.byteStream()).data
+    }
 
     override fun getFilterList() = getFilterListInternal()
 

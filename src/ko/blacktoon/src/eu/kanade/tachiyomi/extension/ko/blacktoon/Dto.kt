@@ -41,30 +41,29 @@ class SeriesItem(
 
     var listIndex = -1
 
-    fun toSManga(cdnUrl: String) =
-        SManga.create().apply {
-            url = id
-            title = name
-            thumbnail_url =
-                poster.takeIf { it.isNotBlank() }?.let {
-                    cdnUrl + it.replace("_x4", "").replace("_x3", "")
+    fun toSManga(cdnUrl: String) = SManga.create().apply {
+        url = id
+        title = name
+        thumbnail_url =
+            poster.takeIf { it.isNotBlank() }?.let {
+                cdnUrl + it.replace("_x4", "").replace("_x3", "")
+            }
+        genre =
+            buildList {
+                add(platformsMap[platform])
+                add(publishDayMap[publishDay])
+                tag.forEach {
+                    add(tagsMap[it])
                 }
-            genre =
-                buildList {
-                    add(platformsMap[platform])
-                    add(publishDayMap[publishDay])
-                    tag.forEach {
-                        add(tagsMap[it])
-                    }
-                }.filterNotNull().joinToString()
-            author = this@SeriesItem.author
-            status =
-                when (listIndex) {
-                    0 -> SManga.COMPLETED
-                    1 -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
-        }
+            }.filterNotNull().joinToString()
+        author = this@SeriesItem.author
+        status =
+            when (listIndex) {
+                0 -> SManga.COMPLETED
+                1 -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
+    }
 }
 
 @Serializable
@@ -76,17 +75,16 @@ class Chapter(
     @SerialName("d")
     val date: String = "",
 ) {
-    fun toSChapter(mangaId: String) =
-        SChapter.create().apply {
-            url = "$mangaId/$id"
-            name = title
-            date_upload =
-                try {
-                    dateFormat.parse(date)!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
-        }
+    fun toSChapter(mangaId: String) = SChapter.create().apply {
+        url = "$mangaId/$id"
+        name = title
+        date_upload =
+            try {
+                dateFormat.parse(date)!!.time
+            } catch (_: ParseException) {
+                0L
+            }
+    }
 }
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)

@@ -25,11 +25,10 @@ class Ganma : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder().add("X-From", baseUrl)
 
-    override fun popularMangaRequest(page: Int) =
-        when (page) {
-            1 -> GET("$baseUrl/api/1.0/ranking", headers)
-            else -> GET("$baseUrl/api/1.1/ranking?flag=Finish", headers)
-        }
+    override fun popularMangaRequest(page: Int) = when (page) {
+        1 -> GET("$baseUrl/api/1.0/ranking", headers)
+        else -> GET("$baseUrl/api/1.1/ranking?flag=Finish", headers)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val list: List<Magazine> = response.parseAs()
@@ -79,11 +78,10 @@ class Ganma : HttpSource() {
 
     override fun chapterListRequest(manga: SManga) = realMangaDetailsRequest(manga)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(realMangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { mangaDetailsParse(it) }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(realMangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { mangaDetailsParse(it) }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Magazine>().toSMangaDetails()
 
@@ -91,11 +89,10 @@ class Ganma : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<Magazine>().getSChapterList().sortedDescending()
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client
-            .newCall(pageListRequest(chapter))
-            .asObservable()
-            .map { pageListParse(chapter, it) }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client
+        .newCall(pageListRequest(chapter))
+        .asObservable()
+        .map { pageListParse(chapter, it) }
 
     override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/1.0/magazines/web/${chapter.url.alias()}", headers)
 
@@ -116,10 +113,9 @@ class Ganma : HttpSource() {
 
     override fun getFilterList() = FilterList(TypeFilter())
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream<Result<T>>(it.body.byteStream()).root
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream<Result<T>>(it.body.byteStream()).root
+    }
 
     private val json: Json by injectLazy()
 }

@@ -32,11 +32,10 @@ open class MyReadingManga(
     override val name = "MyReadingManga"
     final override val baseUrl = "https://myreadingmanga.info"
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .set("User-Agent", USER_AGENT)
-            .add("X-Requested-With", randomString((1..20).random()))
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .set("User-Agent", USER_AGENT)
+        .add("X-Requested-With", randomString((1..20).random()))
 
     override val client =
         network.cloudflareClient
@@ -205,47 +204,46 @@ open class MyReadingManga(
     private fun mangaDetailsParse(
         document: Document,
         needCover: Boolean = true,
-    ): SManga =
-        SManga.create().apply {
-            title = cleanTitle(document.select("h1").text())
-            author = cleanAuthor(document.select("h1").text())
-            artist = author
-            genre = document.select(".entry-header p a[href*=genre], [href*=tag], span.entry-categories a").joinToString { it.text() }
-            val basicDescription = document.select("h1").text()
-            // too troublesome to achieve 100% accuracy assigning scanlator group during chapterListParse
-            val scanlatedBy =
-                document
-                    .select(".entry-terms:has(a[href*=group])")
-                    .firstOrNull()
-                    ?.select("a[href*=group]")
-                    ?.joinToString(prefix = "Scanlated by: ") { it.text() }
-            val extendedDescription =
-                document
-                    .select(
-                        ".entry-content p:not(p:containsOwn(|)):not(.chapter-class + p)",
-                    ).joinToString("\n") { it.text() }
-            description = listOfNotNull(basicDescription, scanlatedBy, extendedDescription).joinToString("\n").trim()
-            status =
-                when (document.select("a[href*=status]").first()?.text()) {
-                    "Ongoing" -> SManga.ONGOING
-                    "Completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-
-            if (needCover) {
-                thumbnail_url =
-                    getThumbnail(
-                        getImage(
-                            client
-                                .newCall(GET("$baseUrl/search/?search=${document.location()}", headers))
-                                .execute()
-                                .asJsoup()
-                                .select("div.wdm_results div.p_content img")
-                                .first()!!,
-                        ),
-                    )
+    ): SManga = SManga.create().apply {
+        title = cleanTitle(document.select("h1").text())
+        author = cleanAuthor(document.select("h1").text())
+        artist = author
+        genre = document.select(".entry-header p a[href*=genre], [href*=tag], span.entry-categories a").joinToString { it.text() }
+        val basicDescription = document.select("h1").text()
+        // too troublesome to achieve 100% accuracy assigning scanlator group during chapterListParse
+        val scanlatedBy =
+            document
+                .select(".entry-terms:has(a[href*=group])")
+                .firstOrNull()
+                ?.select("a[href*=group]")
+                ?.joinToString(prefix = "Scanlated by: ") { it.text() }
+        val extendedDescription =
+            document
+                .select(
+                    ".entry-content p:not(p:containsOwn(|)):not(.chapter-class + p)",
+                ).joinToString("\n") { it.text() }
+        description = listOfNotNull(basicDescription, scanlatedBy, extendedDescription).joinToString("\n").trim()
+        status =
+            when (document.select("a[href*=status]").first()?.text()) {
+                "Ongoing" -> SManga.ONGOING
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
             }
+
+        if (needCover) {
+            thumbnail_url =
+                getThumbnail(
+                    getImage(
+                        client
+                            .newCall(GET("$baseUrl/search/?search=${document.location()}", headers))
+                            .execute()
+                            .asJsoup()
+                            .select("div.wdm_results div.p_content img")
+                            .first()!!,
+                    ),
+                )
         }
+    }
 
     override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 
@@ -362,16 +360,15 @@ open class MyReadingManga(
         )
 
     // Generates the filter lists for app
-    override fun getFilterList(): FilterList =
-        FilterList(
-            EnforceLanguageFilter(siteLang),
-            SearchSortTypeList(),
-            GenreFilter(returnFilter(cachedPagesUrls["genres"]!!, ".tagcloud a[href*=/genre/]")),
-            TagFilter(returnFilter(cachedPagesUrls["tags"]!!, ".tagcloud a[href*=/tag/]")),
-            CatFilter(returnFilter(cachedPagesUrls["categories"]!!, ".links a")),
-            PairingFilter(returnFilter(cachedPagesUrls["pairings"]!!, ".links a")),
-            ScanGroupFilter(returnFilter(cachedPagesUrls["groups"]!!, ".links a")),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        EnforceLanguageFilter(siteLang),
+        SearchSortTypeList(),
+        GenreFilter(returnFilter(cachedPagesUrls["genres"]!!, ".tagcloud a[href*=/genre/]")),
+        TagFilter(returnFilter(cachedPagesUrls["tags"]!!, ".tagcloud a[href*=/tag/]")),
+        CatFilter(returnFilter(cachedPagesUrls["categories"]!!, ".links a")),
+        PairingFilter(returnFilter(cachedPagesUrls["pairings"]!!, ".links a")),
+        ScanGroupFilter(returnFilter(cachedPagesUrls["groups"]!!, ".links a")),
+    )
 
     private class EnforceLanguageFilter(
         val siteLang: String,

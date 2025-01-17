@@ -3,25 +3,24 @@ package eu.kanade.tachiyomi.extension.all.hentai3
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        SelectFilter("Sort by", getSortsList),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        Filter.Header("Use 'Male Tags' or 'Female Tags' for specific categories. 'Tags' searches all categories."),
-        TextFilter("Tags", "tags"),
-        TextFilter("Male Tags", "tags", "male"),
-        TextFilter("Female Tags", "tags", "female"),
-        TextFilter("Series", "series"),
-        TextFilter("Characters", "characters"),
-        TextFilter("Artists", "artist"),
-        TextFilter("Groups", "groups"),
-        TextFilter("Languages", "language"),
-        Filter.Separator(),
-        Filter.Header("Filter by pages, for example: (>20)"),
-        TextFilter("Pages", "page"),
-    )
+fun getFilters(): FilterList = FilterList(
+    SelectFilter("Sort by", getSortsList),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    Filter.Header("Use 'Male Tags' or 'Female Tags' for specific categories. 'Tags' searches all categories."),
+    TextFilter("Tags", "tags"),
+    TextFilter("Male Tags", "tags", "male"),
+    TextFilter("Female Tags", "tags", "female"),
+    TextFilter("Series", "series"),
+    TextFilter("Characters", "characters"),
+    TextFilter("Artists", "artist"),
+    TextFilter("Groups", "groups"),
+    TextFilter("Languages", "language"),
+    Filter.Separator(),
+    Filter.Header("Filter by pages, for example: (>20)"),
+    TextFilter("Pages", "page"),
+)
 
 internal open class TextFilter(
     name: String,

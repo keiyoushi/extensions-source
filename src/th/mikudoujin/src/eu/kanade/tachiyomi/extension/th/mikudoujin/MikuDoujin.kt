@@ -64,12 +64,11 @@ class MikuDoujin : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
-    private fun genre(name: String): String =
-        if (name != "สาวใหญ่/แม่บ้าน") {
-            URLEncoder.encode(name, "UTF-8")
-        } else {
-            name
-        }
+    private fun genre(name: String): String = if (name != "สาวใหญ่/แม่บ้าน") {
+        URLEncoder.encode(name, "UTF-8")
+    } else {
+        name
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -175,42 +174,40 @@ class MikuDoujin : ParsedHttpSource() {
         return chapter
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(GET("$baseUrl/${manga.url}"))
-            .asObservableSuccess()
-            .map {
-                val chList: List<SChapter>
-                val mangaDocument = it.asJsoup()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(GET("$baseUrl/${manga.url}"))
+        .asObservableSuccess()
+        .map {
+            val chList: List<SChapter>
+            val mangaDocument = it.asJsoup()
 
-                if (mangaDocument.select(chapterListSelector()).isEmpty()) {
-                    manga.status = SManga.COMPLETED
-                    val createdChapter =
-                        SChapter.create().apply {
-                            url = manga.url
-                            name = "Chapter 1"
-                            chapter_number = 1.0f
-                        }
-                    chList = listOf(createdChapter)
-                } else {
-                    chList =
-                        mangaDocument.select(chapterListSelector()).mapIndexed { idx, Chapter ->
-                            chapterFromElementWithIndex(Chapter, idx, manga)
-                        }
-                }
-                chList
+            if (mangaDocument.select(chapterListSelector()).isEmpty()) {
+                manga.status = SManga.COMPLETED
+                val createdChapter =
+                    SChapter.create().apply {
+                        url = manga.url
+                        name = "Chapter 1"
+                        chapter_number = 1.0f
+                    }
+                chList = listOf(createdChapter)
+            } else {
+                chList =
+                    mangaDocument.select(chapterListSelector()).mapIndexed { idx, Chapter ->
+                        chapterFromElementWithIndex(Chapter, idx, manga)
+                    }
             }
+            chList
+        }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div#v-pills-tabContent img.lazy").mapIndexed { i, img ->
-            if (img.hasAttr("data-src")) {
-                Page(i, "", img.attr("abs:data-src"))
-            } else {
-                Page(i, "", img.attr("abs:src"))
-            }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#v-pills-tabContent img.lazy").mapIndexed { i, img ->
+        if (img.hasAttr("data-src")) {
+            Page(i, "", img.attr("abs:data-src"))
+        } else {
+            Page(i, "", img.attr("abs:src"))
         }
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

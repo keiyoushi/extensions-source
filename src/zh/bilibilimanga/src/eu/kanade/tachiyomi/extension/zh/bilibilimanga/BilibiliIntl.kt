@@ -49,21 +49,20 @@ class BilibiliIntl(
             else -> "Price"
         }
 
-    fun hasPaidChaptersWarning(chapterCount: Int): String =
-        when (lang) {
-            CHINESE, SIMPLIFIED_CHINESE ->
-                "${Bilibili.EMOJI_WARNING} 此漫画有 ${chapterCount.localized} 个付费章节，已在目录中隐藏。" +
-                    "如果你已购买，请在 WebView 登录并刷新目录，即可阅读已购章节。"
-            SPANISH ->
-                "${Bilibili.EMOJI_WARNING} ADVERTENCIA: Esta serie tiene ${chapterCount.localized} " +
-                    "capítulos pagos que fueron filtrados de la lista de capítulos. Si ya has " +
-                    "desbloqueado y tiene alguno en su cuenta, inicie sesión en WebView y " +
-                    "actualice la lista de capítulos para leerlos."
-            else ->
-                "${Bilibili.EMOJI_WARNING} WARNING: This series has ${chapterCount.localized} paid " +
-                    "chapters. If you have any unlocked in your account then sign in through WebView " +
-                    "to be able to read them."
-        }
+    fun hasPaidChaptersWarning(chapterCount: Int): String = when (lang) {
+        CHINESE, SIMPLIFIED_CHINESE ->
+            "${Bilibili.EMOJI_WARNING} 此漫画有 ${chapterCount.localized} 个付费章节，已在目录中隐藏。" +
+                "如果你已购买，请在 WebView 登录并刷新目录，即可阅读已购章节。"
+        SPANISH ->
+            "${Bilibili.EMOJI_WARNING} ADVERTENCIA: Esta serie tiene ${chapterCount.localized} " +
+                "capítulos pagos que fueron filtrados de la lista de capítulos. Si ya has " +
+                "desbloqueado y tiene alguno en su cuenta, inicie sesión en WebView y " +
+                "actualice la lista de capítulos para leerlos."
+        else ->
+            "${Bilibili.EMOJI_WARNING} WARNING: This series has ${chapterCount.localized} paid " +
+                "chapters. If you have any unlocked in your account then sign in through WebView " +
+                "to be able to read them."
+    }
 
     val imageQualityPrefTitle: String =
         when (lang) {
@@ -219,12 +218,11 @@ class BilibiliIntl(
             else -> "Updates daily"
         }
 
-    private fun updatesEvery(days: String): String =
-        when (lang) {
-            CHINESE, SIMPLIFIED_CHINESE -> "${days}更新"
-            SPANISH -> "Actualizaciones todos los $days"
-            else -> "Updates every $days"
-        }
+    private fun updatesEvery(days: String): String = when (lang) {
+        CHINESE, SIMPLIFIED_CHINESE -> "${days}更新"
+        SPANISH -> "Actualizaciones todos los $days"
+        else -> "Updates every $days"
+    }
 
     fun getUpdateDays(dayIndexes: List<Int>): String {
         val shortWeekDays = dateFormatSymbols.shortWeekdays.filterNot(String::isBlank)

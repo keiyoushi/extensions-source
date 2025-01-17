@@ -50,22 +50,20 @@ class Mangaku : ParsedHttpSource() {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(popularMangaRequest(page))
-                .asObservableSuccess()
-                .map { popularMangaParse(it) }
-        } else {
-            Observable.just(parseDirectory(page))
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(popularMangaRequest(page))
+            .asObservableSuccess()
+            .map { popularMangaParse(it) }
+    } else {
+        Observable.just(parseDirectory(page))
+    }
 
-    override fun popularMangaRequest(page: Int): Request =
-        POST(
-            "$baseUrl/daftar-komik-bahasa-indonesia/",
-            headers,
-            FormBody.Builder().add("ritem", "hot").build(),
-        )
+    override fun popularMangaRequest(page: Int): Request = POST(
+        "$baseUrl/daftar-komik-bahasa-indonesia/",
+        headers,
+        FormBody.Builder().add("ritem", "hot").build(),
+    )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -85,12 +83,11 @@ class Mangaku : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "#data .npx .an a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            title = element.ownText()
-            thumbnail_url = element.selectFirst("img")?.attr("abs:data-src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.ownText()
+        thumbnail_url = element.selectFirst("img")?.attr("abs:data-src")
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -98,12 +95,11 @@ class Mangaku : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = "div.kiri_anime div.utao"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("div.uta div.luf a.series").attr("href"))
-            title = element.select("div.uta div.luf a.series").text()
-            thumbnail_url = element.select("div.uta div.imgu img").attr("abs:data-src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("div.uta div.luf a.series").attr("href"))
+        title = element.select("div.uta div.luf a.series").text()
+        thumbnail_url = element.select("div.uta div.imgu img").attr("abs:data-src")
+    }
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
@@ -115,56 +111,53 @@ class Mangaku : ParsedHttpSource() {
 
     override fun searchMangaSelector() = ".listupd .bs"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select(".bsx a").attr("href"))
-            title = element.select(".bigor .tt a").text()
-            thumbnail_url = element.select(".bsx img").attr("abs:data-src")
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select(".bsx a").attr("href"))
+        title = element.select(".bigor .tt a").text()
+        thumbnail_url = element.select(".bsx img").attr("abs:data-src")
+    }
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title =
-                document
-                    .select("h1.titles a, h1.title")
-                    .text()
-                    .replace("Bahasa Indonesia", "")
-                    .trim()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title =
+            document
+                .select("h1.titles a, h1.title")
+                .text()
+                .replace("Bahasa Indonesia", "")
+                .trim()
 
-            thumbnail_url =
-                document
-                    .select("#sidebar-a a[imageanchor] > img, #abc a[imageanchor] > img")
-                    .attr("abs:src")
+        thumbnail_url =
+            document
+                .select("#sidebar-a a[imageanchor] > img, #abc a[imageanchor] > img")
+                .attr("abs:src")
 
-            genre = document.select(".inf:contains(Genre) p a, .inf:contains(Type) p").joinToString { it.text() }
-            document.select("#wrapper-a #content-a .inf, #abc .inf").forEach { row ->
-                when (row.select(".infx").text()) {
-                    "Author" -> author = row.select("p").text()
-                    "Sinopsis" -> description = row.select("p").text()
-                }
-            }
-            val altName = document.selectFirst(".inf:contains(Alternative) p")?.ownText().takeIf { it.isNullOrBlank().not() }
-            altName?.let {
-                description = "$description\n\nAlternative Name: $altName".trim()
+        genre = document.select(".inf:contains(Genre) p a, .inf:contains(Type) p").joinToString { it.text() }
+        document.select("#wrapper-a #content-a .inf, #abc .inf").forEach { row ->
+            when (row.select(".infx").text()) {
+                "Author" -> author = row.select("p").text()
+                "Sinopsis" -> description = row.select("p").text()
             }
         }
+        val altName = document.selectFirst(".inf:contains(Alternative) p")?.ownText().takeIf { it.isNullOrBlank().not() }
+        altName?.let {
+            description = "$description\n\nAlternative Name: $altName".trim()
+        }
+    }
 
     override fun chapterListSelector() = "#content-b > div > a, .fndsosmed-social + div > a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name =
-                element.text().let {
-                    if (it.contains("–")) {
-                        it.split("–")[1].trim()
-                    } else {
-                        it
-                    }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name =
+            element.text().let {
+                if (it.contains("–")) {
+                    it.split("–")[1].trim()
+                } else {
+                    it
                 }
-        }
+            }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {

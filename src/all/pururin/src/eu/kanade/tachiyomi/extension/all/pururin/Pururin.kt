@@ -38,12 +38,11 @@ abstract class Pururin(
 
     override fun popularMangaSelector(): String = "a.card"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.attr("title")
-            setUrlWithoutDomain(element.attr("abs:href"))
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.attr("title")
+        setUrlWithoutDomain(element.attr("abs:href"))
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector(): String = ".page-item [rel=next]"
 
@@ -220,77 +219,73 @@ abstract class Pururin(
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            document.select(".box-gallery").let { e ->
-                initialized = true
-                title = e.select(".title").text()
-                author =
-                    e
-                        .select("a[href*=/circle/]")
-                        .eachText()
-                        .joinToString()
-                        .ifEmpty { e.select("[itemprop=author]").text() }
-                artist = e.select("[itemprop=author]").eachText().joinToString()
-                genre = e.select("a[href*=/content/]").eachText().joinToString()
-                description =
-                    e
-                        .select(".box-gallery .table-info tr")
-                        .filter { tr ->
-                            tr.select("td").let { td ->
-                                td.isNotEmpty() &&
-                                    td.none {
-                                        it.text().contains("content", ignoreCase = true) ||
-                                            it.text().contains("ratings", ignoreCase = true)
-                                    }
-                            }
-                        }.joinToString("\n") { tr ->
-                            tr.select("td").let { td ->
-                                var a = td.select("a").toList()
-                                if (a.isEmpty()) a = td.drop(1)
-                                td.first()!!.text() + ": " + a.joinToString { it.text() }
-                            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.select(".box-gallery").let { e ->
+            initialized = true
+            title = e.select(".title").text()
+            author =
+                e
+                    .select("a[href*=/circle/]")
+                    .eachText()
+                    .joinToString()
+                    .ifEmpty { e.select("[itemprop=author]").text() }
+            artist = e.select("[itemprop=author]").eachText().joinToString()
+            genre = e.select("a[href*=/content/]").eachText().joinToString()
+            description =
+                e
+                    .select(".box-gallery .table-info tr")
+                    .filter { tr ->
+                        tr.select("td").let { td ->
+                            td.isNotEmpty() &&
+                                td.none {
+                                    it.text().contains("content", ignoreCase = true) ||
+                                        it.text().contains("ratings", ignoreCase = true)
+                                }
                         }
-                status = SManga.COMPLETED
-                thumbnail_url = e.select("img").attr("abs:src")
-            }
+                    }.joinToString("\n") { tr ->
+                        tr.select("td").let { td ->
+                            var a = td.select("a").toList()
+                            if (a.isEmpty()) a = td.drop(1)
+                            td.first()!!.text() + ": " + a.joinToString { it.text() }
+                        }
+                    }
+            status = SManga.COMPLETED
+            thumbnail_url = e.select("img").attr("abs:src")
         }
+    }
 
     // Chapters
 
     override fun chapterListSelector(): String = ".table-collection tbody tr a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.text()
-            setUrlWithoutDomain(element.attr("abs:href"))
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.text()
+        setUrlWithoutDomain(element.attr("abs:href"))
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response
-            .asJsoup()
-            .select(chapterListSelector())
-            .map { chapterFromElement(it) }
-            .reversed()
-            .let { list ->
-                list.ifEmpty {
-                    listOf(
-                        SChapter.create().apply {
-                            setUrlWithoutDomain(response.request.url.toString())
-                            name = "Chapter"
-                        },
-                    )
-                }
+    override fun chapterListParse(response: Response): List<SChapter> = response
+        .asJsoup()
+        .select(chapterListSelector())
+        .map { chapterFromElement(it) }
+        .reversed()
+        .let { list ->
+            list.ifEmpty {
+                listOf(
+                    SChapter.create().apply {
+                        setUrlWithoutDomain(response.request.url.toString())
+                        name = "Chapter"
+                    },
+                )
             }
+        }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(".gallery-preview a img")
-            .mapIndexed { i, img ->
-                Page(i, "", (if (img.hasAttr("abs:src")) img.attr("abs:src") else img.attr("abs:data-src")).replace("t.", "."))
-            }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select(".gallery-preview a img")
+        .mapIndexed { i, img ->
+            Page(i, "", (if (img.hasAttr("abs:src")) img.attr("abs:src") else img.attr("abs:data-src")).replace("t.", "."))
+        }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

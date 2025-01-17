@@ -20,10 +20,9 @@ class HentaiSlayer :
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Origin", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Origin", baseUrl)
 
     private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)

@@ -51,29 +51,28 @@ data class ChapterResponse(
     @SerialName("firstPics") val cover: List<Url>? = emptyList(),
     val tags: List<Tag>? = emptyList(),
 ) {
-    fun toSManga(shortTitle: Boolean) =
-        SManga.create().apply {
-            url = id
-            title = if (shortTitle) name.replace(shortenTitleRegex, "").trim() else name
-            thumbnail_url = cover?.firstOrNull()?.absUrl
-            author = this@ChapterResponse.author
-            artist = author
-            genre = genres
-            description =
-                buildString {
-                    if (!this@ChapterResponse.description.isNullOrEmpty()) append(this@ChapterResponse.description.trim(), "\n\n")
-                    if (formatParsed != null) append("Format: ${formatParsed}\n")
-                    if (languageParsed != null) append("Language: $languageParsed\n")
-                    if (group != null) append("Group: $group\n")
-                    if (characters != null) append("Character(s): $characters\n")
-                    if (parody != null) append("Parody: $parody\n")
-                    if (magazine != null) append("Magazine: $magazine\n")
-                    if (pages != null) append("Pages: $pages\n")
-                }
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            initialized = true
-        }
+    fun toSManga(shortTitle: Boolean) = SManga.create().apply {
+        url = id
+        title = if (shortTitle) name.replace(shortenTitleRegex, "").trim() else name
+        thumbnail_url = cover?.firstOrNull()?.absUrl
+        author = this@ChapterResponse.author
+        artist = author
+        genre = genres
+        description =
+            buildString {
+                if (!this@ChapterResponse.description.isNullOrEmpty()) append(this@ChapterResponse.description.trim(), "\n\n")
+                if (formatParsed != null) append("Format: ${formatParsed}\n")
+                if (languageParsed != null) append("Language: $languageParsed\n")
+                if (group != null) append("Group: $group\n")
+                if (characters != null) append("Character(s): $characters\n")
+                if (parody != null) append("Parody: $parody\n")
+                if (magazine != null) append("Magazine: $magazine\n")
+                if (pages != null) append("Pages: $pages\n")
+            }
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        initialized = true
+    }
 
     private val formatParsed =
         when (format) {
@@ -128,18 +127,17 @@ data class ChapterResponse(
         private val filterTags = listOf("artist", "group", "character", "parody", "magazine")
         private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
 
-        private fun String.capitalize(): String =
-            this.trim().split(" ").joinToString(" ") { word ->
-                word.replaceFirstChar {
-                    if (it.isLowerCase()) {
-                        it.titlecase(
-                            Locale.getDefault(),
-                        )
-                    } else {
-                        it.toString()
-                    }
+        private fun String.capitalize(): String = this.trim().split(" ").joinToString(" ") { word ->
+            word.replaceFirstChar {
+                if (it.isLowerCase()) {
+                    it.titlecase(
+                        Locale.getDefault(),
+                    )
+                } else {
+                    it.toString()
                 }
             }
+        }
     }
 }
 
@@ -150,12 +148,11 @@ data class Url(
     val absUrl get() = url.toAbsUrl()
 
     companion object {
-        fun String.toAbsUrl(baseUrl: String = "https://127.0.0.1/"): String =
-            if (this.matches(urlRegex)) {
-                this
-            } else {
-                baseUrl + this
-            }
+        fun String.toAbsUrl(baseUrl: String = "https://127.0.0.1/"): String = if (this.matches(urlRegex)) {
+            this
+        } else {
+            baseUrl + this
+        }
 
         private val urlRegex = Regex("^https?://.*")
     }

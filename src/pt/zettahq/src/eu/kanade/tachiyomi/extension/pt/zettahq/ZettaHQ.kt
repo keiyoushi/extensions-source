@@ -39,14 +39,13 @@ class ZettaHQ : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = ".next.page-numbers"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("h3 a")!!.let { anchor ->
-                title = anchor.text()
-                setUrlWithoutDomain(anchor.absUrl("href"))
-            }
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("h3 a")!!.let { anchor ->
+            title = anchor.text()
+            setUrlWithoutDomain(anchor.absUrl("href"))
         }
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
 
     // ============================== Popular ==============================
 
@@ -151,15 +150,14 @@ class ZettaHQ : ParsedHttpSource() {
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            thumbnail_url = document.selectFirst(".content-container article img:first-child")?.absUrl("src")
-            genre = document.select(".tags > a.tag").joinToString { it.text() }
-            author = document.selectFirst("strong:contains(Autor) + a")?.text()
-            status = SManga.COMPLETED
-            setUrlWithoutDomain(document.location())
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        thumbnail_url = document.selectFirst(".content-container article img:first-child")?.absUrl("src")
+        genre = document.select(".tags > a.tag").joinToString { it.text() }
+        author = document.selectFirst("strong:contains(Autor) + a")?.text()
+        status = SManga.COMPLETED
+        setUrlWithoutDomain(document.location())
+    }
 
     // ============================== Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -229,15 +227,14 @@ class ZettaHQ : ParsedHttpSource() {
         genreList = parseGenres(document)
     }
 
-    private fun parseGenres(document: Document): List<Genre> =
-        document
-            .select(".cat-item > label")
-            .map { label ->
-                Genre(
-                    name = label.text(),
-                    id = label.text().normalize(),
-                )
-            }
+    private fun parseGenres(document: Document): List<Genre> = document
+        .select(".cat-item > label")
+        .map { label ->
+            Genre(
+                name = label.text(),
+                id = label.text().normalize(),
+            )
+        }
 
     private fun parseOptions(
         document: Document,
@@ -253,12 +250,11 @@ class ZettaHQ : ParsedHttpSource() {
         return options.toTypedArray()
     }
 
-    private fun String.normalize() =
-        this
-            .lowercase()
-            .trim()
-            .replace(SPACE_REGEX, "-")
-            .removeAccents()
+    private fun String.normalize() = this
+        .lowercase()
+        .trim()
+        .replace(SPACE_REGEX, "-")
+        .removeAccents()
 
     private fun String.removeAccents(): String {
         val normalized = Normalizer.normalize(this, Normalizer.Form.NFD)

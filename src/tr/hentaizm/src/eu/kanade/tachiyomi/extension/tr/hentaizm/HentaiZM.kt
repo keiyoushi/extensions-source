@@ -66,18 +66,16 @@ class HentaiZM :
     // returns HTTP 404 after the first page even in the browser, while working
     // perfectly.
     // TODO: Replace with getPopularManga(page) when extensions-lib v1.5 gets released.
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        client
-            .newCall(popularMangaRequest(page))
-            .asObservable()
-            .map(::popularMangaParse)
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client
+        .newCall(popularMangaRequest(page))
+        .asObservable()
+        .map(::popularMangaParse)
 
     // =============================== Latest ===============================
     // Same situation as above.
     // TODO: Replace with getLatestUpdates(page) when extensions-lib v1.5 gets released.
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        client
-            .newCall(latestUpdatesRequest(page))
-            .asObservable()
-            .map(::latestUpdatesParse)
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = client
+        .newCall(latestUpdatesRequest(page))
+        .asObservable()
+        .map(::latestUpdatesParse)
 }

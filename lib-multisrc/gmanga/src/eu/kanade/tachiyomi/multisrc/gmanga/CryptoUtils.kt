@@ -28,11 +28,10 @@ private fun String.hexStringToByteArray(): ByteArray {
     return data
 }
 
-private fun String.sha256(): String =
-    MessageDigest
-        .getInstance("SHA-256")
-        .digest(toByteArray())
-        .fold("") { str, it -> str + "%02x".format(it) }
+private fun String.sha256(): String = MessageDigest
+    .getInstance("SHA-256")
+    .digest(toByteArray())
+    .fold("") { str, it -> str + "%02x".format(it) }
 
 private fun String.aesDecrypt(
     secretKey: ByteArray,

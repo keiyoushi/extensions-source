@@ -32,12 +32,11 @@ abstract class ZManga(
 
     override fun popularMangaSelector() = "div.flexbox2-item"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("div.flexbox2-content a").attr("href"))
-            title = element.select("div.flexbox2-title > span").first()!!.text()
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("div.flexbox2-content a").attr("href"))
+        title = element.select("div.flexbox2-title > span").first()!!.text()
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector() = "div.pagination .next"
 
@@ -107,69 +106,64 @@ abstract class ZManga(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // manga details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            thumbnail_url = document.select("div.series-thumb img").attr("abs:src")
-            author = document.select(".series-infolist li:contains(Author) span").text()
-            artist = document.select(".series-infolist li:contains(Artist) span").text()
-            status = parseStatus(document.select(".series-infoz .status").firstOrNull()?.ownText())
-            description = document.select("div.series-synops").text()
-            genre = document.select("div.series-genres a").joinToString { it.text() }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = document.select("div.series-thumb img").attr("abs:src")
+        author = document.select(".series-infolist li:contains(Author) span").text()
+        artist = document.select(".series-infolist li:contains(Artist) span").text()
+        status = parseStatus(document.select(".series-infoz .status").firstOrNull()?.ownText())
+        description = document.select("div.series-synops").text()
+        genre = document.select("div.series-genres a").joinToString { it.text() }
 
-            // add series type(manga/manhwa/manhua/other) thinggy to genre
-            document.select(seriesTypeSelector).firstOrNull()?.ownText()?.let {
-                if (it.isEmpty().not() && it != "-" && genre!!.contains(it, true).not()) {
-                    genre += if (genre!!.isEmpty()) it else ", $it"
-                }
-            }
-
-            // add alternative name to manga description
-            document.select(altNameSelector).firstOrNull()?.ownText()?.let {
-                if (it.isBlank().not()) {
-                    description =
-                        when {
-                            description.isNullOrBlank() -> altName + it
-                            else -> description + "\n\n$altName" + it
-                        }
-                }
+        // add series type(manga/manhwa/manhua/other) thinggy to genre
+        document.select(seriesTypeSelector).firstOrNull()?.ownText()?.let {
+            if (it.isEmpty().not() && it != "-" && genre!!.contains(it, true).not()) {
+                genre += if (genre!!.isEmpty()) it else ", $it"
             }
         }
+
+        // add alternative name to manga description
+        document.select(altNameSelector).firstOrNull()?.ownText()?.let {
+            if (it.isBlank().not()) {
+                description =
+                    when {
+                        description.isNullOrBlank() -> altName + it
+                        else -> description + "\n\n$altName" + it
+                    }
+            }
+        }
+    }
 
     open val seriesTypeSelector = "div.block span.type"
     open val altNameSelector = ".series-title span"
     open val altName = "Alternative Name" + ": "
 
-    private fun parseStatus(status: String?) =
-        when {
-            status == null -> SManga.UNKNOWN
-            status.contains("Ongoing", true) -> SManga.ONGOING
-            status.contains("Completed", true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("Ongoing", true) -> SManga.ONGOING
+        status.contains("Completed", true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
-    private fun parseDate(date: String): Long =
-        try {
-            dateFormat.parse(date)?.time ?: 0
-        } catch (_: Exception) {
-            0L
-        }
+    private fun parseDate(date: String): Long = try {
+        dateFormat.parse(date)?.time ?: 0
+    } catch (_: Exception) {
+        0L
+    }
 
     // chapters
     // careful not to include download links
     override fun chapterListSelector() = "ul.series-chapterlist div.flexch-infoz a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.select("span").first()!!.ownText()
-            date_upload = parseDate(element.select("span.date").text())
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.select("span").first()!!.ownText()
+        date_upload = parseDate(element.select("span.date").text())
+    }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.reader-area img").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img").mapIndexed { i, img ->
+        Page(i, "", img.attr("abs:src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -244,64 +238,63 @@ abstract class ZManga(
             ),
         )
 
-    private fun getGenreList() =
-        listOf(
-            Tag("4-koma", "4-Koma"),
-            Tag("4-koma-comedy", "4-Koma Comedy"),
-            Tag("action", "Action"),
-            Tag("adult", "Adult"),
-            Tag("adventure", "Adventure"),
-            Tag("comedy", "Comedy"),
-            Tag("demons", "Demons"),
-            Tag("drama", "Drama"),
-            Tag("ecchi", "Ecchi"),
-            Tag("fantasy", "Fantasy"),
-            Tag("game", "Game"),
-            Tag("gender-bender", "Gender bender"),
-            Tag("gore", "Gore"),
-            Tag("harem", "Harem"),
-            Tag("historical", "Historical"),
-            Tag("horror", "Horror"),
-            Tag("isekai", "Isekai"),
-            Tag("josei", "Josei"),
-            Tag("loli", "Loli"),
-            Tag("magic", "Magic"),
-            Tag("manga", "Manga"),
-            Tag("manhua", "Manhua"),
-            Tag("manhwa", "Manhwa"),
-            Tag("martial-arts", "Martial Arts"),
-            Tag("mature", "Mature"),
-            Tag("mecha", "Mecha"),
-            Tag("military", "Military"),
-            Tag("monster-girls", "Monster Girls"),
-            Tag("music", "Music"),
-            Tag("mystery", "Mystery"),
-            Tag("one-shot", "One Shot"),
-            Tag("parody", "Parody"),
-            Tag("police", "Police"),
-            Tag("psychological", "Psychological"),
-            Tag("romance", "Romance"),
-            Tag("school", "School"),
-            Tag("school-life", "School Life"),
-            Tag("sci-fi", "Sci-Fi"),
-            Tag("socks", "Socks"),
-            Tag("seinen", "Seinen"),
-            Tag("shoujo", "Shoujo"),
-            Tag("shoujo-ai", "Shoujo Ai"),
-            Tag("shounen", "Shounen"),
-            Tag("shounen-ai", "Shounen Ai"),
-            Tag("slice-of-life", "Slice of Life"),
-            Tag("smut", "Smut"),
-            Tag("sports", "Sports"),
-            Tag("super-power", "Super Power"),
-            Tag("supernatural", "Supernatural"),
-            Tag("survival", "Survival"),
-            Tag("thriller", "Thriller"),
-            Tag("tragedy", "Tragedy"),
-            Tag("vampire", "Vampire"),
-            Tag("webtoons", "Webtoons"),
-            Tag("yuri", "Yuri"),
-        )
+    private fun getGenreList() = listOf(
+        Tag("4-koma", "4-Koma"),
+        Tag("4-koma-comedy", "4-Koma Comedy"),
+        Tag("action", "Action"),
+        Tag("adult", "Adult"),
+        Tag("adventure", "Adventure"),
+        Tag("comedy", "Comedy"),
+        Tag("demons", "Demons"),
+        Tag("drama", "Drama"),
+        Tag("ecchi", "Ecchi"),
+        Tag("fantasy", "Fantasy"),
+        Tag("game", "Game"),
+        Tag("gender-bender", "Gender bender"),
+        Tag("gore", "Gore"),
+        Tag("harem", "Harem"),
+        Tag("historical", "Historical"),
+        Tag("horror", "Horror"),
+        Tag("isekai", "Isekai"),
+        Tag("josei", "Josei"),
+        Tag("loli", "Loli"),
+        Tag("magic", "Magic"),
+        Tag("manga", "Manga"),
+        Tag("manhua", "Manhua"),
+        Tag("manhwa", "Manhwa"),
+        Tag("martial-arts", "Martial Arts"),
+        Tag("mature", "Mature"),
+        Tag("mecha", "Mecha"),
+        Tag("military", "Military"),
+        Tag("monster-girls", "Monster Girls"),
+        Tag("music", "Music"),
+        Tag("mystery", "Mystery"),
+        Tag("one-shot", "One Shot"),
+        Tag("parody", "Parody"),
+        Tag("police", "Police"),
+        Tag("psychological", "Psychological"),
+        Tag("romance", "Romance"),
+        Tag("school", "School"),
+        Tag("school-life", "School Life"),
+        Tag("sci-fi", "Sci-Fi"),
+        Tag("socks", "Socks"),
+        Tag("seinen", "Seinen"),
+        Tag("shoujo", "Shoujo"),
+        Tag("shoujo-ai", "Shoujo Ai"),
+        Tag("shounen", "Shounen"),
+        Tag("shounen-ai", "Shounen Ai"),
+        Tag("slice-of-life", "Slice of Life"),
+        Tag("smut", "Smut"),
+        Tag("sports", "Sports"),
+        Tag("super-power", "Super Power"),
+        Tag("supernatural", "Supernatural"),
+        Tag("survival", "Survival"),
+        Tag("thriller", "Thriller"),
+        Tag("tragedy", "Tragedy"),
+        Tag("vampire", "Vampire"),
+        Tag("webtoons", "Webtoons"),
+        Tag("yuri", "Yuri"),
+    )
 
     open class UriPartFilter(
         displayName: String,

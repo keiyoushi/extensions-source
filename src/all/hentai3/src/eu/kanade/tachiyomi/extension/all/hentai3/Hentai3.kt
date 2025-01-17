@@ -30,18 +30,16 @@ class Hentai3(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("referer", "$baseUrl/")
-            .set("origin", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("referer", "$baseUrl/")
+        .set("origin", baseUrl)
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request =
-        GET(
-            "$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&pages=$page&"}sort=popular",
-            headers,
-        )
+    override fun popularMangaRequest(page: Int): Request = GET(
+        "$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&pages=$page&"}sort=popular",
+        headers,
+    )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -52,12 +50,11 @@ class Hentai3(
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("div")!!.ownText()
-            setUrlWithoutDomain(element.absUrl("href"))
-            thumbnail_url = element.selectFirst("img:not([class])")!!.absUrl("src")
-        }
+    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("div")!!.ownText()
+        setUrlWithoutDomain(element.absUrl("href"))
+        thumbnail_url = element.selectFirst("img:not([class])")!!.absUrl("src")
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request =
@@ -138,12 +135,11 @@ class Hentai3(
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
 
-        fun String.capitalizeEach() =
-            this.split(" ").joinToString(" ") { s ->
-                s.replaceFirstChar { sr ->
-                    if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
-                }
+        fun String.capitalizeEach() = this.split(" ").joinToString(" ") { s ->
+            s.replaceFirstChar { sr ->
+                if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
             }
+        }
         return SManga.create().apply {
             val authors = document.select("a[href*=/groups/]").eachText().joinToString()
             val artists = document.select("a[href*=/artists/]").eachText().joinToString()

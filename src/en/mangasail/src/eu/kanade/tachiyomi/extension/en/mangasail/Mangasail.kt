@@ -43,14 +43,13 @@ class Mangasail : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "tbody tr"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("td:first-of-type a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-            thumbnail_url = element.selectFirst("td img")!!.attr("src")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("td:first-of-type a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+        thumbnail_url = element.selectFirst("td img")!!.attr("src")
+    }
 
     override fun popularMangaNextPageSelector() = "table + div.text-center ul.pagination li.next a"
 
@@ -60,20 +59,19 @@ class Mangasail : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = "ul#latest-list > li"
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.select("a strong").text()
-            element.selectFirst("a:has(img)")!!.let {
-                url = it.attr("href")
-                // Thumbnails are kind of low-res on latest updates page, transform the img url to get a better version
-                thumbnail_url =
-                    it
-                        .selectFirst("img")
-                        ?.attr("src")
-                        ?.substringBefore("?")
-                        ?.replace("styles/minicover/public/", "")
-            }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        title = element.select("a strong").text()
+        element.selectFirst("a:has(img)")!!.let {
+            url = it.attr("href")
+            // Thumbnails are kind of low-res on latest updates page, transform the img url to get a better version
+            thumbnail_url =
+                it
+                    .selectFirst("img")
+                    ?.attr("src")
+                    ?.substringBefore("?")
+                    ?.replace("styles/minicover/public/", "")
         }
+    }
 
     override fun latestUpdatesNextPageSelector(): String = "There is no next page"
 
@@ -96,57 +94,53 @@ class Mangasail : ParsedHttpSource() {
 
     override fun searchMangaSelector() = "h3.title, div.view-content div.views-row"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            val anchor =
-                element.selectFirst(".views-field-title a")
-                    ?: element.selectFirst("a")
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            title = anchor!!.text()
-            setUrlWithoutDomain(anchor.absUrl("href"))
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        val anchor =
+            element.selectFirst(".views-field-title a")
+                ?: element.selectFirst("a")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        title = anchor!!.text()
+        setUrlWithoutDomain(anchor.absUrl("href"))
+    }
 
     override fun searchMangaNextPageSelector() = "li.next a"
 
     private val json: Json by injectLazy()
 
     // On source's website most of these details are loaded through JQuery
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            with(document.selectFirst("[id*=node-].node-manga[about]")!!) {
-                author = selectByText("Author")?.text()
-                artist = selectByText("Artist")?.text()
-                genre =
-                    selectByText("genres")
-                        ?.select("a[href*=/tags]")
-                        ?.joinToString { it.text() }
-                status = selectByText("Status")?.text().toStatus()
-                description = selectFirst(".field-type-text-with-summary p")?.text()
-                thumbnail_url = selectFirst("img")?.absUrl("src")
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        with(document.selectFirst("[id*=node-].node-manga[about]")!!) {
+            author = selectByText("Author")?.text()
+            artist = selectByText("Artist")?.text()
+            genre =
+                selectByText("genres")
+                    ?.select("a[href*=/tags]")
+                    ?.joinToString { it.text() }
+            status = selectByText("Status")?.text().toStatus()
+            description = selectFirst(".field-type-text-with-summary p")?.text()
+            thumbnail_url = selectFirst("img")?.absUrl("src")
         }
+    }
 
     private fun Element.selectByText(key: String): Element? = selectFirst(".field-label:contains($key) + .field-items .field-item")
 
-    private fun String?.toStatus() =
-        when {
-            this == null -> SManga.UNKNOWN
-            this.contains("Ongoing") -> SManga.ONGOING
-            this.contains("Complete") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String?.toStatus() = when {
+        this == null -> SManga.UNKNOWN
+        this.contains("Ongoing") -> SManga.ONGOING
+        this.contains("Complete") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
 
     override fun chapterListSelector() = "tbody tr"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
-            name = element.select("a").text()
-            date_upload = parseChapterDate(element.select("td + td").text())
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
+        name = element.select("a").text()
+        date_upload = parseChapterDate(element.select("td + td").text())
+    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         var currentPage = 0
@@ -189,11 +183,10 @@ class Mangasail : ParsedHttpSource() {
 
     // Filters
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Text search ignores filters"),
-            GenreFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Text search ignores filters"),
+        GenreFilter(),
+    )
 
     // From https://www.sailmg.com/tagclouds/chunk/1
     private class GenreFilter :

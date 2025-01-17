@@ -3,12 +3,11 @@ package eu.kanade.tachiyomi.extension.ja.comicfuz
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters() =
-    FilterList(
-        TagFilter(),
-        Filter.Separator(),
-        Filter.Header("Doesn't work with text search"),
-    )
+fun getFilters() = FilterList(
+    TagFilter(),
+    Filter.Separator(),
+    Filter.Header("Doesn't work with text search"),
+)
 
 class TagFilter : Filter.Select<String>("Tags", tags.map { it.name }.toTypedArray()) {
     val selected get() =

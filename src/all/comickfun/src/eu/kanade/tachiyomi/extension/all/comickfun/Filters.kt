@@ -3,24 +3,23 @@ package eu.kanade.tachiyomi.extension.all.comickfun
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        Filter.Header(name = "The filter is ignored when using text search."),
-        GenreFilter("Genre", getGenresList),
-        DemographicFilter("Demographic", getDemographicList),
-        TypeFilter("Type", getTypeList),
-        SortFilter("Sort", getSortsList),
-        StatusFilter("Status", getStatusList),
-        CompletedFilter("Completely Scanlated?"),
-        CreatedAtFilter("Created at", getCreatedAtList),
-        MinimumFilter("Minimum Chapters"),
-        Filter.Header("From Year, ex: 2010"),
-        FromYearFilter("From"),
-        Filter.Header("To Year, ex: 2021"),
-        ToYearFilter("To"),
-        Filter.Header("Separate tags with commas"),
-        TagFilter("Tags"),
-    )
+fun getFilters(): FilterList = FilterList(
+    Filter.Header(name = "The filter is ignored when using text search."),
+    GenreFilter("Genre", getGenresList),
+    DemographicFilter("Demographic", getDemographicList),
+    TypeFilter("Type", getTypeList),
+    SortFilter("Sort", getSortsList),
+    StatusFilter("Status", getStatusList),
+    CompletedFilter("Completely Scanlated?"),
+    CreatedAtFilter("Created at", getCreatedAtList),
+    MinimumFilter("Minimum Chapters"),
+    Filter.Header("From Year, ex: 2010"),
+    FromYearFilter("From"),
+    Filter.Header("To Year, ex: 2021"),
+    ToYearFilter("To"),
+    Filter.Header("Separate tags with commas"),
+    TagFilter("Tags"),
+)
 
 /** Filters **/
 internal class GenreFilter(

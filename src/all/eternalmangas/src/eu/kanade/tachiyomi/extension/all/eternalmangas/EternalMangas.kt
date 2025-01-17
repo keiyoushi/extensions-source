@@ -34,25 +34,24 @@ open class EternalMangas(
 
     override fun List<SeriesDto>.additionalParse(): List<SeriesDto> = this.filter { it.language == internalLang }.toMutableList()
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val body = jsRedirect(response)
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val body = jsRedirect(response)
 
-            MANGA_DETAILS_REGEX.find(body)?.groupValues?.get(1)?.let {
-                val unescapedJson = it.unescape()
-                return json.decodeFromString<SeriesDto>(unescapedJson).toSMangaDetails()
-            }
-
-            val document = Jsoup.parse(body)
-            with(document.selectFirst("div#info")!!) {
-                title = select("div:has(p.font-bold:contains(Títuto)) > p.text-sm").text()
-                author = select("div:has(p.font-bold:contains(Autor)) > p.text-sm").text()
-                artist = select("div:has(p.font-bold:contains(Artista)) > p.text-sm").text()
-                genre = select("div:has(p.font-bold:contains(Género)) > p.text-sm > span").joinToString { it.ownText() }
-            }
-            description = document.select("div#sinopsis p").text()
-            thumbnail_url = document.selectFirst("div.contenedor img.object-cover")?.imgAttr()
+        MANGA_DETAILS_REGEX.find(body)?.groupValues?.get(1)?.let {
+            val unescapedJson = it.unescape()
+            return json.decodeFromString<SeriesDto>(unescapedJson).toSMangaDetails()
         }
+
+        val document = Jsoup.parse(body)
+        with(document.selectFirst("div#info")!!) {
+            title = select("div:has(p.font-bold:contains(Títuto)) > p.text-sm").text()
+            author = select("div:has(p.font-bold:contains(Autor)) > p.text-sm").text()
+            artist = select("div:has(p.font-bold:contains(Artista)) > p.text-sm").text()
+            genre = select("div:has(p.font-bold:contains(Género)) > p.text-sm > span").joinToString { it.ownText() }
+        }
+        description = document.select("div#sinopsis p").text()
+        thumbnail_url = document.selectFirst("div.contenedor img.object-cover")?.imgAttr()
+    }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 

@@ -53,13 +53,12 @@ class GunnerkriggCourt : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            chapter_number = element.attr("value").toFloat()
-            setUrlWithoutDomain("/?p=" + element.attr("value"))
-            name = element.parent()!!.previousElementSibling()!!.text() + " (" + chapter_number.toInt() + ")"
-            // date_upload // Find by using hovertext above "Tom" on actual comic page
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        chapter_number = element.attr("value").toFloat()
+        setUrlWithoutDomain("/?p=" + element.attr("value"))
+        name = element.parent()!!.previousElementSibling()!!.text() + " (" + chapter_number.toInt() + ")"
+        // date_upload // Find by using hovertext above "Tom" on actual comic page
+    }
 
     override fun pageListParse(document: Document): List<Page> =
         document.select(".comic_image").mapIndexed { i, element -> Page(i, "", baseUrl + element.attr("src")) }

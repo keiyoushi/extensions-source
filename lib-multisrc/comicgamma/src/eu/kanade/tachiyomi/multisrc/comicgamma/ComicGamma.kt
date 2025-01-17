@@ -40,20 +40,19 @@ open class ComicGamma(
 
     override fun popularMangaSelector() = ".tab_panel.active .manga_item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            url = element.selectFirst(Evaluator.Tag("a"))!!.attr("href")
-            title = element.selectFirst(Evaluator.Class("manga_title"))!!.text()
-            author = element.selectFirst(Evaluator.Class("manga_author"))!!.text()
-            val genreList = element.select(Evaluator.Tag("li")).map { it.text() }
-            genre = genreList.joinToString()
-            status =
-                when {
-                    genreList.contains("完結") && !genreList.contains("リピート配信") -> SManga.COMPLETED
-                    else -> SManga.ONGOING
-                }
-            thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        url = element.selectFirst(Evaluator.Tag("a"))!!.attr("href")
+        title = element.selectFirst(Evaluator.Class("manga_title"))!!.text()
+        author = element.selectFirst(Evaluator.Class("manga_author"))!!.text()
+        val genreList = element.select(Evaluator.Tag("li")).map { it.text() }
+        genre = genreList.joinToString()
+        status =
+            when {
+                genreList.contains("完結") && !genreList.contains("リピート配信") -> SManga.COMPLETED
+                else -> SManga.ONGOING
+            }
+        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.absUrl("src")
+    }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
@@ -106,31 +105,28 @@ open class ComicGamma(
 
     override fun chapterListSelector() = ".read__area .read__outer > a:not([href=#comics])"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            url = element.attr("href").toOldChapterUrl()
-            val number = url.removeSuffix("/").substringAfterLast('/').replace('_', '.')
-            val list = element.selectFirst(Evaluator.Class("read__contents"))!!.children()
-            name = "[$number] ${list[0].text()}"
-            if (list.size >= 3) {
-                date_upload = dateFormat.parseJST(list[2].text())?.time ?: 0L
-            }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        url = element.attr("href").toOldChapterUrl()
+        val number = url.removeSuffix("/").substringAfterLast('/').replace('_', '.')
+        val list = element.selectFirst(Evaluator.Class("read__contents"))!!.children()
+        name = "[$number] ${list[0].text()}"
+        if (list.size >= 3) {
+            date_upload = dateFormat.parseJST(list[2].text())?.time ?: 0L
         }
+    }
 
     override fun pageListRequest(chapter: SChapter) = GET(baseUrl + chapter.url.toNewChapterUrl(), headers)
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     companion object {
-        internal fun SimpleDateFormat.parseJST(date: String) =
-            parse(date)?.apply {
-                time += 12 * 3600 * 1000 // updates at 12 noon
-            }
+        internal fun SimpleDateFormat.parseJST(date: String) = parse(date)?.apply {
+            time += 12 * 3600 * 1000 // updates at 12 noon
+        }
 
-        private fun getJSTFormat(datePattern: String) =
-            SimpleDateFormat(datePattern, Locale.JAPANESE).apply {
-                timeZone = TimeZone.getTimeZone("GMT+09:00")
-            }
+        private fun getJSTFormat(datePattern: String) = SimpleDateFormat(datePattern, Locale.JAPANESE).apply {
+            timeZone = TimeZone.getTimeZone("GMT+09:00")
+        }
 
         private val dateFormat by lazy { getJSTFormat("yyyy年M月dd日") }
 

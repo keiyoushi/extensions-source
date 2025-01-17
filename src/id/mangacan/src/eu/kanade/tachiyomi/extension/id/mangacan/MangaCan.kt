@@ -32,13 +32,12 @@ class MangaCan :
 
     override val pageSelector = "div.images img"
 
-    override fun imageRequest(page: Page): Request =
-        super
-            .imageRequest(page)
-            .newBuilder()
-            .removeHeader("Referer")
-            .addHeader("Referer", "$baseUrl/")
-            .build()
+    override fun imageRequest(page: Page): Request = super
+        .imageRequest(page)
+        .newBuilder()
+        .removeHeader("Referer")
+        .addHeader("Referer", "$baseUrl/")
+        .build()
 
     override fun fetchSearchManga(
         page: Int,
@@ -105,13 +104,12 @@ class MangaCan :
         return FilterList(filters)
     }
 
-    override fun parseGenres(document: Document): List<GenreData> =
-        mutableListOf(GenreData("All", "")).apply {
-            this +=
-                document.select(".textwidget.custom-html-widget a").map { element ->
-                    GenreData(element.text(), element.attr("href"))
-                }
-        }
+    override fun parseGenres(document: Document): List<GenreData> = mutableListOf(GenreData("All", "")).apply {
+        this +=
+            document.select(".textwidget.custom-html-widget a").map { element ->
+                GenreData(element.text(), element.attr("href"))
+            }
+    }
 
     private class GenreFilter(
         name: String,

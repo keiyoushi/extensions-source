@@ -121,45 +121,42 @@ abstract class MachineTranslations(
 
     override fun searchMangaSelector() = "section h2 + div > div"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst("h3")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h3")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    }
 
     override fun searchMangaNextPageSelector() = "a[href*=search]:contains(Next)"
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            description = document.selectFirst("p:has(span:contains(Synopsis))")?.ownText()
-            author = document.selectFirst("p:has(span:contains(Author))")?.ownText()
-            genre = document.select("h2:contains(Genres) + div span").joinToString { it.text() }
-            thumbnail_url = document.selectFirst("img.object-cover")?.absUrl("src")
-            document.selectFirst("p:has(span:contains(Status))")?.ownText()?.let {
-                status =
-                    when (it.lowercase()) {
-                        "ongoing" -> SManga.ONGOING
-                        "complete" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-            }
-            setUrlWithoutDomain(document.location())
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        description = document.selectFirst("p:has(span:contains(Synopsis))")?.ownText()
+        author = document.selectFirst("p:has(span:contains(Author))")?.ownText()
+        genre = document.select("h2:contains(Genres) + div span").joinToString { it.text() }
+        thumbnail_url = document.selectFirst("img.object-cover")?.absUrl("src")
+        document.selectFirst("p:has(span:contains(Status))")?.ownText()?.let {
+            status =
+                when (it.lowercase()) {
+                    "ongoing" -> SManga.ONGOING
+                    "complete" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
+        setUrlWithoutDomain(document.location())
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListSelector() = "section li"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            element.selectFirst("a")!!.let {
-                name = it.ownText()
-                setUrlWithoutDomain(it.absUrl("href"))
-            }
-            date_upload = parseChapterDate(element.selectFirst("span")?.text())
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst("a")!!.let {
+            name = it.ownText()
+            setUrlWithoutDomain(it.absUrl("href"))
         }
+        date_upload = parseChapterDate(element.selectFirst("span")?.text())
+    }
 
     // =============================== Pages ================================
 

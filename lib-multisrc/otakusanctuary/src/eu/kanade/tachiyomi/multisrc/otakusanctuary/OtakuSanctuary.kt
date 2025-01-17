@@ -42,19 +42,18 @@ open class OtakuSanctuary(
     private val json: Json by injectLazy()
 
     // There's no popular list, this will have to do
-    override fun popularMangaRequest(page: Int) =
-        POST(
-            "$baseUrl/Manga/Newest",
-            headers,
-            FormBody
-                .Builder()
-                .apply {
-                    add("Lang", helper.otakusanLang())
-                    add("Page", page.toString())
-                    add("Type", "Include")
-                    add("Dir", "NewPostedDate")
-                }.build(),
-        )
+    override fun popularMangaRequest(page: Int) = POST(
+        "$baseUrl/Manga/Newest",
+        headers,
+        FormBody
+            .Builder()
+            .apply {
+                add("Lang", helper.otakusanLang())
+                add("Page", page.toString())
+                add("Type", "Include")
+                add("Dir", "NewPostedDate")
+            }.build(),
+    )
 
     private fun parseMangaCollection(elements: Elements): List<SManga> {
         val page = emptyList<SManga>().toMutableList()
@@ -112,18 +111,17 @@ open class OtakuSanctuary(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        GET(
-            baseUrl
-                .toHttpUrl()
-                .newBuilder()
-                .apply {
-                    addPathSegments("Home/Search")
-                    addQueryParameter("search", query)
-                }.build()
-                .toString(),
-            headers,
-        )
+    ): Request = GET(
+        baseUrl
+            .toHttpUrl()
+            .newBuilder()
+            .apply {
+                addPathSegments("Home/Search")
+                addQueryParameter("search", query)
+            }.build()
+            .toString(),
+        headers,
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()

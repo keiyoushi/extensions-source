@@ -33,17 +33,15 @@ abstract class Galaxy(
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        if (page == 1) {
-            GET("$baseUrl/webtoons/romance/home", headers)
-        } else {
-            GET("$baseUrl/webtoons/action/home", headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (page == 1) {
+        GET("$baseUrl/webtoons/romance/home", headers)
+    } else {
+        GET("$baseUrl/webtoons/action/home", headers)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -104,13 +102,12 @@ abstract class Galaxy(
     private var filters: List<FilterData> = emptyList()
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    protected fun launchIO(block: () -> Unit) =
-        scope.launch {
-            try {
-                block()
-            } catch (_: Exception) {
-            }
+    protected fun launchIO(block: () -> Unit) = scope.launch {
+        try {
+            block()
+        } catch (_: Exception) {
         }
+    }
 
     override fun getFilterList(): FilterList {
         launchIO {
@@ -243,11 +240,10 @@ abstract class Galaxy(
         }
     }
 
-    private fun Document.getQueryParam(queryParam: String): String? =
-        selectFirst("#full_model a[href*=search?$queryParam]")
-            ?.absUrl("href")
-            ?.toHttpUrlOrNull()
-            ?.queryParameter(queryParam)
+    private fun Document.getQueryParam(queryParam: String): String? = selectFirst("#full_model a[href*=search?$queryParam]")
+        ?.absUrl("href")
+        ?.toHttpUrlOrNull()
+        ?.queryParameter(queryParam)
 
     private fun String.capitalize(): String {
         val result = StringBuilder(length)

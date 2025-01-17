@@ -25,10 +25,9 @@ abstract class VerComics(
     protected open val genreSuffix = ""
     protected open val useSuffixOnSearch = true
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/$urlSuffix/page/$page", headers)
 
@@ -36,14 +35,13 @@ abstract class VerComics(
 
     override fun popularMangaNextPageSelector() = "div.wp-pagenavi > span.current + a"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.select("a.popimg").first()!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.select("img").attr("alt")
-                thumbnail_url = it.selectFirst("img:not(noscript img)")?.imgAttr()
-            }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.select("a.popimg").first()!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.select("img").attr("alt")
+            thumbnail_url = it.selectFirst("img:not(noscript img)")?.imgAttr()
         }
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -88,36 +86,34 @@ abstract class VerComics(
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            document.select("div.tax_post").let {
-                status = SManga.COMPLETED
-                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                val genreList = document.select("div.tax_box:has(div.title:contains(Etiquetas)) a[rel=tag]")
-                genre =
-                    genreList.joinToString { genre ->
-                        val text = genre.text().replaceFirstChar { it.uppercase() }
-                        val slug = genre.attr("href").replace("$baseUrl/$genreSuffix/", "")
-                        val newPair = Pair(text, slug)
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.select("div.tax_post").let {
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            val genreList = document.select("div.tax_box:has(div.title:contains(Etiquetas)) a[rel=tag]")
+            genre =
+                genreList.joinToString { genre ->
+                    val text = genre.text().replaceFirstChar { it.uppercase() }
+                    val slug = genre.attr("href").replace("$baseUrl/$genreSuffix/", "")
+                    val newPair = Pair(text, slug)
 
-                        if (!genres.contains(newPair)) {
-                            genres += newPair
-                        }
-
-                        text
+                    if (!genres.contains(newPair)) {
+                        genres += newPair
                     }
-            }
-        }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = manga.title
-                    url = manga.url
-                },
-            ),
-        )
+                    text
+                }
+        }
+    }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                name = manga.title
+                url = manga.url
+            },
+        ),
+    )
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
@@ -129,10 +125,9 @@ abstract class VerComics(
             "div.wp-content > figure img:not(noscript img)," +
             "div.wp-content > img, div.wp-content > p img"
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(pageListSelector)
-            .mapIndexed { i, img -> Page(i, imageUrl = img.imgAttr()) }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select(pageListSelector)
+        .mapIndexed { i, img -> Page(i, imageUrl = img.imgAttr()) }
 
     protected open var genres = arrayOf(Pair("Ver todos", ""))
 
@@ -147,20 +142,18 @@ abstract class VerComics(
         return FilterList(filters)
     }
 
-    protected open fun Element.imgAttr(): String? =
-        when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
-            this.hasAttr("srcset") -> this.attr("abs:srcset").getSrcSetImage()
-            this.hasAttr("data-cfsrc") -> this.attr("abs:data-cfsrc")
-            else -> this.attr("abs:src")
-        }
+    protected open fun Element.imgAttr(): String? = when {
+        this.hasAttr("data-src") -> this.attr("abs:data-src")
+        this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
+        this.hasAttr("srcset") -> this.attr("abs:srcset").getSrcSetImage()
+        this.hasAttr("data-cfsrc") -> this.attr("abs:data-cfsrc")
+        else -> this.attr("abs:src")
+    }
 
-    private fun String.getSrcSetImage(): String? =
-        this
-            .split(" ")
-            .filter(URL_REGEX::matches)
-            .maxOfOrNull(String::toString)
+    private fun String.getSrcSetImage(): String? = this
+        .split(" ")
+        .filter(URL_REGEX::matches)
+        .maxOfOrNull(String::toString)
 
     // Replace the baseUrl and genreSuffix in the following string
     // Array.from(document.querySelectorAll('div.tagcloud a.tag-cloud-link')).map(a => `Pair("${a.innerText}", "${a.href.replace('$baseUrl/genreSuffix/', '')}")`).join(',\n')

@@ -20,12 +20,11 @@ val json: Json =
         coerceInputValues = true
     }
 
-fun String.parseThumbnailUrl(): String =
-    if (this.matches(AllManga.urlRegex)) {
-        this
-    } else {
-        "https://wp.youtube-anime.com/aln.youtube-anime.com/$this?w=250"
-    }
+fun String.parseThumbnailUrl(): String = if (this.matches(AllManga.urlRegex)) {
+    this
+} else {
+    "https://wp.youtube-anime.com/aln.youtube-anime.com/$this?w=250"
+}
 
 fun String?.parseStatus(): Int {
     if (this == null) {
@@ -39,32 +38,28 @@ fun String?.parseStatus(): Int {
     }
 }
 
-fun String.titleToSlug() =
-    this
-        .trim()
-        .lowercase(Locale.US)
-        .replace(titleSpecialCharactersRegex, "-")
+fun String.titleToSlug() = this
+    .trim()
+    .lowercase(Locale.US)
+    .replace(titleSpecialCharactersRegex, "-")
 
-fun String.parseDescription(): String =
-    Jsoup
-        .parse(
-            this.replace("<br>", "br2n"),
-        ).text()
-        .replace("br2n", "\n")
+fun String.parseDescription(): String = Jsoup
+    .parse(
+        this.replace("<br>", "br2n"),
+    ).text()
+    .replace("br2n", "\n")
 
-fun String?.parseDate(): Long =
-    runCatching {
-        dateFormat.parse(this!!)!!.time
-    }.getOrDefault(0L)
+fun String?.parseDate(): Long = runCatching {
+    dateFormat.parse(this!!)!!.time
+}.getOrDefault(0L)
 
 inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
 inline fun <reified T> List<*>.firstInstanceOrNull(): T? = filterIsInstance<T>().firstOrNull()
 
-inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-    json
-        .encodeToString(this)
-        .toRequestBody(JSON_MEDIA_TYPE)
+inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody = json
+    .encodeToString(this)
+    .toRequestBody(JSON_MEDIA_TYPE)
 
 private val titleSpecialCharactersRegex = Regex("[^a-z\\d]+")
 private val dateFormat by lazy {

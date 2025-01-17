@@ -25,10 +25,9 @@ class DeviantArt : HttpSource() {
     override val lang = "all"
     override val supportsLatest = false
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
+    }
 
     private val backendBaseUrl = "https://backend.deviantart.com"
 
@@ -38,12 +37,11 @@ class DeviantArt : HttpSource() {
         SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
     }
 
-    private fun parseDate(dateStr: String?): Long =
-        try {
-            dateFormat.parse(dateStr ?: "")!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseDate(dateStr: String?): Long = try {
+        dateFormat.parse(dateStr ?: "")!!.time
+    } catch (_: ParseException) {
+        0L
+    }
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
 

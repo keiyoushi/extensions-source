@@ -37,34 +37,32 @@ class PepperCarrot :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Single
-            .create<MangasPage> {
-                updateLangData(client, headers, preferences)
-                val lang =
-                    preferences.lang.ifEmpty {
-                        throw Exception("Please select language in the filter")
-                    }
-                val langMap = preferences.langData.associateBy { langData -> langData.key }
-                val mangas = lang.map { key -> langMap[key]!!.toSManga() }
-                val result = MangasPage(mangas + getArtworkList(), false)
-                it.onSuccess(result)
-            }.toObservable()
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Single
+        .create<MangasPage> {
+            updateLangData(client, headers, preferences)
+            val lang =
+                preferences.lang.ifEmpty {
+                    throw Exception("Please select language in the filter")
+                }
+            val langMap = preferences.langData.associateBy { langData -> langData.key }
+            val mangas = lang.map { key -> langMap[key]!!.toSManga() }
+            val result = MangasPage(mangas + getArtworkList(), false)
+            it.onSuccess(result)
+        }.toObservable()
 
-    private fun getArtworkList(): List<SManga> =
-        arrayOf(
-            "artworks",
-            "wallpapers",
-            "sketchbook",
-            "misc",
-            "book-publishing",
-            "comissions",
-            "eshop",
-            "framasoft",
-            "press",
-            "references",
-            "wiki",
-        ).map(::getArtworkEntry)
+    private fun getArtworkList(): List<SManga> = arrayOf(
+        "artworks",
+        "wallpapers",
+        "sketchbook",
+        "misc",
+        "book-publishing",
+        "comissions",
+        "eshop",
+        "framasoft",
+        "press",
+        "references",
+        "wiki",
+    ).map(::getArtworkEntry)
 
     override fun getFilterList() = getFilters(preferences)
 
@@ -94,19 +92,18 @@ class PepperCarrot :
 
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        Single
-            .create<SManga> {
-                updateLangData(client, headers, preferences)
-                val key = manga.url
-                val result =
-                    if (key.startsWith('#')) {
-                        getArtworkEntry(key.substring(1))
-                    } else {
-                        preferences.langData.find { lang -> lang.key == key }!!.toSManga()
-                    }
-                it.onSuccess(result)
-            }.toObservable()
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Single
+        .create<SManga> {
+            updateLangData(client, headers, preferences)
+            val key = manga.url
+            val result =
+                if (key.startsWith('#')) {
+                    getArtworkEntry(key.substring(1))
+                } else {
+                    preferences.langData.find { lang -> lang.key == key }!!.toSManga()
+                }
+            it.onSuccess(result)
+        }.toObservable()
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val key = manga.url
@@ -121,42 +118,39 @@ class PepperCarrot :
 
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    private fun LangData.toSManga() =
-        SManga.create().apply {
-            url = key
-            title = this@toSManga.title ?: if (key == "en") TITLE else "$TITLE (${key.uppercase()})"
-            author = AUTHOR
-            description =
-                this@toSManga.run {
-                    "Language: $name\nTranslators: $translators"
-                }
-            status = SManga.ONGOING
-            thumbnail_url = "$BASE_URL/0_sources/0ther/artworks/low-res/2016-02-24_vertical-cover_remake_by-David-Revoy.jpg"
-            initialized = true
-        }
+    private fun LangData.toSManga() = SManga.create().apply {
+        url = key
+        title = this@toSManga.title ?: if (key == "en") TITLE else "$TITLE (${key.uppercase()})"
+        author = AUTHOR
+        description =
+            this@toSManga.run {
+                "Language: $name\nTranslators: $translators"
+            }
+        status = SManga.ONGOING
+        thumbnail_url = "$BASE_URL/0_sources/0ther/artworks/low-res/2016-02-24_vertical-cover_remake_by-David-Revoy.jpg"
+        initialized = true
+    }
 
-    private fun getArtworkEntry(key: String) =
-        SManga.create().apply {
-            url = "#$key"
-            title =
-                when (key) {
-                    "comissions" -> "Commissions"
-                    "eshop" -> "Shop"
-                    else -> key.replaceFirstChar { it.uppercase() }
-                }
-            author = AUTHOR
-            status = SManga.ONGOING
-            thumbnail_url = "$BASE_URL/0_sources/0ther/press/low-res/2015-10-12_logo_by-David-Revoy.jpg"
-            initialized = true
-        }
+    private fun getArtworkEntry(key: String) = SManga.create().apply {
+        url = "#$key"
+        title =
+            when (key) {
+                "comissions" -> "Commissions"
+                "eshop" -> "Shop"
+                else -> key.replaceFirstChar { it.uppercase() }
+            }
+        author = AUTHOR
+        status = SManga.ONGOING
+        thumbnail_url = "$BASE_URL/0_sources/0ther/press/low-res/2015-10-12_logo_by-David-Revoy.jpg"
+        initialized = true
+    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Single
-            .create<List<SChapter>> {
-                updateLangData(client, headers, preferences)
-                val response = client.newCall(chapterListRequest(manga)).execute()
-                it.onSuccess(chapterListParse(response))
-            }.toObservable()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Single
+        .create<List<SChapter>> {
+            updateLangData(client, headers, preferences)
+            val response = client.newCall(chapterListRequest(manga)).execute()
+            it.onSuccess(chapterListParse(response))
+        }.toObservable()
 
     override fun chapterListRequest(manga: SManga): Request {
         val key = manga.url

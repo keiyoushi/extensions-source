@@ -3,22 +3,21 @@ package eu.kanade.tachiyomi.extension.all.akuma
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Female Tags", "female"),
-        TextFilter("Male Tags", "male"),
-        TextFilter("Other Tags", "other"),
-        CategoryFilter(),
-        TextFilter("Groups", "group"),
-        TextFilter("Artists", "artist"),
-        TextFilter("Parody", "parody"),
-        TextFilter("Characters", "character"),
-        Filter.Separator(),
-        Filter.Header("Search in favorites, read, or commented"),
-        OptionFilter(),
-    )
+fun getFilters(): FilterList = FilterList(
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    TextFilter("Female Tags", "female"),
+    TextFilter("Male Tags", "male"),
+    TextFilter("Other Tags", "other"),
+    CategoryFilter(),
+    TextFilter("Groups", "group"),
+    TextFilter("Artists", "artist"),
+    TextFilter("Parody", "parody"),
+    TextFilter("Characters", "character"),
+    Filter.Separator(),
+    Filter.Header("Search in favorites, read, or commented"),
+    OptionFilter(),
+)
 
 internal class TextFilter(
     name: String,

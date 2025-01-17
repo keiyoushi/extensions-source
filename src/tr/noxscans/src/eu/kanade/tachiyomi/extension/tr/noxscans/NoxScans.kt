@@ -60,10 +60,9 @@ class NoxScans :
         } ?: document
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        checkVerification(response.asJsoup())
-            .select(chapterListSelector())
-            .map(::chapterFromElement)
+    override fun chapterListParse(response: Response): List<SChapter> = checkVerification(response.asJsoup())
+        .select(chapterListSelector())
+        .map(::chapterFromElement)
 
     override fun pageListParse(document: Document): List<Page> {
         val doc = checkVerification(document)
@@ -99,39 +98,35 @@ class NoxScans :
         }
     }
 
-    private fun findServerArrayKey(jsonData: JSONObject): String? =
-        jsonData.keys().asSequence().find { key ->
+    private fun findServerArrayKey(jsonData: JSONObject): String? = jsonData.keys().asSequence().find { key ->
+        try {
+            val value = jsonData.getJSONArray(key)
+            value.length() > 0 && isValidServerObject(value.getJSONObject(0))
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun isValidServerObject(obj: JSONObject): Boolean = obj.length() == 2 &&
+        obj.keys().asSequence().any { key ->
             try {
-                val value = jsonData.getJSONArray(key)
-                value.length() > 0 && isValidServerObject(value.getJSONObject(0))
+                val arrayValue = obj.getJSONArray(key)
+                arrayValue.length() > 0 && isImageUrl(arrayValue.getString(0))
             } catch (e: Exception) {
                 false
             }
         }
 
-    private fun isValidServerObject(obj: JSONObject): Boolean =
-        obj.length() == 2 &&
-            obj.keys().asSequence().any { key ->
-                try {
-                    val arrayValue = obj.getJSONArray(key)
-                    arrayValue.length() > 0 && isImageUrl(arrayValue.getString(0))
-                } catch (e: Exception) {
-                    false
-                }
-            }
-
-    private fun findImageArrayKey(server: JSONObject): String? =
-        server.keys().asSequence().find { key ->
-            try {
-                val value = server.getJSONArray(key)
-                value.length() > 0 && isImageUrl(value.getString(0))
-            } catch (e: Exception) {
-                false
-            }
+    private fun findImageArrayKey(server: JSONObject): String? = server.keys().asSequence().find { key ->
+        try {
+            val value = server.getJSONArray(key)
+            value.length() > 0 && isImageUrl(value.getString(0))
+        } catch (e: Exception) {
+            false
         }
+    }
 
-    private fun isImageUrl(url: String): Boolean =
-        IMAGE_EXTENSIONS.any { ext ->
-            url.lowercase().endsWith(ext) && url.contains("/wp-content/uploads/")
-        }
+    private fun isImageUrl(url: String): Boolean = IMAGE_EXTENSIONS.any { ext ->
+        url.lowercase().endsWith(ext) && url.contains("/wp-content/uploads/")
+    }
 }

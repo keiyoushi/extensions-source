@@ -12,11 +12,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MiauScanFactory : SourceFactory {
-    override fun createSources() =
-        listOf(
-            MiauScan("es"),
-            MiauScan("pt-BR"),
-        )
+    override fun createSources() = listOf(
+        MiauScan("es"),
+        MiauScan("pt-BR"),
+    )
 }
 
 open class MiauScan(
@@ -63,18 +62,16 @@ open class MiauScan(
         return super.searchMangaRequest(page, query, FilterList(overloadedFilters))
     }
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        super.searchMangaFromElement(element).apply {
-            title = title.replace(PORTUGUESE_SUFFIX, "")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
+        title = title.replace(PORTUGUESE_SUFFIX, "")
+    }
 
     override val seriesAuthorSelector = ".tsinfo .imptdt:contains(autor) i"
     override val seriesStatusSelector = ".tsinfo .imptdt:contains(estado) i"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            title = title.replace(PORTUGUESE_SUFFIX, "")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        title = title.replace(PORTUGUESE_SUFFIX, "")
+    }
 
     override fun getGenreList(): List<Genre> = super.getGenreList().filter { it.value != PORTUGUESE_GENRE_ID }
 

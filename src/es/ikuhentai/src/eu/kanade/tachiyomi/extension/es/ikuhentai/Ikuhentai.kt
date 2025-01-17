@@ -136,12 +136,11 @@ class Ikuhentai : ParsedHttpSource() {
         return manga
     }
 
-    private fun parseStatus(element: String): Int =
-        when {
-            element.lowercase().contains("ongoing") -> SManga.ONGOING
-            element.lowercase().contains("completado") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(element: String): Int = when {
+        element.lowercase().contains("ongoing") -> SManga.ONGOING
+        element.lowercase().contains("completado") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = "li.wp-manga-chapter"
 
@@ -238,70 +237,67 @@ class Ikuhentai : ParsedHttpSource() {
         statuses: List<Status>,
     ) : Filter.Group<Status>("Estado", statuses)
 
-    override fun getFilterList() =
-        FilterList(
+    override fun getFilterList() = FilterList(
 //            TextField("Judul", "title"),
-            TextField("Autor", "author"),
-            TextField("Año de publicación", "release"),
-            SortBy(),
-            StatusList(getStatusList()),
-            GenreList(getGenreList()),
-        )
+        TextField("Autor", "author"),
+        TextField("Año de publicación", "release"),
+        SortBy(),
+        StatusList(getStatusList()),
+        GenreList(getGenreList()),
+    )
 
-    private fun getStatusList() =
-        listOf(
-            Status("Completado", "end"),
-            Status("En emisión", "on-going"),
-            Status("Cancelado", "canceled"),
-            Status("Pausado", "on-hold"),
-        )
+    private fun getStatusList() = listOf(
+        Status("Completado", "end"),
+        Status("En emisión", "on-going"),
+        Status("Cancelado", "canceled"),
+        Status("Pausado", "on-hold"),
+    )
 
-    private fun getGenreList() =
-        listOf(
-            Genre("Ahegao", "ahegao"),
-            Genre("Anal", "anal"),
-            Genre("Bestiality", "bestialidad"),
-            Genre("Bondage", "bondage"),
-            Genre("Bukkake", "bukkake"),
-            Genre("Chicas monstruo", "chicas-monstruo"),
-            Genre("Chikan", "chikan"),
-            Genre("Colegialas", "colegialas"),
-            Genre("Comics porno", "comics-porno"),
-            Genre("Dark Skin", "dark-skin"),
-            Genre("Demonios", "demonios"),
-            Genre("Ecchi", "ecchi"),
-            Genre("Embarazadas", "embarazadas"),
-            Genre("Enfermeras", "enfermeras"),
-            Genre("Eroges", "eroges"),
-            Genre("Fantasía", "fantasia"),
-            Genre("Futanari", "futanari"),
-            Genre("Gangbang", "gangbang"),
-            Genre("Gemelas", "gemelas"),
-            Genre("Gender Bender", "gender-bender"),
-            Genre("Gore", "gore"),
-            Genre("Handjob", "handjob"),
-            Genre("Harem", "harem"),
-            Genre("Hipnosis", "hipnosis"),
-            Genre("Incesto", "incesto"),
-            Genre("Loli", "loli"),
-            Genre("Maids", "maids"),
-            Genre("Masturbación", "masturbacion"),
-            Genre("Milf", "milf"),
-            Genre("Mind Break", "mind-break"),
-            Genre("My Hero Academia", "my-hero-academia"),
-            Genre("Naruto", "naruto"),
-            Genre("Netorare", "netorare"),
-            Genre("Paizuri", "paizuri"),
-            Genre("Pokemon", "pokemon"),
-            Genre("Profesora", "profesora"),
-            Genre("Prostitución", "prostitucion"),
-            Genre("Romance", "romance"),
-            Genre("Straight Shota", "straight-shota"),
-            Genre("Tentáculos", "tentaculos"),
-            Genre("Virgen", "virgen"),
-            Genre("Yaoi", "yaoi"),
-            Genre("Yuri", "yuri"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Ahegao", "ahegao"),
+        Genre("Anal", "anal"),
+        Genre("Bestiality", "bestialidad"),
+        Genre("Bondage", "bondage"),
+        Genre("Bukkake", "bukkake"),
+        Genre("Chicas monstruo", "chicas-monstruo"),
+        Genre("Chikan", "chikan"),
+        Genre("Colegialas", "colegialas"),
+        Genre("Comics porno", "comics-porno"),
+        Genre("Dark Skin", "dark-skin"),
+        Genre("Demonios", "demonios"),
+        Genre("Ecchi", "ecchi"),
+        Genre("Embarazadas", "embarazadas"),
+        Genre("Enfermeras", "enfermeras"),
+        Genre("Eroges", "eroges"),
+        Genre("Fantasía", "fantasia"),
+        Genre("Futanari", "futanari"),
+        Genre("Gangbang", "gangbang"),
+        Genre("Gemelas", "gemelas"),
+        Genre("Gender Bender", "gender-bender"),
+        Genre("Gore", "gore"),
+        Genre("Handjob", "handjob"),
+        Genre("Harem", "harem"),
+        Genre("Hipnosis", "hipnosis"),
+        Genre("Incesto", "incesto"),
+        Genre("Loli", "loli"),
+        Genre("Maids", "maids"),
+        Genre("Masturbación", "masturbacion"),
+        Genre("Milf", "milf"),
+        Genre("Mind Break", "mind-break"),
+        Genre("My Hero Academia", "my-hero-academia"),
+        Genre("Naruto", "naruto"),
+        Genre("Netorare", "netorare"),
+        Genre("Paizuri", "paizuri"),
+        Genre("Pokemon", "pokemon"),
+        Genre("Profesora", "profesora"),
+        Genre("Prostitución", "prostitucion"),
+        Genre("Romance", "romance"),
+        Genre("Straight Shota", "straight-shota"),
+        Genre("Tentáculos", "tentaculos"),
+        Genre("Virgen", "virgen"),
+        Genre("Yaoi", "yaoi"),
+        Genre("Yuri", "yuri"),
+    )
 
     private open class UriPartFilter(
         displayName: String,

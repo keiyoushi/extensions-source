@@ -47,13 +47,12 @@ class Nekopost : HttpSource() {
 
     override val supportsLatest: Boolean = false
 
-    private fun getStatus(status: String) =
-        when (status) {
-            "1" -> SManga.ONGOING
-            "2" -> SManga.COMPLETED
-            "3" -> SManga.LICENSED
-            else -> SManga.UNKNOWN
-        }
+    private fun getStatus(status: String) = when (status) {
+        "1" -> SManga.ONGOING
+        "2" -> SManga.COMPLETED
+        "3" -> SManga.LICENSED
+        else -> SManga.UNKNOWN
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 

@@ -87,21 +87,20 @@ abstract class Luscious(
 
     private val lusLang: String = toLusLang(lang)
 
-    private fun toLusLang(lang: String): String =
-        when (lang) {
-            "all" -> FILTER_VALUE_IGNORE
-            "en" -> "1"
-            "ja" -> "2"
-            "es" -> "3"
-            "it" -> "4"
-            "de" -> "5"
-            "fr" -> "6"
-            "zh" -> "8"
-            "ko" -> "9"
-            "pt-BR" -> "100"
-            "th" -> "101"
-            else -> "99"
-        }
+    private fun toLusLang(lang: String): String = when (lang) {
+        "all" -> FILTER_VALUE_IGNORE
+        "en" -> "1"
+        "ja" -> "2"
+        "es" -> "3"
+        "it" -> "4"
+        "de" -> "5"
+        "fr" -> "6"
+        "zh" -> "8"
+        "ko" -> "9"
+        "pt-BR" -> "100"
+        "th" -> "101"
+        else -> "99"
+    }
 
     // Common
 
@@ -259,10 +258,9 @@ abstract class Luscious(
         }
     }
 
-    private fun buildAlbumInfoRequestInput(id: String): JsonObject =
-        buildJsonObject {
-            put("id", id)
-        }
+    private fun buildAlbumInfoRequestInput(id: String): JsonObject = buildJsonObject {
+        put("id", id)
+    }
 
     private fun buildAlbumInfoRequest(id: String): Request {
         val input = buildAlbumInfoRequestInput(id)
@@ -376,21 +374,20 @@ abstract class Luscious(
     private fun buildAlbumPicturesRequestInput(
         id: String,
         page: Int,
-    ): JsonObject =
-        buildJsonObject {
-            putJsonObject("input") {
-                putJsonArray("filters") {
-                    add(
-                        buildJsonObject {
-                            put("name", "album_id")
-                            put("value", id)
-                        },
-                    )
-                }
-                put("display", getSortPref())
-                put("page", page)
+    ): JsonObject = buildJsonObject {
+        putJsonObject("input") {
+            putJsonArray("filters") {
+                add(
+                    buildJsonObject {
+                        put("name", "album_id")
+                        put("value", id)
+                    },
+                )
             }
+            put("display", getSortPref())
+            put("page", page)
         }
+    }
 
     private fun buildAlbumPicturesPageUrl(
         id: String,
@@ -453,20 +450,19 @@ abstract class Luscious(
         return pages
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        when (getMergeChapterPref()) {
-            true -> {
-                val id = chapter.url.substringAfterLast("_").removeSuffix("/")
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = when (getMergeChapterPref()) {
+        true -> {
+            val id = chapter.url.substringAfterLast("_").removeSuffix("/")
 
-                client
-                    .newCall(GET(buildAlbumPicturesPageUrl(id, 1)))
-                    .asObservableSuccess()
-                    .map { parseAlbumPicturesResponseMergeChapter(it) }
-            }
-            false -> {
-                Observable.just(listOf(Page(0, chapter.url, chapter.url)))
-            }
+            client
+                .newCall(GET(buildAlbumPicturesPageUrl(id, 1)))
+                .asObservableSuccess()
+                .map { parseAlbumPicturesResponseMergeChapter(it) }
         }
+        false -> {
+            Observable.just(listOf(Page(0, chapter.url, chapter.url)))
+        }
+    }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
@@ -575,33 +571,31 @@ abstract class Luscious(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        buildAlbumListRequest(
-            page,
-            filters.let {
-                if (it.isEmpty()) {
-                    getSortFilters(SEARCH_DEFAULT_SORT_STATE)
-                } else {
-                    it
-                }
-            },
-            query,
-        )
+    ): Request = buildAlbumListRequest(
+        page,
+        filters.let {
+            if (it.isEmpty()) {
+                getSortFilters(SEARCH_DEFAULT_SORT_STATE)
+            } else {
+                it
+            }
+        },
+        query,
+    )
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith("ID:")) {
-            val id = query.substringAfterLast("ID:")
-            client
-                .newCall(buildAlbumInfoRequest(id))
-                .asObservableSuccess()
-                .map { MangasPage(listOf(detailsParse(it)), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith("ID:")) {
+        val id = query.substringAfterLast("ID:")
+        client
+            .newCall(buildAlbumInfoRequest(id))
+            .asObservableSuccess()
+            .map { MangasPage(listOf(detailsParse(it)), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     class TriStateFilterOption(
         name: String,
@@ -719,24 +713,23 @@ abstract class Luscious(
 
     override fun getFilterList(): FilterList = getSortFilters(POPULAR_DEFAULT_SORT_STATE)
 
-    private fun getSortFilters(sortState: Int) =
-        FilterList(
-            SortBySelectFilter(getSortFilters(), sortState),
-            AlbumTypeSelectFilter(getAlbumTypeFilters()),
-            ContentTypeSelectFilter(getContentTypeFilters()),
-            AlbumSizeSelectFilter(getAlbumSizeFilters()),
-            SelectionSelectFilter(getSelectionFilters()),
-            RestrictGenresSelectFilter(getRestrictGenresFilters()),
-            InterestGroupFilter(getInterestFilters()),
-            LanguageGroupFilter(getLanguageFilters()),
-            GenreGroupFilter(getGenreFilters()),
-            Filter.Header("Separate tags with commas (,)"),
-            Filter.Header("Prepend with dash (-) to exclude"),
-            TagTextFilters(),
-            Filter.Header("The following require username or ID"),
-            CreatorTextFilters(),
-            FavoriteTextFilters(),
-        )
+    private fun getSortFilters(sortState: Int) = FilterList(
+        SortBySelectFilter(getSortFilters(), sortState),
+        AlbumTypeSelectFilter(getAlbumTypeFilters()),
+        ContentTypeSelectFilter(getContentTypeFilters()),
+        AlbumSizeSelectFilter(getAlbumSizeFilters()),
+        SelectionSelectFilter(getSelectionFilters()),
+        RestrictGenresSelectFilter(getRestrictGenresFilters()),
+        InterestGroupFilter(getInterestFilters()),
+        LanguageGroupFilter(getLanguageFilters()),
+        GenreGroupFilter(getGenreFilters()),
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        TagTextFilters(),
+        Filter.Header("The following require username or ID"),
+        CreatorTextFilters(),
+        FavoriteTextFilters(),
+    )
 
     private fun getSortFilters(): List<SelectFilterOption> {
         val sortOptions = mutableListOf<SelectFilterOption>()
@@ -794,137 +787,129 @@ abstract class Luscious(
         return sortOptions
     }
 
-    private fun getAlbumTypeFilters() =
-        listOf(
-            SelectFilterOption("All", FILTER_VALUE_IGNORE),
-            SelectFilterOption("Manga", "manga"),
-            SelectFilterOption("Pictures", "pictures"),
-        )
+    private fun getAlbumTypeFilters() = listOf(
+        SelectFilterOption("All", FILTER_VALUE_IGNORE),
+        SelectFilterOption("Manga", "manga"),
+        SelectFilterOption("Pictures", "pictures"),
+    )
 
-    private fun getRestrictGenresFilters() =
-        listOf(
-            SelectFilterOption("None", FILTER_VALUE_IGNORE),
-            SelectFilterOption("Loose", "loose"),
-            SelectFilterOption("Strict", "strict"),
-        )
+    private fun getRestrictGenresFilters() = listOf(
+        SelectFilterOption("None", FILTER_VALUE_IGNORE),
+        SelectFilterOption("Loose", "loose"),
+        SelectFilterOption("Strict", "strict"),
+    )
 
-    private fun getSelectionFilters() =
-        listOf(
-            SelectFilterOption("All", "all"),
-            SelectFilterOption("No Votes", "not_voted"),
-            SelectFilterOption("Downvoted", "downvoted"),
-            SelectFilterOption("Animated", "animated"),
-            SelectFilterOption("Banned", "banned"),
-            SelectFilterOption("Made by People You Follow", "made_by_following"),
-            SelectFilterOption("Faved by People You Follow", "faved_by_following"),
-        )
+    private fun getSelectionFilters() = listOf(
+        SelectFilterOption("All", "all"),
+        SelectFilterOption("No Votes", "not_voted"),
+        SelectFilterOption("Downvoted", "downvoted"),
+        SelectFilterOption("Animated", "animated"),
+        SelectFilterOption("Banned", "banned"),
+        SelectFilterOption("Made by People You Follow", "made_by_following"),
+        SelectFilterOption("Faved by People You Follow", "faved_by_following"),
+    )
 
-    private fun getContentTypeFilters() =
-        listOf(
-            SelectFilterOption("All", FILTER_VALUE_IGNORE),
-            SelectFilterOption("Hentai", "0"),
-            SelectFilterOption("Non-Erotic", "5"),
-            SelectFilterOption("Real People", "6"),
-        )
+    private fun getContentTypeFilters() = listOf(
+        SelectFilterOption("All", FILTER_VALUE_IGNORE),
+        SelectFilterOption("Hentai", "0"),
+        SelectFilterOption("Non-Erotic", "5"),
+        SelectFilterOption("Real People", "6"),
+    )
 
-    private fun getAlbumSizeFilters() =
-        listOf(
-            SelectFilterOption("All", FILTER_VALUE_IGNORE),
-            SelectFilterOption("0-25", "0"),
-            SelectFilterOption("0-50", "1"),
-            SelectFilterOption("50-100", "2"),
-            SelectFilterOption("100-200", "3"),
-            SelectFilterOption("200-800", "4"),
-            SelectFilterOption("800-3200", "5"),
-            SelectFilterOption("3200-12800", "6"),
-        )
+    private fun getAlbumSizeFilters() = listOf(
+        SelectFilterOption("All", FILTER_VALUE_IGNORE),
+        SelectFilterOption("0-25", "0"),
+        SelectFilterOption("0-50", "1"),
+        SelectFilterOption("50-100", "2"),
+        SelectFilterOption("100-200", "3"),
+        SelectFilterOption("200-800", "4"),
+        SelectFilterOption("800-3200", "5"),
+        SelectFilterOption("3200-12800", "6"),
+    )
 
-    private fun getInterestFilters() =
-        listOf(
-            CheckboxFilterOption("Straight Sex", "1"),
-            CheckboxFilterOption("Trans x Girl", "10"),
-            CheckboxFilterOption("Gay / Yaoi", "2"),
-            CheckboxFilterOption("Lesbian / Yuri", "3"),
-            CheckboxFilterOption("Trans", "5"),
-            CheckboxFilterOption("Solo Girl", "6"),
-            CheckboxFilterOption("Trans x Trans", "8"),
-            CheckboxFilterOption("Trans x Guy", "9"),
-        )
+    private fun getInterestFilters() = listOf(
+        CheckboxFilterOption("Straight Sex", "1"),
+        CheckboxFilterOption("Trans x Girl", "10"),
+        CheckboxFilterOption("Gay / Yaoi", "2"),
+        CheckboxFilterOption("Lesbian / Yuri", "3"),
+        CheckboxFilterOption("Trans", "5"),
+        CheckboxFilterOption("Solo Girl", "6"),
+        CheckboxFilterOption("Trans x Trans", "8"),
+        CheckboxFilterOption("Trans x Guy", "9"),
+    )
 
-    private fun getLanguageFilters() =
-        listOf(
-            CheckboxFilterOption("English", toLusLang("en"), false),
-            CheckboxFilterOption("Japanese", toLusLang("ja"), false),
-            CheckboxFilterOption("Spanish", toLusLang("es"), false),
-            CheckboxFilterOption("Italian", toLusLang("it"), false),
-            CheckboxFilterOption("German", toLusLang("de"), false),
-            CheckboxFilterOption("French", toLusLang("fr"), false),
-            CheckboxFilterOption("Chinese", toLusLang("zh"), false),
-            CheckboxFilterOption("Korean", toLusLang("ko"), false),
-            CheckboxFilterOption("Others", toLusLang("other"), false),
-            CheckboxFilterOption("Portuguese", toLusLang("pt-BR"), false),
-            CheckboxFilterOption("Thai", toLusLang("th"), false),
-        ).filterNot { it.value == lusLang }
+    private fun getLanguageFilters() = listOf(
+        CheckboxFilterOption("English", toLusLang("en"), false),
+        CheckboxFilterOption("Japanese", toLusLang("ja"), false),
+        CheckboxFilterOption("Spanish", toLusLang("es"), false),
+        CheckboxFilterOption("Italian", toLusLang("it"), false),
+        CheckboxFilterOption("German", toLusLang("de"), false),
+        CheckboxFilterOption("French", toLusLang("fr"), false),
+        CheckboxFilterOption("Chinese", toLusLang("zh"), false),
+        CheckboxFilterOption("Korean", toLusLang("ko"), false),
+        CheckboxFilterOption("Others", toLusLang("other"), false),
+        CheckboxFilterOption("Portuguese", toLusLang("pt-BR"), false),
+        CheckboxFilterOption("Thai", toLusLang("th"), false),
+    ).filterNot { it.value == lusLang }
 
-    private fun getGenreFilters() =
-        listOf(
-            TriStateFilterOption("3D / Digital Art", "25"),
-            TriStateFilterOption("Amateurs", "20"),
-            TriStateFilterOption("Artist Collection", "19"),
-            TriStateFilterOption("Asian Girls", "12"),
-            TriStateFilterOption("BDSM", "27"),
-            TriStateFilterOption("Bestiality Hentai", "5"),
-            TriStateFilterOption("Casting", "44"),
-            TriStateFilterOption("Celebrity Fakes", "16"),
-            TriStateFilterOption("Cosplay", "22"),
-            TriStateFilterOption("Cross-Dressing", "30"),
-            TriStateFilterOption("Cumshot", "26"),
-            TriStateFilterOption("Defloration / First Time", "59"),
-            TriStateFilterOption("Ebony Girls", "32"),
-            TriStateFilterOption("European Girls", "46"),
-            TriStateFilterOption("Extreme Gore", "60"),
-            TriStateFilterOption("Extreme Scat", "61"),
-            TriStateFilterOption("Fantasy / Monster Girls", "10"),
-            TriStateFilterOption("Fetish", "2"),
-            TriStateFilterOption("Furries", "8"),
-            TriStateFilterOption("Futanari", "31"),
-            TriStateFilterOption("Group Sex", "36"),
-            TriStateFilterOption("Harem", "56"),
-            TriStateFilterOption("Humor", "41"),
-            TriStateFilterOption("Incest", "24"),
-            TriStateFilterOption("Interracial", "28"),
-            TriStateFilterOption("Kemonomimi / Animal Ears", "39"),
-            TriStateFilterOption("Latina Girls", "33"),
-            TriStateFilterOption("Lolicon", "3"),
-            TriStateFilterOption("Mature", "13"),
-            TriStateFilterOption("Members: Original Art", "18"),
-            TriStateFilterOption("Members: Verified Selfies", "21"),
-            TriStateFilterOption("Military", "48"),
-            TriStateFilterOption("Mind Control", "34"),
-            TriStateFilterOption("Monsters & Tentacles", "38"),
-            TriStateFilterOption("Music", "45"),
-            TriStateFilterOption("Netorare / Cheating", "40"),
-            TriStateFilterOption("No Genre Given", "1"),
-            TriStateFilterOption("Nonconsent / Reluctance", "37"),
-            TriStateFilterOption("Other Ethnicity Girls", "57"),
-            TriStateFilterOption("Private to Luscious", "55"),
-            TriStateFilterOption("Public Sex", "43"),
-            TriStateFilterOption("Romance", "42"),
-            TriStateFilterOption("School / College", "35"),
-            TriStateFilterOption("Sex Workers", "47"),
-            TriStateFilterOption("SFW", "23"),
-            TriStateFilterOption("Shotacon", "4"),
-            TriStateFilterOption("Softcore / Ecchi", "9"),
-            TriStateFilterOption("Superheroes", "17"),
-            TriStateFilterOption("Swimsuit", "49"),
-            TriStateFilterOption("Tankōbon", "45"),
-            TriStateFilterOption("Trans", "14"),
-            TriStateFilterOption("TV / Movies", "51"),
-            TriStateFilterOption("Video Games", "15"),
-            TriStateFilterOption("Vintage", "58"),
-            TriStateFilterOption("Western", "11"),
-            TriStateFilterOption("Workplace Sex", "50"),
-        )
+    private fun getGenreFilters() = listOf(
+        TriStateFilterOption("3D / Digital Art", "25"),
+        TriStateFilterOption("Amateurs", "20"),
+        TriStateFilterOption("Artist Collection", "19"),
+        TriStateFilterOption("Asian Girls", "12"),
+        TriStateFilterOption("BDSM", "27"),
+        TriStateFilterOption("Bestiality Hentai", "5"),
+        TriStateFilterOption("Casting", "44"),
+        TriStateFilterOption("Celebrity Fakes", "16"),
+        TriStateFilterOption("Cosplay", "22"),
+        TriStateFilterOption("Cross-Dressing", "30"),
+        TriStateFilterOption("Cumshot", "26"),
+        TriStateFilterOption("Defloration / First Time", "59"),
+        TriStateFilterOption("Ebony Girls", "32"),
+        TriStateFilterOption("European Girls", "46"),
+        TriStateFilterOption("Extreme Gore", "60"),
+        TriStateFilterOption("Extreme Scat", "61"),
+        TriStateFilterOption("Fantasy / Monster Girls", "10"),
+        TriStateFilterOption("Fetish", "2"),
+        TriStateFilterOption("Furries", "8"),
+        TriStateFilterOption("Futanari", "31"),
+        TriStateFilterOption("Group Sex", "36"),
+        TriStateFilterOption("Harem", "56"),
+        TriStateFilterOption("Humor", "41"),
+        TriStateFilterOption("Incest", "24"),
+        TriStateFilterOption("Interracial", "28"),
+        TriStateFilterOption("Kemonomimi / Animal Ears", "39"),
+        TriStateFilterOption("Latina Girls", "33"),
+        TriStateFilterOption("Lolicon", "3"),
+        TriStateFilterOption("Mature", "13"),
+        TriStateFilterOption("Members: Original Art", "18"),
+        TriStateFilterOption("Members: Verified Selfies", "21"),
+        TriStateFilterOption("Military", "48"),
+        TriStateFilterOption("Mind Control", "34"),
+        TriStateFilterOption("Monsters & Tentacles", "38"),
+        TriStateFilterOption("Music", "45"),
+        TriStateFilterOption("Netorare / Cheating", "40"),
+        TriStateFilterOption("No Genre Given", "1"),
+        TriStateFilterOption("Nonconsent / Reluctance", "37"),
+        TriStateFilterOption("Other Ethnicity Girls", "57"),
+        TriStateFilterOption("Private to Luscious", "55"),
+        TriStateFilterOption("Public Sex", "43"),
+        TriStateFilterOption("Romance", "42"),
+        TriStateFilterOption("School / College", "35"),
+        TriStateFilterOption("Sex Workers", "47"),
+        TriStateFilterOption("SFW", "23"),
+        TriStateFilterOption("Shotacon", "4"),
+        TriStateFilterOption("Softcore / Ecchi", "9"),
+        TriStateFilterOption("Superheroes", "17"),
+        TriStateFilterOption("Swimsuit", "49"),
+        TriStateFilterOption("Tankōbon", "45"),
+        TriStateFilterOption("Trans", "14"),
+        TriStateFilterOption("TV / Movies", "51"),
+        TriStateFilterOption("Video Games", "15"),
+        TriStateFilterOption("Vintage", "58"),
+        TriStateFilterOption("Western", "11"),
+        TriStateFilterOption("Workplace Sex", "50"),
+    )
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 

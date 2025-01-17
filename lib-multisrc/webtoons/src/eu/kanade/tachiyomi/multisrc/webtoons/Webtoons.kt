@@ -54,31 +54,29 @@ open class Webtoons(
                         cookies: List<Cookie>,
                     ) {}
 
-                    override fun loadForRequest(url: HttpUrl): List<Cookie> =
-                        listOf<Cookie>(
-                            Cookie
-                                .Builder()
-                                .domain("www.webtoons.com")
-                                .path("/")
-                                .name("ageGatePass")
-                                .value("true")
-                                .name("locale")
-                                .value(localeForCookie)
-                                .name("needGDPR")
-                                .value("false")
-                                .build(),
-                        )
+                    override fun loadForRequest(url: HttpUrl): List<Cookie> = listOf<Cookie>(
+                        Cookie
+                            .Builder()
+                            .domain("www.webtoons.com")
+                            .path("/")
+                            .name("ageGatePass")
+                            .value("true")
+                            .name("locale")
+                            .value(localeForCookie)
+                            .name("needGDPR")
+                            .value("false")
+                            .build(),
+                    )
                 },
             ).addInterceptor(::sslRetryInterceptor)
             .build()
 
     // m.webtoons.com throws an SSL error that can be solved by a simple retry
-    private fun sslRetryInterceptor(chain: Interceptor.Chain): Response =
-        try {
-            chain.proceed(chain.request())
-        } catch (e: SocketException) {
-            chain.proceed(chain.request())
-        }
+    private fun sslRetryInterceptor(chain: Interceptor.Chain): Response = try {
+        chain.proceed(chain.request())
+    } catch (e: SocketException) {
+        chain.proceed(chain.request())
+    }
 
     private val day: String
         get() {
@@ -102,10 +100,9 @@ open class Webtoons(
 
     override fun latestUpdatesSelector() = "div#dailyList > $day li > a"
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Referer", "https://www.webtoons.com/$langCode/")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Referer", "https://www.webtoons.com/$langCode/")
 
     protected val mobileHeaders: Headers =
         super
@@ -169,11 +166,10 @@ open class Webtoons(
         val emptyResult = Observable.just(MangasPage(emptyList(), false))
 
         // given a url to either a webtoon or an episode, returns a url path to corresponding webtoon
-        fun webtoonPath(u: HttpUrl) =
-            when {
-                langCode == u.pathSegments[0] -> "/${u.pathSegments[0]}/${u.pathSegments[1]}/${u.pathSegments[2]}/list"
-                else -> "/${u.pathSegments[0]}/${u.pathSegments[1]}/list" // dongmanmanhua doesn't include langCode
-            }
+        fun webtoonPath(u: HttpUrl) = when {
+            langCode == u.pathSegments[0] -> "/${u.pathSegments[0]}/${u.pathSegments[1]}/${u.pathSegments[2]}/list"
+            else -> "/${u.pathSegments[0]}/${u.pathSegments[1]}/list" // dongmanmanhua doesn't include langCode
+        }
 
         return query.substringAfter(URL_SEARCH_PREFIX).toHttpUrlOrNull()?.let { url ->
             val titleNo = url.queryParameter("title_no")
@@ -250,23 +246,21 @@ open class Webtoons(
         return manga
     }
 
-    open fun String.toStatus(): Int =
-        when {
-            contains("UP") -> SManga.ONGOING
-            contains("COMPLETED") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    open fun String.toStatus(): Int = when {
+        contains("UP") -> SManga.ONGOING
+        contains("COMPLETED") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun imageUrlParse(document: Document): String = document.select("img").first()!!.attr("src")
 
     // Filters
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Header("Query can not be blank"),
-            Separator(),
-            SearchType(getOfficialList()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Header("Query can not be blank"),
+        Separator(),
+        SearchType(getOfficialList()),
+    )
 
     override fun chapterListSelector() = "ul#_episodeList li[id*=episode]"
 
@@ -274,12 +268,11 @@ open class Webtoons(
         vals: Array<Pair<String, String>>,
     ) : UriPartFilter("Official or Challenge", vals)
 
-    private fun getOfficialList() =
-        arrayOf(
-            Pair("Any", ""),
-            Pair("Official only", "WEBTOON"),
-            Pair("Challenge only", "CHALLENGE"),
-        )
+    private fun getOfficialList() = arrayOf(
+        Pair("Any", ""),
+        Pair("Official only", "WEBTOON"),
+        Pair("Challenge only", "CHALLENGE"),
+    )
 
     open class UriPartFilter(
         displayName: String,
@@ -305,12 +298,11 @@ open class Webtoons(
         return chapter
     }
 
-    open fun chapterParseDate(date: String): Long =
-        try {
-            dateFormat.parse(date)?.time ?: 0
-        } catch (e: ParseException) {
-            0
-        }
+    open fun chapterParseDate(date: String): Long = try {
+        dateFormat.parse(date)?.time ?: 0
+    } catch (e: ParseException) {
+        0
+    }
 
     override fun chapterListRequest(manga: SManga) = GET("https://m.webtoons.com" + manga.url, mobileHeaders)
 

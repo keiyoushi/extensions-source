@@ -32,23 +32,21 @@ abstract class NoiseManga(
             .rateLimit(1, 2, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", USER_AGENT)
-            .add("Origin", baseUrl)
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", USER_AGENT)
+        .add("Origin", baseUrl)
+        .add("Referer", baseUrl)
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaSelector(): String = "ul#menu-home li a[title=\"Séries\"] + ul li a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.text()
-            setUrlWithoutDomain(element.attr("href"))
-            thumbnail_url = baseUrl + SLUG_TO_DETAILS_MAP[url]?.thumbnail_url
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.text()
+        setUrlWithoutDomain(element.attr("href"))
+        thumbnail_url = baseUrl + SLUG_TO_DETAILS_MAP[url]?.thumbnail_url
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -59,13 +57,12 @@ abstract class NoiseManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        super
-            .fetchSearchManga(page, query, filters)
-            .map {
-                val mangas = it.mangas.filter { m -> m.title.contains(query, true) }
-                MangasPage(mangas, it.hasNextPage)
-            }
+    ): Observable<MangasPage> = super
+        .fetchSearchManga(page, query, filters)
+        .map {
+            val mangas = it.mangas.filter { m -> m.title.contains(query, true) }
+            MangasPage(mangas, it.hasNextPage)
+        }
 
     override fun searchMangaRequest(
         page: Int,
@@ -107,26 +104,24 @@ abstract class NoiseManga(
         return "div.entry-content div table tr td:nth-child($columnSelector) a"
     }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.text()
-            scanlator = "NOISE Manga"
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.text()
+        scanlator = "NOISE Manga"
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select("div.single-content div.single-entry-summary img.aligncenter")
-            .mapIndexed { i, element ->
-                val imgUrl =
-                    element
-                        .attr("srcset")
-                        .substringAfterLast(", ")
-                        .substringBeforeLast(" ")
-                Page(i, "", imgUrl)
-            }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select("div.single-content div.single-entry-summary img.aligncenter")
+        .mapIndexed { i, element ->
+            val imgUrl =
+                element
+                    .attr("srcset")
+                    .substringAfterLast(", ")
+                    .substringBeforeLast(" ")
+            Page(i, "", imgUrl)
+        }
 
     override fun imageUrlParse(document: Document) = ""
 

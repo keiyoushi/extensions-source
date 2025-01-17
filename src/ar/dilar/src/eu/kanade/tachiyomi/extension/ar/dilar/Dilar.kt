@@ -61,11 +61,10 @@ class Dilar :
         screen.addPreference(mirrorPref)
     }
 
-    private fun mirrorPref() =
-        when {
-            System.getenv("CI") == "true" -> MIRROR_PREF_ENTRY_VALUES.joinToString("#, ")
-            else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
-        }
+    private fun mirrorPref() = when {
+        System.getenv("CI") == "true" -> MIRROR_PREF_ENTRY_VALUES.joinToString("#, ")
+        else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
+    }
 
     override val baseUrl by lazy { mirrorPref() }
 

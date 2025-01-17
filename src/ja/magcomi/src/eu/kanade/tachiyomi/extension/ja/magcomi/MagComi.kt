@@ -24,15 +24,13 @@ class MagComi :
 
     override fun popularMangaSelector(): String = "ul[class^=\"SeriesSection_series_list\"] > li > a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("h3").text()
-            thumbnail_url = element.select("div.jsx-series-thumb > span > noscript > img").attr("src")
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("h3").text()
+        thumbnail_url = element.select("div.jsx-series-thumb > span > noscript > img").attr("src")
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
-    override fun getCollections(): List<Collection> =
-        listOf(
-            Collection("連載・読切", ""),
-        )
+    override fun getCollections(): List<Collection> = listOf(
+        Collection("連載・読切", ""),
+    )
 }

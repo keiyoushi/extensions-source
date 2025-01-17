@@ -43,12 +43,11 @@ class MangaHen : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("h2")!!.ownText()
-            setUrlWithoutDomain(element.absUrl("href"))
-            thumbnail_url = element.selectFirst("img")!!.absUrl("src")
-        }
+    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h2")!!.ownText()
+        setUrlWithoutDomain(element.absUrl("href"))
+        thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request = GET("$advSearchURL/?search=1&type=0&sort=2&page=$page", headers)
@@ -163,15 +162,14 @@ class MangaHen : HttpSource() {
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = "Chapter"
-                    setUrlWithoutDomain(manga.url)
-                },
-            ),
-        )
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                name = "Chapter"
+                setUrlWithoutDomain(manga.url)
+            },
+        ),
+    )
 
     // Pages
 

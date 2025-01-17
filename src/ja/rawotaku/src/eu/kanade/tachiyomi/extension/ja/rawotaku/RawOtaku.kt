@@ -37,10 +37,9 @@ class RawOtaku : MangaReader() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
 
@@ -104,66 +103,63 @@ class RawOtaku : MangaReader() {
 
     override fun searchMangaSelector() = ".manga_list-sbs .manga-poster"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            element.selectFirst(Evaluator.Tag("img"))!!.let {
-                title = it.attr("alt")
-                thumbnail_url = it.imgAttr()
-            }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        element.selectFirst(Evaluator.Tag("img"))!!.let {
+            title = it.attr("alt")
+            thumbnail_url = it.imgAttr()
         }
+    }
 
     override fun searchMangaNextPageSelector() = "ul.pagination > li.active + li"
 
     // =============================== Filters ==============================
 
-    override fun getFilterList() =
-        FilterList(
-            Note,
-            Filter.Separator(),
-            TypeFilter(),
-            StatusFilter(),
-            LanguageFilter(),
-            SortFilter(),
-            GenresFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Note,
+        Filter.Separator(),
+        TypeFilter(),
+        StatusFilter(),
+        LanguageFilter(),
+        SortFilter(),
+        GenresFilter(),
+    )
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val root = document.selectFirst(Evaluator.Id("ani_detail"))!!
-            val mangaTitle = root.selectFirst(Evaluator.Class("manga-name"))!!.ownText()
-            title = mangaTitle
-            description =
-                buildString {
-                    root.selectFirst(".description")?.ownText()?.let { append(it) }
-                    append("\n\n")
-                    root.selectFirst(".manga-name-or")?.ownText()?.let {
-                        if (it.isNotEmpty() && it != mangaTitle) {
-                            append("Alternative Title: ")
-                            append(it)
-                        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val root = document.selectFirst(Evaluator.Id("ani_detail"))!!
+        val mangaTitle = root.selectFirst(Evaluator.Class("manga-name"))!!.ownText()
+        title = mangaTitle
+        description =
+            buildString {
+                root.selectFirst(".description")?.ownText()?.let { append(it) }
+                append("\n\n")
+                root.selectFirst(".manga-name-or")?.ownText()?.let {
+                    if (it.isNotEmpty() && it != mangaTitle) {
+                        append("Alternative Title: ")
+                        append(it)
                     }
-                }.trim()
-            thumbnail_url = root.selectFirst(Evaluator.Tag("img"))!!.imgAttr()
-            genre = root.selectFirst(Evaluator.Class("genres"))!!.children().joinToString { it.ownText() }
-            for (item in root.selectFirst(Evaluator.Class("anisc-info"))!!.children()) {
-                if (item.hasClass("item").not()) continue
-                when (item.selectFirst(Evaluator.Class("item-head"))!!.ownText()) {
-                    "著者:" -> item.parseAuthorsTo(this)
-                    "地位:" ->
-                        status =
-                            when (item.selectFirst(Evaluator.Class("name"))!!.ownText().lowercase()) {
-                                "ongoing" -> SManga.ONGOING
-                                "completed" -> SManga.COMPLETED
-                                "on-hold" -> SManga.ON_HIATUS
-                                "canceled" -> SManga.CANCELLED
-                                else -> SManga.UNKNOWN
-                            }
                 }
+            }.trim()
+        thumbnail_url = root.selectFirst(Evaluator.Tag("img"))!!.imgAttr()
+        genre = root.selectFirst(Evaluator.Class("genres"))!!.children().joinToString { it.ownText() }
+        for (item in root.selectFirst(Evaluator.Class("anisc-info"))!!.children()) {
+            if (item.hasClass("item").not()) continue
+            when (item.selectFirst(Evaluator.Class("item-head"))!!.ownText()) {
+                "著者:" -> item.parseAuthorsTo(this)
+                "地位:" ->
+                    status =
+                        when (item.selectFirst(Evaluator.Class("name"))!!.ownText().lowercase()) {
+                            "ongoing" -> SManga.ONGOING
+                            "completed" -> SManga.COMPLETED
+                            "on-hold" -> SManga.ON_HIATUS
+                            "canceled" -> SManga.CANCELLED
+                            else -> SManga.UNKNOWN
+                        }
             }
         }
+    }
 
     private fun Element.parseAuthorsTo(manga: SManga) {
         val authors = select(Evaluator.Tag("a"))
@@ -204,11 +200,10 @@ class RawOtaku : MangaReader() {
     override val chapterType = ""
     override val volumeType = ""
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map(::parseChapterList)
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map(::parseChapterList)
 
     private fun parseChapterList(response: Response): List<SChapter> {
         val document = response.use { it.asJsoup() }
@@ -220,33 +215,31 @@ class RawOtaku : MangaReader() {
 
     private fun chapterListSelector(): String = "#ja-chaps > .chapter-item"
 
-    private fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val id = element.attr("data-id")
-            element.selectFirst("a")!!.run {
-                setUrlWithoutDomain(attr("href") + "#$id")
-                name = selectFirst(".name")?.text() ?: text()
-            }
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val id = element.attr("data-id")
+        element.selectFirst("a")!!.run {
+            setUrlWithoutDomain(attr("href") + "#$id")
+            name = selectFirst(".name")?.text() ?: text()
         }
+    }
 
     // =============================== Pages ================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        Observable.fromCallable {
-            val id = chapter.url.substringAfterLast("#")
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val id = chapter.url.substringAfterLast("#")
 
-            val ajaxHeaders =
-                super
-                    .headersBuilder()
-                    .apply {
-                        add("Accept", "application/json, text/javascript, */*; q=0.01")
-                        add("Referer", URLEncoder.encode(baseUrl + chapter.url.substringBeforeLast("#"), "utf-8"))
-                        add("X-Requested-With", "XMLHttpRequest")
-                    }.build()
+        val ajaxHeaders =
+            super
+                .headersBuilder()
+                .apply {
+                    add("Accept", "application/json, text/javascript, */*; q=0.01")
+                    add("Referer", URLEncoder.encode(baseUrl + chapter.url.substringBeforeLast("#"), "utf-8"))
+                    add("X-Requested-With", "XMLHttpRequest")
+                }.build()
 
-            val ajaxUrl = "$baseUrl/json/chapter?mode=vertical&id=$id"
-            client.newCall(GET(ajaxUrl, ajaxHeaders)).execute().let(::pageListParse)
-        }
+        val ajaxUrl = "$baseUrl/json/chapter?mode=vertical&id=$id"
+        client.newCall(GET(ajaxUrl, ajaxHeaders)).execute().let(::pageListParse)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.use { it.parseHtmlProperty() }
@@ -264,12 +257,11 @@ class RawOtaku : MangaReader() {
 
     // ============================= Utilities ==============================
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        else -> attr("abs:src")
+    }
 
     private fun Response.parseHtmlProperty(): Document {
         val html =

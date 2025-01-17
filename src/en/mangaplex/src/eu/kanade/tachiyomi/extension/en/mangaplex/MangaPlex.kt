@@ -135,12 +135,11 @@ class MangaPlex : ParsedHttpSource() {
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select("#the-post .entry-content > img")
-            .toList()
-            .filter { it.attr("src").isNotEmpty() }
-            .mapIndexed { i, el -> Page(i, "", el.attr("src")) }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select("#the-post .entry-content > img")
+        .toList()
+        .filter { it.attr("src").isNotEmpty() }
+        .mapIndexed { i, el -> Page(i, "", el.attr("src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

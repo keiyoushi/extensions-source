@@ -48,10 +48,9 @@ class KoinoboriScan : HttpSource() {
             .rateLimit(2, 1)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/api/topSeries", headers)
 
@@ -82,15 +81,14 @@ class KoinoboriScan : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (seriesList.isEmpty()) {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it, page, query) }
-        } else {
-            Observable.just(parseSeriesList(page, query))
-        }
+    ): Observable<MangasPage> = if (seriesList.isEmpty()) {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, page, query) }
+    } else {
+        Observable.just(parseSeriesList(page, query))
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -129,10 +127,9 @@ class KoinoboriScan : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Presione 'Filtrar' para mostrar toda la biblioteca"),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Presione 'Filtrar' para mostrar toda la biblioteca"),
+    )
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comic/${manga.url}"
 

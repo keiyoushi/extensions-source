@@ -81,30 +81,27 @@ class ReadComicTop : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("div.egb-right > a.egb-serie").attr("href"))
-            title = element.select("div.egb-right > a.egb-serie").text()
-            thumbnail_url = element.select("a.eg-image > img").attr("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select("div.egb-right > a.egb-serie").attr("href"))
+        title = element.select("div.egb-right > a.egb-serie").text()
+        thumbnail_url = element.select("a.eg-image > img").attr("src")
+    }
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            with(element.select("ul.line-list > li > a.big-link")) {
-                setUrlWithoutDomain(attr("href"))
-                title = text()
-            }
-            thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover&font_size=62"
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        with(element.select("ul.line-list > li > a.big-link")) {
+            setUrlWithoutDomain(attr("href"))
+            title = text()
         }
+        thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover&font_size=62"
+    }
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            with(element.select("div.dlb-right > a.dlb-title")) {
-                setUrlWithoutDomain(attr("href"))
-                title = text()
-            }
-            thumbnail_url = element.select("a.dlb-image > img").attr("src")
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        with(element.select("div.dlb-right > a.dlb-title")) {
+            setUrlWithoutDomain(attr("href"))
+            title = text()
         }
+        thumbnail_url = element.select("a.dlb-image > img").attr("src")
+    }
 
     override fun popularMangaNextPageSelector() = "div.general-nav > a:contains(Next)"
 
@@ -114,61 +111,55 @@ class ReadComicTop : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select("h1.title").text()
-            thumbnail_url = document.select("div.anime-image > img").attr("src")
-            status = parseStatus(document.select("ul.anime-genres li.status").text())
-            author = document.select("td:contains(Author:) + td").text()
-            description = document.select(".detail-desc-content > p").text()
-            genre = document.select("ul.anime-genres > li > a[href*='genre']").joinToString { it.text() }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("h1.title").text()
+        thumbnail_url = document.select("div.anime-image > img").attr("src")
+        status = parseStatus(document.select("ul.anime-genres li.status").text())
+        author = document.select("td:contains(Author:) + td").text()
+        description = document.select(".detail-desc-content > p").text()
+        genre = document.select("ul.anime-genres > li > a[href*='genre']").joinToString { it.text() }
+    }
 
-    private fun parseStatus(element: String): Int =
-        when {
-            element.contains("Completed") -> SManga.COMPLETED
-            element.contains("Ongoing") -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(element: String): Int = when {
+        element.contains("Completed") -> SManga.COMPLETED
+        element.contains("Ongoing") -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = "ul.basic-list > li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            with(element.select("a.ch-name")) {
-                setUrlWithoutDomain(attr("href"))
-                name = text()
-            }
-            date_upload = dateParse(element.select("span").text())
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        with(element.select("a.ch-name")) {
+            setUrlWithoutDomain(attr("href"))
+            name = text()
         }
+        date_upload = dateParse(element.select("span").text())
+    }
 
     private val dateFormat by lazy { SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH) }
 
-    private fun dateParse(dateStr: String): Long =
-        try {
-            dateFormat.parse(dateStr)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun dateParse(dateStr: String): Long = try {
+        dateFormat.parse(dateStr)!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url + "/full", headers)
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.chapter-container img").mapIndexed { index, img ->
-            Page(index, "", img.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.chapter-container img").mapIndexed { index, img ->
+        Page(index, "", img.attr("abs:src"))
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Note: can't leave both filters as Any with a blank search string"),
-            Filter.Separator(),
-            GenreFilter(getGenreList),
-            StatusFilter(getStatusList),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Note: can't leave both filters as Any with a blank search string"),
+        Filter.Separator(),
+        GenreFilter(getGenreList),
+        StatusFilter(getStatusList),
+    )
 
     private class Genre(
         name: String,

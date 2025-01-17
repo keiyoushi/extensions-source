@@ -23,19 +23,17 @@ class FoamGirl : ParsedHttpSource() {
     override val name = "FoamGirl"
     override val supportsLatest = false
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Popular
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url = element.select("img").attr("data-original")
-            title = element.select("a.meta-title").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            initialized = true
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.select("img").attr("data-original")
+        title = element.select("a.meta-title").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        initialized = true
+    }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
@@ -57,19 +55,18 @@ class FoamGirl : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        GET(
-            baseUrl
-                .toHttpUrl()
-                .newBuilder()
-                .apply {
-                    addPathSegment("page")
-                    addPathSegment("$page")
-                    addQueryParameter("post_type", "post")
-                    addQueryParameter("s", query)
-                }.build(),
-            headers,
-        )
+    ): Request = GET(
+        baseUrl
+            .toHttpUrl()
+            .newBuilder()
+            .apply {
+                addPathSegment("page")
+                addPathSegment("$page")
+                addQueryParameter("post_type", "post")
+                addQueryParameter("s", query)
+            }.build(),
+        headers,
+    )
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -132,13 +129,12 @@ class FoamGirl : ParsedHttpSource() {
         }
     }
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("link[rel=canonical]").attr("abs:href"))
-            chapter_number = 0F
-            name = "GALLERY"
-            date_upload = getDate(element.select("span.image-info-time").text().substring(1))
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("link[rel=canonical]").attr("abs:href"))
+        chapter_number = 0F
+        name = "GALLERY"
+        date_upload = getDate(element.select("span.image-info-time").text().substring(1))
+    }
 
     override fun chapterListSelector() = "html"
 
@@ -153,12 +149,11 @@ class FoamGirl : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    private fun getDate(str: String): Long =
-        try {
-            DATE_FORMAT.parse(str)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun getDate(str: String): Long = try {
+        DATE_FORMAT.parse(str)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
+    }
 
     private fun String.isNumber() = isNotEmpty() && all { it.isDigit() }
 

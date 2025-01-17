@@ -25,64 +25,62 @@ class Randowiz : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(
-            MangasPage(
-                listOf(
-                    SManga.create().apply {
-                        title = "Randowiz: We live in an MMO!?"
-                        artist = "Randowiz"
-                        author = "Randowiz"
-                        status = SManga.ONGOING
-                        url = "/category/we-live-in-an-mmo/"
-                        description =
-                            "The world of 'Mamuon' where players and NPC's live together in harmony. Or do they? DO THEY?"
-                        thumbnail_url =
-                            "https://i0.wp.com/randowis.com/wp-content/uploads/2016/02/MMO_CHP_001_CSP_000.jpg?resize=800%2C800&ssl=1"
-                    },
-                    SManga.create().apply {
-                        title = "Randowiz: Short comics"
-                        artist = "Randowiz"
-                        author = "Randowiz"
-                        status = SManga.ONGOING
-                        url = "/category/short-comics/"
-                        description =
-                            "So short that i have to compensate.."
-                        thumbnail_url =
-                            "https://i0.wp.com/randowis.com/wp-content/uploads/2021/10/Images_PNGs_Site_BOT-SUPPORT.png"
-                    },
-                    SManga.create().apply {
-                        title = "Randowiz: Illustations"
-                        artist = "Randowiz"
-                        author = "Randowiz"
-                        status = SManga.ONGOING
-                        url = "/category/art/"
-                        description =
-                            "You like draw? I give you draw."
-                        thumbnail_url =
-                            "https://i0.wp.com/randowis.com/wp-content/uploads/2021/05/colour-studies-021-post.jpg"
-                    },
-                ),
-                false,
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
+        MangasPage(
+            listOf(
+                SManga.create().apply {
+                    title = "Randowiz: We live in an MMO!?"
+                    artist = "Randowiz"
+                    author = "Randowiz"
+                    status = SManga.ONGOING
+                    url = "/category/we-live-in-an-mmo/"
+                    description =
+                        "The world of 'Mamuon' where players and NPC's live together in harmony. Or do they? DO THEY?"
+                    thumbnail_url =
+                        "https://i0.wp.com/randowis.com/wp-content/uploads/2016/02/MMO_CHP_001_CSP_000.jpg?resize=800%2C800&ssl=1"
+                },
+                SManga.create().apply {
+                    title = "Randowiz: Short comics"
+                    artist = "Randowiz"
+                    author = "Randowiz"
+                    status = SManga.ONGOING
+                    url = "/category/short-comics/"
+                    description =
+                        "So short that i have to compensate.."
+                    thumbnail_url =
+                        "https://i0.wp.com/randowis.com/wp-content/uploads/2021/10/Images_PNGs_Site_BOT-SUPPORT.png"
+                },
+                SManga.create().apply {
+                    title = "Randowiz: Illustations"
+                    artist = "Randowiz"
+                    author = "Randowiz"
+                    status = SManga.ONGOING
+                    url = "/category/art/"
+                    description =
+                        "You like draw? I give you draw."
+                    thumbnail_url =
+                        "https://i0.wp.com/randowis.com/wp-content/uploads/2021/05/colour-studies-021-post.jpg"
+                },
             ),
-        )
+            false,
+        ),
+    )
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        fetchPopularManga(page).map {
-            MangasPage(
-                it.mangas.filter { manga ->
-                    manga.title.contains(
-                        query,
-                        ignoreCase = true,
-                    )
-                },
-                false,
-            )
-        }
+    ): Observable<MangasPage> = fetchPopularManga(page).map {
+        MangasPage(
+            it.mangas.filter { manga ->
+                manga.title.contains(
+                    query,
+                    ignoreCase = true,
+                )
+            },
+            false,
+        )
+    }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 

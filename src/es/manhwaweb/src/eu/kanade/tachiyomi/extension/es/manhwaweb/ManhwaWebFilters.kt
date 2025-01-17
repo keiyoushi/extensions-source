@@ -55,36 +55,35 @@ class GenreFilter(
     genres: List<Genre>,
 ) : Filter.Group<Genre>(title, genres)
 
-fun getGenres(): List<Genre> =
-    listOf(
-        Genre("Acción", 3),
-        Genre("Aventura", 29),
-        Genre("Comedia", 18),
-        Genre("Drama", 1),
-        Genre("Recuentos de la vida", 42),
-        Genre("Romance", 2),
-        Genre("Venganza", 5),
-        Genre("Harem", 6),
-        Genre("Fantasia", 23),
-        Genre("Sobrenatural", 31),
-        Genre("Tragedia", 25),
-        Genre("Psicológico", 43),
-        Genre("Horror", 32),
-        Genre("Thriller", 44),
-        Genre("Historias cortas", 28),
-        Genre("Ecchi", 30),
-        Genre("Gore", 34),
-        Genre("Girls love", 27),
-        Genre("Boys love", 45),
-        Genre("Reencarnación", 41),
-        Genre("Sistema de niveles", 37),
-        Genre("Ciencia ficción", 33),
-        Genre("Apocalíptico", 38),
-        Genre("Artes Marciales", 39),
-        Genre("Superpoderes", 40),
-        Genre("Cultivación (cultivo)", 35),
-        Genre("Milf", 8),
-    )
+fun getGenres(): List<Genre> = listOf(
+    Genre("Acción", 3),
+    Genre("Aventura", 29),
+    Genre("Comedia", 18),
+    Genre("Drama", 1),
+    Genre("Recuentos de la vida", 42),
+    Genre("Romance", 2),
+    Genre("Venganza", 5),
+    Genre("Harem", 6),
+    Genre("Fantasia", 23),
+    Genre("Sobrenatural", 31),
+    Genre("Tragedia", 25),
+    Genre("Psicológico", 43),
+    Genre("Horror", 32),
+    Genre("Thriller", 44),
+    Genre("Historias cortas", 28),
+    Genre("Ecchi", 30),
+    Genre("Gore", 34),
+    Genre("Girls love", 27),
+    Genre("Boys love", 45),
+    Genre("Reencarnación", 41),
+    Genre("Sistema de niveles", 37),
+    Genre("Ciencia ficción", 33),
+    Genre("Apocalíptico", 38),
+    Genre("Artes Marciales", 39),
+    Genre("Superpoderes", 40),
+    Genre("Cultivación (cultivo)", 35),
+    Genre("Milf", 8),
+)
 
 class SortProperty(
     val name: String,
@@ -93,12 +92,11 @@ class SortProperty(
     override fun toString(): String = name
 }
 
-fun getSortProperties(): List<SortProperty> =
-    listOf(
-        SortProperty("Alfabético", "alfabetico"),
-        SortProperty("Creación", "creacion"),
-        SortProperty("Num. Capítulos", "num_chapter"),
-    )
+fun getSortProperties(): List<SortProperty> = listOf(
+    SortProperty("Alfabético", "alfabetico"),
+    SortProperty("Creación", "creacion"),
+    SortProperty("Num. Capítulos", "num_chapter"),
+)
 
 class SortByFilter(
     title: String,

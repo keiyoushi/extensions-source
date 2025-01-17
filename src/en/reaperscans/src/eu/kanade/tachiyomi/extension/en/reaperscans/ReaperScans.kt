@@ -67,11 +67,10 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
         }
     }
 
-    override fun getSortProperties(): List<SortProperty> =
-        listOf(
-            SortProperty(intl["sort_by_title"], "title"),
-            SortProperty(intl["sort_by_views"], "total_views"),
-            SortProperty(intl["sort_by_latest"], "updated_at"),
-            SortProperty(intl["sort_by_created_at"], "created_at"),
-        )
+    override fun getSortProperties(): List<SortProperty> = listOf(
+        SortProperty(intl["sort_by_title"], "title"),
+        SortProperty(intl["sort_by_views"], "total_views"),
+        SortProperty(intl["sort_by_latest"], "updated_at"),
+        SortProperty(intl["sort_by_created_at"], "created_at"),
+    )
 }

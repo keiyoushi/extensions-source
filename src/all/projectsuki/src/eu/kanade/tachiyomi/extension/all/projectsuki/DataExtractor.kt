@@ -31,30 +31,29 @@ internal typealias ScanGroup = String
 internal fun <R> unexpectedErrorCatchingLazy(
     mode: LazyThreadSafetyMode = LazyThreadSafetyMode.SYNCHRONIZED,
     initializer: () -> R,
-): PropertyDelegateProvider<Any?, Lazy<R>> =
-    PropertyDelegateProvider { thisRef, property ->
-        lazy(mode) {
-            try {
-                initializer()
-            } catch (exception: Exception) {
-                if (exception !is ProjectSukiException) {
-                    val locationHint =
-                        buildString {
-                            when (thisRef) {
-                                null -> append("<root>")
-                                else -> append(thisRef::class.simpleName)
-                            }
-                            append('.')
-                            append(property.name)
+): PropertyDelegateProvider<Any?, Lazy<R>> = PropertyDelegateProvider { thisRef, property ->
+    lazy(mode) {
+        try {
+            initializer()
+        } catch (exception: Exception) {
+            if (exception !is ProjectSukiException) {
+                val locationHint =
+                    buildString {
+                        when (thisRef) {
+                            null -> append("<root>")
+                            else -> append(thisRef::class.simpleName)
                         }
-                    reportErrorToUser(
-                        locationHint,
-                    ) { """Unexpected ${exception::class.simpleName}: ${exception.message ?: "<no message>"}""" }
-                }
-                throw exception
+                        append('.')
+                        append(property.name)
+                    }
+                reportErrorToUser(
+                    locationHint,
+                ) { """Unexpected ${exception::class.simpleName}: ${exception.message ?: "<no message>"}""" }
             }
+            throw exception
         }
     }
+}
 
 /**
  * Gets the thumbnail image for a particular [bookID], [extension] if needed and [size].
@@ -65,20 +64,19 @@ internal fun bookThumbnailUrl(
     bookID: BookID,
     extension: String,
     size: UInt? = null,
-): HttpUrl =
-    homepageUrl
-        .newBuilder()
-        .addPathSegment("images")
-        .addPathSegment("gallery")
-        .addPathSegment(bookID)
-        .addPathSegment(
-            when {
-                size == null && extension.isBlank() -> "thumb"
-                size == null -> "thumb.$extension"
-                extension.isBlank() -> "$size-thumb"
-                else -> "$size-thumb.$extension"
-            },
-        ).build()
+): HttpUrl = homepageUrl
+    .newBuilder()
+    .addPathSegment("images")
+    .addPathSegment("gallery")
+    .addPathSegment(bookID)
+    .addPathSegment(
+        when {
+            size == null && extension.isBlank() -> "thumb"
+            size == null -> "thumb.$extension"
+            extension.isBlank() -> "$size-thumb"
+            else -> "$size-thumb.$extension"
+        },
+    ).build()
 
 /**
  * Finds the nearest common parent between 2 or more [elements] (will return null if [elements].size < 2).
@@ -337,11 +335,10 @@ class DataExtractor(
         }
 
         object Author : BookDetail() {
-            override fun tryFind(extractor: DataExtractor): Collection<Element> =
-                extractor.psHrefAnchors
-                    .filter { (_, url) ->
-                        url.queryParameterNames.contains("author")
-                    }.keys
+            override fun tryFind(extractor: DataExtractor): Collection<Element> = extractor.psHrefAnchors
+                .filter { (_, url) ->
+                    url.queryParameterNames.contains("author")
+                }.keys
 
             override val regex: Regex = """authors?:?""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -351,11 +348,10 @@ class DataExtractor(
         }
 
         object Artist : BookDetail() {
-            override fun tryFind(extractor: DataExtractor): Collection<Element> =
-                extractor.psHrefAnchors
-                    .filter { (_, url) ->
-                        url.queryParameterNames.contains("artist")
-                    }.keys
+            override fun tryFind(extractor: DataExtractor): Collection<Element> = extractor.psHrefAnchors
+                .filter { (_, url) ->
+                    url.queryParameterNames.contains("artist")
+                }.keys
 
             override val regex: Regex = """artists?:?""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -365,11 +361,10 @@ class DataExtractor(
         }
 
         object Status : BookDetail() {
-            override fun tryFind(extractor: DataExtractor): Collection<Element> =
-                extractor.psHrefAnchors
-                    .filter { (_, url) ->
-                        url.queryParameterNames.contains("status")
-                    }.keys
+            override fun tryFind(extractor: DataExtractor): Collection<Element> = extractor.psHrefAnchors
+                .filter { (_, url) ->
+                    url.queryParameterNames.contains("status")
+                }.keys
 
             override val regex: Regex = """status:?""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -379,11 +374,10 @@ class DataExtractor(
         }
 
         object Origin : BookDetail() {
-            override fun tryFind(extractor: DataExtractor): Collection<Element> =
-                extractor.psHrefAnchors
-                    .filter { (_, url) ->
-                        url.queryParameterNames.contains("origin")
-                    }.keys
+            override fun tryFind(extractor: DataExtractor): Collection<Element> = extractor.psHrefAnchors
+                .filter { (_, url) ->
+                    url.queryParameterNames.contains("origin")
+                }.keys
 
             override val regex: Regex = """origin:?""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -450,11 +444,10 @@ class DataExtractor(
         }
 
         object Genre : BookDetail() {
-            override fun tryFind(extractor: DataExtractor): Collection<Element> =
-                extractor.psHrefAnchors
-                    .filter { (_, url) ->
-                        url.matchAgainst(genreSearchUrlPattern).doesMatch
-                    }.keys
+            override fun tryFind(extractor: DataExtractor): Collection<Element> = extractor.psHrefAnchors
+                .filter { (_, url) ->
+                    url.matchAgainst(genreSearchUrlPattern).doesMatch
+                }.keys
 
             override val regex: Regex = """genre(?:\(s\))?:?""".toRegex(RegexOption.IGNORE_CASE)
 
@@ -671,18 +664,17 @@ class DataExtractor(
              *
              * Not all column indexes might be present if some column isn't recognised as a data type listed above.
              */
-            fun extractDataTypes(headers: List<Element>): Map<ChaptersTableColumnDataType, Int> =
-                buildMap {
-                    headers
-                        .map { it.text() }
-                        .forEachIndexed { columnIndex, columnHeaderText ->
-                            all.forEach { dataType ->
-                                if (dataType.isRepresentedBy(columnHeaderText)) {
-                                    put(dataType, columnIndex)
-                                }
+            fun extractDataTypes(headers: List<Element>): Map<ChaptersTableColumnDataType, Int> = buildMap {
+                headers
+                    .map { it.text() }
+                    .forEachIndexed { columnIndex, columnHeaderText ->
+                        all.forEach { dataType ->
+                            if (dataType.isRepresentedBy(columnHeaderText)) {
+                                put(dataType, columnIndex)
                             }
                         }
-                }
+                    }
+            }
         }
     }
 
@@ -842,15 +834,14 @@ class DataExtractor(
     }
 
     /** Tries to infer the chapter number from the raw title. */
-    private fun String.tryAnalyzeChapterNumber(): ChapterNumber? =
-        ChapterNumber.chapterNumberRegex
-            .find(this)
-            ?.let { simpleMatchResult ->
-                val main: UInt = simpleMatchResult.groupValues[1].toUInt()
-                val sub: UInt = simpleMatchResult.groupValues[2].takeIf { it.isNotBlank() }?.toUInt() ?: 0u
+    private fun String.tryAnalyzeChapterNumber(): ChapterNumber? = ChapterNumber.chapterNumberRegex
+        .find(this)
+        ?.let { simpleMatchResult ->
+            val main: UInt = simpleMatchResult.groupValues[1].toUInt()
+            val sub: UInt = simpleMatchResult.groupValues[2].takeIf { it.isNotBlank() }?.toUInt() ?: 0u
 
-                ChapterNumber(main, sub)
-            }
+            ChapterNumber(main, sub)
+        }
 
     /**
      * Represents an index where the chapter number is unknown and
@@ -952,19 +943,17 @@ class DataExtractor(
         }
 
         // previous chapter number
-        fun ChapterNumber.predictBelow(): ChapterNumber =
-            when (sub) {
-                0u -> ChapterNumber(main - 1u, 0u) // before chapter 18, chapter 17
-                5u -> ChapterNumber(main, 0u) // before chapter 18.5, chapter 18
-                else -> ChapterNumber(main, sub - 1u) // before chapter 18.4, chapter 18.3
-            }
+        fun ChapterNumber.predictBelow(): ChapterNumber = when (sub) {
+            0u -> ChapterNumber(main - 1u, 0u) // before chapter 18, chapter 17
+            5u -> ChapterNumber(main, 0u) // before chapter 18.5, chapter 18
+            else -> ChapterNumber(main, sub - 1u) // before chapter 18.4, chapter 18.3
+        }
 
         // next chapter number
-        fun ChapterNumber.predictAbove(): ChapterNumber =
-            when (sub) {
-                0u, 5u -> ChapterNumber(main + 1u, 0u) // after chapter 17 or 17.5, chapter 18
-                else -> ChapterNumber(main, sub + 1u) // after chapter 18.3, 18.4
-            }
+        fun ChapterNumber.predictAbove(): ChapterNumber = when (sub) {
+            0u, 5u -> ChapterNumber(main + 1u, 0u) // after chapter 17 or 17.5, chapter 18
+            else -> ChapterNumber(main, sub + 1u) // after chapter 18.3, 18.4
+        }
 
         fun MissingChapterNumberEdge.indexAbove(): Int = index - 1
 
@@ -1084,11 +1073,10 @@ class DataExtractor(
      */
     private val absoluteDateFormat: ThreadLocal<SimpleDateFormat> =
         object : ThreadLocal<SimpleDateFormat>() {
-            override fun initialValue() =
-                runCatching { SimpleDateFormat("MMMM dd, yyyy", Locale.US) }.fold(
-                    onSuccess = { it },
-                    onFailure = { reportErrorToUser { "Invalid SimpleDateFormat(MMMM dd, yyyy)" } },
-                )
+            override fun initialValue() = runCatching { SimpleDateFormat("MMMM dd, yyyy", Locale.US) }.fold(
+                onSuccess = { it },
+                onFailure = { reportErrorToUser { "Invalid SimpleDateFormat(MMMM dd, yyyy)" } },
+            )
         }
 
     private val relativeChapterDateRegex =
@@ -1101,37 +1089,36 @@ class DataExtractor(
      *
      * @see Calendar
      */
-    private fun String.tryAnalyzeChapterDate(): Date? =
-        when (val match = relativeChapterDateRegex.matchEntire(trim())) {
-            null -> {
-                absoluteDateFormat
-                    .get()
-                    .runCatching { this!!.parse(this@tryAnalyzeChapterDate) }
-                    .fold(
-                        onSuccess = { it },
-                        onFailure = { reportErrorToUser { "Could not parse date: $this" } },
-                    )
-            }
-
-            else -> {
-                // relative
-                val number: Int = match.groupValues[1].toInt()
-                val relativity: String = match.groupValues[2]
-                val cal: Calendar = Calendar.getInstance(TimeZone.getDefault(), Locale.US)
-
-                with(relativity) {
-                    when {
-                        startsWith("year") -> cal.add(Calendar.YEAR, -number)
-                        startsWith("month") -> cal.add(Calendar.MONTH, -number)
-                        startsWith("week") -> cal.add(Calendar.DAY_OF_MONTH, -number * 7)
-                        startsWith("day") -> cal.add(Calendar.DAY_OF_MONTH, -number)
-                        startsWith("hour") -> cal.add(Calendar.HOUR, -number)
-                        startsWith("min") -> cal.add(Calendar.MINUTE, -number)
-                        startsWith("sec") -> cal.add(Calendar.SECOND, -number)
-                    }
-                }
-
-                cal.time
-            }
+    private fun String.tryAnalyzeChapterDate(): Date? = when (val match = relativeChapterDateRegex.matchEntire(trim())) {
+        null -> {
+            absoluteDateFormat
+                .get()
+                .runCatching { this!!.parse(this@tryAnalyzeChapterDate) }
+                .fold(
+                    onSuccess = { it },
+                    onFailure = { reportErrorToUser { "Could not parse date: $this" } },
+                )
         }
+
+        else -> {
+            // relative
+            val number: Int = match.groupValues[1].toInt()
+            val relativity: String = match.groupValues[2]
+            val cal: Calendar = Calendar.getInstance(TimeZone.getDefault(), Locale.US)
+
+            with(relativity) {
+                when {
+                    startsWith("year") -> cal.add(Calendar.YEAR, -number)
+                    startsWith("month") -> cal.add(Calendar.MONTH, -number)
+                    startsWith("week") -> cal.add(Calendar.DAY_OF_MONTH, -number * 7)
+                    startsWith("day") -> cal.add(Calendar.DAY_OF_MONTH, -number)
+                    startsWith("hour") -> cal.add(Calendar.HOUR, -number)
+                    startsWith("min") -> cal.add(Calendar.MINUTE, -number)
+                    startsWith("sec") -> cal.add(Calendar.SECOND, -number)
+                }
+            }
+
+            cal.time
+        }
+    }
 }

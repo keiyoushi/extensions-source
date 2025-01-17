@@ -25,17 +25,16 @@ class PatchFriday : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    private fun createManga(): SManga =
-        SManga.create().apply {
-            initialized = true
-            title = "Patch Friday"
-            status = SManga.ONGOING
-            url = ""
-            author = "Patch Friday"
-            artist = author
-            thumbnail_url = "https://patchfriday.com/patches/68.png"
-            description = "The IT security webcomic"
-        }
+    private fun createManga(): SManga = SManga.create().apply {
+        initialized = true
+        title = "Patch Friday"
+        status = SManga.ONGOING
+        url = ""
+        author = "Patch Friday"
+        artist = author
+        thumbnail_url = "https://patchfriday.com/patches/68.png"
+        description = "The IT security webcomic"
+    }
 
     // Popular
 
@@ -75,11 +74,10 @@ class PatchFriday : HttpSource() {
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(GET("$baseUrl/search/?search=;", headers))
-            .asObservableSuccess()
-            .map { parseChapters(it) }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(GET("$baseUrl/search/?search=;", headers))
+        .asObservableSuccess()
+        .map { parseChapters(it) }
 
     private fun parseChapters(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()

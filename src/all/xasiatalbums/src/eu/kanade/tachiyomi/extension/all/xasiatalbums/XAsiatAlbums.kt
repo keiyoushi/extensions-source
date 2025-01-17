@@ -26,10 +26,9 @@ class XAsiatAlbums : ParsedHttpSource() {
 
     private val mainUrl = "https://www.xasiat.com"
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Latest
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
@@ -44,14 +43,13 @@ class XAsiatAlbums : ParsedHttpSource() {
     override fun mangaDetailsRequest(manga: SManga) = GET("${mainUrl}${manga.url}", headers)
 
     // Popular
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            title = element.attr("title")
-            thumbnail_url = element.select(".thumb").attr("data-original")
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        title = element.attr("title")
+        thumbnail_url = element.select(".thumb").attr("data-original")
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    }
 
     override fun popularMangaNextPageSelector(): String = ".load-more"
 
@@ -63,22 +61,21 @@ class XAsiatAlbums : ParsedHttpSource() {
         blockId: String,
         page: Int,
         others: Map<String, String>,
-    ): Request =
-        GET(
-            mainUrl
-                .toHttpUrl()
-                .newBuilder()
-                .apply {
-                    addPathSegments(path)
-                    addQueryParameter("mode", "async")
-                    addQueryParameter("function", "get_block")
-                    addQueryParameter("block_id", blockId)
-                    addQueryParameter("from", page.toString())
-                    others.forEach { addQueryParameter(it.key, it.value) }
-                    addQueryParameter("_", System.currentTimeMillis().toString())
-                }.build(),
-            headers,
-        )
+    ): Request = GET(
+        mainUrl
+            .toHttpUrl()
+            .newBuilder()
+            .apply {
+                addPathSegments(path)
+                addQueryParameter("mode", "async")
+                addQueryParameter("function", "get_block")
+                addQueryParameter("block_id", blockId)
+                addQueryParameter("from", page.toString())
+                others.forEach { addQueryParameter(it.key, it.value) }
+                addQueryParameter("_", System.currentTimeMillis().toString())
+            }.build(),
+        headers,
+    )
 
     override fun popularMangaSelector(): String = ".list-albums a"
 
@@ -117,45 +114,42 @@ class XAsiatAlbums : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select(".entry-title").text()
-            description = document.select("meta[og:description]").attr("og:description")
-            genre = getTags(document).joinToString(", ")
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select(".entry-title").text()
+        description = document.select("meta[og:description]").attr("og:description")
+        genre = getTags(document).joinToString(", ")
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    }
 
-    private fun getTags(document: Element): List<String> =
-        document.select(".info-content a").map { a ->
-            val link = a.attr("href").split(".com/")[1]
-            val tag = a.text()
-            if (tag.isNotEmpty()) {
-                categories[tag] = link
-            }
-            tag
+    private fun getTags(document: Element): List<String> = document.select(".info-content a").map { a ->
+        val link = a.attr("href").split(".com/")[1]
+        val tag = a.text()
+        if (tag.isNotEmpty()) {
+            categories[tag] = link
         }
+        tag
+    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(
-                Request
-                    .Builder()
-                    .apply {
-                        url(manga.thumbnail_url.toString())
-                        method("HEAD", null)
-                    }.build(),
-            ).asObservableSuccess()
-            .map { response ->
-                val lastModified = response.headers["last-modified"]
-                listOf(
-                    SChapter.create().apply {
-                        url = "${mainUrl}${manga.url}"
-                        name = "Photobook"
-                        date_upload = getDate(lastModified.toString())
-                    },
-                )
-            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(
+            Request
+                .Builder()
+                .apply {
+                    url(manga.thumbnail_url.toString())
+                    method("HEAD", null)
+                }.build(),
+        ).asObservableSuccess()
+        .map { response ->
+            val lastModified = response.headers["last-modified"]
+            listOf(
+                SChapter.create().apply {
+                    url = "${mainUrl}${manga.url}"
+                    name = "Photobook"
+                    date_upload = getDate(lastModified.toString())
+                },
+            )
+        }
 
     override fun chapterListSelector() = ""
 
@@ -164,10 +158,9 @@ class XAsiatAlbums : ParsedHttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url)
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("a.item").mapIndexed { i, it ->
-            Page(i, imageUrl = it.attr("href"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("a.item").mapIndexed { i, it ->
+        Page(i, imageUrl = it.attr("href"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -202,12 +195,11 @@ class XAsiatAlbums : ParsedHttpSource() {
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
-    private fun getDate(str: String): Long =
-        try {
-            DATE_FORMAT.parse(str)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun getDate(str: String): Long = try {
+        DATE_FORMAT.parse(str)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
+    }
 
     companion object {
         private val DATE_FORMAT by lazy {

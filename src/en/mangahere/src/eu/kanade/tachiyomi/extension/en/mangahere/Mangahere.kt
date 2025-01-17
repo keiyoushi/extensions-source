@@ -33,10 +33,9 @@ class Mangahere : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     private val cookieInterceptor =
         CookieInterceptor(
@@ -194,33 +193,32 @@ class Mangahere : ParsedHttpSource() {
         return chapter
     }
 
-    private fun parseChapterDate(date: String): Long =
-        if ("Today" in date || " ago" in date) {
-            Calendar
-                .getInstance()
-                .apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-        } else if ("Yesterday" in date) {
-            Calendar
-                .getInstance()
-                .apply {
-                    add(Calendar.DATE, -1)
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-        } else {
-            try {
-                SimpleDateFormat("MMM dd,yyyy", Locale.ENGLISH).parse(date)?.time ?: 0L
-            } catch (e: ParseException) {
-                0L
-            }
+    private fun parseChapterDate(date: String): Long = if ("Today" in date || " ago" in date) {
+        Calendar
+            .getInstance()
+            .apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+    } else if ("Yesterday" in date) {
+        Calendar
+            .getInstance()
+            .apply {
+                add(Calendar.DATE, -1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+    } else {
+        try {
+            SimpleDateFormat("MMM dd,yyyy", Locale.ENGLISH).parse(date)?.time ?: 0L
+        } catch (e: ParseException) {
+            0L
         }
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val bar = document.select("script[src*=chapter_bar]")
@@ -380,21 +378,20 @@ class Mangahere : ParsedHttpSource() {
         name: String,
     ) : Filter.Text(name)
 
-    override fun getFilterList() =
-        FilterList(
-            TypeList(
-                types.keys
-                    .toList()
-                    .sorted()
-                    .toTypedArray(),
-            ),
-            ArtistFilter("Artist"),
-            AuthorFilter("Author"),
-            GenreList(genres()),
-            RatingList(ratings),
-            YearFilter("Year released"),
-            CompletionList(completions),
-        )
+    override fun getFilterList() = FilterList(
+        TypeList(
+            types.keys
+                .toList()
+                .sorted()
+                .toTypedArray(),
+        ),
+        ArtistFilter("Artist"),
+        AuthorFilter("Author"),
+        GenreList(genres()),
+        RatingList(ratings),
+        YearFilter("Year released"),
+        CompletionList(completions),
+    )
 
     private val types =
         hashMapOf(
@@ -411,44 +408,43 @@ class Mangahere : ParsedHttpSource() {
     private val completions = arrayOf("Either", "No", "Yes")
     private val ratings = arrayOf("No Stars", "1 Star", "2 Stars", "3 Stars", "4 Stars", "5 Stars")
 
-    private fun genres() =
-        arrayListOf(
-            Genre("Action", 1),
-            Genre("Adventure", 2),
-            Genre("Comedy", 3),
-            Genre("Fantasy", 4),
-            Genre("Historical", 5),
-            Genre("Horror", 6),
-            Genre("Martial Arts", 7),
-            Genre("Mystery", 8),
-            Genre("Romance", 9),
-            Genre("Shounen Ai", 10),
-            Genre("Supernatural", 11),
-            Genre("Drama", 12),
-            Genre("Shounen", 13),
-            Genre("School Life", 14),
-            Genre("Shoujo", 15),
-            Genre("Gender Bender", 16),
-            Genre("Josei", 17),
-            Genre("Psychological", 18),
-            Genre("Seinen", 19),
-            Genre("Slice of Life", 20),
-            Genre("Sci-fi", 21),
-            Genre("Ecchi", 22),
-            Genre("Harem", 23),
-            Genre("Shoujo Ai", 24),
-            Genre("Yuri", 25),
-            Genre("Mature", 26),
-            Genre("Tragedy", 27),
-            Genre("Yaoi", 28),
-            Genre("Doujinshi", 29),
-            Genre("Sports", 30),
-            Genre("Adult", 31),
-            Genre("One Shot", 32),
-            Genre("Smut", 33),
-            Genre("Mecha", 34),
-            Genre("Shotacon", 35),
-            Genre("Lolicon", 36),
-            Genre("Webtoons", 37),
-        )
+    private fun genres() = arrayListOf(
+        Genre("Action", 1),
+        Genre("Adventure", 2),
+        Genre("Comedy", 3),
+        Genre("Fantasy", 4),
+        Genre("Historical", 5),
+        Genre("Horror", 6),
+        Genre("Martial Arts", 7),
+        Genre("Mystery", 8),
+        Genre("Romance", 9),
+        Genre("Shounen Ai", 10),
+        Genre("Supernatural", 11),
+        Genre("Drama", 12),
+        Genre("Shounen", 13),
+        Genre("School Life", 14),
+        Genre("Shoujo", 15),
+        Genre("Gender Bender", 16),
+        Genre("Josei", 17),
+        Genre("Psychological", 18),
+        Genre("Seinen", 19),
+        Genre("Slice of Life", 20),
+        Genre("Sci-fi", 21),
+        Genre("Ecchi", 22),
+        Genre("Harem", 23),
+        Genre("Shoujo Ai", 24),
+        Genre("Yuri", 25),
+        Genre("Mature", 26),
+        Genre("Tragedy", 27),
+        Genre("Yaoi", 28),
+        Genre("Doujinshi", 29),
+        Genre("Sports", 30),
+        Genre("Adult", 31),
+        Genre("One Shot", 32),
+        Genre("Smut", 33),
+        Genre("Mecha", 34),
+        Genre("Shotacon", 35),
+        Genre("Lolicon", 36),
+        Genre("Webtoons", 37),
+    )
 }

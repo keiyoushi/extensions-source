@@ -58,12 +58,11 @@ class SenManga : ParsedHttpSource() {
 
     override fun popularMangaSelector() = ".mng"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            title = element.select("div.series-title").text()
-            thumbnail_url = element.select(".cover img").attr("data-src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        title = element.select("div.series-title").text()
+        thumbnail_url = element.select(".cover img").attr("data-src")
+    }
 
     override fun popularMangaNextPageSelector() = "ul.pagination a[rel=next]"
 
@@ -110,54 +109,51 @@ class SenManga : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.select("h1.series").text()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.select("h1.series").text()
 
-            thumbnail_url = document.select("div.cover img").first()!!.attr("src")
+        thumbnail_url = document.select("div.cover img").first()!!.attr("src")
 
-            description = document.select("div.summary").first()!!.text()
+        description = document.select("div.summary").first()!!.text()
 
-            val seriesElement = document.select("div.series-desc .info")
+        val seriesElement = document.select("div.series-desc .info")
 
-            genre = seriesElement.select(".item.genre a").joinToString(", ") { it.text() }
-            status =
-                seriesElement.select(".item:has(strong:contains(Status))").first()?.text().orEmpty().let {
-                    parseStatus(it.substringAfter("Status:"))
-                }
-            author = seriesElement.select(".item:has(strong:contains(Author)) a").text()
-        }
+        genre = seriesElement.select(".item.genre a").joinToString(", ") { it.text() }
+        status =
+            seriesElement.select(".item:has(strong:contains(Status))").first()?.text().orEmpty().let {
+                parseStatus(it.substringAfter("Status:"))
+            }
+        author = seriesElement.select(".item:has(strong:contains(Author)) a").text()
+    }
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("Ongoing") -> SManga.ONGOING
-            status.contains("Complete") -> SManga.COMPLETED
-            status.contains("Hiatus") -> SManga.ON_HIATUS
-            status.contains("Dropped") -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("Ongoing") -> SManga.ONGOING
+        status.contains("Complete") -> SManga.COMPLETED
+        status.contains("Hiatus") -> SManga.ON_HIATUS
+        status.contains("Dropped") -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directory/last_update?page=$page", headers)
 
     override fun chapterListSelector() = "ul.chapter-list li"
 
     @SuppressLint("DefaultLocale")
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            val linkElement = element.getElementsByTag("a")
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        val linkElement = element.getElementsByTag("a")
 
-            setUrlWithoutDomain(linkElement.attr("href"))
+        setUrlWithoutDomain(linkElement.attr("href"))
 
-            name = linkElement.first()!!.text()
+        name = linkElement.first()!!.text()
 
-            chapter_number = element
-                .child(0)
-                .text()
-                .trim()
-                .toFloatOrNull() ?: -1f
+        chapter_number = element
+            .child(0)
+            .text()
+            .trim()
+            .toFloatOrNull() ?: -1f
 
-            date_upload = parseDate(element.select("time").attr("datetime"))
-        }
+        date_upload = parseDate(element.select("time").attr("datetime"))
+    }
 
     private fun parseDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0
 
@@ -187,13 +183,12 @@ class SenManga : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            GenreFilter(getGenreList()),
-            StatusFilter(),
-            TypeFilter(),
-            OrderFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        GenreFilter(getGenreList()),
+        StatusFilter(),
+        TypeFilter(),
+        OrderFilter(),
+    )
 
     private class Genre(
         name: String,
@@ -247,42 +242,41 @@ class SenManga : ParsedHttpSource() {
             ),
         )
 
-    private fun getGenreList(): List<Genre> =
-        listOf(
-            Genre("Action"),
-            Genre("Adult"),
-            Genre("Adventure"),
-            Genre("Comedy"),
-            Genre("Cooking"),
-            Genre("Drama"),
-            Genre("Ecchi"),
-            Genre("Fantasy"),
-            Genre("Gender Bender"),
-            Genre("Harem"),
-            Genre("Historical"),
-            Genre("Horror"),
-            Genre("Josei"),
-            Genre("Light Novel"),
-            Genre("Martial Arts"),
-            Genre("Mature"),
-            Genre("Music"),
-            Genre("Mystery"),
-            Genre("Psychological"),
-            Genre("Romance"),
-            Genre("School Life"),
-            Genre("Sci-Fi"),
-            Genre("Seinen"),
-            Genre("Shoujo"),
-            Genre("Shoujo Ai"),
-            Genre("Shounen"),
-            Genre("Shounen Ai"),
-            Genre("Slice of Life"),
-            Genre("Smut"),
-            Genre("Sports"),
-            Genre("Supernatural"),
-            Genre("Tragedy"),
-            Genre("Webtoons"),
-            Genre("Yaoi"),
-            Genre("Yuri"),
-        )
+    private fun getGenreList(): List<Genre> = listOf(
+        Genre("Action"),
+        Genre("Adult"),
+        Genre("Adventure"),
+        Genre("Comedy"),
+        Genre("Cooking"),
+        Genre("Drama"),
+        Genre("Ecchi"),
+        Genre("Fantasy"),
+        Genre("Gender Bender"),
+        Genre("Harem"),
+        Genre("Historical"),
+        Genre("Horror"),
+        Genre("Josei"),
+        Genre("Light Novel"),
+        Genre("Martial Arts"),
+        Genre("Mature"),
+        Genre("Music"),
+        Genre("Mystery"),
+        Genre("Psychological"),
+        Genre("Romance"),
+        Genre("School Life"),
+        Genre("Sci-Fi"),
+        Genre("Seinen"),
+        Genre("Shoujo"),
+        Genre("Shoujo Ai"),
+        Genre("Shounen"),
+        Genre("Shounen Ai"),
+        Genre("Slice of Life"),
+        Genre("Smut"),
+        Genre("Sports"),
+        Genre("Supernatural"),
+        Genre("Tragedy"),
+        Genre("Webtoons"),
+        Genre("Yaoi"),
+        Genre("Yuri"),
+    )
 }

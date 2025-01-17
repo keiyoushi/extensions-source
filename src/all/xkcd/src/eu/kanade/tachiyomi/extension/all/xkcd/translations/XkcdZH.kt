@@ -33,19 +33,18 @@ class XkcdZH : Xkcd("https://xkcd.tw", "zh", "yyyy-MM-dd HH:mm:ss") {
 
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
 
-    override fun chapterListParse(response: Response) =
-        json.parseToJsonElement(response.body.string()).jsonObject.values.map {
-            val obj = it.jsonObject
-            val number = obj["id"]!!.jsonPrimitive.content
-            val title = obj["title"]!!.jsonPrimitive.content
-            val date = obj["translate_time"]!!.jsonPrimitive.content
-            SChapter.create().apply {
-                url = "/$number"
-                name = title.numbered(number)
-                chapter_number = number.toFloat()
-                date_upload = date.timestamp()
-            }
+    override fun chapterListParse(response: Response) = json.parseToJsonElement(response.body.string()).jsonObject.values.map {
+        val obj = it.jsonObject
+        val number = obj["id"]!!.jsonPrimitive.content
+        val title = obj["title"]!!.jsonPrimitive.content
+        val date = obj["translate_time"]!!.jsonPrimitive.content
+        SChapter.create().apply {
+            url = "/$number"
+            name = title.numbered(number)
+            chapter_number = number.toFloat()
+            date_upload = date.timestamp()
         }
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         // if img tag is empty then it is an interactive comic

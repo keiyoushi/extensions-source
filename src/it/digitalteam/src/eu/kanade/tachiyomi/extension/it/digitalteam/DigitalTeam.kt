@@ -54,12 +54,11 @@ class DigitalTeam : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     // ELEMENT
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select(".manga_title a").text()
-            thumbnail_url = element.select("img").attr("src")
-            setUrlWithoutDomain(element.select(".manga_title a").first()!!.attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select(".manga_title a").text()
+        thumbnail_url = element.select("img").attr("src")
+        setUrlWithoutDomain(element.select(".manga_title a").first()!!.attr("href"))
+    }
 
     override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
@@ -73,46 +72,43 @@ class DigitalTeam : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val infoElement = document.select("#manga_left")
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val infoElement = document.select("#manga_left")
 
-            author = infoElement.select(".info_name:contains(Autore)").next().text()
-            artist = infoElement.select(".info_name:contains(Artista)").next().text()
-            genre = infoElement.select(".info_name:contains(Genere)").next().text()
-            status = parseStatus(infoElement.select(".info_name:contains(Status)").next().text())
-            description = document.select("div.plot").text()
-            thumbnail_url = infoElement.select(".cover img").attr("src")
-        }
+        author = infoElement.select(".info_name:contains(Autore)").next().text()
+        artist = infoElement.select(".info_name:contains(Artista)").next().text()
+        genre = infoElement.select(".info_name:contains(Genere)").next().text()
+        status = parseStatus(infoElement.select(".info_name:contains(Status)").next().text())
+        description = document.select("div.plot").text()
+        thumbnail_url = infoElement.select(".cover img").attr("src")
+    }
 
-    private fun parseStatus(element: String): Int =
-        when {
-            element.lowercase(Locale.ROOT).contains("in corso") -> SManga.ONGOING
-            element.lowercase(Locale.ROOT).contains("completo") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(element: String): Int = when {
+        element.lowercase(Locale.ROOT).contains("in corso") -> SManga.ONGOING
+        element.lowercase(Locale.ROOT).contains("completo") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = ".chapter_list ul li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val urlElement = element.select("a").first()!!
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val urlElement = element.select("a").first()!!
 
-            setUrlWithoutDomain(urlElement.attr("href"))
-            name = urlElement.text()
-            date_upload = element
-                .select(".ch_bottom")
-                .first()
-                ?.text()
-                ?.replace("Pubblicato il ", "")
-                ?.let {
-                    try {
-                        DATE_FORMAT_FULL.parse(it)?.time
-                    } catch (e: ParseException) {
-                        DATE_FORMAT_SIMPLE.parse(it)?.time
-                    }
-                } ?: 0
-        }
+        setUrlWithoutDomain(urlElement.attr("href"))
+        name = urlElement.text()
+        date_upload = element
+            .select(".ch_bottom")
+            .first()
+            ?.text()
+            ?.replace("Pubblicato il ", "")
+            ?.let {
+                try {
+                    DATE_FORMAT_FULL.parse(it)?.time
+                } catch (e: ParseException) {
+                    DATE_FORMAT_SIMPLE.parse(it)?.time
+                }
+            } ?: 0
+    }
 
     private fun getXhrPages(
         script_content: String,

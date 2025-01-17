@@ -17,24 +17,22 @@ class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Onl
             Pair("Eyeshield 21", "$baseUrl/manga/eyeshield-21/"),
         ).sortedBy { it.first }.distinctBy { it.second }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            description = document.select("div.card-body > p").text()
-            title =
-                document
-                    .select("h2 > span")
-                    .text()
-                    .substringAfter("Manga: ")
-                    .trim()
-            thumbnail_url = document.select(".card-img-right").attr("src")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        description = document.select("div.card-body > p").text()
+        title =
+            document
+                .select("h2 > span")
+                .text()
+                .substringAfter("Manga: ")
+                .trim()
+        thumbnail_url = document.select(".card-img-right").attr("src")
+    }
 
     override fun chapterListSelector(): String = "tbody > tr"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.select("td:first-child").text()
-            url = element.select("a").attr("abs:href")
-            date_upload = System.currentTimeMillis() // I have no idear how to parse Date stuff
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.select("td:first-child").text()
+        url = element.select("a").attr("abs:href")
+        date_upload = System.currentTimeMillis() // I have no idear how to parse Date stuff
+    }
 }

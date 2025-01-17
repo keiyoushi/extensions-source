@@ -66,15 +66,14 @@ class IncludedTagFilter : TagFilter("Include Tags")
 
 class ExcludedTagFilter : TagFilter("Exclude Tags")
 
-fun getFilters() =
-    FilterList(
-        SortFilter(),
-        FormatFilter(),
-        Filter.Separator(),
-        MinPageFilter(),
-        MaxPageFilter(),
-        Filter.Separator(),
-        IncludedTagFilter(),
-        ExcludedTagFilter(),
-        Filter.Header("comma (,) separated tag/parody/character/artist/group"),
-    )
+fun getFilters() = FilterList(
+    SortFilter(),
+    FormatFilter(),
+    Filter.Separator(),
+    MinPageFilter(),
+    MaxPageFilter(),
+    Filter.Separator(),
+    IncludedTagFilter(),
+    ExcludedTagFilter(),
+    Filter.Header("comma (,) separated tag/parody/character/artist/group"),
+)

@@ -8,18 +8,17 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 
 class NamiComiFilters {
-    internal fun getFilterList(intl: Intl): FilterList =
-        FilterList(
-            HasAvailableChaptersFilter(intl),
-            ContentRatingList(intl, getContentRatings(intl)),
-            StatusList(intl, getStatus(intl)),
-            SortFilter(intl, getSortables(intl)),
-            TagsFilter(intl, getTagFilters(intl)),
-            TagList(intl["content"], getContents(intl)),
-            TagList(intl["format"], getFormats(intl)),
-            TagList(intl["genre"], getGenres(intl)),
-            TagList(intl["theme"], getThemes(intl)),
-        )
+    internal fun getFilterList(intl: Intl): FilterList = FilterList(
+        HasAvailableChaptersFilter(intl),
+        ContentRatingList(intl, getContentRatings(intl)),
+        StatusList(intl, getStatus(intl)),
+        SortFilter(intl, getSortables(intl)),
+        TagsFilter(intl, getTagFilters(intl)),
+        TagList(intl["content"], getContents(intl)),
+        TagList(intl["format"], getFormats(intl)),
+        TagList(intl["genre"], getGenres(intl)),
+        TagList(intl["theme"], getThemes(intl)),
+    )
 
     private interface UrlQueryFilter {
         fun addQueryParameter(
@@ -63,12 +62,11 @@ class NamiComiFilters {
         }
     }
 
-    private fun getContentRatings(intl: Intl) =
-        listOf(
-            ContentRating(intl["content_rating_safe"], ContentRatingDto.SAFE.value),
-            ContentRating(intl["content_rating_restricted"], ContentRatingDto.RESTRICTED.value),
-            ContentRating(intl["content_rating_mature"], ContentRatingDto.MATURE.value),
-        )
+    private fun getContentRatings(intl: Intl) = listOf(
+        ContentRating(intl["content_rating_safe"], ContentRatingDto.SAFE.value),
+        ContentRating(intl["content_rating_restricted"], ContentRatingDto.RESTRICTED.value),
+        ContentRating(intl["content_rating_mature"], ContentRatingDto.MATURE.value),
+    )
 
     private class Status(
         name: String,
@@ -90,13 +88,12 @@ class NamiComiFilters {
         }
     }
 
-    private fun getStatus(intl: Intl) =
-        listOf(
-            Status(intl["status_ongoing"], StatusDto.ONGOING.value),
-            Status(intl["status_completed"], StatusDto.COMPLETED.value),
-            Status(intl["status_hiatus"], StatusDto.HIATUS.value),
-            Status(intl["status_cancelled"], StatusDto.CANCELLED.value),
-        )
+    private fun getStatus(intl: Intl) = listOf(
+        Status(intl["status_ongoing"], StatusDto.ONGOING.value),
+        Status(intl["status_completed"], StatusDto.COMPLETED.value),
+        Status(intl["status_hiatus"], StatusDto.HIATUS.value),
+        Status(intl["status_cancelled"], StatusDto.CANCELLED.value),
+    )
 
     data class Sortable(
         val title: String,
@@ -105,18 +102,17 @@ class NamiComiFilters {
         override fun toString(): String = title
     }
 
-    private fun getSortables(intl: Intl) =
-        arrayOf(
-            Sortable(intl["sort_alphabetic"], "title"),
-            Sortable(intl["sort_number_of_chapters"], "chapterCount"),
-            Sortable(intl["sort_number_of_follows"], "followCount"),
-            Sortable(intl["sort_number_of_likes"], "reactions"),
-            Sortable(intl["sort_number_of_comments"], "commentCount"),
-            Sortable(intl["sort_content_created_at"], "publishedAt"),
-            Sortable(intl["sort_views"], "views"),
-            Sortable(intl["sort_year"], "year"),
-            Sortable(intl["sort_rating"], "rating"),
-        )
+    private fun getSortables(intl: Intl) = arrayOf(
+        Sortable(intl["sort_alphabetic"], "title"),
+        Sortable(intl["sort_number_of_chapters"], "chapterCount"),
+        Sortable(intl["sort_number_of_follows"], "followCount"),
+        Sortable(intl["sort_number_of_likes"], "reactions"),
+        Sortable(intl["sort_number_of_comments"], "commentCount"),
+        Sortable(intl["sort_content_created_at"], "publishedAt"),
+        Sortable(intl["sort_views"], "views"),
+        Sortable(intl["sort_year"], "year"),
+        Sortable(intl["sort_rating"], "rating"),
+    )
 
     class SortFilter(
         intl: Intl,
@@ -280,11 +276,10 @@ class NamiComiFilters {
         override fun toString(): String = title
     }
 
-    private fun getTagModes(intl: Intl) =
-        arrayOf(
-            TagMode(intl["mode_and"], "and"),
-            TagMode(intl["mode_or"], "or"),
-        )
+    private fun getTagModes(intl: Intl) = arrayOf(
+        TagMode(intl["mode_and"], "and"),
+        TagMode(intl["mode_or"], "or"),
+    )
 
     private class TagInclusionMode(
         intl: Intl,
@@ -327,11 +322,10 @@ class NamiComiFilters {
         }
     }
 
-    private fun getTagFilters(intl: Intl): FilterList =
-        FilterList(
-            TagInclusionMode(intl, getTagModes(intl)),
-            TagExclusionMode(intl, getTagModes(intl)),
-        )
+    private fun getTagFilters(intl: Intl): FilterList = FilterList(
+        TagInclusionMode(intl, getTagModes(intl)),
+        TagExclusionMode(intl, getTagModes(intl)),
+    )
 
     internal fun addFiltersToUrl(
         url: HttpUrl.Builder,
@@ -345,12 +339,11 @@ class NamiComiFilters {
         return url.build()
     }
 
-    private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> =
-        apply {
-            if (intl.chosenLanguage == NamiComiConstants.english) {
-                return this
-            }
-
-            return sortedWith(compareBy(intl.collator, Tag::name))
+    private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> = apply {
+        if (intl.chosenLanguage == NamiComiConstants.english) {
+            return this
         }
+
+        return sortedWith(compareBy(intl.collator, Tag::name))
+    }
 }

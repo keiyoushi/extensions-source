@@ -31,12 +31,11 @@ class MyHentaiComics : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "li.g-item"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("h2").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("h2").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector() = "a.ui-state-default span.ui-icon-seek-next"
 
@@ -56,28 +55,26 @@ class MyHentaiComics : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotBlank()) {
-            GET("$baseUrl/index.php/search?q=$query&page=$page", headers)
-        } else {
-            var url = baseUrl
-            for (filter in if (filters.isEmpty()) getFilterList() else filters) {
-                when (filter) {
-                    is GenreFilter -> url += filter.toUriPart() + "?page=$page"
-                    else -> {}
-                }
+    ): Request = if (query.isNotBlank()) {
+        GET("$baseUrl/index.php/search?q=$query&page=$page", headers)
+    } else {
+        var url = baseUrl
+        for (filter in if (filters.isEmpty()) getFilterList() else filters) {
+            when (filter) {
+                is GenreFilter -> url += filter.toUriPart() + "?page=$page"
+                else -> {}
             }
-            GET(url, headers)
         }
+        GET(url, headers)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("h2, p").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("h2, p").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
@@ -103,15 +100,14 @@ class MyHentaiComics : ParsedHttpSource() {
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = "Chapter"
-                    url = manga.url
-                },
-            ),
-        )
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                name = "Chapter"
+                url = manga.url
+            },
+        ),
+    )
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
@@ -140,12 +136,11 @@ class MyHentaiComics : ParsedHttpSource() {
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Cannot combine search types!"),
-            Filter.Separator("-----------------"),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Cannot combine search types!"),
+        Filter.Separator("-----------------"),
+        GenreFilter(),
+    )
 
     private class GenreFilter :
         UriPartFilter(

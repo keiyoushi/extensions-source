@@ -31,10 +31,9 @@ class Alandal : HttpSource() {
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder() =
-        super.headersBuilder().apply {
-            add("Referer", "$baseUrl/")
-        }
+    override fun headersBuilder() = super.headersBuilder().apply {
+        add("Referer", "$baseUrl/")
+    }
 
     private val apiHeaders by lazy { apiHeadersBuilder.build() }
 
@@ -100,12 +99,11 @@ class Alandal : HttpSource() {
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            GenreFilter(),
-            SortFilter(),
-            StatusFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        GenreFilter(),
+        SortFilter(),
+        StatusFilter(),
+    )
 
     // =========================== Manga Details ============================
 
@@ -124,19 +122,17 @@ class Alandal : HttpSource() {
         return GET(url, apiHeaders)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response
-            .parseAs<ResponseDto<MangaDetailsDto>>()
-            .data.series
-            .toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response
+        .parseAs<ResponseDto<MangaDetailsDto>>()
+        .data.series
+        .toSManga()
 
     // ============================== Chapters ==============================
 
-    override fun getChapterUrl(chapter: SChapter): String =
-        baseUrl +
-            chapter.url
-                .replace("series/", "chapter/comic-")
-                .replace("chapters/", "")
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl +
+        chapter.url
+            .replace("series/", "chapter/comic-")
+            .replace("chapters/", "")
 
     override fun chapterListRequest(manga: SManga): Request {
         val url =
@@ -215,8 +211,7 @@ class Alandal : HttpSource() {
 
     // ============================= Utilities ==============================
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream(it.body.byteStream())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
 }

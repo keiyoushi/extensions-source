@@ -80,21 +80,20 @@ class DisasterScans : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SLUG)) {
-            val url = "/comics/${query.substringAfter(PREFIX_SLUG)}"
-            val manga = SManga.create().apply { this.url = url }
-            client
-                .newCall(mangaDetailsRequest(manga))
-                .asObservableSuccess()
-                .map { mangaDetailsParse(it).apply { this.url = url } }
-                .map { MangasPage(listOf(it), false) }
-        } else {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it, query) }
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG)) {
+        val url = "/comics/${query.substringAfter(PREFIX_SLUG)}"
+        val manga = SManga.create().apply { this.url = url }
+        client
+            .newCall(mangaDetailsRequest(manga))
+            .asObservableSuccess()
+            .map { mangaDetailsParse(it).apply { this.url = url } }
+            .map { MangasPage(listOf(it), false) }
+    } else {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, query) }
+    }
 
     override fun searchMangaRequest(
         page: Int,

@@ -16,8 +16,7 @@ class LerHentai :
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            description = description?.removePrefix("Sinopse\n\n")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        description = description?.removePrefix("Sinopse\n\n")
+    }
 }

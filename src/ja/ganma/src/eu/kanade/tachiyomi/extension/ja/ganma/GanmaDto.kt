@@ -27,26 +27,24 @@ class Magazine(
     val announcement: Announcement? = null,
     val items: List<Story> = emptyList(),
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            url = "${alias!!}#$id"
-            title = this@Magazine.title
-            thumbnail_url = squareImage!!.url
-        }
+    fun toSManga() = SManga.create().apply {
+        url = "${alias!!}#$id"
+        title = this@Magazine.title
+        thumbnail_url = squareImage!!.url
+    }
 
-    fun toSMangaDetails() =
-        toSManga().apply {
-            author = this@Magazine.author?.penName
-            val flagsText = flags?.toText()
-            description = generateDescription(flagsText)
-            status =
-                when {
-                    flags?.isFinish == true -> SManga.COMPLETED
-                    !flagsText.isNullOrEmpty() -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
-            initialized = true
-        }
+    fun toSMangaDetails() = toSManga().apply {
+        author = this@Magazine.author?.penName
+        val flagsText = flags?.toText()
+        description = generateDescription(flagsText)
+        status =
+            when {
+                flags?.isFinish == true -> SManga.COMPLETED
+                !flagsText.isNullOrEmpty() -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
+        initialized = true
+    }
 
     private fun generateDescription(flagsText: String?): String {
         val result = mutableListOf<String>()
@@ -79,11 +77,10 @@ fun String.alias() = this.substringBefore('#')
 
 fun String.mangaId() = this.substringAfter('#')
 
-fun String.chapterDir(): Pair<String, String> =
-    with(this.substringAfter('#')) {
-        // this == [mangaId-UUID]/[chapterId-UUID]
-        Pair(substring(0, 36), substring(37, 37 + 36))
-    }
+fun String.chapterDir(): Pair<String, String> = with(this.substringAfter('#')) {
+    // this == [mangaId-UUID]/[chapterId-UUID]
+    Pair(substring(0, 36), substring(37, 37 + 36))
+}
 
 // Chapter
 @Serializable
@@ -177,8 +174,7 @@ class Directory(
     val token: String,
     val files: List<String>,
 ) {
-    fun toPageList(): MutableList<Page> =
-        files.mapIndexedTo(ArrayList(files.size + 1)) { i, file ->
-            Page(i, imageUrl = "$baseUrl$file?$token")
-        }
+    fun toPageList(): MutableList<Page> = files.mapIndexedTo(ArrayList(files.size + 1)) { i, file ->
+        Page(i, imageUrl = "$baseUrl$file?$token")
+    }
 }

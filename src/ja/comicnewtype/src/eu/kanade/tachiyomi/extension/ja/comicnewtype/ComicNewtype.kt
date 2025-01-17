@@ -91,34 +91,33 @@ class ComicNewtype : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val root = response.asJsoup().selectFirst(Evaluator.Class("pc__list--contents"))!!
-            title = root.selectFirst(Evaluator.Tag("h1"))!!.ownText()
-            author = root.selectFirst(Evaluator.Class("contents__info"))!!.ownText()
-            // This one is horizontal. Prefer the square one from manga list.
-            // thumbnail_url = baseUrl + root.selectFirst(Evaluator.Class("contents__thumb-comic"))
-            //     .child(0).attr("src").removeSuffix("/w500/")
-            genre =
-                root
-                    .selectFirst(Evaluator.Class("container__link-list--genre-btn"))
-                    ?.run { children().joinToString { it.text() } }
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val root = response.asJsoup().selectFirst(Evaluator.Class("pc__list--contents"))!!
+        title = root.selectFirst(Evaluator.Tag("h1"))!!.ownText()
+        author = root.selectFirst(Evaluator.Class("contents__info"))!!.ownText()
+        // This one is horizontal. Prefer the square one from manga list.
+        // thumbnail_url = baseUrl + root.selectFirst(Evaluator.Class("contents__thumb-comic"))
+        //     .child(0).attr("src").removeSuffix("/w500/")
+        genre =
+            root
+                .selectFirst(Evaluator.Class("container__link-list--genre-btn"))
+                ?.run { children().joinToString { it.text() } }
 
-            val updates =
-                root
-                    .selectFirst(Evaluator.Class("contents__date--info-comic"))!!
-                    .textNodes()
-                    .filterNot { it.isBlank }
-                    .joinToString("  ||  ") { it.text() }
-            val isCompleted = (updates == "連載終了")
-            status = if (isCompleted) SManga.COMPLETED else SManga.ONGOING
-            description =
-                buildString {
-                    if (!isCompleted) append(updates).append("\n\n")
-                    append(root.selectFirst(Evaluator.Class("contents__txt-catch"))!!.ownText()).append("\n\n")
-                    append(root.selectFirst(Evaluator.Class("contents__txt--desc"))!!.ownText())
-                }
-        }
+        val updates =
+            root
+                .selectFirst(Evaluator.Class("contents__date--info-comic"))!!
+                .textNodes()
+                .filterNot { it.isBlank }
+                .joinToString("  ||  ") { it.text() }
+        val isCompleted = (updates == "連載終了")
+        status = if (isCompleted) SManga.COMPLETED else SManga.ONGOING
+        description =
+            buildString {
+                if (!isCompleted) append(updates).append("\n\n")
+                append(root.selectFirst(Evaluator.Class("contents__txt-catch"))!!.ownText()).append("\n\n")
+                append(root.selectFirst(Evaluator.Class("contents__txt--desc"))!!.ownText())
+            }
+    }
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url + "more/1/", headers)
 

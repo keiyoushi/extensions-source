@@ -36,26 +36,24 @@ abstract class FMReader(
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64) Gecko/20100101 Firefox/77.0")
-            add("Referer", baseUrl)
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64) Gecko/20100101 Firefox/77.0")
+        add("Referer", baseUrl)
+    }
 
     protected fun Elements.imgAttr(): String? = getImgAttr(this.firstOrNull())
 
     private fun Element.imgAttr(): String? = getImgAttr(this)
 
-    open fun getImgAttr(element: Element?): String? =
-        when {
-            element == null -> null
-            element.hasAttr("data-original") -> element.attr("abs:data-original")
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-bg") -> element.attr("abs:data-bg")
-            element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
-            element.hasAttr("style") -> element.attr("style").substringAfter("(").substringBefore(")")
-            else -> element.attr("abs:src")
-        }
+    open fun getImgAttr(element: Element?): String? = when {
+        element == null -> null
+        element.hasAttr("data-original") -> element.attr("abs:data-original")
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        element.hasAttr("data-bg") -> element.attr("abs:data-bg")
+        element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
+        element.hasAttr("style") -> element.attr("style").substringAfter("(").substringBefore(")")
+        else -> element.attr("abs:src")
+    }
 
     open val requestPath = "manga-list.html"
 
@@ -140,14 +138,13 @@ abstract class FMReader(
 
     open val headerSelector = "h3 a, .series-title a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select(headerSelector).let {
-                setUrlWithoutDomain(it.attr("abs:href"))
-                title = it.text()
-            }
-            thumbnail_url = element.select("img, .thumb-wrapper .img-in-ratio").imgAttr()
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select(headerSelector).let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.text()
         }
+        thumbnail_url = element.select("img, .thumb-wrapper .img-in-ratio").imgAttr()
+    }
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -255,21 +252,20 @@ abstract class FMReader(
     open fun chapterFromElement(
         element: Element,
         mangaTitle: String = "",
-    ): SChapter =
-        SChapter.create().apply {
-            if (chapterUrlSelector != "") {
-                element.select(chapterUrlSelector).first()!!.let {
-                    setUrlWithoutDomain(it.attr("abs:href"))
-                    name = it.text().substringAfter("$mangaTitle ")
-                }
-            } else {
-                element.let {
-                    setUrlWithoutDomain(it.attr("abs:href"))
-                    name = element.attr(chapterNameAttrSelector).substringAfter("$mangaTitle ")
-                }
+    ): SChapter = SChapter.create().apply {
+        if (chapterUrlSelector != "") {
+            element.select(chapterUrlSelector).first()!!.let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                name = it.text().substringAfter("$mangaTitle ")
             }
-            date_upload = element.select(chapterTimeSelector).let { if (it.hasText()) parseRelativeDate(it.text()) else 0 }
+        } else {
+            element.let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                name = element.attr(chapterNameAttrSelector).substringAfter("$mangaTitle ")
+            }
         }
+        date_upload = element.select(chapterTimeSelector).let { if (it.hasText()) parseRelativeDate(it.text()) else 0 }
+    }
 
     // gets the number from "1 day ago"
     open val dateValueIndex = 0
@@ -344,16 +340,14 @@ abstract class FMReader(
         }
     }
 
-    open fun parseAbsoluteDate(dateStr: String): Long =
-        runCatching { dateFormat.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
+    open fun parseAbsoluteDate(dateStr: String): Long = runCatching { dateFormat.parse(dateStr)?.time }
+        .getOrNull() ?: 0L
 
     open val pageListImageSelector = "img.chapter-img"
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(pageListImageSelector).mapIndexed { i, img ->
-            Page(i, document.location(), img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListImageSelector).mapIndexed { i, img ->
+        Page(i, document.location(), img.imgAttr())
+    }
 
     protected fun base64PageListParse(document: Document): List<Page> {
         fun Element.decoded(): String {
@@ -398,156 +392,152 @@ abstract class FMReader(
     private class SortBy : Filter.Sort("Sorted By", arrayOf("A-Z", "Most vỉews", "Last updated"), Selection(1, false))
 
     // TODO: Country (leftover from original LHTranslation)
-    override fun getFilterList() =
-        FilterList(
-            TextField("Author", "author"),
-            TextField("Group", "group"),
-            Status(),
-            SortBy(),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        TextField("Author", "author"),
+        TextField("Group", "group"),
+        Status(),
+        SortBy(),
+        GenreList(getGenreList()),
+    )
 
     // [...document.querySelectorAll("div.panel-body a")].map((el,i) => `Genre("${el.innerText.trim()}")`).join(',\n')
     //  on https://lhtranslation.net/search
-    open fun getGenreList() =
-        listOf(
-            Genre("Action"),
-            Genre("18+"),
-            Genre("Adult"),
-            Genre("Anime"),
-            Genre("Comedy"),
-            Genre("Comic"),
-            Genre("Doujinshi"),
-            Genre("Drama"),
-            Genre("Ecchi"),
-            Genre("Fantasy"),
-            Genre("Gender Bender"),
-            Genre("Harem"),
-            Genre("Historical"),
-            Genre("Horror"),
-            Genre("Josei"),
-            Genre("Live action"),
-            Genre("Manhua"),
-            Genre("Manhwa"),
-            Genre("Martial Art"),
-            Genre("Mature"),
-            Genre("Mecha"),
-            Genre("Mystery"),
-            Genre("One shot"),
-            Genre("Psychological"),
-            Genre("Romance"),
-            Genre("School Life"),
-            Genre("Sci-fi"),
-            Genre("Seinen"),
-            Genre("Shoujo"),
-            Genre("Shojou Ai"),
-            Genre("Shounen"),
-            Genre("Shounen Ai"),
-            Genre("Slice of Life"),
-            Genre("Smut"),
-            Genre("Sports"),
-            Genre("Supernatural"),
-            Genre("Tragedy"),
-            Genre("Adventure"),
-            Genre("Yaoi"),
-        )
+    open fun getGenreList() = listOf(
+        Genre("Action"),
+        Genre("18+"),
+        Genre("Adult"),
+        Genre("Anime"),
+        Genre("Comedy"),
+        Genre("Comic"),
+        Genre("Doujinshi"),
+        Genre("Drama"),
+        Genre("Ecchi"),
+        Genre("Fantasy"),
+        Genre("Gender Bender"),
+        Genre("Harem"),
+        Genre("Historical"),
+        Genre("Horror"),
+        Genre("Josei"),
+        Genre("Live action"),
+        Genre("Manhua"),
+        Genre("Manhwa"),
+        Genre("Martial Art"),
+        Genre("Mature"),
+        Genre("Mecha"),
+        Genre("Mystery"),
+        Genre("One shot"),
+        Genre("Psychological"),
+        Genre("Romance"),
+        Genre("School Life"),
+        Genre("Sci-fi"),
+        Genre("Seinen"),
+        Genre("Shoujo"),
+        Genre("Shojou Ai"),
+        Genre("Shounen"),
+        Genre("Shounen Ai"),
+        Genre("Slice of Life"),
+        Genre("Smut"),
+        Genre("Sports"),
+        Genre("Supernatural"),
+        Genre("Tragedy"),
+        Genre("Adventure"),
+        Genre("Yaoi"),
+    )
 
     // from manhwa18.com/search, removed a few that didn't return results/wouldn't be terribly useful
-    fun getAdultGenreList() =
-        listOf(
-            Genre("18"),
-            Genre("Action"),
-            Genre("Adult"),
-            Genre("Adventure"),
-            Genre("Anime"),
-            Genre("Comedy"),
-            Genre("Comic"),
-            Genre("Doujinshi"),
-            Genre("Drama"),
-            Genre("Ecchi"),
-            Genre("Fantasy"),
-            Genre("Gender Bender"),
-            Genre("Harem"),
-            Genre("Historical"),
-            Genre("Horror"),
-            Genre("Josei"),
-            Genre("Live action"),
-            Genre("Magic"),
-            Genre("Manhua"),
-            Genre("Manhwa"),
-            Genre("Martial Arts"),
-            Genre("Mature"),
-            Genre("Mecha"),
-            Genre("Mystery"),
-            Genre("Oneshot"),
-            Genre("Psychological"),
-            Genre("Romance"),
-            Genre("School Life"),
-            Genre("Sci-fi"),
-            Genre("Seinen"),
-            Genre("Shoujo"),
-            Genre("Shoujo Ai"),
-            Genre("Shounen"),
-            Genre("Shounen Ai"),
-            Genre("Slice of life"),
-            Genre("Smut"),
-            Genre("Soft Yaoi"),
-            Genre("Soft Yuri"),
-            Genre("Sports"),
-            Genre("Supernatural"),
-            Genre("Tragedy"),
-            Genre("VnComic"),
-            Genre("Webtoon"),
-        )
+    fun getAdultGenreList() = listOf(
+        Genre("18"),
+        Genre("Action"),
+        Genre("Adult"),
+        Genre("Adventure"),
+        Genre("Anime"),
+        Genre("Comedy"),
+        Genre("Comic"),
+        Genre("Doujinshi"),
+        Genre("Drama"),
+        Genre("Ecchi"),
+        Genre("Fantasy"),
+        Genre("Gender Bender"),
+        Genre("Harem"),
+        Genre("Historical"),
+        Genre("Horror"),
+        Genre("Josei"),
+        Genre("Live action"),
+        Genre("Magic"),
+        Genre("Manhua"),
+        Genre("Manhwa"),
+        Genre("Martial Arts"),
+        Genre("Mature"),
+        Genre("Mecha"),
+        Genre("Mystery"),
+        Genre("Oneshot"),
+        Genre("Psychological"),
+        Genre("Romance"),
+        Genre("School Life"),
+        Genre("Sci-fi"),
+        Genre("Seinen"),
+        Genre("Shoujo"),
+        Genre("Shoujo Ai"),
+        Genre("Shounen"),
+        Genre("Shounen Ai"),
+        Genre("Slice of life"),
+        Genre("Smut"),
+        Genre("Soft Yaoi"),
+        Genre("Soft Yuri"),
+        Genre("Sports"),
+        Genre("Supernatural"),
+        Genre("Tragedy"),
+        Genre("VnComic"),
+        Genre("Webtoon"),
+    )
 
     // taken from readcomiconline.org/search
-    fun getComicsGenreList() =
-        listOf(
-            Genre("Action"),
-            Genre("Adventure"),
-            Genre("Anthology"),
-            Genre("Anthropomorphic"),
-            Genre("Biography"),
-            Genre("Children"),
-            Genre("Comedy"),
-            Genre("Crime"),
-            Genre("Drama"),
-            Genre("Family"),
-            Genre("Fantasy"),
-            Genre("Fighting"),
-            Genre("GraphicNovels"),
-            Genre("Historical"),
-            Genre("Horror"),
-            Genre("LeadingLadies"),
-            Genre("LGBTQ"),
-            Genre("Literature"),
-            Genre("Manga"),
-            Genre("MartialArts"),
-            Genre("Mature"),
-            Genre("Military"),
-            Genre("Mystery"),
-            Genre("Mythology"),
-            Genre("Personal"),
-            Genre("Political"),
-            Genre("Post-Apocalyptic"),
-            Genre("Psychological"),
-            Genre("Pulp"),
-            Genre("Religious"),
-            Genre("Robots"),
-            Genre("Romance"),
-            Genre("Schoollife"),
-            Genre("Sci-Fi"),
-            Genre("Sliceoflife"),
-            Genre("Sport"),
-            Genre("Spy"),
-            Genre("Superhero"),
-            Genre("Supernatural"),
-            Genre("Suspense"),
-            Genre("Thriller"),
-            Genre("Vampires"),
-            Genre("VideoGames"),
-            Genre("War"),
-            Genre("Western"),
-            Genre("Zombies"),
-        )
+    fun getComicsGenreList() = listOf(
+        Genre("Action"),
+        Genre("Adventure"),
+        Genre("Anthology"),
+        Genre("Anthropomorphic"),
+        Genre("Biography"),
+        Genre("Children"),
+        Genre("Comedy"),
+        Genre("Crime"),
+        Genre("Drama"),
+        Genre("Family"),
+        Genre("Fantasy"),
+        Genre("Fighting"),
+        Genre("GraphicNovels"),
+        Genre("Historical"),
+        Genre("Horror"),
+        Genre("LeadingLadies"),
+        Genre("LGBTQ"),
+        Genre("Literature"),
+        Genre("Manga"),
+        Genre("MartialArts"),
+        Genre("Mature"),
+        Genre("Military"),
+        Genre("Mystery"),
+        Genre("Mythology"),
+        Genre("Personal"),
+        Genre("Political"),
+        Genre("Post-Apocalyptic"),
+        Genre("Psychological"),
+        Genre("Pulp"),
+        Genre("Religious"),
+        Genre("Robots"),
+        Genre("Romance"),
+        Genre("Schoollife"),
+        Genre("Sci-Fi"),
+        Genre("Sliceoflife"),
+        Genre("Sport"),
+        Genre("Spy"),
+        Genre("Superhero"),
+        Genre("Supernatural"),
+        Genre("Suspense"),
+        Genre("Thriller"),
+        Genre("Vampires"),
+        Genre("VideoGames"),
+        Genre("War"),
+        Genre("Western"),
+        Genre("Zombies"),
+    )
 }

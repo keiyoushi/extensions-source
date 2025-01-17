@@ -76,18 +76,17 @@ class TsuminoUtils {
         fun getCollection(
             document: Document,
             selector: String,
-        ): List<SChapter> =
-            document
-                .select(selector)
-                .map { element ->
-                    SChapter.create().apply {
-                        val chapterNum = element.select("span")[0].text()
-                        val chapterName = element.select("span")[1].text()
-                        name = "$chapterNum. $chapterName"
-                        scanlator = getGroups(document)
-                        url = element.attr("href").replace("entry", "Read/Index")
-                    }
-                }.reversed()
+        ): List<SChapter> = document
+            .select(selector)
+            .map { element ->
+                SChapter.create().apply {
+                    val chapterNum = element.select("span")[0].text()
+                    val chapterName = element.select("span")[1].text()
+                    name = "$chapterNum. $chapterName"
+                    scanlator = getGroups(document)
+                    url = element.attr("href").replace("entry", "Read/Index")
+                }
+            }.reversed()
 
         fun getChapter(
             document: Document,

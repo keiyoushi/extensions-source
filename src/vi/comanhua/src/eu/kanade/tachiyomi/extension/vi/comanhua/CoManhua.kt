@@ -29,12 +29,11 @@ class CoManhua :
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
         }
 
-    private fun parseChapterDate(dateString: String): Long =
-        try {
-            coManhuaDateFormat.parse(dateString)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun parseChapterDate(dateString: String): Long = try {
+        coManhuaDateFormat.parse(dateString)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
+    }
 
     override val client: OkHttpClient =
         super.client
@@ -52,14 +51,13 @@ class CoManhua :
 
     override fun popularMangaSelector() = "div.pda.manga-list div.manga-item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("div.manga-title a")?.let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("abs:href"))
-            }
-            element.selectFirst("div.manga-image img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("div.manga-title a")?.let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("abs:href"))
         }
+        element.selectFirst("div.manga-image img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
+    }
 
     override fun popularMangaNextPageSelector() = "div.list-pagination a:last-child:not(.active)"
 
@@ -107,25 +105,23 @@ class CoManhua :
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1.manga-title")!!.text()
-            description = document.selectFirst("div.manga-des")?.text()
-            status = document.selectFirst(".md-title:has(.fa-rss) ~ .md-content")?.text().toStatus()
-            genre = document.select("div.tags span a")?.joinToString { it.text() }
-            document.selectFirst("div.manga-img img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1.manga-title")!!.text()
+        description = document.selectFirst("div.manga-des")?.text()
+        status = document.selectFirst(".md-title:has(.fa-rss) ~ .md-content")?.text().toStatus()
+        genre = document.select("div.tags span a")?.joinToString { it.text() }
+        document.selectFirst("div.manga-img img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
+    }
 
     override fun chapterListSelector() = ".manga .manga-chapters ul li:has(.chapter-name)"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            element.selectFirst("div.chapter-name a")?.let {
-                name = it.text()
-                setUrlWithoutDomain(it.attr("abs:href"))
-            }
-            date_upload = element.selectFirst("> :nth-child(3):last-child")?.text()?.let { parseChapterDate(it) } ?: 0L
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.selectFirst("div.chapter-name a")?.let {
+            name = it.text()
+            setUrlWithoutDomain(it.attr("abs:href"))
         }
+        date_upload = element.selectFirst("> :nth-child(3):last-child")?.text()?.let { parseChapterDate(it) } ?: 0L
+    }
 
     override val pageListSelector = ".chapters img.img-chap-item"
 
@@ -144,12 +140,11 @@ class CoManhua :
         fun toUriPart(): String = state.filter { it.state }.joinToString(",") { it.value }
     }
 
-    override fun getStatusList(): List<Pair<String?, String>> =
-        listOf(
-            Pair("Tất cả", "Tất cả"),
-            Pair("continue", "Đang tiến hành"),
-            Pair("completed", "Đã hoàn thành"),
-        )
+    override fun getStatusList(): List<Pair<String?, String>> = listOf(
+        Pair("Tất cả", "Tất cả"),
+        Pair("continue", "Đang tiến hành"),
+        Pair("completed", "Đã hoàn thành"),
+    )
 
     override val genresSelector = "div.filter-content div.filter-tags div.tags-checkbox div.tags label"
 

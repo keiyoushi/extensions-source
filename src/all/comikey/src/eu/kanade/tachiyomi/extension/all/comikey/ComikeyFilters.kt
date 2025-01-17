@@ -5,32 +5,29 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 
-fun getComikeyFilters(intl: Intl) =
-    FilterList(
-        Filter.Header(intl["search_use_two_characters"]),
-        Filter.Separator(),
-        SortFilter(intl["sort_by"], getSortOptions(intl)),
-        TypeFilter(intl["filter_by"], getTypeOptions(intl)),
-    )
+fun getComikeyFilters(intl: Intl) = FilterList(
+    Filter.Header(intl["search_use_two_characters"]),
+    Filter.Separator(),
+    SortFilter(intl["sort_by"], getSortOptions(intl)),
+    TypeFilter(intl["filter_by"], getTypeOptions(intl)),
+)
 
-fun getSortOptions(intl: Intl) =
-    arrayOf(
-        intl["sort_last_updated"],
-        intl["sort_name"],
-        intl["sort_popularity"],
-        intl["sort_chapter_count"],
-    )
+fun getSortOptions(intl: Intl) = arrayOf(
+    intl["sort_last_updated"],
+    intl["sort_name"],
+    intl["sort_popularity"],
+    intl["sort_chapter_count"],
+)
 
-fun getTypeOptions(intl: Intl) =
-    arrayOf(
-        intl["all"],
-        intl["manga"],
-        intl["webtoon"],
-        intl["new"],
-        intl["complete"],
-        intl["exclusive"],
-        intl["simulpub"],
-    )
+fun getTypeOptions(intl: Intl) = arrayOf(
+    intl["all"],
+    intl["manga"],
+    intl["webtoon"],
+    intl["new"],
+    intl["complete"],
+    intl["exclusive"],
+    intl["simulpub"],
+)
 
 interface UriFilter {
     fun addToUri(builder: HttpUrl.Builder)

@@ -6,18 +6,17 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class ToomicsFactory : SourceFactory {
-    override fun createSources(): List<Source> =
-        listOf(
-            ToomicsEnglish(),
-            ToomicsSimplifiedChinese(),
-            ToomicsTraditionalChinese(),
-            ToomicsSpanishLA(),
-            ToomicsSpanish(),
-            ToomicsItalian(),
-            ToomicsGerman(),
-            ToomicsFrench(),
-            ToomicsPortuguese(),
-        )
+    override fun createSources(): List<Source> = listOf(
+        ToomicsEnglish(),
+        ToomicsSimplifiedChinese(),
+        ToomicsTraditionalChinese(),
+        ToomicsSpanishLA(),
+        ToomicsSpanish(),
+        ToomicsItalian(),
+        ToomicsGerman(),
+        ToomicsFrench(),
+        ToomicsPortuguese(),
+    )
 }
 
 class ToomicsEnglish : ToomicsGlobal("en", SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH))

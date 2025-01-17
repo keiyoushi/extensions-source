@@ -88,12 +88,11 @@ class Manwa :
 
     override fun popularMangaSelector(): String = "#rankList_2 > a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.attr("title")
-            url = element.attr("href")
-            thumbnail_url = element.select("img").attr("data-original")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.attr("title")
+        url = element.attr("href")
+        thumbnail_url = element.select("img").attr("data-original")
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/getUpdate?page=${page * 15 - 15}&date=", headers)
@@ -158,34 +157,31 @@ class Manwa :
 
     override fun searchMangaSelector(): String = "ul.book-list > li"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("p.book-list-info-title")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            thumbnail_url = element.selectFirst("img")!!.attr("data-original")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("p.book-list-info-title")!!.text()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        thumbnail_url = element.selectFirst("img")!!.attr("data-original")
+    }
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.selectFirst(".detail-main-info-title")!!.text()
-            thumbnail_url = document.selectFirst("div.detail-main-cover > img")!!.attr("data-original")
-            author = document.select("p.detail-main-info-author > span.detail-main-info-value > a").text()
-            artist = author
-            genre = document.select("div.detail-main-info-class > a.info-tag").eachText().joinToString(", ")
-            description = document.selectFirst("#detail > p.detail-desc")!!.text()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst(".detail-main-info-title")!!.text()
+        thumbnail_url = document.selectFirst("div.detail-main-cover > img")!!.attr("data-original")
+        author = document.select("p.detail-main-info-author > span.detail-main-info-value > a").text()
+        artist = author
+        genre = document.select("div.detail-main-info-class > a.info-tag").eachText().joinToString(", ")
+        description = document.selectFirst("#detail > p.detail-desc")!!.text()
+    }
 
     // Chapters
 
     override fun chapterListSelector(): String = "ul#detail-list-select > li > a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            url = element.attr("href")
-            name = element.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        url = element.attr("href")
+        name = element.text()
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
@@ -198,23 +194,22 @@ class Manwa :
     override fun pageListRequest(chapter: SChapter): Request =
         GET("$baseUrl${chapter.url}?img_host=${preferences.getString(IMAGE_HOST_KEY, IMAGE_HOST_ENTRY_VALUES[0])}", headers)
 
-    override fun pageListParse(document: Document): List<Page> =
-        mutableListOf<Page>().apply {
-            val cssQuery = "#cp_img > div.img-content > img[data-r-src]"
-            val elements = document.select(cssQuery)
-            if (elements.size == 3) {
-                val darkReader = document.selectFirst("#cp_img p")
-                if (darkReader != null) {
-                    if (preferences.getBoolean(AUTO_CLEAR_COOKIE_KEY, false)) {
-                        clearCookies()
-                    }
-                    throw Exception(darkReader.text())
+    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
+        val cssQuery = "#cp_img > div.img-content > img[data-r-src]"
+        val elements = document.select(cssQuery)
+        if (elements.size == 3) {
+            val darkReader = document.selectFirst("#cp_img p")
+            if (darkReader != null) {
+                if (preferences.getBoolean(AUTO_CLEAR_COOKIE_KEY, false)) {
+                    clearCookies()
                 }
-            }
-            elements.forEachIndexed { index, it ->
-                add(Page(index, "", it.attr("data-r-src")))
+                throw Exception(darkReader.text())
             }
         }
+        elements.forEachIndexed { index, it ->
+            add(Page(index, "", it.attr("data-r-src")))
+        }
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

@@ -162,10 +162,9 @@ class Dmzj :
         return "$baseUrl/info/$cid.html"
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            throw UnsupportedOperationException()
-        }
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        throw UnsupportedOperationException()
+    }
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 

@@ -66,38 +66,37 @@ val POPULAR_QUERY =
         """.trimMargin()
     }
 
-fun buildPopularQueryPayload(page: Int) =
-    buildJsonObject {
-        put("operationName", "getProjects")
-        put("query", POPULAR_QUERY)
-        putJsonObject("variables") {
-            putJsonObject("filters") {
-                putJsonObject("childExpressions") {
-                    putJsonObject("filters") {
-                        put("field", "Project.id")
-                        put("op", "GE")
-                        putJsonArray("values") {
-                            add("1")
-                        }
+fun buildPopularQueryPayload(page: Int) = buildJsonObject {
+    put("operationName", "getProjects")
+    put("query", POPULAR_QUERY)
+    putJsonObject("variables") {
+        putJsonObject("filters") {
+            putJsonObject("childExpressions") {
+                putJsonObject("filters") {
+                    put("field", "Project.id")
+                    put("op", "GE")
+                    putJsonArray("values") {
+                        add("1")
                     }
-                    put("operator", "AND")
                 }
                 put("operator", "AND")
             }
-            putJsonObject("orders") {
-                putJsonArray("orders") {
-                    addJsonObject {
-                        put("field", "Project.views")
-                        put("or", "DESC")
-                    }
+            put("operator", "AND")
+        }
+        putJsonObject("orders") {
+            putJsonArray("orders") {
+                addJsonObject {
+                    put("field", "Project.views")
+                    put("or", "DESC")
                 }
             }
-            putJsonObject("pagination") {
-                put("limit", 12)
-                put("page", page)
-            }
+        }
+        putJsonObject("pagination") {
+            put("limit", 12)
+            put("page", page)
         }
     }
+}
 
 fun buildSearchQueryPayload(
     query: String,
@@ -159,14 +158,13 @@ val MANGA_DETAILS_QUERY =
         """.trimMargin()
     }
 
-fun buildMangaDetailsQueryPayload(id: Int) =
-    buildJsonObject {
-        put("operationName", "project")
-        put("query", MANGA_DETAILS_QUERY)
-        putJsonObject("variables") {
-            put("id", id)
-        }
+fun buildMangaDetailsQueryPayload(id: Int) = buildJsonObject {
+    put("operationName", "project")
+    put("query", MANGA_DETAILS_QUERY)
+    putJsonObject("variables") {
+        put("id", id)
     }
+}
 
 val PAGES_QUERY =
     buildQuery {
@@ -202,11 +200,10 @@ val PAGES_QUERY =
         """.trimMargin()
     }
 
-fun buildPagesQueryPayload(id: String) =
-    buildJsonObject {
-        put("operationName", "getChapter")
-        put("query", PAGES_QUERY)
-        putJsonObject("variables") {
-            put("id", id)
-        }
+fun buildPagesQueryPayload(id: String) = buildJsonObject {
+    put("operationName", "getChapter")
+    put("query", PAGES_QUERY)
+    putJsonObject("variables") {
+        put("id", id)
     }
+}

@@ -41,21 +41,19 @@ class LeerCapitulo : ParsedHttpSource() {
 
     private val notRateLimitClient = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaSelector(): String = ".hot-manga > .thumbnails > a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            title = element.attr("title")
-            thumbnail_url = element.selectFirst("img")!!.imgAttr()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        title = element.attr("title")
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -128,63 +126,58 @@ class LeerCapitulo : ParsedHttpSource() {
 
     override fun searchMangaSelector(): String = "div.cate-manga div.mainpage-manga"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("div.media-body a")!!.attr("href"))
-            title = element.selectFirst("div.media-body a")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.imgAttr()
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("div.media-body a")!!.attr("href"))
+        title = element.selectFirst("div.media-body a")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
+    }
 
     override fun searchMangaNextPageSelector(): String = "ul.pagination > li.active + li"
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Los filtros serán ignorados si se realiza una búsqueda por texto."),
-            Filter.Header("Los filtros no se pueden combinar  entre ellos."),
-            GenreFilter(),
-            AlphabeticFilter(),
-            StatusFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Los filtros serán ignorados si se realiza una búsqueda por texto."),
+        Filter.Header("Los filtros no se pueden combinar  entre ellos."),
+        GenreFilter(),
+        AlphabeticFilter(),
+        StatusFilter(),
+    )
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun latestUpdatesSelector(): String = ".mainpage-manga"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst(".media-body > a")!!.attr("abs:href"))
-            title = element.selectFirst("h4")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.imgAttr()
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst(".media-body > a")!!.attr("abs:href"))
+        title = element.selectFirst("h4")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
+    }
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
 
-            val altNames = document.selectFirst(".description-update > span:contains(Títulos Alternativos:) + :matchText")?.text()
-            val desc = document.selectFirst("#example2")!!.text()
-            description =
-                when (altNames) {
-                    null -> desc
-                    else -> "$desc\n\nAlt name(s): $altNames"
-                }
+        val altNames = document.selectFirst(".description-update > span:contains(Títulos Alternativos:) + :matchText")?.text()
+        val desc = document.selectFirst("#example2")!!.text()
+        description =
+            when (altNames) {
+                null -> desc
+                else -> "$desc\n\nAlt name(s): $altNames"
+            }
 
-            genre = document.select(".description-update a[href^='/genre/']").joinToString { it.text() }
-            status = document.selectFirst(".description-update > span:contains(Estado:) + :matchText")!!.text().toStatus()
-            thumbnail_url = document.selectFirst(".cover-detail > img")!!.imgAttr()
-        }
+        genre = document.select(".description-update a[href^='/genre/']").joinToString { it.text() }
+        status = document.selectFirst(".description-update > span:contains(Estado:) + :matchText")!!.text().toStatus()
+        thumbnail_url = document.selectFirst(".cover-detail > img")!!.imgAttr()
+    }
 
     override fun chapterListSelector(): String = ".chapter-list > ul > li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            with(element.selectFirst("a.xanh")!!) {
-                setUrlWithoutDomain(attr("abs:href"))
-                name = text()
-            }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        with(element.selectFirst("a.xanh")!!) {
+            setUrlWithoutDomain(attr("abs:href"))
+            name = text()
         }
+    }
 
     private var cachedScriptUrl: String? = null
 
@@ -253,23 +246,21 @@ class LeerCapitulo : ParsedHttpSource() {
         }
     }
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        else -> attr("abs:src")
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    private fun String.toStatus() =
-        when (this) {
-            "Ongoing" -> SManga.ONGOING
-            "Paused" -> SManga.ON_HIATUS
-            "Completed" -> SManga.COMPLETED
-            "Cancelled" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toStatus() = when (this) {
+        "Ongoing" -> SManga.ONGOING
+        "Paused" -> SManga.ON_HIATUS
+        "Completed" -> SManga.COMPLETED
+        "Cancelled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     @Serializable
     class MangaDto(

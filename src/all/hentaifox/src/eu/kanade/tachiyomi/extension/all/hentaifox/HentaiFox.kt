@@ -39,50 +39,47 @@ class HentaiFox(
         )
     private val langCode = languages.firstOrNull { lang -> lang.first == mangaLang }?.second
 
-    override fun Element.mangaLang() =
-        attr("data-languages")
-            .split(' ')
-            .let {
-                when {
-                    it.contains(langCode) -> mangaLang
-                    // search result doesn't have "data-languages" which will return a list with 1 blank element
-                    it.size > 1 || (it.size == 1 && it.first().isNotBlank()) -> "other"
-                    // if we don't know which language to filter then set to mangaLang to not filter at all
-                    else -> mangaLang
-                }
+    override fun Element.mangaLang() = attr("data-languages")
+        .split(' ')
+        .let {
+            when {
+                it.contains(langCode) -> mangaLang
+                // search result doesn't have "data-languages" which will return a list with 1 blank element
+                it.size > 1 || (it.size == 1 && it.first().isNotBlank()) -> "other"
+                // if we don't know which language to filter then set to mangaLang to not filter at all
+                else -> mangaLang
             }
+        }
 
     override val useShortTitlePreference = false
 
     override fun Element.mangaTitle(selector: String): String? = mangaFullTitle(selector)
 
-    override fun Element.getInfo(tag: String): String =
-        select("ul.${tag.lowercase()} a")
-            .joinToString {
-                val name = it.ownText()
-                if (tag.contains(regexTag)) {
-                    genres[name] =
-                        it
-                            .attr("href")
-                            .removeSuffix("/")
-                            .substringAfterLast('/')
-                }
-                listOf(
-                    name,
+    override fun Element.getInfo(tag: String): String = select("ul.${tag.lowercase()} a")
+        .joinToString {
+            val name = it.ownText()
+            if (tag.contains(regexTag)) {
+                genres[name] =
                     it
-                        .select(".split_tag")
-                        .text()
-                        .removePrefix("| ")
-                        .trim(),
-                ).filter { s -> s.isNotBlank() }
-                    .joinToString()
+                        .attr("href")
+                        .removeSuffix("/")
+                        .substringAfterLast('/')
             }
+            listOf(
+                name,
+                it
+                    .select(".split_tag")
+                    .text()
+                    .removePrefix("| ")
+                    .trim(),
+            ).filter { s -> s.isNotBlank() }
+                .joinToString()
+        }
 
-    override fun Element.getTime(): Long =
-        selectFirst(".pages:contains(Posted:)")
-            ?.ownText()
-            ?.removePrefix("Posted: ")
-            .toDate(simpleDateFormat)
+    override fun Element.getTime(): Long = selectFirst(".pages:contains(Posted:)")
+        ?.ownText()
+        ?.removePrefix("Posted: ")
+        .toDate(simpleDateFormat)
 
     override fun HttpUrl.Builder.addPageUri(page: Int): HttpUrl.Builder {
         val url = toString()
@@ -118,12 +115,11 @@ class HentaiFox(
     override val favoritePath = "includes/user_favs.php"
     override val pagesRequest = "includes/thumbs_loader.php"
 
-    override fun getFilterList() =
-        FilterList(
-            listOf(
-                Filter.Header("HINT: Use double quote (\") for exact match"),
-            ) + super.getFilterList().list,
-        )
+    override fun getFilterList() = FilterList(
+        listOf(
+            Filter.Header("HINT: Use double quote (\") for exact match"),
+        ) + super.getFilterList().list,
+    )
 
     private val sidebarPath = "includes/sidebar.php"
 

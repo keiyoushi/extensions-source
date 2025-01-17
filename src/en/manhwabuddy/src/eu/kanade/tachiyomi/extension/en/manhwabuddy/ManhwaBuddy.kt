@@ -21,24 +21,22 @@ class ManhwaBuddy : ParsedHttpSource() {
     override val name = "ManhwaBuddy"
     override val supportsLatest = true
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            name = element.selectFirst(".chapter-name")!!.text()
-            date_upload =
-                element
-                    .selectFirst(".ct-update")
-                    ?.text()
-                    .orEmpty()
-                    .let { parseDate(it) }
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        name = element.selectFirst(".chapter-name")!!.text()
+        date_upload =
+            element
+                .selectFirst(".ct-update")
+                ?.text()
+                .orEmpty()
+                .let { parseDate(it) }
+    }
 
-    private fun parseDate(dateStr: String): Long =
-        try {
-            dateFormat.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseDate(dateStr: String): Long = try {
+        dateFormat.parse(dateStr)!!.time
+    } catch (_: ParseException) {
+        0L
+    }
 
     private val dateFormat by lazy {
         SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH)
@@ -48,12 +46,11 @@ class ManhwaBuddy : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst("h4")!!.text()
-            thumbnail_url = element.selectFirst("img")?.attr("src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("h4")!!.text()
+        thumbnail_url = element.selectFirst("img")?.attr("src")
+    }
 
     override fun latestUpdatesNextPageSelector(): String = ".next"
 
@@ -61,33 +58,30 @@ class ManhwaBuddy : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = ".latest-list .latest-item"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val info = document.selectFirst(".main-info-right")!!
-            author = info.selectFirst("li:contains(Author) a")?.text()
-            status =
-                when (info.selectFirst("li:contains(Status) span")?.text()) {
-                    "Ongoing" -> SManga.ONGOING
-                    "Complete" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            artist = info.selectFirst("li:contains(Artist) a")?.text()
-            genre = info.select("li:contains(Genres) a").joinToString { it.text() }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val info = document.selectFirst(".main-info-right")!!
+        author = info.selectFirst("li:contains(Author) a")?.text()
+        status =
+            when (info.selectFirst("li:contains(Status) span")?.text()) {
+                "Ongoing" -> SManga.ONGOING
+                "Complete" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        artist = info.selectFirst("li:contains(Artist) a")?.text()
+        genre = info.select("li:contains(Genres) a").joinToString { it.text() }
 
-            description = document.select(".short-desc-content p").joinToString("\n") { it.text() }
-        }
+        description = document.select(".short-desc-content p").joinToString("\n") { it.text() }
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(".loading").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".loading").mapIndexed { i, element ->
+        Page(i, imageUrl = element.attr("abs:src"))
+    }
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst("h3")!!.text()
-            thumbnail_url = element.selectFirst("img")?.attr("src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("h3")!!.text()
+        thumbnail_url = element.selectFirst("img")?.attr("src")
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -95,12 +89,11 @@ class ManhwaBuddy : ParsedHttpSource() {
 
     override fun popularMangaSelector(): String = ".item-move"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst("a")!!.attr("title")
-            thumbnail_url = element.selectFirst("img")?.attr("src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("a")!!.attr("title")
+        thumbnail_url = element.selectFirst("img")?.attr("src")
+    }
 
     override fun searchMangaNextPageSelector(): String = ".next"
 
@@ -143,12 +136,11 @@ class ManhwaBuddy : ParsedHttpSource() {
     override fun searchMangaSelector(): String = ".latest-list .latest-item"
 
     // Filter
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Filter does not work with text search, reset it before filter"),
-            Filter.Separator(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Filter does not work with text search, reset it before filter"),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
     // copy([...document.querySelectorAll(".nav-pc-list li a")].map((e) => `Pair("${e.textContent.trim()}", "${e.href.split("/").filter(Boolean).pop()}"),`).join("\n"))
     private class GenreFilter :

@@ -51,11 +51,10 @@ class ComicFuz : HttpSource() {
                 return@addNetworkInterceptor response
             }.build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .set("Origin", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList())
 
@@ -233,8 +232,7 @@ class ComicFuz : HttpSource() {
 
     private inline fun <reified T> Response.parseAs(): T = ProtoBuf.decodeFromByteArray(body.bytes())
 
-    private inline fun <reified T : Any> T.toRequestBody(): RequestBody =
-        ProtoBuf
-            .encodeToByteArray(this)
-            .toRequestBody("application/protobuf".toMediaType())
+    private inline fun <reified T : Any> T.toRequestBody(): RequestBody = ProtoBuf
+        .encodeToByteArray(this)
+        .toRequestBody("application/protobuf".toMediaType())
 }

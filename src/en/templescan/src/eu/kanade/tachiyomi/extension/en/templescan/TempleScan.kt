@@ -29,11 +29,10 @@ class TempleScan : HttpSource() {
 
     override val versionId = 3
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("referer", "$baseUrl/")
-            .set("origin", baseUrl)
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("referer", "$baseUrl/")
+        .set("origin", baseUrl)
 
     override val client =
         network.cloudflareClient
@@ -232,10 +231,9 @@ class TempleScan : HttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.asJsoup().select("img[alt^=chapter]").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.absUrl("src"))
-        }
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("img[alt^=chapter]").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.absUrl("src"))
+    }
 
     private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 

@@ -35,10 +35,9 @@ abstract class Makaru(
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val url = apiUrlBuilder("Series", page, MAX_MANGA_RESULTS).build()
@@ -111,41 +110,40 @@ abstract class Makaru(
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val document = response.asJsoup()
-            val (_, data) = getMangaFeed(document)
-            val mangaContent = data.feed.entry.first { it.category.all { c -> c.term != "Chapter" } }
-            val mangaInfo = Jsoup.parseBodyFragment(mangaContent.content.t, baseUrl)
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        val (_, data) = getMangaFeed(document)
+        val mangaContent = data.feed.entry.first { it.category.all { c -> c.term != "Chapter" } }
+        val mangaInfo = Jsoup.parseBodyFragment(mangaContent.content.t, baseUrl)
 
-            title = document.selectFirst("h1[itemprop=headline]")!!.text()
-            genre = document.select("div.genres a").joinToString { it.text() }
-            thumbnail_url = document.selectFirst("div.thumbnail img")?.imgAttr()
-            author = mangaInfo.select("span.komikus").joinToString { it.text() }
-            status =
-                when (document.selectFirst("div.info-single-list ul li:contains(Status)")?.ownText()) {
-                    "Ongoing" -> SManga.ONGOING
-                    "Completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-
-            val descriptionBuilder = StringBuilder()
-            val descriptionElement = mangaInfo.selectFirst("div.sinopsis")
-
-            for (entry in mangaInfo.select("li.info_x")) {
-                when (entry.selectFirst("strong")!!.text().removeSuffix(":")) {
-                    "Artist" -> artist = entry.ownText()
-                    else -> descriptionBuilder.appendLine(entry.text())
-                }
+        title = document.selectFirst("h1[itemprop=headline]")!!.text()
+        genre = document.select("div.genres a").joinToString { it.text() }
+        thumbnail_url = document.selectFirst("div.thumbnail img")?.imgAttr()
+        author = mangaInfo.select("span.komikus").joinToString { it.text() }
+        status =
+            when (document.selectFirst("div.info-single-list ul li:contains(Status)")?.ownText()) {
+                "Ongoing" -> SManga.ONGOING
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
             }
 
-            if (descriptionElement != null) {
-                descriptionBuilder.appendLine()
-                descriptionBuilder.append(descriptionElement.textWithNewlines())
-            }
+        val descriptionBuilder = StringBuilder()
+        val descriptionElement = mangaInfo.selectFirst("div.sinopsis")
 
-            description = descriptionBuilder.toString().trim()
+        for (entry in mangaInfo.select("li.info_x")) {
+            when (entry.selectFirst("strong")!!.text().removeSuffix(":")) {
+                "Artist" -> artist = entry.ownText()
+                else -> descriptionBuilder.appendLine(entry.text())
+            }
         }
+
+        if (descriptionElement != null) {
+            descriptionBuilder.appendLine()
+            descriptionBuilder.append(descriptionElement.textWithNewlines())
+        }
+
+        description = descriptionBuilder.toString().trim()
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -195,12 +193,11 @@ abstract class Makaru(
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            LabelFilter("Status", getStatusList()),
-            LabelFilter("Type", getTypeList()),
-            LabelFilter("Genre", getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        LabelFilter("Status", getStatusList()),
+        LabelFilter("Type", getTypeList()),
+        LabelFilter("Genre", getGenreList()),
+    )
 
     private val hexEscapeRegex = Regex("""\\x([0-9A-Za-z]{2})""")
 

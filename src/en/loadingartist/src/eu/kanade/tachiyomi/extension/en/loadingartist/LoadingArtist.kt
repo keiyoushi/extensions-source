@@ -41,22 +41,21 @@ class LoadingArtist : HttpSource() {
 
     // Popular Section (list of comic archives by year)
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(
-            MangasPage(
-                listOf(
-                    SManga.create().apply {
-                        title = "Loading Artist"
-                        setUrlWithoutDomain("/archives")
-                        thumbnail_url = "$baseUrl/img/bg/logo-text_dark.png"
-                        artist = "Loading Artist"
-                        author = artist
-                        status = SManga.ONGOING
-                    },
-                ),
-                false,
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
+        MangasPage(
+            listOf(
+                SManga.create().apply {
+                    title = "Loading Artist"
+                    setUrlWithoutDomain("/archives")
+                    thumbnail_url = "$baseUrl/img/bg/logo-text_dark.png"
+                    artist = "Loading Artist"
+                    author = artist
+                    status = SManga.ONGOING
+                },
             ),
-        )
+            false,
+        ),
+    )
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -86,13 +85,12 @@ class LoadingArtist : HttpSource() {
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        client
-            .newCall(GET("$baseUrl/search.json", headers))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response)
-            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client
+        .newCall(GET("$baseUrl/search.json", headers))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response)
+        }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val comics = json.decodeFromString<List<Comic>>(response.body.string())

@@ -59,46 +59,42 @@ class MangaKuro : ParsedHttpSource() {
         filters: FilterList,
     ): Request = mangaRequestBuilder("search", page, "keyword", query)
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst(".mg_name a")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst(".mg_name a")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+    }
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            author = document.selectFirst("div:has(.lnr-user) + .info_value")?.text()
-            status =
-                document
-                    .selectFirst("div:has(.lnr-leaf) + .info_value")
-                    ?.text()
-                    .orEmpty()
-                    .let { parseStatus(it) }
-            description = document.selectFirst(".detail_reviewContent")?.text()
-            thumbnail_url = document.selectFirst(".detail_avatar img")?.absUrl("src")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        author = document.selectFirst("div:has(.lnr-user) + .info_value")?.text()
+        status =
+            document
+                .selectFirst("div:has(.lnr-leaf) + .info_value")
+                ?.text()
+                .orEmpty()
+                .let { parseStatus(it) }
+        description = document.selectFirst(".detail_reviewContent")?.text()
+        thumbnail_url = document.selectFirst(".detail_avatar img")?.absUrl("src")
+    }
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("進行中") -> SManga.ONGOING
-            // status.contains("Completed") -> SManga.COMPLETED / I only found OnGoing Titles and i have no idea what string they would use
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("進行中") -> SManga.ONGOING
+        // status.contains("Completed") -> SManga.COMPLETED / I only found OnGoing Titles and i have no idea what string they would use
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = ".chapter_box .item"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val a = element.selectFirst("a")!!
-            setUrlWithoutDomain(a.absUrl("href"))
-            name = a.text().substringAfter("# ")
-            // date_upload = no real date in web
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val a = element.selectFirst("a")!!
+        setUrlWithoutDomain(a.absUrl("href"))
+        name = a.text().substringAfter("# ")
+        // date_upload = no real date in web
+    }
 
     private val chapterIDRegex = """CHAPTER_ID = (\d+);""".toRegex()
     private val imageRegex = """src=\\"([^"]+)\\""".toRegex()

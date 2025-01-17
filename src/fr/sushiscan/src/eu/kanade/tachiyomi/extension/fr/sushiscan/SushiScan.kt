@@ -50,25 +50,23 @@ class SushiScan :
             ).rateLimit(2, 1, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .addCustomUA()
-            .set("Referer", "$baseUrl$mangaUrlDirectory")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .addCustomUA()
+        .set("Referer", "$baseUrl$mangaUrlDirectory")
 
     override val altNamePrefix = "Nom alternatif : "
     override val seriesAuthorSelector = ".infotable tr:contains(Auteur) td:last-child"
     override val seriesStatusSelector = ".infotable tr:contains(Statut) td:last-child"
 
-    override fun String?.parseStatus(): Int =
-        when {
-            this == null -> SManga.UNKNOWN
-            this.contains("En Cours", ignoreCase = true) -> SManga.ONGOING
-            this.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
-            this.contains("Abandonné", ignoreCase = true) -> SManga.CANCELLED
-            this.contains("En Pause", ignoreCase = true) -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    override fun String?.parseStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
+        this.contains("En Cours", ignoreCase = true) -> SManga.ONGOING
+        this.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
+        this.contains("Abandonné", ignoreCase = true) -> SManga.CANCELLED
+        this.contains("En Pause", ignoreCase = true) -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -85,10 +83,9 @@ class SushiScan :
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            status = document.select(seriesStatusSelector).text().parseStatus()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        status = document.select(seriesStatusSelector).text().parseStatus()
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val scriptContent =

@@ -43,12 +43,11 @@ class VoyceMe : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Accept", ACCEPT_ALL)
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Accept", ACCEPT_ALL)
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val payload =
@@ -163,12 +162,11 @@ class VoyceMe : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response
-            .parseAs<VoyceMeSeriesResponse>()
-            .data.series
-            .first()
-            .toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response
+        .parseAs<VoyceMeSeriesResponse>()
+        .data.series
+        .first()
+        .toSManga()
 
     override fun chapterListRequest(manga: SManga): Request {
         val comicSlug =
@@ -232,13 +230,12 @@ class VoyceMe : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    override fun pageListParse(response: Response): List<Page> =
-        response
-            .parseAs<VoyceMeChapterImagesResponse>()
-            .data.images
-            .mapIndexed { i, page ->
-                Page(i, baseUrl, STATIC_URL + page.image)
-            }
+    override fun pageListParse(response: Response): List<Page> = response
+        .parseAs<VoyceMeChapterImagesResponse>()
+        .data.images
+        .mapIndexed { i, page ->
+            Page(i, baseUrl, STATIC_URL + page.image)
+        }
 
     override fun imageUrlParse(response: Response): String = ""
 
@@ -252,10 +249,9 @@ class VoyceMe : HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(it.body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(it.body.string())
+    }
 
     companion object {
         private const val ACCEPT_ALL = "*/*"

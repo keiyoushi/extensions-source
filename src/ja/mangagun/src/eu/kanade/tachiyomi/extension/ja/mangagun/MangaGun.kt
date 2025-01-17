@@ -23,11 +23,10 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
     private fun mangaRequest(
         sortBy: String,
         page: Int,
-    ): Request =
-        GET(
-            "$baseUrl/manga-list.html?listType=pagination&page=$page&artist=&author=&group=&m_status=&name=&genre=&ungenre=&magazine=&sort=$sortBy&sort_type=DESC",
-            headers,
-        )
+    ): Request = GET(
+        "$baseUrl/manga-list.html?listType=pagination&page=$page&artist=&author=&group=&m_status=&name=&genre=&ungenre=&magazine=&sort=$sortBy&sort_type=DESC",
+        headers,
+    )
 
     override fun popularMangaRequest(page: Int): Request = mangaRequest("views", page)
 

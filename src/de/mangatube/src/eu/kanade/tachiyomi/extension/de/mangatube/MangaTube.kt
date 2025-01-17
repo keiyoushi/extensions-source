@@ -53,13 +53,12 @@ class MangaTube : ParsedHttpSource() {
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        client
-            .newCall(popularMangaRequest(page))
-            .asObservableSuccess()
-            .map { response ->
-                parseMangaFromJson(response, page < 96)
-            }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client
+        .newCall(popularMangaRequest(page))
+        .asObservableSuccess()
+        .map { response ->
+            parseMangaFromJson(response, page < 96)
+        }
 
     override fun popularMangaRequest(page: Int): Request {
         val rbodyContent =
@@ -106,14 +105,13 @@ class MangaTube : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = "div#series-updates div.series-update:not([style\$=none])"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("a.series-name").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.select("div.cover img").attr("abs:data-original")
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("a.series-name").let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        thumbnail_url = element.select("div.cover img").attr("abs:data-original")
+    }
 
     override fun latestUpdatesNextPageSelector() = "button#load-more-updates"
 
@@ -138,50 +136,47 @@ class MangaTube : ParsedHttpSource() {
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            document.select("div.series-detailed div.row").first()!!.let { info ->
-                author = info.select("li:contains(Autor:) a").joinToString { it.text() }
-                artist = info.select("li:contains(Artist:) a").joinToString { it.text() }
-                status =
-                    info
-                        .select("li:contains(Offiziel)")
-                        .firstOrNull()
-                        ?.ownText()
-                        .toStatus()
-                genre = info.select(".genre-list a").joinToString { it.text() }
-                thumbnail_url = info.select("img").attr("abs:data-original")
-            }
-            description = document.select("div.series-footer h4 ~ p").joinToString("\n\n") { it.text() }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.select("div.series-detailed div.row").first()!!.let { info ->
+            author = info.select("li:contains(Autor:) a").joinToString { it.text() }
+            artist = info.select("li:contains(Artist:) a").joinToString { it.text() }
+            status =
+                info
+                    .select("li:contains(Offiziel)")
+                    .firstOrNull()
+                    ?.ownText()
+                    .toStatus()
+            genre = info.select(".genre-list a").joinToString { it.text() }
+            thumbnail_url = info.select("img").attr("abs:data-original")
         }
+        description = document.select("div.series-footer h4 ~ p").joinToString("\n\n") { it.text() }
+    }
 
-    private fun String?.toStatus() =
-        when {
-            this == null -> SManga.UNKNOWN
-            this.contains("laufend", ignoreCase = true) -> SManga.ONGOING
-            this.contains("abgeschlossen", ignoreCase = true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String?.toStatus() = when {
+        this == null -> SManga.UNKNOWN
+        this.contains("laufend", ignoreCase = true) -> SManga.ONGOING
+        this.contains("abgeschlossen", ignoreCase = true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // Chapters
 
     override fun chapterListSelector() = "ul.chapter-list li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            element.select("a[title]").let {
-                name = "${it.select("b").text()} ${it.select("span:not(.btn)").joinToString(" ") { span -> span.text() }}"
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            date_upload =
-                element.select("p.chapter-date").text().let {
-                    try {
-                        SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(it.substringAfter(" "))?.time ?: 0L
-                    } catch (_: ParseException) {
-                        0L
-                    }
-                }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.select("a[title]").let {
+            name = "${it.select("b").text()} ${it.select("span:not(.btn)").joinToString(" ") { span -> span.text() }}"
+            setUrlWithoutDomain(it.attr("href"))
         }
+        date_upload =
+            element.select("p.chapter-date").text().let {
+                try {
+                    SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(it.substringAfter(" "))?.time ?: 0L
+                } catch (_: ParseException) {
+                    0L
+                }
+            }
+    }
 
     // Pages
 

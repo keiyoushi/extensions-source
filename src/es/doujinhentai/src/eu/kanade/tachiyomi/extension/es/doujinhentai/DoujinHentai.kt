@@ -65,12 +65,11 @@ class DoujinHentai :
 
     override fun searchMangaSelector() = "div.c-tabs-item__content > div.c-tabs-item__content, ${popularMangaSelector()}"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        if (element.hasAttr("href")) {
-            popularMangaFromElement(element) // genre search results
-        } else {
-            super.searchMangaFromElement(element) // query search results
-        }
+    override fun searchMangaFromElement(element: Element): SManga = if (element.hasAttr("href")) {
+        popularMangaFromElement(element) // genre search results
+    } else {
+        super.searchMangaFromElement(element) // query search results
+    }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
@@ -78,11 +77,10 @@ class DoujinHentai :
 
     override val pageListParseSelector = "div#all > img.img-responsive"
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Solo funciona si la consulta está en blanco"),
-            GenreSelectFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Solo funciona si la consulta está en blanco"),
+        GenreSelectFilter(),
+    )
 
     class GenreSelectFilter :
         UriPartFilter(

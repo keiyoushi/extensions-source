@@ -80,10 +80,9 @@ class Japscan :
 
     private fun chapterListPref() = preferences.getString(SHOW_SPOILER_CHAPTERS, "hide")
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("referer", "$baseUrl/")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas/?sort=popular&p=$page", headers)
@@ -185,21 +184,19 @@ class Japscan :
         return MangasPage(manga, hasNextPage)
     }
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url = element.select("img").attr("abs:src")
-            element.select("p a").let {
-                title = it.text()
-                url = it.attr("href")
-            }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.select("img").attr("abs:src")
+        element.select("p a").let {
+            title = it.text()
+            url = it.attr("href")
         }
+    }
 
-    private fun searchMangaFromJson(jsonObj: JsonObject): SManga =
-        SManga.create().apply {
-            url = jsonObj["url"]!!.jsonPrimitive.content
-            title = jsonObj["name"]!!.jsonPrimitive.content
-            thumbnail_url = baseUrl + jsonObj["image"]!!.jsonPrimitive.content
-        }
+    private fun searchMangaFromJson(jsonObj: JsonObject): SManga = SManga.create().apply {
+        url = jsonObj["url"]!!.jsonPrimitive.content
+        title = jsonObj["name"]!!.jsonPrimitive.content
+        thumbnail_url = baseUrl + jsonObj["image"]!!.jsonPrimitive.content
+    }
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("#main .card-body")!!
@@ -226,20 +223,18 @@ class Japscan :
         return manga
     }
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("En Cours") -> SManga.ONGOING
-            status.contains("Terminé") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("En Cours") -> SManga.ONGOING
+        status.contains("Terminé") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
-    override fun chapterListSelector() =
-        "#chapters_list > div.collapse > div.chapters_list" +
-            if (chapterListPref() == "hide") {
-                ":not(:has(.badge:contains(SPOILER),.badge:contains(RAW),.badge:contains(VUS)))"
-            } else {
-                ""
-            }
+    override fun chapterListSelector() = "#chapters_list > div.collapse > div.chapters_list" +
+        if (chapterListPref() == "hide") {
+            ":not(:has(.badge:contains(SPOILER),.badge:contains(RAW),.badge:contains(VUS)))"
+        } else {
+            ""
+        }
     // JapScan sometimes uploads some "spoiler preview" chapters, containing 2 or 3 untranslated pictures taken from a raw. Sometimes they also upload full RAWs/US versions and replace them with a translation as soon as available.
     // Those have a span.badge "SPOILER" or "RAW". The additional pseudo selector makes sure to exclude these from the chapter list.
 
@@ -259,10 +254,9 @@ class Japscan :
         return chapter
     }
 
-    private fun parseChapterDate(date: String) =
-        runCatching {
-            dateFormat.parse(date)!!.time
-        }.getOrDefault(0L)
+    private fun parseChapterDate(date: String) = runCatching {
+        dateFormat.parse(date)!!.time
+    }.getOrDefault(0L)
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {

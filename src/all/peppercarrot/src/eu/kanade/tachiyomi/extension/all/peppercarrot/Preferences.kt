@@ -19,16 +19,15 @@ import org.jsoup.select.Evaluator
 import uy.kohesive.injekt.injectLazy
 import java.util.Locale
 
-fun getPreferences(context: Context) =
-    arrayOf(
-        SwitchPreferenceCompat(context).apply {
-            key = HI_RES_PREF
-            title = "High resolution images"
-            summary = "Changes will not be applied to images that are already cached or downloaded " +
-                "until you clear the chapter cache or delete the chapter download."
-            setDefaultValue(false)
-        },
-    )
+fun getPreferences(context: Context) = arrayOf(
+    SwitchPreferenceCompat(context).apply {
+        key = HI_RES_PREF
+        title = "High resolution images"
+        summary = "Changes will not be applied to images that are already cached or downloaded " +
+            "until you clear the chapter cache or delete the chapter download."
+        setDefaultValue(false)
+    },
+)
 
 val SharedPreferences.isHiRes get() = getBoolean(HI_RES_PREF, false)
 val SharedPreferences.lastUpdated get() = getLong(LAST_UPDATED_PREF, 0)

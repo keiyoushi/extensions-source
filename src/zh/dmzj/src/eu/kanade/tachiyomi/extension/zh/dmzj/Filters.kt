@@ -3,17 +3,16 @@ package eu.kanade.tachiyomi.extension.zh.dmzj
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilterListInternal(isMultiGenre: Boolean) =
-    FilterList(
-        RankingGroup(),
-        Filter.Separator(),
-        Filter.Header("分类筛选（查看排行榜、搜索文本时无效）"),
-        if (isMultiGenre) GenreGroup() else GenreSelectFilter(),
-        StatusFilter(),
-        ReaderFilter(),
-        RegionFilter(),
-        SortFilter(),
-    )
+fun getFilterListInternal(isMultiGenre: Boolean) = FilterList(
+    RankingGroup(),
+    Filter.Separator(),
+    Filter.Header("分类筛选（查看排行榜、搜索文本时无效）"),
+    if (isMultiGenre) GenreGroup() else GenreSelectFilter(),
+    StatusFilter(),
+    ReaderFilter(),
+    RegionFilter(),
+    SortFilter(),
+)
 
 // region Ranking filters
 

@@ -75,14 +75,13 @@ open class Mangahub : ParsedHttpSource() {
 
     private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.$userAgentRandomizer",
-            )
-            add("Referer", baseUrl)
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.$userAgentRandomizer",
+        )
+        add("Referer", baseUrl)
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         val pageStr = if (page > 1) "?page=$page" else ""
@@ -143,11 +142,10 @@ open class Mangahub : ParsedHttpSource() {
         return manga
     }
 
-    private fun parseStatus(elements: String): Int =
-        when {
-            elements.contains("Переведена") or elements.contains("Выпуск завершен") -> SManga.COMPLETED
-            else -> SManga.ONGOING
-        }
+    private fun parseStatus(elements: String): Int = when {
+        elements.contains("Переведена") or elements.contains("Выпуск завершен") -> SManga.COMPLETED
+        else -> SManga.ONGOING
+    }
 
     override fun chapterListSelector() = "div.py-2.px-3"
 

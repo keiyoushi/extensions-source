@@ -47,12 +47,11 @@ open class Viz(
             .rateLimit(1, 1, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", USER_AGENT)
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/$servicePath")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", USER_AGENT)
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/$servicePath")
 
     private val json: Json by injectLazy()
 
@@ -90,15 +89,14 @@ open class Viz(
 
     override fun popularMangaSelector(): String = "section.section_chapters div.o_sort_container div.o_sortable > a.o_chapters-link"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("div.pad-x-rg")!!.text()
-            thumbnail_url =
-                element
-                    .selectFirst("div.pos-r img.disp-bl")
-                    ?.attr("data-original")
-            url = element.attr("href")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("div.pad-x-rg")!!.text()
+        thumbnail_url =
+            element
+                .selectFirst("div.pos-r img.disp-bl")
+                ?.attr("data-original")
+        url = element.attr("href")
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -232,33 +230,31 @@ open class Viz(
             .sortedByDescending { it.chapter_number }
     }
 
-    override fun chapterListSelector() =
-        "section.section_chapters div.o_sortable > a.o_chapter-container, " +
-            "section.section_chapters div.o_sortable div.o_chapter-vol-container tr.o_chapter a.o_chapter-container"
+    override fun chapterListSelector() = "section.section_chapters div.o_sortable > a.o_chapter-container, " +
+        "section.section_chapters div.o_sortable div.o_chapter-vol-container tr.o_chapter a.o_chapter-container"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val isVolume = element.select("div:nth-child(1) table").first() == null
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val isVolume = element.select("div:nth-child(1) table").first() == null
 
-            if (isVolume) {
-                name = element.text()
-            } else {
-                val leftSide = element.select("div:nth-child(1) table").first()!!
-                val rightSide = element.select("div:nth-child(2) table").first()!!
+        if (isVolume) {
+            name = element.text()
+        } else {
+            val leftSide = element.select("div:nth-child(1) table").first()!!
+            val rightSide = element.select("div:nth-child(2) table").first()!!
 
-                name = rightSide.select("td").first()!!.text()
-                date_upload =
-                    leftSide
-                        .select("td[align=right]")
-                        .first()!!
-                        .text()
-                        .toDate()
-            }
-
-            chapter_number = name.substringAfter("Ch. ").toFloatOrNull() ?: -1F
-            scanlator = "VIZ Media"
-            url = element.attr("data-target-url")
+            name = rightSide.select("td").first()!!.text()
+            date_upload =
+                leftSide
+                    .select("td[align=right]")
+                    .first()!!
+                    .text()
+                    .toDate()
         }
+
+        chapter_number = name.substringAfter("Ch. ").toFloatOrNull() ?: -1F
+        scanlator = "VIZ Media"
+        url = element.attr("data-target-url")
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val mangaUrl =
@@ -414,14 +410,12 @@ open class Viz(
         throw IOException(authCheckResponse.archiveInfo?.error?.message ?: AUTH_CHECK_FAILED)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(it.body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(it.body.string())
+    }
 
-    private fun String.toDate(): Long =
-        runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
+    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private const val ACCEPT_JSON = "application/json, text/javascript, */*; q=0.01"

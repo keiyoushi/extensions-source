@@ -25,15 +25,14 @@ data class ChapterDto(
     @SerialName("chapter_slug") private val slug: String,
     @SerialName("date_gmt") private val date: String,
 ) {
-    fun toSChapter(mangaSlug: String) =
-        SChapter.create().apply {
-            name = this@ChapterDto.name
-            url = "$mangaSlug/$slug"
-            date_upload =
-                try {
-                    dateFormat.parse(date)?.time ?: 0
-                } catch (e: ParseException) {
-                    0
-                }
-        }
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        name = this@ChapterDto.name
+        url = "$mangaSlug/$slug"
+        date_upload =
+            try {
+                dateFormat.parse(date)?.time ?: 0
+            } catch (e: ParseException) {
+                0
+            }
+    }
 }

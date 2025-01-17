@@ -161,14 +161,13 @@ open class TaddyInk(
 
     override fun imageUrlParse(response: Response) = ""
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            GenreFilter(),
-            Filter.Separator(),
-            Filter.Header("Filter by the creator or tags:"),
-            CreatorFilter(),
-            TagFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        GenreFilter(),
+        Filter.Separator(),
+        Filter.Header("Filter by the creator or tags:"),
+        CreatorFilter(),
+        TagFilter(),
+    )
 
     class CreatorFilter : AdvSearchEntryFilter("Creator")
 

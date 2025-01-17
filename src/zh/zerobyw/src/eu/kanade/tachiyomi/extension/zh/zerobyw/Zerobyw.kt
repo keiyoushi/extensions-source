@@ -46,10 +46,9 @@ class Zerobyw :
 
     private val isCi = System.getenv("CI") == "true"
 
-    override fun headersBuilder() =
-        Headers
-            .Builder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
+    override fun headersBuilder() = Headers
+        .Builder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
 
     // Popular
     // Website does not provide popular manga, this is actually latest manga
@@ -60,13 +59,12 @@ class Zerobyw :
 
     override fun popularMangaSelector(): String = "div.uk-card"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            val link = element.selectFirst("p.mt5 > a")!!
-            title = getTitle(link.text())
-            setUrlWithoutDomain(link.absUrl("href"))
-            thumbnail_url = element.selectFirst("img")!!.attr("src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        val link = element.selectFirst("p.mt5 > a")!!
+        title = getTitle(link.text())
+        setUrlWithoutDomain(link.absUrl("href"))
+        thumbnail_url = element.selectFirst("img")!!.attr("src")
+    }
 
     // Latest
 
@@ -113,39 +111,36 @@ class Zerobyw :
 
     override fun searchMangaSelector(): String = "a.uk-card, div.uk-card"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = getTitle(element.selectFirst("p.mt5")!!.text())
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            thumbnail_url = element.selectFirst("img")!!.attr("src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = getTitle(element.selectFirst("p.mt5")!!.text())
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        thumbnail_url = element.selectFirst("img")!!.attr("src")
+    }
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = getTitle(document.selectFirst("h3.uk-heading-line")!!.text())
-            thumbnail_url = document.selectFirst("div.uk-width-medium > img")!!.absUrl("src")
-            author = document.selectFirst("div.cl > a.uk-label")!!.text().substring(3)
-            genre = document.select("div.cl > a.uk-label, div.cl > span.uk-label").eachText().joinToString(", ")
-            description = document.select("li > div.uk-alert").html().replace("<br>", "")
-            status =
-                when (document.select("div.cl > span.uk-label").last()!!.text()) {
-                    "连载中" -> SManga.ONGOING
-                    "已完结" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = getTitle(document.selectFirst("h3.uk-heading-line")!!.text())
+        thumbnail_url = document.selectFirst("div.uk-width-medium > img")!!.absUrl("src")
+        author = document.selectFirst("div.cl > a.uk-label")!!.text().substring(3)
+        genre = document.select("div.cl > a.uk-label, div.cl > span.uk-label").eachText().joinToString(", ")
+        description = document.select("li > div.uk-alert").html().replace("<br>", "")
+        status =
+            when (document.select("div.cl > span.uk-label").last()!!.text()) {
+                "连载中" -> SManga.ONGOING
+                "已完结" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     // Chapters
 
     override fun chapterListSelector(): String = "div.uk-grid-collapse > div.muludiv"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a.uk-button-default")!!.absUrl("href"))
-            name = element.selectFirst("a.uk-button-default")!!.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a.uk-button-default")!!.absUrl("href"))
+        name = element.selectFirst("a.uk-button-default")!!.text()
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).asReversed()
 
@@ -171,14 +166,13 @@ class Zerobyw :
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("如果使用文本搜索"),
-            Filter.Header("过滤器将被忽略"),
-            CategoryFilter(),
-            StatusFilter(),
-            AttributeFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("如果使用文本搜索"),
+        Filter.Header("过滤器将被忽略"),
+        CategoryFilter(),
+        StatusFilter(),
+        AttributeFilter(),
+    )
 
     private class CategoryFilter :
         UriSelectFilterPath(

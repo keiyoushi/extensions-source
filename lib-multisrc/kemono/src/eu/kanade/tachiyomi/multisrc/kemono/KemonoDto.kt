@@ -31,27 +31,25 @@ class KemonoCreatorDto(
             else -> (updated.double * 1000).toLong()
         }
 
-    fun toSManga(imgCdnUrl: String) =
-        SManga.create().apply {
-            url = "/$service/user/$id" // should be /server/ for Discord but will be filtered anyway
-            title = name
-            author = service.serviceName()
-            thumbnail_url = "$imgCdnUrl/icons/$service/$id"
-            description = Kemono.PROMPT
-            initialized = true
-        }
+    fun toSManga(imgCdnUrl: String) = SManga.create().apply {
+        url = "/$service/user/$id" // should be /server/ for Discord but will be filtered anyway
+        title = name
+        author = service.serviceName()
+        thumbnail_url = "$imgCdnUrl/icons/$service/$id"
+        description = Kemono.PROMPT
+        initialized = true
+    }
 
     companion object {
         private val dateFormat by lazy { getApiDateFormat() }
 
-        fun String.serviceName() =
-            when (this) {
-                "fanbox" -> "Pixiv Fanbox"
-                "subscribestar" -> "SubscribeStar"
-                "dlsite" -> "DLsite"
-                "onlyfans" -> "OnlyFans"
-                else -> replaceFirstChar { it.uppercase() }
-            }
+        fun String.serviceName() = when (this) {
+            "fanbox" -> "Pixiv Fanbox"
+            "subscribestar" -> "SubscribeStar"
+            "dlsite" -> "DLsite"
+            "onlyfans" -> "OnlyFans"
+            else -> replaceFirstChar { it.uppercase() }
+        }
     }
 }
 
@@ -85,24 +83,23 @@ class KemonoPostDto(
             }.distinctBy { it.path }
                 .map { it.toString() }
 
-    fun toSChapter() =
-        SChapter.create().apply {
-            val postDate = dateFormat.parse(edited ?: published ?: added)
+    fun toSChapter() = SChapter.create().apply {
+        val postDate = dateFormat.parse(edited ?: published ?: added)
 
-            url = "/$service/user/$user/post/$id"
-            date_upload = postDate?.time ?: 0
-            name =
-                title.ifBlank {
-                    val postDateString =
-                        when {
-                            postDate != null && postDate.time != 0L -> chapterNameDateFormat.format(postDate)
-                            else -> "unknown date"
-                        }
+        url = "/$service/user/$user/post/$id"
+        date_upload = postDate?.time ?: 0
+        name =
+            title.ifBlank {
+                val postDateString =
+                    when {
+                        postDate != null && postDate.time != 0L -> chapterNameDateFormat.format(postDate)
+                        else -> "unknown date"
+                    }
 
-                    "Post from $postDateString"
-                }
-            chapter_number = -2f
-        }
+                "Post from $postDateString"
+            }
+        chapter_number = -2f
+    }
 
     companion object {
         val dateFormat by lazy { getApiDateFormat() }

@@ -29,13 +29,12 @@ class Mihentai : MangaThemesia("Mihentai", "https://mihentai.com", "all") {
             ),
         )
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            listOf(
-                StatusFilter(),
-                TypeFilter(),
-                OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
-                GenreListFilter(intl["genre_filter_title"], getGenreList()),
-            ),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        listOf(
+            StatusFilter(),
+            TypeFilter(),
+            OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
+            GenreListFilter(intl["genre_filter_title"], getGenreList()),
+        ),
+    )
 }

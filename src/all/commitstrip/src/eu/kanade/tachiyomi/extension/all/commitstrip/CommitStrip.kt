@@ -28,31 +28,30 @@ abstract class CommitStrip(
 
     // Helper
 
-    private fun createManga(year: Int): SManga =
-        SManga.create().apply {
-            url = "$baseUrl/$siteLang/$year"
-            title = "$name ($year)"
-            thumbnail_url =
-                when (lang) {
-                    "en" -> LOGO_EN
-                    "fr" -> LOGO_FR
-                    else -> LOGO_EN
-                }
-            author =
-                when (lang) {
-                    "en" -> AUTHOR_EN
-                    "fr" -> AUTHOR_FR
-                    else -> AUTHOR_EN
-                }
-            artist = ARTIST
-            status = if (year != currentYear) SManga.COMPLETED else SManga.ONGOING
-            description =
-                when (lang) {
-                    "en" -> "$SUMMARY_EN $NOTE $year"
-                    "fr" -> "$SUMMARY_FR $NOTE $year"
-                    else -> "$SUMMARY_EN $NOTE $year"
-                }
-        }
+    private fun createManga(year: Int): SManga = SManga.create().apply {
+        url = "$baseUrl/$siteLang/$year"
+        title = "$name ($year)"
+        thumbnail_url =
+            when (lang) {
+                "en" -> LOGO_EN
+                "fr" -> LOGO_FR
+                else -> LOGO_EN
+            }
+        author =
+            when (lang) {
+                "en" -> AUTHOR_EN
+                "fr" -> AUTHOR_FR
+                else -> AUTHOR_EN
+            }
+        artist = ARTIST
+        status = if (year != currentYear) SManga.COMPLETED else SManga.ONGOING
+        description =
+            when (lang) {
+                "en" -> "$SUMMARY_EN $NOTE $year"
+                "fr" -> "$SUMMARY_FR $NOTE $year"
+                else -> "$SUMMARY_EN $NOTE $year"
+            }
+    }
 
     // Popular
 
@@ -69,19 +68,17 @@ abstract class CommitStrip(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        fetchPopularManga(1).map { mangaList ->
-            mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
-        }
+    ): Observable<MangasPage> = fetchPopularManga(1).map { mangaList ->
+        mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
+    }
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga) =
-        Observable.just(
-            manga.apply {
-                initialized = true
-            },
-        )!!
+    override fun fetchMangaDetails(manga: SManga) = Observable.just(
+        manga.apply {
+            initialized = true
+        },
+    )!!
 
     // Open in WebView
 
@@ -114,14 +111,13 @@ abstract class CommitStrip(
     private fun chapterListRequest(
         manga: SManga,
         page: Int,
-    ): Response =
-        client.newCall(GET("${manga.url}/page/$page", headers)).execute().run {
-            if (!isSuccessful) {
-                close()
-                throw Exception("HTTP error $code")
-            }
-            this
+    ): Response = client.newCall(GET("${manga.url}/page/$page", headers)).execute().run {
+        if (!isSuccessful) {
+            close()
+            throw Exception("HTTP error $code")
         }
+        this
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> =
         super.chapterListParse(response).reversed().distinct().mapIndexed { index, chapter ->
@@ -130,29 +126,27 @@ abstract class CommitStrip(
 
     override fun chapterListSelector() = ".excerpt a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            url = "$baseUrl/$siteLang" + element.attr("href").substringAfter(baseUrl)
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        url = "$baseUrl/$siteLang" + element.attr("href").substringAfter(baseUrl)
 
-            // get the chapter date from the url
-            val date = Regex("\\d{4}\\/\\d{2}\\/\\d{2}").find(url)?.value
-            val parsedDate = date?.let { SimpleDateFormat("yyyy/MM/dd", Locale.US).parse(it) }
-            date_upload = parsedDate?.time ?: 0L
+        // get the chapter date from the url
+        val date = Regex("\\d{4}\\/\\d{2}\\/\\d{2}").find(url)?.value
+        val parsedDate = date?.let { SimpleDateFormat("yyyy/MM/dd", Locale.US).parse(it) }
+        date_upload = parsedDate?.time ?: 0L
 
-            name = element.select("span").text()
-        }
+        name = element.select("span").text()
+    }
 
     // Page
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client
-            .newCall(GET(chapter.url, headers))
-            .execute()
-            .run {
-                asJsoup().select(".entry-content p img").attr("src")
-            }.let {
-                Observable.just(listOf(Page(0, "", it)))
-            }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client
+        .newCall(GET(chapter.url, headers))
+        .execute()
+        .run {
+            asJsoup().select(".entry-content p img").attr("src")
+        }.let {
+            Observable.just(listOf(Page(0, "", it)))
+        }
 
     // Unsupported
 

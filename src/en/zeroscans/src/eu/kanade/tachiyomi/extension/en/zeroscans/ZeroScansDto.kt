@@ -76,13 +76,12 @@ data class ZeroScansCoverDto(
     val vertical: String? = null,
     val full: String? = null,
 ) {
-    fun getHighResCover(): String =
-        when {
-            !this.full.isNullOrBlank() -> this.full
-            !this.horizontal.isNullOrBlank() -> this.horizontal.replace("-horizontal", "-full")
-            !this.vertical.isNullOrBlank() -> this.vertical.replace("-vertical", "-full")
-            else -> ""
-        }
+    fun getHighResCover(): String = when {
+        !this.full.isNullOrBlank() -> this.full
+        !this.horizontal.isNullOrBlank() -> this.horizontal.replace("-horizontal", "-full")
+        !this.vertical.isNullOrBlank() -> this.vertical.replace("-vertical", "-full")
+        else -> ""
+    }
 }
 
 @Serializable

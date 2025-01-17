@@ -27,12 +27,11 @@ class Comicabc : ParsedHttpSource() {
 
     override fun popularMangaSelector(): String = ".container .row a.comicpic_col6"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("li.nowraphide")!!.text()
-            setUrlWithoutDomain(element.attr("abs:href"))
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("li.nowraphide")!!.text()
+        setUrlWithoutDomain(element.attr("abs:href"))
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+    }
 
     // Latest
 
@@ -60,33 +59,31 @@ class Comicabc : ParsedHttpSource() {
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.selectFirst(".item_content_box .h2")!!.text()
-            thumbnail_url = document.selectFirst(".item-cover img")!!.attr("abs:src")
-            author = document.selectFirst(".item_content_box .item-info-author")?.text()?.substringAfter("作者: ")
-            artist = author
-            description = document.selectFirst(".item_content_box .item_info_detail")?.text()
-            status =
-                when (document.selectFirst(".item_content_box .item-info-status")?.text()) {
-                    "連載中" -> SManga.ONGOING
-                    "已完結" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst(".item_content_box .h2")!!.text()
+        thumbnail_url = document.selectFirst(".item-cover img")!!.attr("abs:src")
+        author = document.selectFirst(".item_content_box .item-info-author")?.text()?.substringAfter("作者: ")
+        artist = author
+        description = document.selectFirst(".item_content_box .item_info_detail")?.text()
+        status =
+            when (document.selectFirst(".item_content_box .item-info-status")?.text()) {
+                "連載中" -> SManga.ONGOING
+                "已完結" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     // Chapters
 
     override fun chapterListSelector(): String = "#chapters a"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val onclick = element.attr("onclick")
-            val comicId = onclick.substringAfter("cview('").substringBefore("-")
-            val chapterId = onclick.substringAfter("-").substringBefore(".html")
-            url = "/online/new-$comicId.html?ch=$chapterId"
-            name = element.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val onclick = element.attr("onclick")
+        val comicId = onclick.substringAfter("cview('").substringBefore("-")
+        val chapterId = onclick.substringAfter("-").substringBefore(".html")
+        url = "/online/new-$comicId.html?ch=$chapterId"
+        name = element.text()
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 

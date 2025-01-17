@@ -56,41 +56,40 @@ class Manhwa18 : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.isBlank()) {
-            client
-                .newCall(filterMangaRequest(page, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    popularMangaParse(response)
-                }
-        } else {
-            if (page == 1 || searchMangaCache == null) {
-                searchMangaCache =
-                    super
-                        .fetchSearchManga(page, query, filters)
-                        .toBlocking()
-                        .last()
+    ): Observable<MangasPage> = if (query.isBlank()) {
+        client
+            .newCall(filterMangaRequest(page, filters))
+            .asObservableSuccess()
+            .map { response ->
+                popularMangaParse(response)
             }
-
-            // Handling a large manga list
-            Observable
-                .just(searchMangaCache!!)
-                .map { mangaPage ->
-                    val mangas = mangaPage.mangas
-
-                    val fromIndex = (page - 1) * MAX_MANGA_PER_PAGE
-                    val toIndex = page * MAX_MANGA_PER_PAGE
-
-                    MangasPage(
-                        mangas.subList(
-                            min(fromIndex, mangas.size - 1),
-                            min(toIndex, mangas.size),
-                        ),
-                        hasNextPage = toIndex < mangas.size,
-                    )
-                }
+    } else {
+        if (page == 1 || searchMangaCache == null) {
+            searchMangaCache =
+                super
+                    .fetchSearchManga(page, query, filters)
+                    .toBlocking()
+                    .last()
         }
+
+        // Handling a large manga list
+        Observable
+            .just(searchMangaCache!!)
+            .map { mangaPage ->
+                val mangas = mangaPage.mangas
+
+                val fromIndex = (page - 1) * MAX_MANGA_PER_PAGE
+                val toIndex = page * MAX_MANGA_PER_PAGE
+
+                MangasPage(
+                    mangas.subList(
+                        min(fromIndex, mangas.size - 1),
+                        min(toIndex, mangas.size),
+                    ),
+                    hasNextPage = toIndex < mangas.size,
+                )
+            }
+    }
 
     private fun filterMangaRequest(
         page: Int,
@@ -208,9 +207,8 @@ class Manhwa18 : HttpSource() {
     // unused
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun String.parseDate(): Long =
-        runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
+    private fun String.parseDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private val DATE_FORMATTER by lazy {

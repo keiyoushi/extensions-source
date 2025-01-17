@@ -25,7 +25,6 @@ class MugiManga :
 
     override val useNewChapterEndpoint = true
 
-    override fun pageListParse(document: Document): List<Page> =
-        super.pageListParse(document).takeIf { it.isNotEmpty() }
-            ?: throw Exception("WebView'de oturum açmanız gerekebilir")
+    override fun pageListParse(document: Document): List<Page> = super.pageListParse(document).takeIf { it.isNotEmpty() }
+        ?: throw Exception("WebView'de oturum açmanız gerekebilir")
 }

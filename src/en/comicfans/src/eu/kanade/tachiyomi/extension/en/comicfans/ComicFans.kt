@@ -40,18 +40,16 @@ class ComicFans : HttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
-    private fun apiHeadersBuilder() =
-        headersBuilder().apply {
-            add("Accept", "*/*")
-            add("Host", apiUrl.toHttpUrl().host)
-            add("Origin", baseUrl)
-            add("site-domain", "www.${baseUrl.toHttpUrl().host}")
-        }
+    private fun apiHeadersBuilder() = headersBuilder().apply {
+        add("Accept", "*/*")
+        add("Host", apiUrl.toHttpUrl().host)
+        add("Origin", baseUrl)
+        add("site-domain", "www.${baseUrl.toHttpUrl().host}")
+    }
 
     private val apiHeaders by lazy { apiHeadersBuilder().build() }
 
@@ -148,14 +146,13 @@ class ComicFans : HttpSource() {
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Text search ignores filters"),
-            Filter.Separator(),
-            GenreFilter(),
-            LastUpdateFilter(),
-            StatusFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Text search ignores filters"),
+        Filter.Separator(),
+        GenreFilter(),
+        LastUpdateFilter(),
+        StatusFilter(),
+    )
 
     // =========================== Manga Details ============================
 
@@ -185,13 +182,12 @@ class ComicFans : HttpSource() {
         return GET("$apiUrl/chapters/page?sortDirection=ASC&bookId=$bookId&pageNumber=1&pageSize=9999", apiHeaders)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response
-            .parseAs<ListDataDto<ChapterDto>>()
-            .data.list
-            .mapIndexed { index, chapterDto ->
-                chapterDto.toSChapter(index + 1)
-            }.reversed()
+    override fun chapterListParse(response: Response): List<SChapter> = response
+        .parseAs<ListDataDto<ChapterDto>>()
+        .data.list
+        .mapIndexed { index, chapterDto ->
+            chapterDto.toSChapter(index + 1)
+        }.reversed()
 
     // =============================== Pages ================================
 
@@ -204,10 +200,9 @@ class ComicFans : HttpSource() {
         return GET("$apiUrl/chapters/$chapterId", apiHeaders)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<DataDto<PageDataDto>>().data.comicImageList.map {
-            Page(it.sortNum, imageUrl = "$cdnUrl/${it.imageUrl}")
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<DataDto<PageDataDto>>().data.comicImageList.map {
+        Page(it.sortNum, imageUrl = "$cdnUrl/${it.imageUrl}")
+    }
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders =

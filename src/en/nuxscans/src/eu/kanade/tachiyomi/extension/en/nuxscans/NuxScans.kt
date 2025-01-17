@@ -60,12 +60,11 @@ class NuxScans : ParsedHttpSource() {
     // manga details
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl2 + manga.url)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            thumbnail_url = document.select("a#unclick").attr("href")
-            title = document.select("div.post-header .post-tag").text()
-            description = document.select(".gridnux .column1 .text-overflow").joinToString("\n") { it.text() }
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        thumbnail_url = document.select("a#unclick").attr("href")
+        title = document.select("div.post-header .post-tag").text()
+        description = document.select(".gridnux .column1 .text-overflow").joinToString("\n") { it.text() }
+    }
 
     // chapters
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl2 + manga.url)

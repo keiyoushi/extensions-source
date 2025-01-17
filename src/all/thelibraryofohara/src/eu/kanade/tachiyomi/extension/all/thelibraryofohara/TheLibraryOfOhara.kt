@@ -35,28 +35,27 @@ class TheLibraryOfOhara(
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     // only show entries which contain pictures only.
-    override fun popularMangaSelector() =
-        when (lang) {
-            "en" ->
-                "#categories-7 ul li.cat-item-589813936," + // Chapter Secrets
-                    "#categories-7 ul li.cat-item-607613583, " + // Chapter Secrets Specials
-                    "#categories-7 ul li.cat-item-43972770, " + // Charlotte Family
-                    "#categories-7 ul li.cat-item-9363667, " + // Complete Guides
-                    "#categories-7 ul li.cat-item-634609261, " + // Parody Chapter
-                    "#categories-7 ul li.cat-item-699200615, " + // Return to the Reverie
-                    "#categories-7 ul li.cat-item-139757, " + // SBS
-                    "#categories-7 ul li.cat-item-22695, " + // Timeline
-                    "#categories-7 ul li.cat-item-648324575" // Vivre Card Databook
-            "id" ->
-                "#categories-7 ul li.cat-item-702404482," +
-                    " #categories-7 ul li.cat-item-699200615" // Chapter Secrets Bahasa Indonesia, Return to the Reverie
-            "fr" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
-            "ar" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
-            "it" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
-            else ->
-                "#categories-7 ul li.cat-item-693784776," +
-                    " #categories-7 ul li.cat-item-699200615" // Chapter Secrets (multilingual), Return to the Reverie
-        }
+    override fun popularMangaSelector() = when (lang) {
+        "en" ->
+            "#categories-7 ul li.cat-item-589813936," + // Chapter Secrets
+                "#categories-7 ul li.cat-item-607613583, " + // Chapter Secrets Specials
+                "#categories-7 ul li.cat-item-43972770, " + // Charlotte Family
+                "#categories-7 ul li.cat-item-9363667, " + // Complete Guides
+                "#categories-7 ul li.cat-item-634609261, " + // Parody Chapter
+                "#categories-7 ul li.cat-item-699200615, " + // Return to the Reverie
+                "#categories-7 ul li.cat-item-139757, " + // SBS
+                "#categories-7 ul li.cat-item-22695, " + // Timeline
+                "#categories-7 ul li.cat-item-648324575" // Vivre Card Databook
+        "id" ->
+            "#categories-7 ul li.cat-item-702404482," +
+                " #categories-7 ul li.cat-item-699200615" // Chapter Secrets Bahasa Indonesia, Return to the Reverie
+        "fr" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
+        "ar" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
+        "it" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
+        else ->
+            "#categories-7 ul li.cat-item-693784776," +
+                " #categories-7 ul li.cat-item-699200615" // Chapter Secrets (multilingual), Return to the Reverie
+    }
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -81,13 +80,12 @@ class TheLibraryOfOhara(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        client
-            .newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
+    ): Observable<MangasPage> = client
+        .newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map { response ->
+            searchMangaParse(response, query)
+        }
 
     override fun searchMangaRequest(
         page: Int,
@@ -98,13 +96,12 @@ class TheLibraryOfOhara(
     private fun searchMangaParse(
         response: Response,
         query: String,
-    ): MangasPage =
-        MangasPage(
-            popularMangaParse(response).mangas.filter {
-                it.title.contains(query, ignoreCase = true)
-            },
-            false,
-        )
+    ): MangasPage = MangasPage(
+        popularMangaParse(response).mangas.filter {
+            it.title.contains(query, ignoreCase = true)
+        },
+        false,
+    )
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 

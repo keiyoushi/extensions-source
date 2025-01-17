@@ -31,11 +31,10 @@ class Atsumaru : HttpSource() {
             .rateLimit(2)
             .build()
 
-    private fun apiHeadersBuilder() =
-        headersBuilder().apply {
-            add("Accept", "*/*")
-            add("Host", apiUrl.toHttpUrl().host)
-        }
+    private fun apiHeadersBuilder() = headersBuilder().apply {
+        add("Accept", "*/*")
+        add("Host", apiUrl.toHttpUrl().host)
+    }
 
     private val apiHeaders by lazy { apiHeadersBuilder().build() }
 

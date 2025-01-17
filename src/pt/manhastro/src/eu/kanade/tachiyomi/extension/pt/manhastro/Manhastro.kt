@@ -55,21 +55,20 @@ class Manhastro :
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .selectFirst("script:containsData(imageLinks)")
-            ?.data()
-            ?.let {
-                imageLinksPattern
-                    .find(it)
-                    ?.groups
-                    ?.get(1)
-                    ?.value
-            }?.let { json.decodeFromString<List<String>>(it) }
-            ?.mapIndexed { i, imageUrlEncoded ->
-                val imageUrl = String(Base64.decode(imageUrlEncoded, Base64.DEFAULT))
-                Page(i, document.location(), imageUrl)
-            } ?: emptyList()
+    override fun pageListParse(document: Document): List<Page> = document
+        .selectFirst("script:containsData(imageLinks)")
+        ?.data()
+        ?.let {
+            imageLinksPattern
+                .find(it)
+                ?.groups
+                ?.get(1)
+                ?.value
+        }?.let { json.decodeFromString<List<String>>(it) }
+        ?.mapIndexed { i, imageUrlEncoded ->
+            val imageUrl = String(Base64.decode(imageUrlEncoded, Base64.DEFAULT))
+            Page(i, document.location(), imageUrl)
+        } ?: emptyList()
 
     private val imageLinksPattern = """var\s+?imageLinks\s*?=\s*?(\[.*]);""".toRegex()
 

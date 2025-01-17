@@ -31,12 +31,11 @@ data class SHObject(
     val slug: String,
     val title: String,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            url = "/${series.slug}/$slug"
-            title = this@SHObject.title
-            thumbnail_url = preview.sizes.thumb
-        }
+    fun toSManga() = SManga.create().apply {
+        url = "/${series.slug}/$slug"
+        title = this@SHObject.title
+        thumbnail_url = preview.sizes.thumb
+    }
 }
 
 @Serializable

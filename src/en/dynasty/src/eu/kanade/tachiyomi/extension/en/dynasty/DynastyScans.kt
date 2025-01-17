@@ -108,19 +108,18 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = "div.pagination > ul > li.active + li > a"
 
-    private fun buildListfromResponse(): List<Node> =
-        client
-            .newCall(
-                Request
-                    .Builder()
-                    .headers(headers)
-                    .url(popularMangaInitialUrl())
-                    .build(),
-            ).execute()
-            .asJsoup()
-            .select("div#main")
-            .first { it.hasText() }
-            .childNodes()
+    private fun buildListfromResponse(): List<Node> = client
+        .newCall(
+            Request
+                .Builder()
+                .headers(headers)
+                .url(popularMangaInitialUrl())
+                .build(),
+        ).execute()
+        .asJsoup()
+        .select("div#main")
+        .first { it.hasText() }
+        .childNodes()
 
     protected fun parseHeader(
         document: Document,
@@ -227,23 +226,22 @@ abstract class DynastyScans : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        try {
-            val imageUrl =
-                document
-                    .select("script")
-                    .last()!!
-                    .html()
-                    .substringAfter("var pages = [")
-                    .substringBefore("];")
+    override fun pageListParse(document: Document): List<Page> = try {
+        val imageUrl =
+            document
+                .select("script")
+                .last()!!
+                .html()
+                .substringAfter("var pages = [")
+                .substringBefore("];")
 
-            json.parseToJsonElement("[$imageUrl]").jsonArray.mapIndexed { index, it ->
-                Page(index, imageUrl = "$baseUrl${it.jsonObject["image"]!!.jsonPrimitive.content}")
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
+        json.parseToJsonElement("[$imageUrl]").jsonArray.mapIndexed { index, it ->
+            Page(index, imageUrl = "$baseUrl${it.jsonObject["image"]!!.jsonPrimitive.content}")
         }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList()
+    }
 
     class InternalList(
         nodes: List<Node>,
@@ -279,9 +277,8 @@ abstract class DynastyScans : ParsedHttpSource() {
             }
         }
 
-        fun indexOfPartial(partial: String): Int =
-            (0..this.lastIndex).firstOrNull { this[it].contains(partial) }
-                ?: -1
+        fun indexOfPartial(partial: String): Int = (0..this.lastIndex).firstOrNull { this[it].contains(partial) }
+            ?: -1
     }
 
     data class Validate(

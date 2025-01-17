@@ -108,26 +108,24 @@ open class NHentai(
 
     override fun latestUpdatesSelector() = "#content .container:not(.index-popular) .gallery"
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            title =
-                element.select("a > div").text().replace("\"", "").let {
-                    if (displayFullTitle) it.trim() else it.shortenTitle()
-                }
-            thumbnail_url =
-                element.selectFirst(".cover img")!!.let { img ->
-                    if (img.hasAttr("data-src")) img.attr("abs:data-src") else img.attr("abs:src")
-                }
-        }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        title =
+            element.select("a > div").text().replace("\"", "").let {
+                if (displayFullTitle) it.trim() else it.shortenTitle()
+            }
+        thumbnail_url =
+            element.selectFirst(".cover img")!!.let { img ->
+                if (img.hasAttr("data-src")) img.attr("abs:data-src") else img.attr("abs:src")
+            }
+    }
 
     override fun latestUpdatesNextPageSelector() = "#content > section.pagination > a.next"
 
-    override fun popularMangaRequest(page: Int) =
-        GET(
-            if (nhLang.isBlank()) "$baseUrl/search/?q=\"\"&sort=popular&page=$page" else "$baseUrl/language/$nhLang/popular?page=$page",
-            headers,
-        )
+    override fun popularMangaRequest(page: Int) = GET(
+        if (nhLang.isBlank()) "$baseUrl/search/?q=\"\"&sort=popular&page=$page" else "$baseUrl/language/$nhLang/popular?page=$page",
+        headers,
+    )
 
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
@@ -139,23 +137,22 @@ open class NHentai(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val id = query.removePrefix(PREFIX_ID_SEARCH)
-                client
-                    .newCall(searchMangaByIdRequest(id))
-                    .asObservableSuccess()
-                    .map { response -> searchMangaByIdParse(response, id) }
-            }
-            query.toIntOrNull() != null -> {
-                client
-                    .newCall(searchMangaByIdRequest(query))
-                    .asObservableSuccess()
-                    .map { response -> searchMangaByIdParse(response, query) }
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val id = query.removePrefix(PREFIX_ID_SEARCH)
+            client
+                .newCall(searchMangaByIdRequest(id))
+                .asObservableSuccess()
+                .map { response -> searchMangaByIdParse(response, id) }
         }
+        query.toIntOrNull() != null -> {
+            client
+                .newCall(searchMangaByIdRequest(query))
+                .asObservableSuccess()
+                .map { response -> searchMangaByIdParse(response, query) }
+        }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -200,24 +197,23 @@ open class NHentai(
         }
     }
 
-    private fun combineQuery(filters: FilterList): String =
-        buildString {
-            filters.filterIsInstance<AdvSearchEntryFilter>().forEach { filter ->
-                filter.state
-                    .split(",")
-                    .map(String::trim)
-                    .filterNot(String::isBlank)
-                    .forEach { tag ->
-                        val y = !(filter.name == "Pages" || filter.name == "Uploaded")
-                        if (tag.startsWith("-")) append("-")
-                        append(filter.name, ':')
-                        if (y) append('"')
-                        append(tag.removePrefix("-"))
-                        if (y) append('"')
-                        append(" ")
-                    }
-            }
+    private fun combineQuery(filters: FilterList): String = buildString {
+        filters.filterIsInstance<AdvSearchEntryFilter>().forEach { filter ->
+            filter.state
+                .split(",")
+                .map(String::trim)
+                .filterNot(String::isBlank)
+                .forEach { tag ->
+                    val y = !(filter.name == "Pages" || filter.name == "Uploaded")
+                    if (tag.startsWith("-")) append("-")
+                    append(filter.name, ':')
+                    if (y) append('"')
+                    append(tag.removePrefix("-"))
+                    if (y) append('"')
+                    append(" ")
+                }
         }
+    }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/g/$id", headers)
 
@@ -328,27 +324,26 @@ open class NHentai(
         }
     }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Separate tags with commas (,)"),
-            Filter.Header("Prepend with dash (-) to exclude"),
-            TagFilter(),
-            CategoryFilter(),
-            GroupFilter(),
-            ArtistFilter(),
-            ParodyFilter(),
-            CharactersFilter(),
-            Filter.Header("Uploaded valid units are h, d, w, m, y."),
-            Filter.Header("example: (>20d)"),
-            UploadedFilter(),
-            Filter.Header("Filter by pages, for example: (>20)"),
-            PagesFilter(),
-            Filter.Separator(),
-            SortFilter(),
-            OffsetPageFilter(),
-            Filter.Header("Sort is ignored if favorites only"),
-            FavoriteFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        TagFilter(),
+        CategoryFilter(),
+        GroupFilter(),
+        ArtistFilter(),
+        ParodyFilter(),
+        CharactersFilter(),
+        Filter.Header("Uploaded valid units are h, d, w, m, y."),
+        Filter.Header("example: (>20d)"),
+        UploadedFilter(),
+        Filter.Header("Filter by pages, for example: (>20)"),
+        PagesFilter(),
+        Filter.Separator(),
+        SortFilter(),
+        OffsetPageFilter(),
+        Filter.Header("Sort is ignored if favorites only"),
+        FavoriteFilter(),
+    )
 
     class TagFilter : AdvSearchEntryFilter("Tags")
 

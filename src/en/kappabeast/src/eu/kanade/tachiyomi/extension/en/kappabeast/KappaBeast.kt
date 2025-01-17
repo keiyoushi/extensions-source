@@ -18,11 +18,10 @@ class KappaBeast :
 
     override val pageSelector = ".epcontent.entry-content img"
 
-    override fun parseGenres(document: Document): List<GenreData> =
-        document.select("li:has(input[id*='genre'])").map { li ->
-            GenreData(
-                li.selectFirst("label")!!.text(),
-                li.selectFirst("input[type=checkbox]")!!.attr("value"),
-            )
-        }
+    override fun parseGenres(document: Document): List<GenreData> = document.select("li:has(input[id*='genre'])").map { li ->
+        GenreData(
+            li.selectFirst("label")!!.text(),
+            li.selectFirst("input[type=checkbox]")!!.attr("value"),
+        )
+    }
 }

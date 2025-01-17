@@ -26,30 +26,29 @@ class SeriesDto(
     val metadata: SeriesMetadataDto,
     val booksMetadata: BookMetadataAggregationDto,
 ) : ConvertibleToSManga {
-    override fun toSManga(baseUrl: String) =
-        SManga.create().apply {
-            title = metadata.title
-            url = "$baseUrl/api/v1/series/$id"
-            thumbnail_url = "$url/thumbnail"
-            status =
-                when {
-                    metadata.status == "ENDED" &&
-                        metadata.totalBookCount != null &&
-                        booksCount < metadata.totalBookCount
-                    -> SManga.PUBLISHING_FINISHED
-                    metadata.status == "ENDED" -> SManga.COMPLETED
-                    metadata.status == "ONGOING" -> SManga.ONGOING
-                    metadata.status == "ABANDONED" -> SManga.CANCELLED
-                    metadata.status == "HIATUS" -> SManga.ON_HIATUS
-                    else -> SManga.UNKNOWN
-                }
-            genre = (metadata.genres + metadata.tags + booksMetadata.tags).distinct().joinToString(", ")
-            description = metadata.summary.ifBlank { booksMetadata.summary }
-            booksMetadata.authors.groupBy({ it.role }, { it.name }).let { map ->
-                author = map["writer"]?.distinct()?.joinToString()
-                artist = map["penciller"]?.distinct()?.joinToString()
+    override fun toSManga(baseUrl: String) = SManga.create().apply {
+        title = metadata.title
+        url = "$baseUrl/api/v1/series/$id"
+        thumbnail_url = "$url/thumbnail"
+        status =
+            when {
+                metadata.status == "ENDED" &&
+                    metadata.totalBookCount != null &&
+                    booksCount < metadata.totalBookCount
+                -> SManga.PUBLISHING_FINISHED
+                metadata.status == "ENDED" -> SManga.COMPLETED
+                metadata.status == "ONGOING" -> SManga.ONGOING
+                metadata.status == "ABANDONED" -> SManga.CANCELLED
+                metadata.status == "HIATUS" -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
             }
+        genre = (metadata.genres + metadata.tags + booksMetadata.tags).distinct().joinToString(", ")
+        description = metadata.summary.ifBlank { booksMetadata.summary }
+        booksMetadata.authors.groupBy({ it.role }, { it.name }).let { map ->
+            author = map["writer"]?.distinct()?.joinToString()
+            artist = map["penciller"]?.distinct()?.joinToString()
         }
+    }
 }
 
 @Serializable
@@ -188,12 +187,11 @@ class ReadListDto(
     val lastModifiedDate: String,
     val filtered: Boolean,
 ) : ConvertibleToSManga {
-    override fun toSManga(baseUrl: String) =
-        SManga.create().apply {
-            title = name
-            description = summary
-            url = "$baseUrl/api/v1/readlists/$id"
-            thumbnail_url = "$url/thumbnail"
-            status = SManga.UNKNOWN
-        }
+    override fun toSManga(baseUrl: String) = SManga.create().apply {
+        title = name
+        description = summary
+        url = "$baseUrl/api/v1/readlists/$id"
+        thumbnail_url = "$url/thumbnail"
+        status = SManga.UNKNOWN
+    }
 }

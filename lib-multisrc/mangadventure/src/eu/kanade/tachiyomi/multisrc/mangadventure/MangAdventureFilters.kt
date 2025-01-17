@@ -37,12 +37,11 @@ internal class SortOrder(
     UriFilter {
     override val param = "sort"
 
-    override fun toString() =
-        when (state?.ascending) {
-            null -> ""
-            true -> sorts[state!!.index]
-            false -> "-" + sorts[state!!.index]
-        }
+    override fun toString() = when (state?.ascending) {
+        null -> ""
+        true -> sorts[state!!.index]
+        false -> "-" + sorts[state!!.index]
+    }
 
     companion object {
         /** The available sort order values. */
@@ -90,8 +89,7 @@ internal class CategoryList(
     UriFilter {
     override val param = "categories"
 
-    override fun toString() =
-        state
-            .filterNot { it.isIgnored() }
-            .joinToString(",") { if (it.isIncluded()) it.name else "-" + it.name }
+    override fun toString() = state
+        .filterNot { it.isIgnored() }
+        .joinToString(",") { if (it.isIncluded()) it.name else "-" + it.name }
 }

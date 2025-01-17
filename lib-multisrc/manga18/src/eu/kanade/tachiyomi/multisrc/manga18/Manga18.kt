@@ -30,10 +30,9 @@ abstract class Manga18(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list-manga/$page?order_by=views", headers)
 
@@ -52,12 +51,11 @@ abstract class Manga18(
 
     override fun popularMangaNextPageSelector() = ".pagination a[rel=next]"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst("div.mg_info > div.mg_name a")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst("div.mg_info > div.mg_name a")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list-manga/$page", headers)
 
@@ -161,59 +159,57 @@ abstract class Manga18(
     protected open val artistSelector = "div.info_label:contains(artist) + div.info_value"
     protected open val thumbnailSelector = "div.detail_avatar > img"
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val info = document.selectFirst(infoElementSelector)!!
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val info = document.selectFirst(infoElementSelector)!!
 
-            title = document.select(titleSelector).text()
-            description =
-                buildString {
-                    document
-                        .select(descriptionSelector)
-                        .eachText()
-                        .onEach {
-                            append(it.trim())
-                            append("\n\n")
-                        }
+        title = document.select(titleSelector).text()
+        description =
+            buildString {
+                document
+                    .select(descriptionSelector)
+                    .eachText()
+                    .onEach {
+                        append(it.trim())
+                        append("\n\n")
+                    }
 
-                    info
-                        .selectFirst(altNameSelector)
-                        ?.text()
-                        ?.takeIf { it != "Updating" && it.isNotEmpty() }
-                        ?.let {
-                            append("Alternative Names:\n")
-                            append(it.trim())
-                        }
-                }
-            status =
-                when (info.select(statusSelector).text()) {
-                    "On Going" -> SManga.ONGOING
-                    "Completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            author = info.selectFirst(authorSelector)?.text()?.takeIf { it != "Updating" }
-            artist = info.selectFirst(artistSelector)?.text()?.takeIf { it != "Updating" }
-            genre = info.select(genreSelector).eachText().joinToString()
-            thumbnail_url = document.selectFirst(thumbnailSelector)?.absUrl("src")
-        }
+                info
+                    .selectFirst(altNameSelector)
+                    ?.text()
+                    ?.takeIf { it != "Updating" && it.isNotEmpty() }
+                    ?.let {
+                        append("Alternative Names:\n")
+                        append(it.trim())
+                    }
+            }
+        status =
+            when (info.select(statusSelector).text()) {
+                "On Going" -> SManga.ONGOING
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        author = info.selectFirst(authorSelector)?.text()?.takeIf { it != "Updating" }
+        artist = info.selectFirst(artistSelector)?.text()?.takeIf { it != "Updating" }
+        genre = info.select(genreSelector).eachText().joinToString()
+        thumbnail_url = document.selectFirst(thumbnailSelector)?.absUrl("src")
+    }
 
     override fun chapterListSelector() = "div.chapter_box .item"
 
     protected open val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            element.selectFirst("a")!!.run {
-                setUrlWithoutDomain(absUrl("href"))
-                name = text()
-            }
-            date_upload =
-                try {
-                    dateFormat.parse(element.selectFirst("p")!!.text())!!.time
-                } catch (_: Exception) {
-                    0L
-                }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst("a")!!.run {
+            setUrlWithoutDomain(absUrl("href"))
+            name = text()
         }
+        date_upload =
+            try {
+                dateFormat.parse(element.selectFirst("p")!!.text())!!.time
+            } catch (_: Exception) {
+                0L
+            }
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val script =

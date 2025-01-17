@@ -21,31 +21,28 @@ class SeriesDto(
     private val author: String?,
     private val tags: List<SeriesTagsDto>? = emptyList(),
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            title = this@SeriesDto.title
-            thumbnail_url = thumbnail
-            url = slug
-        }
+    fun toSManga() = SManga.create().apply {
+        title = this@SeriesDto.title
+        thumbnail_url = thumbnail
+        url = slug
+    }
 
-    fun toSMangaDetails() =
-        SManga.create().apply {
-            title = this@SeriesDto.title.trim()
-            author = this@SeriesDto.author?.trim()
-            status = parseStatus(this@SeriesDto.status)
-            thumbnail_url = thumbnail
-            genre = tags?.joinToString { it.name.trim() }
-            description = this@SeriesDto.description?.trim()
-        }
+    fun toSMangaDetails() = SManga.create().apply {
+        title = this@SeriesDto.title.trim()
+        author = this@SeriesDto.author?.trim()
+        status = parseStatus(this@SeriesDto.status)
+        thumbnail_url = thumbnail
+        genre = tags?.joinToString { it.name.trim() }
+        description = this@SeriesDto.description?.trim()
+    }
 
-    private fun parseStatus(status: String?) =
-        when (status?.trim()) {
-            "Ongoing" -> SManga.ONGOING
-            "Completado" -> SManga.COMPLETED
-            "Abandonado" -> SManga.CANCELLED
-            "Pausado" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?) = when (status?.trim()) {
+        "Ongoing" -> SManga.ONGOING
+        "Completado" -> SManga.COMPLETED
+        "Abandonado" -> SManga.CANCELLED
+        "Pausado" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 }
 
 @Serializable

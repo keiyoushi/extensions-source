@@ -1,9 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.mangapark
 
-private fun buildQuery(queryAction: () -> String): String =
-    queryAction()
-        .trimIndent()
-        .replace("%", "$")
+private fun buildQuery(queryAction: () -> String): String = queryAction()
+    .trimIndent()
+    .replace("%", "$")
 
 val SEARCH_QUERY =
     buildQuery {

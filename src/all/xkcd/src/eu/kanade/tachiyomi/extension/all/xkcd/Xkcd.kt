@@ -68,18 +68,17 @@ open class Xkcd(
         }
     }
 
-    final override fun fetchPopularManga(page: Int) =
-        SManga
-            .create()
-            .apply {
-                title = name
-                artist = creator
-                author = creator
-                description = synopsis
-                status = SManga.ONGOING
-                thumbnail_url = THUMBNAIL_URL
-                setUrlWithoutDomain(archive)
-            }.let { Observable.just(MangasPage(listOf(it), false))!! }
+    final override fun fetchPopularManga(page: Int) = SManga
+        .create()
+        .apply {
+            title = name
+            artist = creator
+            author = creator
+            description = synopsis
+            status = SManga.ONGOING
+            thumbnail_url = THUMBNAIL_URL
+            setUrlWithoutDomain(archive)
+        }.let { Observable.just(MangasPage(listOf(it), false))!! }
 
     final override fun fetchSearchManga(
         page: Int,
@@ -89,16 +88,15 @@ open class Xkcd(
 
     final override fun fetchMangaDetails(manga: SManga) = Observable.just(manga.apply { initialized = true })!!
 
-    override fun chapterListParse(response: Response) =
-        response.asJsoup().select(chapterListSelector).map {
-            SChapter.create().apply {
-                url = it.attr("href")
-                val number = url.removeSurrounding("/")
-                name = it.text().numbered(number)
-                chapter_number = number.toFloat()
-                date_upload = it.attr("title").timestamp()
-            }
+    override fun chapterListParse(response: Response) = response.asJsoup().select(chapterListSelector).map {
+        SChapter.create().apply {
+            url = it.attr("href")
+            val number = url.removeSurrounding("/")
+            name = it.text().numbered(number)
+            chapter_number = number.toFloat()
+            date_upload = it.attr("title").timestamp()
         }
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         // if the img tag is empty or has siblings then it is an interactive comic

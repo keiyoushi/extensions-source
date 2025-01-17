@@ -39,11 +39,10 @@ open class WebtoonsTranslate(
 
     private val pageSize = 24
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .removeAll("Referer")
-            .add("Referer", mobileBaseUrl.toString())
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .removeAll("Referer")
+        .add("Referer", mobileBaseUrl.toString())
 
     private fun mangaRequest(
         page: Int,
@@ -115,13 +114,12 @@ open class WebtoonsTranslate(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        client
-            .newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
+    ): Observable<MangasPage> = client
+        .newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map { response ->
+            searchMangaParse(response, query)
+        }
 
     /**
      * Don't see a search function for Fan Translations, so let's do it client side.
@@ -217,28 +215,27 @@ open class WebtoonsTranslate(
             .reversed()
     }
 
-    private fun parseChapterJson(obj: JsonObject): SChapter =
-        SChapter.create().apply {
-            name = obj["title"]!!.jsonPrimitive.content + " #" + obj["episodeSeq"]!!.jsonPrimitive.int
-            chapter_number = obj["episodeSeq"]!!.jsonPrimitive.int.toFloat()
-            date_upload = obj["updateYmdt"]!!.jsonPrimitive.long
-            scanlator = obj["teamVersion"]!!
-                .jsonPrimitive.int
-                .takeIf { it != 0 }
-                ?.toString() ?: "(wiki)"
+    private fun parseChapterJson(obj: JsonObject): SChapter = SChapter.create().apply {
+        name = obj["title"]!!.jsonPrimitive.content + " #" + obj["episodeSeq"]!!.jsonPrimitive.int
+        chapter_number = obj["episodeSeq"]!!.jsonPrimitive.int.toFloat()
+        date_upload = obj["updateYmdt"]!!.jsonPrimitive.long
+        scanlator = obj["teamVersion"]!!
+            .jsonPrimitive.int
+            .takeIf { it != 0 }
+            ?.toString() ?: "(wiki)"
 
-            val chapterUrl =
-                apiBaseUrl
-                    .resolve("/lineWebtoon/ctrans/translatedEpisodeDetail_jsonp.json")!!
-                    .newBuilder()
-                    .addQueryParameter("titleNo", obj["titleNo"]!!.jsonPrimitive.int.toString())
-                    .addQueryParameter("episodeNo", obj["episodeNo"]!!.jsonPrimitive.int.toString())
-                    .addQueryParameter("languageCode", obj["languageCode"]!!.jsonPrimitive.content)
-                    .addQueryParameter("teamVersion", obj["teamVersion"]!!.jsonPrimitive.int.toString())
-                    .toString()
+        val chapterUrl =
+            apiBaseUrl
+                .resolve("/lineWebtoon/ctrans/translatedEpisodeDetail_jsonp.json")!!
+                .newBuilder()
+                .addQueryParameter("titleNo", obj["titleNo"]!!.jsonPrimitive.int.toString())
+                .addQueryParameter("episodeNo", obj["episodeNo"]!!.jsonPrimitive.int.toString())
+                .addQueryParameter("languageCode", obj["languageCode"]!!.jsonPrimitive.content)
+                .addQueryParameter("teamVersion", obj["teamVersion"]!!.jsonPrimitive.int.toString())
+                .toString()
 
-            setUrlWithoutDomain(chapterUrl)
-        }
+        setUrlWithoutDomain(chapterUrl)
+    }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(apiBaseUrl.resolve(chapter.url)!!, headers)
 

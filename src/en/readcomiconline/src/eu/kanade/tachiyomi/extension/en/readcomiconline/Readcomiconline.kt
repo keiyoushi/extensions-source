@@ -89,12 +89,11 @@ class Readcomiconline :
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/ComicList/LatestUpdate?page=$page", headers)
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            title = element.text()
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        title = element.text()
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+    }
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -205,26 +204,23 @@ class Readcomiconline :
         return manga
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(realMangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(realMangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
     private fun realMangaDetailsRequest(manga: SManga): Request = super.mangaDetailsRequest(manga)
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
-            ?: super.mangaDetailsRequest(manga)
+    override fun mangaDetailsRequest(manga: SManga): Request = captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
+        ?: super.mangaDetailsRequest(manga)
 
-    private fun parseStatus(status: String) =
-        when {
-            status.contains("Ongoing") -> SManga.ONGOING
-            status.contains("Completed") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when {
+        status.contains("Ongoing") -> SManga.ONGOING
+        status.contains("Completed") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = "table.listing tr:gt(1)"
 
@@ -383,72 +379,70 @@ class Readcomiconline :
             ),
         )
 
-    override fun getFilterList() =
-        FilterList(
-            Status(),
-            GenreList(getGenreList()),
-            Filter.Separator(),
-            Filter.Header("Filters below is ignored when Status,Genre or the queue is not empty."),
-            SortFilter(),
-            PublisherFilter(),
-            WriterFilter(),
-            ArtistFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Status(),
+        GenreList(getGenreList()),
+        Filter.Separator(),
+        Filter.Header("Filters below is ignored when Status,Genre or the queue is not empty."),
+        SortFilter(),
+        PublisherFilter(),
+        WriterFilter(),
+        ArtistFilter(),
+    )
 
     // $("select[name=\"genres\"]").map((i,el) => `Genre("${$(el).next().text().trim()}", ${i})`).get().join(',\n')
     // on https://readcomiconline.li/AdvanceSearch
-    private fun getGenreList() =
-        listOf(
-            Genre("Action", "1"),
-            Genre("Adventure", "2"),
-            Genre("Anthology", "38"),
-            Genre("Anthropomorphic", "46"),
-            Genre("Biography", "41"),
-            Genre("Children", "49"),
-            Genre("Comedy", "3"),
-            Genre("Crime", "17"),
-            Genre("Drama", "19"),
-            Genre("Family", "25"),
-            Genre("Fantasy", "20"),
-            Genre("Fighting", "31"),
-            Genre("Graphic Novels", "5"),
-            Genre("Historical", "28"),
-            Genre("Horror", "15"),
-            Genre("Leading Ladies", "35"),
-            Genre("LGBTQ", "51"),
-            Genre("Literature", "44"),
-            Genre("Manga", "40"),
-            Genre("Martial Arts", "4"),
-            Genre("Mature", "8"),
-            Genre("Military", "33"),
-            Genre("Mini-Series", "56"),
-            Genre("Movies & TV", "47"),
-            Genre("Music", "55"),
-            Genre("Mystery", "23"),
-            Genre("Mythology", "21"),
-            Genre("Personal", "48"),
-            Genre("Political", "42"),
-            Genre("Post-Apocalyptic", "43"),
-            Genre("Psychological", "27"),
-            Genre("Pulp", "39"),
-            Genre("Religious", "53"),
-            Genre("Robots", "9"),
-            Genre("Romance", "32"),
-            Genre("School Life", "52"),
-            Genre("Sci-Fi", "16"),
-            Genre("Slice of Life", "50"),
-            Genre("Sport", "54"),
-            Genre("Spy", "30"),
-            Genre("Superhero", "22"),
-            Genre("Supernatural", "24"),
-            Genre("Suspense", "29"),
-            Genre("Thriller", "18"),
-            Genre("Vampires", "34"),
-            Genre("Video Games", "37"),
-            Genre("War", "26"),
-            Genre("Western", "45"),
-            Genre("Zombies", "36"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Action", "1"),
+        Genre("Adventure", "2"),
+        Genre("Anthology", "38"),
+        Genre("Anthropomorphic", "46"),
+        Genre("Biography", "41"),
+        Genre("Children", "49"),
+        Genre("Comedy", "3"),
+        Genre("Crime", "17"),
+        Genre("Drama", "19"),
+        Genre("Family", "25"),
+        Genre("Fantasy", "20"),
+        Genre("Fighting", "31"),
+        Genre("Graphic Novels", "5"),
+        Genre("Historical", "28"),
+        Genre("Horror", "15"),
+        Genre("Leading Ladies", "35"),
+        Genre("LGBTQ", "51"),
+        Genre("Literature", "44"),
+        Genre("Manga", "40"),
+        Genre("Martial Arts", "4"),
+        Genre("Mature", "8"),
+        Genre("Military", "33"),
+        Genre("Mini-Series", "56"),
+        Genre("Movies & TV", "47"),
+        Genre("Music", "55"),
+        Genre("Mystery", "23"),
+        Genre("Mythology", "21"),
+        Genre("Personal", "48"),
+        Genre("Political", "42"),
+        Genre("Post-Apocalyptic", "43"),
+        Genre("Psychological", "27"),
+        Genre("Pulp", "39"),
+        Genre("Religious", "53"),
+        Genre("Robots", "9"),
+        Genre("Romance", "32"),
+        Genre("School Life", "52"),
+        Genre("Sci-Fi", "16"),
+        Genre("Slice of Life", "50"),
+        Genre("Sport", "54"),
+        Genre("Spy", "30"),
+        Genre("Superhero", "22"),
+        Genre("Supernatural", "24"),
+        Genre("Suspense", "29"),
+        Genre("Thriller", "18"),
+        Genre("Vampires", "34"),
+        Genre("Video Games", "37"),
+        Genre("War", "26"),
+        Genre("Western", "45"),
+        Genre("Zombies", "36"),
+    )
     // Preferences Code
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {

@@ -202,22 +202,20 @@ class OlympusScanlation :
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    override fun chapterListRequest(manga: SManga): Request =
-        paginatedChapterListRequest(
-            manga.url
-                .substringAfter("/series/comic-")
-                .substringBefore("/chapters"),
-            1,
-        )
+    override fun chapterListRequest(manga: SManga): Request = paginatedChapterListRequest(
+        manga.url
+            .substringAfter("/series/comic-")
+            .substringBefore("/chapters"),
+        1,
+    )
 
     private fun paginatedChapterListRequest(
         mangaUrl: String,
         page: Int,
-    ): Request =
-        GET(
-            url = "$apiBaseUrl/api/series/$mangaUrl/chapters?page=$page&direction=desc&type=comic",
-            headers = headers,
-        )
+    ): Request = GET(
+        url = "$apiBaseUrl/api/series/$mangaUrl/chapters?page=$page&direction=desc&type=comic",
+        headers = headers,
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slug =

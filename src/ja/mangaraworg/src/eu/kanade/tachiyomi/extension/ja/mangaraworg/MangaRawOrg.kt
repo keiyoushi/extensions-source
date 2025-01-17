@@ -37,43 +37,39 @@ class MangaRawOrg : MangaThemesia("Manga Raw.org", "https://mangaraw.org", "ja")
 
     override fun searchMangaSelector() = "div.bsx"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("div.bigor > a").let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("div.bigor > a").let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun searchMangaNextPageSelector() = "a[rel=next]"
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super
-            .mangaDetailsParse(document)
-            .apply { description = document.select("div.bottom").firstOrNull()?.ownText() }
+    override fun mangaDetailsParse(document: Document): SManga = super
+        .mangaDetailsParse(document)
+        .apply { description = document.select("div.bottom").firstOrNull()?.ownText() }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client
-            .newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .map { response ->
-                pageListParse(response, baseUrl + chapter.url.removeSuffix("/"))
-            }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client
+        .newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .map { response ->
+            pageListParse(response, baseUrl + chapter.url.removeSuffix("/"))
+        }
 
     private fun pageListParse(
         response: Response,
         chapterUrl: String,
-    ): List<Page> =
-        response
-            .asJsoup()
-            .select("span.page-link")
-            .first()!!
-            .ownText()
-            .substringAfterLast(" ")
-            .toInt()
-            .let { lastNum -> IntRange(1, lastNum) }
-            .map { num -> Page(num, "$chapterUrl/$num") }
+    ): List<Page> = response
+        .asJsoup()
+        .select("span.page-link")
+        .first()!!
+        .ownText()
+        .substringAfterLast(" ")
+        .toInt()
+        .let { lastNum -> IntRange(1, lastNum) }
+        .map { num -> Page(num, "$chapterUrl/$num") }
 
     override fun imageUrlParse(document: Document): String = document.select("a.img-block img").attr("abs:src")
 

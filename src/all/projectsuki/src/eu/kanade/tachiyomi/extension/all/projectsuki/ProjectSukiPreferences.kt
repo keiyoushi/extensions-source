@@ -47,94 +47,88 @@ class ProjectSukiPreferences(
         ) {
             override val rawGet: SharedPreferences.(identifier: String, default: String) -> String = { id, def -> getString(id, def)!! }
 
-            override fun String.transform(): ProjectSukiFilters.SearchMode =
-                ProjectSukiFilters.SearchMode
-                    .values()
-                    .firstOrNull { it.display == this } ?: ProjectSukiFilters.SearchMode.SMART
+            override fun String.transform(): ProjectSukiFilters.SearchMode = ProjectSukiFilters.SearchMode
+                .values()
+                .firstOrNull { it.display == this } ?: ProjectSukiFilters.SearchMode.SMART
 
-            override fun PreferenceScreen.constructPreference() =
-                ListPreference(context).apply {
-                    key = preferenceIdentifier
-                    entries =
-                        ProjectSukiFilters.SearchMode
-                            .values()
-                            .map { it.display }
-                            .toTypedArray()
-                    entryValues =
-                        ProjectSukiFilters.SearchMode
-                            .values()
-                            .map { it.display }
-                            .toTypedArray()
-                    setDefaultValue(ProjectSukiFilters.SearchMode.SMART.display)
-                    title = "Default search mode"
-                    summary =
-                        summary {
-                            """
-                            Select which Search Mode to use by default. Can be useful for global searches. ${ProjectSukiFilters.SearchMode.SMART} is recommended.
-                             - ${ProjectSukiFilters.SearchMode.SMART}: ${ProjectSukiFilters.SearchMode.SMART.run { description() }}
-                             - ${ProjectSukiFilters.SearchMode.SIMPLE}: ${ProjectSukiFilters.SearchMode.SIMPLE.run { description() }}
-                             - ${ProjectSukiFilters.SearchMode.FULL_SITE}: ${ProjectSukiFilters.SearchMode.FULL_SITE.run { description() }}
-                            """.trimIndent()
-                        }
-                }
+            override fun PreferenceScreen.constructPreference() = ListPreference(context).apply {
+                key = preferenceIdentifier
+                entries =
+                    ProjectSukiFilters.SearchMode
+                        .values()
+                        .map { it.display }
+                        .toTypedArray()
+                entryValues =
+                    ProjectSukiFilters.SearchMode
+                        .values()
+                        .map { it.display }
+                        .toTypedArray()
+                setDefaultValue(ProjectSukiFilters.SearchMode.SMART.display)
+                title = "Default search mode"
+                summary =
+                    summary {
+                        """
+                        Select which Search Mode to use by default. Can be useful for global searches. ${ProjectSukiFilters.SearchMode.SMART} is recommended.
+                         - ${ProjectSukiFilters.SearchMode.SMART}: ${ProjectSukiFilters.SearchMode.SMART.run { description() }}
+                         - ${ProjectSukiFilters.SearchMode.SIMPLE}: ${ProjectSukiFilters.SearchMode.SIMPLE.run { description() }}
+                         - ${ProjectSukiFilters.SearchMode.FULL_SITE}: ${ProjectSukiFilters.SearchMode.FULL_SITE.run { description() }}
+                        """.trimIndent()
+                    }
+            }
         }
 
     val whitelistedLanguages =
         object : PSPreference<String, Set<String>>("$SHORT_FORM_ID-languages-whitelist", "") {
             override val rawGet: SharedPreferences.(identifier: String, default: String) -> String = { id, def -> getString(id, def)!! }
 
-            override fun String.transform(): Set<String> =
-                split(',')
-                    .filter { it.isNotBlank() }
-                    .mapTo(HashSet()) { it.trim().lowercase(Locale.US) }
+            override fun String.transform(): Set<String> = split(',')
+                .filter { it.isNotBlank() }
+                .mapTo(HashSet()) { it.trim().lowercase(Locale.US) }
 
-            override fun PreferenceScreen.constructPreference() =
-                EditTextPreference(context).apply {
-                    key = preferenceIdentifier
-                    title = "Whitelisted languages"
-                    dialogTitle = "Include chapters in the following languages:"
-                    dialogMessage =
-                        "Enter the languages you want to include by separating them with a comma ',' (e.g. \"English, SPANISH, gReEk\", without quotes (\"))."
-                    summary =
-                        summary {
-                            """
+            override fun PreferenceScreen.constructPreference() = EditTextPreference(context).apply {
+                key = preferenceIdentifier
+                title = "Whitelisted languages"
+                dialogTitle = "Include chapters in the following languages:"
+                dialogMessage =
+                    "Enter the languages you want to include by separating them with a comma ',' (e.g. \"English, SPANISH, gReEk\", without quotes (\"))."
+                summary =
+                    summary {
+                        """
                 NOTE: You will need to refresh comics that have already been fetched!! (drag down in the comic page in tachiyomi)
 
                 When empty will allow all languages (see blacklisting).
                 It will match the string present in the "Language" column of the chapter (NOT case sensitive).
                 Chapters that do not have a "Language" column, will be listed as "$UNKNOWN_LANGUAGE", which is always whitelisted (see blacklisting).
                 """
-                        }
-                }
+                    }
+            }
         }
 
     val blacklistedLanguages =
         object : PSPreference<String, Set<String>>("$SHORT_FORM_ID-languages-blacklist", "") {
             override val rawGet: SharedPreferences.(identifier: String, default: String) -> String = { id, def -> getString(id, def)!! }
 
-            override fun String.transform(): Set<String> =
-                split(",")
-                    .filter { it.isNotBlank() }
-                    .mapTo(HashSet()) { it.trim().lowercase(Locale.US) }
+            override fun String.transform(): Set<String> = split(",")
+                .filter { it.isNotBlank() }
+                .mapTo(HashSet()) { it.trim().lowercase(Locale.US) }
 
-            override fun PreferenceScreen.constructPreference() =
-                EditTextPreference(context).apply {
-                    key = preferenceIdentifier
-                    title = "Blacklisted languages"
-                    dialogTitle = "Exclude chapters in the following languages:"
-                    dialogMessage =
-                        "Enter the languages you want to exclude by separating them with a comma ',' (e.g. \"English, SPANISH, gReEk\", without quotes (\"))."
-                    summary =
-                        summary {
-                            """
-                            NOTE: You will need to refresh comics that have already been fetched!! (drag down in the comic page in tachiyomi)
+            override fun PreferenceScreen.constructPreference() = EditTextPreference(context).apply {
+                key = preferenceIdentifier
+                title = "Blacklisted languages"
+                dialogTitle = "Exclude chapters in the following languages:"
+                dialogMessage =
+                    "Enter the languages you want to exclude by separating them with a comma ',' (e.g. \"English, SPANISH, gReEk\", without quotes (\"))."
+                summary =
+                    summary {
+                        """
+                        NOTE: You will need to refresh comics that have already been fetched!! (drag down in the comic page in tachiyomi)
 
-                            When a language is in BOTH whitelist and blacklist, it will be EXCLUDED.
-                            It will match the string present in the "Language" column of the chapter (NOT case sensitive).
-                            Chapters that do not have a "Language" column, will be listed as "$UNKNOWN_LANGUAGE", you can exclude them by adding "unknown" to the list (e.g. "Chinese, unknown, Alienese").
-                            """.trimIndent()
-                        }
-                }
+                        When a language is in BOTH whitelist and blacklist, it will be EXCLUDED.
+                        It will match the string present in the "Language" column of the chapter (NOT case sensitive).
+                        Chapters that do not have a "Language" column, will be listed as "$UNKNOWN_LANGUAGE", you can exclude them by adding "unknown" to the list (e.g. "Chinese, unknown, Alienese").
+                        """.trimIndent()
+                    }
+            }
         }
 
     fun PreferenceScreen.configure() {

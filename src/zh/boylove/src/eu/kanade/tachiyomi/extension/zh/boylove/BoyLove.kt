@@ -81,12 +81,11 @@ class BoyLove :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotBlank()) {
-            textSearchRequest(page, query)
-        } else {
-            GET("$baseUrl/home/api/cate/tp/${parseFilters(page, filters)}", headers)
-        }
+    ): Request = if (query.isNotBlank()) {
+        textSearchRequest(page, query)
+    } else {
+        GET("$baseUrl/home/api/cate/tp/${parseFilters(page, filters)}", headers)
+    }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
@@ -158,24 +157,22 @@ class BoyLove :
             }
         }
 
-    private fun Document.getPartsCount(): Int? =
-        selectFirst("script:containsData(do_mergeImg):containsData(context0 =)")?.data()?.run {
-            substringBefore("canvas0.width")
-                .substringAfterLast("var ")
-                .substringBefore(';')
-                .trim()
-                .substringAfterLast(" ")
-                .toIntOrNull()
-        }
+    private fun Document.getPartsCount(): Int? = selectFirst("script:containsData(do_mergeImg):containsData(context0 =)")?.data()?.run {
+        substringBefore("canvas0.width")
+            .substringAfterLast("var ")
+            .substringBefore(';')
+            .trim()
+            .substringAfterLast(" ")
+            .toIntOrNull()
+    }
 
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream<ResultDto<T>>(body.byteStream()).result
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream<ResultDto<T>>(body.byteStream()).result
+    }
 
     private var genres: Array<String> = emptyArray()
     private var isFetchingGenres = false

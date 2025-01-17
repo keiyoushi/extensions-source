@@ -3,26 +3,25 @@ package eu.kanade.tachiyomi.extension.all.koharu
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        SortFilter("Sort by", getSortsList),
-        CategoryFilter("Category"),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Artists", "artist"),
-        TextFilter("Magazines", "magazine"),
-        TextFilter("Publishers", "publisher"),
-        TextFilter("Characters", "character"),
-        TextFilter("Cosplayers", "cosplayer"),
-        TextFilter("Parodies", "parody"),
-        TextFilter("Circles", "circle"),
-        TextFilter("Male Tags", "male"),
-        TextFilter("Female Tags", "female"),
-        TextFilter("Tags ( Universal )", "tag"),
-        Filter.Header("Filter by pages, for example: (>20)"),
-        TextFilter("Pages", "pages"),
-    )
+fun getFilters(): FilterList = FilterList(
+    SortFilter("Sort by", getSortsList),
+    CategoryFilter("Category"),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    TextFilter("Artists", "artist"),
+    TextFilter("Magazines", "magazine"),
+    TextFilter("Publishers", "publisher"),
+    TextFilter("Characters", "character"),
+    TextFilter("Cosplayers", "cosplayer"),
+    TextFilter("Parodies", "parody"),
+    TextFilter("Circles", "circle"),
+    TextFilter("Male Tags", "male"),
+    TextFilter("Female Tags", "female"),
+    TextFilter("Tags ( Universal )", "tag"),
+    Filter.Header("Filter by pages, for example: (>20)"),
+    TextFilter("Pages", "pages"),
+)
 
 internal open class TextFilter(
     name: String,

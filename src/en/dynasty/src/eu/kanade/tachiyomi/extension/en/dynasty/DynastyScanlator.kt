@@ -18,11 +18,10 @@ class DynastyScanlator : DynastyScans() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        GET(
-            "$baseUrl/search?q=$query&classes%5B%5D=$categoryPrefix&page=$page&sort=",
-            headers,
-        )
+    ): Request = GET(
+        "$baseUrl/search?q=$query&classes%5B%5D=$categoryPrefix&page=$page&sort=",
+        headers,
+    )
 
     override fun popularMangaInitialUrl() = ""
 

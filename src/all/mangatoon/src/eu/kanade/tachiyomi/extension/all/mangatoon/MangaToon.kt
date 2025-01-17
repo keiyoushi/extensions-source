@@ -61,12 +61,11 @@ open class MangaToon(
 
     override fun popularMangaSelector() = "div.genre-content div.items a"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("div.content-title").text().trim()
-            thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("div.content-title").text().trim()
+        thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun popularMangaNextPageSelector() = "span.next"
 
@@ -95,45 +94,43 @@ open class MangaToon(
 
     override fun searchMangaSelector() = "div.comics-result div.recommend-item:has(a[abs:href^=$baseUrl])"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("div.recommend-comics-title").text().trim()
-            thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("div.recommend-comics-title").text().trim()
+        thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            author =
-                document
-                    .select("div.detail-author-name span")
-                    .text()
-                    .substringAfter(": ")
-            description =
-                document
-                    .select("div.detail-description-short p")
-                    .joinToString("\n\n") { it.text() }
-            genre =
-                document
-                    .select("div.detail-tags-info span")
-                    .text()
-                    .split("/")
-                    .map { it.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() } }
-                    .sorted()
-                    .joinToString { it.trim() }
-            status =
-                document
-                    .select("div.detail-status")
-                    .text()
-                    .trim()
-                    .toStatus()
-            val thumbnail = document.select("div.detail-img img").imgAttr().toNormalPosterUrl()
-            if (!thumbnail.contains("cartoon-big-images")) {
-                thumbnail_url = thumbnail
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        author =
+            document
+                .select("div.detail-author-name span")
+                .text()
+                .substringAfter(": ")
+        description =
+            document
+                .select("div.detail-description-short p")
+                .joinToString("\n\n") { it.text() }
+        genre =
+            document
+                .select("div.detail-tags-info span")
+                .text()
+                .split("/")
+                .map { it.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() } }
+                .sorted()
+                .joinToString { it.trim() }
+        status =
+            document
+                .select("div.detail-status")
+                .text()
+                .trim()
+                .toStatus()
+        val thumbnail = document.select("div.detail-img img").imgAttr().toNormalPosterUrl()
+        if (!thumbnail.contains("cartoon-big-images")) {
+            thumbnail_url = thumbnail
         }
+    }
 
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "/episodes", headers)
 
@@ -164,46 +161,41 @@ open class MangaToon(
 
     override fun chapterListSelector() = "a.episode-item-new"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            name = element.select("div.episode-title-new:last-child").text().trim()
-            chapter_number = element
-                .select("div.episode-number")
-                .text()
-                .trim()
-                .toFloatOrNull() ?: -1f
-            date_upload = element.select("div.episode-date span.open-date").text().toDate()
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.select("div.episode-title-new:last-child").text().trim()
+        chapter_number = element
+            .select("div.episode-number")
+            .text()
+            .trim()
+            .toFloatOrNull() ?: -1f
+        date_upload = element.select("div.episode-date span.open-date").text().toDate()
+        setUrlWithoutDomain(element.attr("href"))
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select("div.pictures div img:first-child")
-            .mapIndexed { i, element -> Page(i, "", element.imgAttr()) }
-            .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
+    override fun pageListParse(document: Document): List<Page> = document
+        .select("div.pictures div img:first-child")
+        .mapIndexed { i, element -> Page(i, "", element.imgAttr()) }
+        .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
 
     override fun imageUrlParse(document: Document) = ""
 
-    private fun String.toDate(): Long =
-        runCatching { DATE_FORMAT.parse(this)?.time }
-            .getOrNull() ?: 0L
+    private fun String.toDate(): Long = runCatching { DATE_FORMAT.parse(this)?.time }
+        .getOrNull() ?: 0L
 
-    protected open fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-src") -> attr("abs:data-src")
-            else -> attr("abs:src")
-        }
+    protected open fun Element.imgAttr(): String = when {
+        hasAttr("data-src") -> attr("abs:data-src")
+        else -> attr("abs:src")
+    }
 
     protected open fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 
     private fun String.toNormalPosterUrl(): String = replace(POSTER_SUFFIX, "$1")
 
-    private fun String.toStatus(): Int =
-        when (lowercase(locale)) {
-            in ONGOING_STATUS -> SManga.ONGOING
-            in COMPLETED_STATUS -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toStatus(): Int = when (lowercase(locale)) {
+        in ONGOING_STATUS -> SManga.ONGOING
+        in COMPLETED_STATUS -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     companion object {
         private val ONGOING_STATUS =

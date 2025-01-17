@@ -23,17 +23,16 @@ class MangaDto(
     @SerialName("last_updatetime")
     private val lastUpdateTime: Long = 0,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            url = id.toString()
-            title = this@MangaDto.title
-            author = authors?.joinToString { it.name }
-            description = this@MangaDto.description
-            genre = types.joinToString { it.name }
-            status = parseStatus(this@MangaDto.status[0].name)
-            thumbnail_url = cover
-            initialized = true
-        }
+    fun toSManga() = SManga.create().apply {
+        url = id.toString()
+        title = this@MangaDto.title
+        author = authors?.joinToString { it.name }
+        description = this@MangaDto.description
+        genre = types.joinToString { it.name }
+        status = parseStatus(this@MangaDto.status[0].name)
+        thumbnail_url = cover
+        initialized = true
+    }
 
     fun parseChapterList(): List<SChapter> {
         val mangaId = id.toString()
@@ -89,12 +88,11 @@ class ChapterDto(
     @SerialName("updatetime")
     private val updateTime: Long = 0,
 ) {
-    fun toSChapterInternal() =
-        SChapter.create().apply {
-            url = id.toString()
-            name = this@ChapterDto.name.formatChapterName()
-            date_upload = updateTime * 1000
-        }
+    fun toSChapterInternal() = SChapter.create().apply {
+        url = id.toString()
+        name = this@ChapterDto.name.formatChapterName()
+        date_upload = updateTime * 1000
+    }
 }
 
 @Serializable
@@ -127,15 +125,14 @@ class PageItemDto(
     private val cover: String,
     private val types: String,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            url = this@PageItemDto.id.toString()
-            title = this@PageItemDto.title
-            author = authors.formatList()
-            genre = types.formatList()
-            status = parseStatus(this@PageItemDto.status)
-            thumbnail_url = cover
-        }
+    fun toSManga() = SManga.create().apply {
+        url = this@PageItemDto.id.toString()
+        title = this@PageItemDto.title
+        author = authors.formatList()
+        genre = types.formatList()
+        status = parseStatus(this@PageItemDto.status)
+        thumbnail_url = cover
+    }
 }
 
 @Serializable

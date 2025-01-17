@@ -12,12 +12,11 @@ data class ApiSearchComic(
     val ComicTitle: String,
     val CoverImage: String,
 ) {
-    fun toSManga(cdnUrl: String) =
-        SManga.create().apply {
-            title = ComicTitle
-            thumbnail_url = "$cdnUrl$CoverImage#thumbnail"
-            url = "/comics/$id-${ComicTitle.titleToSlug()}"
-        }
+    fun toSManga(cdnUrl: String) = SManga.create().apply {
+        title = ComicTitle
+        thumbnail_url = "$cdnUrl$CoverImage#thumbnail"
+        url = "/comics/$id-${ComicTitle.titleToSlug()}"
+    }
 }
 
 @Serializable
@@ -53,16 +52,15 @@ data class ApiChapter(
     val ChapterName: String,
     val chapterDate: String,
 ) {
-    fun toSChapter(mangaUrl: String) =
-        SChapter.create().apply {
-            url = "$mangaUrl/$chapterID-chapter-$chapterNumber"
-            chapter_number = chapterNumber.toFloat()
-            name = "Chapter $chapterNumber"
-            if (ChapterName.isNotEmpty()) {
-                name += ": $ChapterName"
-            }
-            date_upload = chapterDate.parseDate()
+    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
+        url = "$mangaUrl/$chapterID-chapter-$chapterNumber"
+        chapter_number = chapterNumber.toFloat()
+        name = "Chapter $chapterNumber"
+        if (ChapterName.isNotEmpty()) {
+            name += ": $ChapterName"
         }
+        date_upload = chapterDate.parseDate()
+    }
 }
 
 @Serializable
@@ -85,21 +83,18 @@ data class ApiChapterPages(
     )
 }
 
-private fun String.titleToSlug() =
-    this
-        .trim()
-        .lowercase()
-        .replace(DisasterScans.titleSpecialCharactersRegex, "-")
-        .replace(DisasterScans.trailingHyphenRegex, "")
+private fun String.titleToSlug() = this
+    .trim()
+    .lowercase()
+    .replace(DisasterScans.titleSpecialCharactersRegex, "-")
+    .replace(DisasterScans.trailingHyphenRegex, "")
 
-private fun String.parseDate(): Long =
-    runCatching {
-        DisasterScans.dateFormat.parse(this)!!.time
-    }.getOrDefault(0L)
+private fun String.parseDate(): Long = runCatching {
+    DisasterScans.dateFormat.parse(this)!!.time
+}.getOrDefault(0L)
 
-private fun String.parseStatus(): Int =
-    when {
-        contains("ongoing", true) -> SManga.ONGOING
-        contains("completed", true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+private fun String.parseStatus(): Int = when {
+    contains("ongoing", true) -> SManga.ONGOING
+    contains("completed", true) -> SManga.COMPLETED
+    else -> SManga.UNKNOWN
+}

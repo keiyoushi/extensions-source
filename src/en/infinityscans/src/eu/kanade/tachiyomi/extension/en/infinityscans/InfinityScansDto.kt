@@ -36,12 +36,11 @@ data class SearchEntryDto(
     val status: String?,
     val updated: Int? = null,
 ) {
-    fun toSManga(cdnHost: String) =
-        SManga.create().apply {
-            title = this@SearchEntryDto.title
-            thumbnail_url = "https://$cdnHost/$id/$cover?_=${getImageParameter()}"
-            url = "/comic/$id/$slug"
-        }
+    fun toSManga(cdnHost: String) = SManga.create().apply {
+        title = this@SearchEntryDto.title
+        thumbnail_url = "https://$cdnHost/$id/$cover?_=${getImageParameter()}"
+        url = "/comic/$id/$slug"
+    }
 
     private fun getImageParameter(): Long = updated?.toLong() ?: 0L
 }
@@ -59,15 +58,14 @@ data class ChapterEntryDto(
     val sequence: Int,
     val date: Int,
 ) {
-    fun toSChapter(slug: String) =
-        SChapter.create().apply {
-            name = title
+    fun toSChapter(slug: String) = SChapter.create().apply {
+        name = title
 
-            // Things like prologues mess up the sequence number
-            chapter_number = title.substringAfter("hapter ").toFloatOrNull() ?: sequence.toFloat()
-            date_upload = date.toLong() * 1000
-            url = "$slug/chapter/$id"
-        }
+        // Things like prologues mess up the sequence number
+        chapter_number = title.substringAfter("hapter ").toFloatOrNull() ?: sequence.toFloat()
+        date_upload = date.toLong() * 1000
+        url = "$slug/chapter/$id"
+    }
 }
 
 @Serializable

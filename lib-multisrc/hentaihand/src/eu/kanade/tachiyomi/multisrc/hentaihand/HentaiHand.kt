@@ -204,11 +204,10 @@ abstract class HentaiHand(
         return GET("$baseUrl/api/comics/$slug")
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(mangaDetailsApiRequest(manga))
-            .asObservableSuccess()
-            .map { mangaDetailsParse(it).apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(mangaDetailsApiRequest(manga))
+        .asObservableSuccess()
+        .map { mangaDetailsParse(it).apply { initialized = true } }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val obj = json.parseToJsonElement(response.body.string()).jsonObject
@@ -401,30 +400,29 @@ abstract class HentaiHand(
         default: String,
         value: String,
         isPassword: Boolean = false,
-    ): androidx.preference.EditTextPreference =
-        androidx.preference.EditTextPreference(context).apply {
-            key = title
-            this.title = title
-            summary = value
-            this.setDefaultValue(default)
-            dialogTitle = title
+    ): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        key = title
+        this.title = title
+        summary = value
+        this.setDefaultValue(default)
+        dialogTitle = title
 
-            if (isPassword) {
-                setOnBindEditTextListener {
-                    it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                }
-            }
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(title, newValue as String).commit()
-                    Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+        if (isPassword) {
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
         }
+        setOnPreferenceChangeListener { _, newValue ->
+            try {
+                val res = preferences.edit().putString(title, newValue as String).commit()
+                Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                res
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
 
     private fun getPrefUsername(): String = preferences.getString(USERNAME_TITLE, USERNAME_DEFAULT)!!
 
@@ -510,61 +508,55 @@ abstract class HentaiHand(
         val singularName: String,
     ) : Filter.Text(name)
 
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(getSortPairs()),
-            OrderFilter(getOrderPairs()),
-            DurationFilter(getDurationPairs()),
-            Filter.Header("Separate terms with commas (,)"),
-            CategoriesFilter(),
-            TagsFilter(),
-            ArtistsFilter(),
-            GroupsFilter(),
-            CharactersFilter(),
-            ParodiesFilter(),
-            LanguagesFilter(),
-            AttributesGroupFilter(getAttributePairs()),
-            StatusGroupFilter(getStatusPairs()),
-        )
+    override fun getFilterList() = FilterList(
+        SortFilter(getSortPairs()),
+        OrderFilter(getOrderPairs()),
+        DurationFilter(getDurationPairs()),
+        Filter.Header("Separate terms with commas (,)"),
+        CategoriesFilter(),
+        TagsFilter(),
+        ArtistsFilter(),
+        GroupsFilter(),
+        CharactersFilter(),
+        ParodiesFilter(),
+        LanguagesFilter(),
+        AttributesGroupFilter(getAttributePairs()),
+        StatusGroupFilter(getStatusPairs()),
+    )
 
-    private fun getSortPairs() =
-        listOf(
-            Pair("Upload Date", "uploaded_at"),
-            Pair("Title", "title"),
-            Pair("Pages", "pages"),
-            Pair("Favorites", "favorites"),
-            Pair("Popularity", "popularity"),
-        )
+    private fun getSortPairs() = listOf(
+        Pair("Upload Date", "uploaded_at"),
+        Pair("Title", "title"),
+        Pair("Pages", "pages"),
+        Pair("Favorites", "favorites"),
+        Pair("Popularity", "popularity"),
+    )
 
-    private fun getOrderPairs() =
-        listOf(
-            Pair("Descending", "desc"),
-            Pair("Ascending", "asc"),
-        )
+    private fun getOrderPairs() = listOf(
+        Pair("Descending", "desc"),
+        Pair("Ascending", "asc"),
+    )
 
-    private fun getDurationPairs() =
-        listOf(
-            Pair("Today", "day"),
-            Pair("This Week", "week"),
-            Pair("This Month", "month"),
-            Pair("This Year", "year"),
-            Pair("All Time", "all"),
-        )
+    private fun getDurationPairs() = listOf(
+        Pair("Today", "day"),
+        Pair("This Week", "week"),
+        Pair("This Month", "month"),
+        Pair("This Year", "year"),
+        Pair("All Time", "all"),
+    )
 
-    private fun getAttributePairs() =
-        listOf(
-            Pair("Translated", "translated"),
-            Pair("Speechless", "speechless"),
-            Pair("Rewritten", "rewritten"),
-        )
+    private fun getAttributePairs() = listOf(
+        Pair("Translated", "translated"),
+        Pair("Speechless", "speechless"),
+        Pair("Rewritten", "rewritten"),
+    )
 
-    private fun getStatusPairs() =
-        listOf(
-            Pair("Ongoing", "ongoing"),
-            Pair("Complete", "complete"),
-            Pair("On Hold", "onhold"),
-            Pair("Canceled", "canceled"),
-        )
+    private fun getStatusPairs() = listOf(
+        Pair("Ongoing", "ongoing"),
+        Pair("Complete", "complete"),
+        Pair("On Hold", "onhold"),
+        Pair("Canceled", "canceled"),
+    )
 
     companion object {
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)

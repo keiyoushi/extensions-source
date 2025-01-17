@@ -32,24 +32,22 @@ class DocTruyen3Q :
             .rateLimit(3)
             .build()
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(".page-chapter a img, .page-chapter img")
-            .mapIndexed { index, element ->
-                val img = element.attr("abs:src").takeIf { it.isNotBlank() } ?: element.attr("abs:data-original")
-                Page(index, imageUrl = img)
-            }.distinctBy { it.imageUrl }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select(".page-chapter a img, .page-chapter img")
+        .mapIndexed { index, element ->
+            val img = element.attr("abs:src").takeIf { it.isNotBlank() } ?: element.attr("abs:data-original")
+            Page(index, imageUrl = img)
+        }.distinctBy { it.imageUrl }
 
     override fun popularMangaSelector() = "div.item-manga div.item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("h3 a")?.let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("abs:href"))
-            }
-            thumbnail_url = imageOrNull(element.selectFirst("img")!!)
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("h3 a")?.let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("abs:href"))
         }
+        thumbnail_url = imageOrNull(element.selectFirst("img")!!)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -78,21 +76,19 @@ class DocTruyen3Q :
         return GET(url.toString(), headers)
     }
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1.title-manga")!!.text()
-            description = document.selectFirst("p.detail-summary")?.text()
-            status = document.selectFirst("li.status p.detail-info span")?.text().toStatus()
-            genre = document.select("li.category p.detail-info a")?.joinToString { it.text() }
-            thumbnail_url = imageOrNull(document.selectFirst("img.image-comic")!!)
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1.title-manga")!!.text()
+        description = document.selectFirst("p.detail-summary")?.text()
+        status = document.selectFirst("li.status p.detail-info span")?.text().toStatus()
+        genre = document.select("li.category p.detail-info a")?.joinToString { it.text() }
+        thumbnail_url = imageOrNull(document.selectFirst("img.image-comic")!!)
+    }
 
     override fun chapterListSelector() = "div.list-chapter li.row:not(.heading):not([style])"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            date_upload = element.selectFirst(".chapters + div")?.text().toDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        date_upload = element.selectFirst(".chapters + div")?.text().toDate()
+    }
 
     override val genresSelector = ".categories-detail ul.nav li:not(.active) a"
 }

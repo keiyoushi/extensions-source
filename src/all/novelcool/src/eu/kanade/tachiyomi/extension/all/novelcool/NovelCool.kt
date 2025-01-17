@@ -67,15 +67,14 @@ open class NovelCool(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        when (preference.useAppApi) {
-            true ->
-                client
-                    .newCall(commonApiRequest("$apiUrl/elite/hot/", page))
-                    .asObservableSuccess()
-                    .map(::commonApiResponseParse)
-            else -> super.fetchPopularManga(page)
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = when (preference.useAppApi) {
+        true ->
+            client
+                .newCall(commonApiRequest("$apiUrl/elite/hot/", page))
+                .asObservableSuccess()
+                .map(::commonApiResponseParse)
+        else -> super.fetchPopularManga(page)
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         // popular on the site only have novels
@@ -94,15 +93,14 @@ open class NovelCool(
 
     override fun popularMangaSelector() = searchMangaSelector()
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        when (preference.useAppApi) {
-            true ->
-                client
-                    .newCall(commonApiRequest("$apiUrl/elite/latest/", page))
-                    .asObservableSuccess()
-                    .map(::commonApiResponseParse)
-            else -> super.fetchLatestUpdates(page)
-        }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = when (preference.useAppApi) {
+        true ->
+            client
+                .newCall(commonApiRequest("$apiUrl/elite/latest/", page))
+                .asObservableSuccess()
+                .map(::commonApiResponseParse)
+        else -> super.fetchLatestUpdates(page)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/latest.html", headers)
 
@@ -122,15 +120,14 @@ open class NovelCool(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when (preference.useAppApi) {
-            true ->
-                client
-                    .newCall(commonApiRequest("$apiUrl/book/search/", page, query))
-                    .asObservableSuccess()
-                    .map(::commonApiResponseParse)
-            else -> super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = when (preference.useAppApi) {
+        true ->
+            client
+                .newCall(commonApiRequest("$apiUrl/book/search/", page, query))
+                .asObservableSuccess()
+                .map(::commonApiResponseParse)
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -176,12 +173,11 @@ open class NovelCool(
         return super.searchMangaParse(response)
     }
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.select(".book-pic").attr("title")
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").imgAttr()
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.select(".book-pic").attr("title")
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.select("img").imgAttr()
+    }
 
     override fun searchMangaSelector() = ".book-list .book-item:not(:has(.book-type-novel))"
 
@@ -207,12 +203,11 @@ open class NovelCool(
         val id: String,
     ) : Filter.TriState(name)
 
-    private fun getStatusList() =
-        listOf(
-            Pair("All", ""),
-            Pair("Completed", "YES"),
-            Pair("Ongoing", "NO"),
-        )
+    private fun getStatusList() = listOf(
+        Pair("All", ""),
+        Pair("Completed", "YES"),
+        Pair("Ongoing", "NO"),
+    )
 
     private class StatusFilter(
         title: String,
@@ -221,14 +216,13 @@ open class NovelCool(
         fun getValue() = status[state].second
     }
 
-    private fun getRatingList() =
-        listOf(
-            Pair("All", ""),
-            Pair("5 Star", "5"),
-            Pair("4 Star", "4"),
-            Pair("3 Star", "3"),
-            Pair("2 Star", "2"),
-        )
+    private fun getRatingList() = listOf(
+        Pair("All", ""),
+        Pair("5 Star", "5"),
+        Pair("4 Star", "4"),
+        Pair("3 Star", "3"),
+        Pair("2 Star", "2"),
+    )
 
     private class RatingFilter(
         title: String,
@@ -290,32 +284,30 @@ open class NovelCool(
 
     private fun genresRequest(): Request = GET("$baseUrl/search/", headers)
 
-    private fun parseGenres(document: Document): List<Pair<String, String>> =
-        document
-            .selectFirst(".category-list")
-            ?.select(".category-id-item")
-            .orEmpty()
-            .map { div ->
-                Pair(
-                    div.attr("title"),
-                    div.attr("cate_id"),
-                )
-            }
-
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1.bookinfo-title")!!.text()
-            description = document.selectFirst("div.bk-summary-txt")?.text()
-            genre = document.select(".bookinfo-category-list a").joinToString { it.text() }
-            author = document.selectFirst(".bookinfo-author > a")?.attr("title")
-            thumbnail_url = document.selectFirst(".bookinfo-pic-img")?.attr("abs:src")
-            status =
-                document
-                    .select(".bookinfo-category-list a")
-                    .first()
-                    ?.text()
-                    .parseStatus()
+    private fun parseGenres(document: Document): List<Pair<String, String>> = document
+        .selectFirst(".category-list")
+        ?.select(".category-id-item")
+        .orEmpty()
+        .map { div ->
+            Pair(
+                div.attr("title"),
+                div.attr("cate_id"),
+            )
         }
+
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1.bookinfo-title")!!.text()
+        description = document.selectFirst("div.bk-summary-txt")?.text()
+        genre = document.select(".bookinfo-category-list a").joinToString { it.text() }
+        author = document.selectFirst(".bookinfo-author > a")?.attr("title")
+        thumbnail_url = document.selectFirst(".bookinfo-pic-img")?.attr("abs:src")
+        status =
+            document
+                .select(".bookinfo-category-list a")
+                .first()
+                ?.text()
+                .parseStatus()
+    }
 
     private fun String?.parseStatus(): Int {
         this ?: return SManga.UNKNOWN
@@ -328,29 +320,25 @@ open class NovelCool(
 
     override fun chapterListSelector() = ".chapter-item-list a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.attr("title")
-            date_upload = element.select(".chapter-item-time").text().parseDate()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.attr("title")
+        date_upload = element.select(".chapter-item-time").text().parseDate()
+    }
 
-    private fun String.parseDate(): Long =
-        runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
+    private fun String.parseDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        pageClient
-            .newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .map(::pageListParse)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = pageClient
+        .newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .map(::pageListParse)
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        super
-            .pageListRequest(chapter)
-            .newBuilder()
-            .addHeader("Referer", baseUrl)
-            .build()
+    override fun pageListRequest(chapter: SChapter): Request = super
+        .pageListRequest(chapter)
+        .newBuilder()
+        .addHeader("Referer", baseUrl)
+        .build()
 
     override fun pageListParse(document: Document): List<Page> {
         var doc = document
@@ -380,21 +368,19 @@ open class NovelCool(
         }
     }
 
-    private fun singlePageParse(document: Document): List<Page> =
-        document
-            .selectFirst(".mangaread-pagenav > .sl-page")
-            ?.select("option")
-            ?.mapIndexed { idx, page ->
-                Page(idx, page.attr("value"))
-            } ?: emptyList()
+    private fun singlePageParse(document: Document): List<Page> = document
+        .selectFirst(".mangaread-pagenav > .sl-page")
+        ?.select("option")
+        ?.mapIndexed { idx, page ->
+            Page(idx, page.attr("value"))
+        } ?: emptyList()
 
     override fun imageUrlParse(document: Document): String = document.select(".mangaread-manga-pic").attr("src")
 
-    private fun Elements.imgAttr(): String =
-        when {
-            hasAttr("lazy_url") -> attr("abs:lazy_url")
-            else -> attr("abs:src")
-        }
+    private fun Elements.imgAttr(): String = when {
+        hasAttr("lazy_url") -> attr("abs:lazy_url")
+        else -> attr("abs:src")
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context)

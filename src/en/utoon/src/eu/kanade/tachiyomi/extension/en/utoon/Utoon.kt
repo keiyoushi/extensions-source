@@ -20,10 +20,9 @@ class Utoon :
 
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-            date_upload = element.selectFirst("span a")?.attr("title")?.let { parseRelativeDate(it) }
-                ?: parseChapterDate("${element.selectFirst(chapterDateSelector())?.text()} $currentYear")
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        date_upload = element.selectFirst("span a")?.attr("title")?.let { parseRelativeDate(it) }
+            ?: parseChapterDate("${element.selectFirst(chapterDateSelector())?.text()} $currentYear")
+    }
 }

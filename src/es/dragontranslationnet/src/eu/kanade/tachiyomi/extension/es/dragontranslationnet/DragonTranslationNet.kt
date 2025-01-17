@@ -21,12 +21,11 @@ class DragonTranslationNet : Madara("DragonTranslation.net", "https://dragontran
 
     override fun popularMangaNextPageSelector() = "li.page-item a[rel=next]"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("div.series-box a").attr("href"))
-            thumbnail_url = element.select("img.thumb-img").attr("abs:src")
-            title = element.select(".series-title").text()
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select("div.series-box a").attr("href"))
+        thumbnail_url = element.select("img.thumb-img").attr("abs:src")
+        title = element.select(".series-title").text()
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -82,12 +81,11 @@ class DragonTranslationNet : Madara("DragonTranslation.net", "https://dragontran
         return chapter
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div#chapter_imgs img").mapIndexed { index, element ->
-            Page(
-                index,
-                document.location(),
-                element.attr("abs:src"),
-            )
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#chapter_imgs img").mapIndexed { index, element ->
+        Page(
+            index,
+            document.location(),
+            element.attr("abs:src"),
+        )
+    }
 }

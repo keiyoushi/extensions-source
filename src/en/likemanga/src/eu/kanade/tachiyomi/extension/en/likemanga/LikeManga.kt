@@ -44,10 +44,9 @@ class LikeManga : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter("top-manga")))
 
@@ -193,30 +192,28 @@ class LikeManga : ParsedHttpSource() {
         return super.searchMangaParse(response)
     }
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
-            title = element.select(".title-manga").text()
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
+        title = element.select(".title-manga").text()
+    }
 
     override fun searchMangaSelector() = "div.card-body div.card"
 
     override fun searchMangaNextPageSelector() = "ul.pagination a:contains(»)"
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.select("#title-detail-manga").text()
-            thumbnail_url = document.selectFirst(".detail-info img")?.imgAttr()
-            description = document.selectFirst("#summary_shortened")?.text()?.trim()
-            genre = document.select(".list-info a[href*=/genres/]").joinToString { it.text() }
-            status = document.selectFirst(".list-info .status p:nth-child(2)")?.text().parseStatus()
-            author =
-                document
-                    .selectFirst(".list-info .author p:nth-child(2)")
-                    ?.text()
-                    ?.takeUnless { it.trim() == "Updating" }
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.select("#title-detail-manga").text()
+        thumbnail_url = document.selectFirst(".detail-info img")?.imgAttr()
+        description = document.selectFirst("#summary_shortened")?.text()?.trim()
+        genre = document.select(".list-info a[href*=/genres/]").joinToString { it.text() }
+        status = document.selectFirst(".list-info .status p:nth-child(2)")?.text().parseStatus()
+        author =
+            document
+                .selectFirst(".list-info .author p:nth-child(2)")
+                ?.text()
+                ?.takeUnless { it.trim() == "Updating" }
+    }
 
     private fun String?.parseStatus(): Int {
         if (this == null) return SManga.UNKNOWN
@@ -305,12 +302,11 @@ class LikeManga : ParsedHttpSource() {
             .map(::chapterFromElement)
     }
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            name = element.select("a").text()
-            date_upload = element.selectFirst(".chapter-release-date")?.text().parseDate()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        name = element.select("a").text()
+        date_upload = element.selectFirst(".chapter-release-date")?.text().parseDate()
+    }
 
     override fun chapterListSelector() = ".wp-manga-chapter"
 
@@ -337,21 +333,19 @@ class LikeManga : ParsedHttpSource() {
             .mapIndexed { i, img -> Page(i, "", img.imgAttr()) }
     }
 
-    private fun Element.imgAttr(): String? =
-        when {
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String? = when {
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        else -> attr("abs:src")
+    }
 
-    private fun String?.parseDate(): Long =
-        try {
-            dateFormat.parse(this!!)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun String?.parseDate(): Long = try {
+        dateFormat.parse(this!!)!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 

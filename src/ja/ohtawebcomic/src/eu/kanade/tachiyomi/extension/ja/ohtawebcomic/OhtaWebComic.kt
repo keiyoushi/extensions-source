@@ -36,22 +36,20 @@ class OhtaWebComic : ParsedHttpSource() {
             .addInterceptor(SpeedBinbInterceptor(json))
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private lateinit var directory: List<Element>
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(popularMangaRequest(page))
-                .asObservableSuccess()
-                .map { popularMangaParse(it) }
-        } else {
-            Observable.just(parseDirectory(page, ::popularMangaFromElement))
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(popularMangaRequest(page))
+            .asObservableSuccess()
+            .map { popularMangaParse(it) }
+    } else {
+        Observable.just(parseDirectory(page, ::popularMangaFromElement))
+    }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/list/", headers)
 
@@ -75,12 +73,11 @@ class OhtaWebComic : ParsedHttpSource() {
 
     override fun popularMangaSelector() = ".bnrList ul li a"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            title = element.selectFirst(".title")!!.text()
-            thumbnail_url = element.selectFirst(".pic img")?.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.selectFirst(".title")!!.text()
+        thumbnail_url = element.selectFirst(".pic img")?.absUrl("src")
+    }
 
     override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
@@ -96,15 +93,14 @@ class OhtaWebComic : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (page == 1) {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it, query) }
-        } else {
-            Observable.just(parseDirectory(page, ::searchMangaFromElement))
-        }
+    ): Observable<MangasPage> = if (page == 1) {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, query) }
+    } else {
+        Observable.just(parseDirectory(page, ::searchMangaFromElement))
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -135,36 +131,35 @@ class OhtaWebComic : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("[itemprop=name]")!!.text()
-            author = document.selectFirst("[itemprop=author]")?.text()
-            thumbnail_url =
-                document
-                    .selectFirst(".contentHeader")
-                    ?.attr("style")
-                    ?.substringAfter("background-image:url(")
-                    ?.substringBefore(");")
-            description =
-                buildString {
-                    var currentNode =
-                        document.selectFirst("h3.titleBoader:contains(作品について) + dl")
-                            ?: return@buildString
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("[itemprop=name]")!!.text()
+        author = document.selectFirst("[itemprop=author]")?.text()
+        thumbnail_url =
+            document
+                .selectFirst(".contentHeader")
+                ?.attr("style")
+                ?.substringAfter("background-image:url(")
+                ?.substringBefore(");")
+        description =
+            buildString {
+                var currentNode =
+                    document.selectFirst("h3.titleBoader:contains(作品について) + dl")
+                        ?: return@buildString
 
-                    while (true) {
-                        val nextSibling =
-                            currentNode.nextElementSibling()
-                                ?: break
+                while (true) {
+                    val nextSibling =
+                        currentNode.nextElementSibling()
+                            ?: break
 
-                        if (nextSibling.nodeName() != "p") {
-                            break
-                        }
-
-                        appendLine(nextSibling.text())
-                        currentNode = nextSibling
+                    if (nextSibling.nodeName() != "p") {
+                        break
                     }
+
+                    appendLine(nextSibling.text())
+                    currentNode = nextSibling
                 }
-        }
+            }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -191,11 +186,10 @@ class OhtaWebComic : ParsedHttpSource() {
 
     override fun chapterListSelector() = ".backnumberList a[onclick*=openBook]"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            url = "/contents/${element.getChapterId()}"
-            name = element.selectFirst("div.title")!!.text()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        url = "/contents/${element.getChapterId()}"
+        name = element.selectFirst("div.title")!!.text()
+    }
 
     private val reader by lazy { SpeedBinbReader(client, headers, json, true) }
 
@@ -221,7 +215,6 @@ class OhtaWebComic : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }
 
-private fun Element.getChapterId(): String =
-    attr("onclick")
-        .substringAfter("openBook('")
-        .substringBefore("')")
+private fun Element.getChapterId(): String = attr("onclick")
+    .substringAfter("openBook('")
+    .substringBefore("')")

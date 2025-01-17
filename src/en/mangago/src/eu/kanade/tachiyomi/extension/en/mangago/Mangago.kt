@@ -82,11 +82,10 @@ class Mangago :
                     .build()
             }.build()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("Cookie", cookiesHeader)
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Cookie", cookiesHeader)
 
     private val cookiesHeader by lazy {
         val cookies = mutableMapOf<String, String>()
@@ -103,16 +102,15 @@ class Mangago :
 
     private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
 
-    private fun mangaFromElement(element: Element) =
-        SManga.create().apply {
-            val linkElement = element.selectFirst(".thm-effect")!!
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
+        val linkElement = element.selectFirst(".thm-effect")!!
 
-            setUrlWithoutDomain(linkElement.attr("href"))
-            title = linkElement.attr("title")
+        setUrlWithoutDomain(linkElement.attr("href"))
+        title = linkElement.attr("title")
 
-            val thumbnailElem = linkElement.selectFirst("img")!!
-            thumbnail_url = thumbnailElem.attr("abs:data-src").ifBlank { thumbnailElem.attr("abs:src") }
-        }
+        val thumbnailElem = linkElement.selectFirst("img")!!
+        thumbnail_url = thumbnailElem.attr("abs:data-src").ifBlank { thumbnailElem.attr("abs:src") }
+    }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/genre/all/$page/?f=1&o=1&sortby=view&e=", headers)
 
@@ -193,54 +191,52 @@ class Mangago :
             RegexOption.IGNORE_CASE,
         )
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst(".w-title h1")!!.text()
-            if (isRemoveTitleVersion()) {
-                title = title.replace(titleRegex, "").trim()
-            }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst(".w-title h1")!!.text()
+        if (isRemoveTitleVersion()) {
+            title = title.replace(titleRegex, "").trim()
+        }
 
-            document.getElementById("information")!!.let {
-                thumbnail_url = it.selectFirst("img")!!.attr("abs:src")
-                description =
-                    it.selectFirst(".manga_summary")?.let { summary ->
-                        summary.selectFirst("font")?.remove()
-                        summary.text()
-                    }
-                it.select(".manga_info li, .manga_right tr").forEach { el ->
-                    when (el.selectFirst("b, label")!!.text().lowercase()) {
-                        "alternative:" -> description += "\n\n${el.text()}"
-                        "status:" ->
-                            status =
-                                when (el.selectFirst("span")!!.text().lowercase()) {
-                                    "ongoing" -> SManga.ONGOING
-                                    "completed" -> SManga.COMPLETED
-                                    else -> SManga.UNKNOWN
-                                }
-                        "author(s):", "author:" -> author = el.select("a").joinToString { it.text() }
-                        "genre(s):" -> genre = el.select("a").joinToString { it.text() }
-                    }
+        document.getElementById("information")!!.let {
+            thumbnail_url = it.selectFirst("img")!!.attr("abs:src")
+            description =
+                it.selectFirst(".manga_summary")?.let { summary ->
+                    summary.selectFirst("font")?.remove()
+                    summary.text()
+                }
+            it.select(".manga_info li, .manga_right tr").forEach { el ->
+                when (el.selectFirst("b, label")!!.text().lowercase()) {
+                    "alternative:" -> description += "\n\n${el.text()}"
+                    "status:" ->
+                        status =
+                            when (el.selectFirst("span")!!.text().lowercase()) {
+                                "ongoing" -> SManga.ONGOING
+                                "completed" -> SManga.COMPLETED
+                                else -> SManga.UNKNOWN
+                            }
+                    "author(s):", "author:" -> author = el.select("a").joinToString { it.text() }
+                    "genre(s):" -> genre = el.select("a").joinToString { it.text() }
                 }
             }
         }
+    }
 
     override fun chapterListSelector() = "table#chapter_table > tbody > tr, table.uk-table > tbody > tr"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            val link = element.select("a.chico")
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        val link = element.select("a.chico")
 
-            val urlOriginal = link.attr("href")
-            if (urlOriginal.startsWith("http")) url = urlOriginal else setUrlWithoutDomain(urlOriginal)
-            name = link.text().trim()
-            date_upload = runCatching {
-                dateFormat.parse(element.select("td:last-child").text().trim())?.time
-            }.getOrNull() ?: 0L
-            scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")?.text()?.trim()
-            if (scanlator.isNullOrBlank()) {
-                scanlator = "Unknown"
-            }
+        val urlOriginal = link.attr("href")
+        if (urlOriginal.startsWith("http")) url = urlOriginal else setUrlWithoutDomain(urlOriginal)
+        name = link.text().trim()
+        date_upload = runCatching {
+            dateFormat.parse(element.select("td:last-child").text().trim())?.time
+        }.getOrNull() ?: 0L
+        scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")?.text()?.trim()
+        if (scanlator.isNullOrBlank()) {
+            scanlator = "Unknown"
         }
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         if (!document.select("div.controls ul#dropdown-menu-page").isNullOrEmpty()) {
@@ -373,13 +369,12 @@ class Mangago :
         }
     }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Ignored if using text search"),
-            SortFilter(),
-            StatusFilterGroup(),
-            GenreFilterGroup(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Ignored if using text search"),
+        SortFilter(),
+        StatusFilterGroup(),
+        GenreFilterGroup(),
+    )
 
     private interface UriFilter {
         fun addToUrl(builder: HttpUrl.Builder)
@@ -580,10 +575,9 @@ class Mangago :
         return output.toByteArray()
     }
 
-    private fun buildCookies(cookies: Map<String, String>) =
-        cookies.entries.joinToString(separator = "; ", postfix = ";") {
-            "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
-        }
+    private fun buildCookies(cookies: Map<String, String>) = cookies.entries.joinToString(separator = "; ", postfix = ";") {
+        "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
+    }
 
     private fun String.decodeHex(): ByteArray {
         check(length % 2 == 0) { "Must have an even length" }

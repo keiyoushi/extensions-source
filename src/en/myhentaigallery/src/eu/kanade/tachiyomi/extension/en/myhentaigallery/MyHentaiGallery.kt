@@ -34,12 +34,11 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.comic-inner"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("h2").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("h2").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.select("img").attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector() = "li.next"
 
@@ -70,39 +69,37 @@ class MyHentaiGallery : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client
-                .newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client
+            .newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotBlank()) {
-            GET("$baseUrl/search/$page?query=$query", headers)
-        } else {
-            val url = "$baseUrl/gallery/category".toHttpUrl().newBuilder()
+    ): Request = if (query.isNotBlank()) {
+        GET("$baseUrl/search/$page?query=$query", headers)
+    } else {
+        val url = "$baseUrl/gallery/category".toHttpUrl().newBuilder()
 
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> {
-                        url.addPathSegment(filter.toUriPart())
-                    }
-                    else -> {}
+        filters.forEach { filter ->
+            when (filter) {
+                is GenreFilter -> {
+                    url.addPathSegment(filter.toUriPart())
                 }
+                else -> {}
             }
-            url.addPathSegment("$page")
-
-            GET(url.build(), headers)
         }
+        url.addPathSegment("$page")
+
+        GET(url.build(), headers)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -112,36 +109,34 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        document.select("div.comic-header").let { info ->
-            SManga.create().apply {
-                title = info.select("h1").text()
-                genre = info.select("div:containsOwn(categories) a").joinToString { it.text() }
-                artist = info.select("div:containsOwn(artists) a").text()
-                thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.attr("src")
-                description =
-                    info.select("div:containsOwn(groups) a").let { groups ->
-                        if (groups.isNotEmpty()) "Groups: ${groups.joinToString { it.text() }}\n" else ""
-                    }
-                description +=
-                    info.select("div:containsOwn(parodies) a").let { groups ->
-                        if (groups.isNotEmpty()) "Parodies: ${groups.joinToString { it.text() }}" else ""
-                    }
-            }
+    override fun mangaDetailsParse(document: Document): SManga = document.select("div.comic-header").let { info ->
+        SManga.create().apply {
+            title = info.select("h1").text()
+            genre = info.select("div:containsOwn(categories) a").joinToString { it.text() }
+            artist = info.select("div:containsOwn(artists) a").text()
+            thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.attr("src")
+            description =
+                info.select("div:containsOwn(groups) a").let { groups ->
+                    if (groups.isNotEmpty()) "Groups: ${groups.joinToString { it.text() }}\n" else ""
+                }
+            description +=
+                info.select("div:containsOwn(parodies) a").let { groups ->
+                    if (groups.isNotEmpty()) "Parodies: ${groups.joinToString { it.text() }}" else ""
+                }
         }
+    }
 
     // Chapters
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        listOf(
-            SChapter.create().apply {
-                name = "Chapter"
-                url =
-                    response.request.url
-                        .toString()
-                        .substringAfter(baseUrl)
-            },
-        )
+    override fun chapterListParse(response: Response): List<SChapter> = listOf(
+        SChapter.create().apply {
+            name = "Chapter"
+            url =
+                response.request.url
+                    .toString()
+                    .substringAfter(baseUrl)
+        },
+    )
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
@@ -149,21 +144,19 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.comic-thumb img[src]").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:src").replace("/thumbnail/", "/original/"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.comic-thumb img[src]").mapIndexed { i, img ->
+        Page(i, "", img.attr("abs:src").replace("/thumbnail/", "/original/"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            GenreFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
     private class GenreFilter :
         UriPartFilter(

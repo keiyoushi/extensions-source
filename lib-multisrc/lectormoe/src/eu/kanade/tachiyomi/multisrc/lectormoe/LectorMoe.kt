@@ -36,10 +36,9 @@ abstract class LectorMoe(
             .rateLimitHost(apiBaseUrl.toHttpUrl(), 3)
             .build()
 
-    final override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    final override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val apiHeaders: Headers =
         headersBuilder()
@@ -91,16 +90,14 @@ abstract class LectorMoe(
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            SortByFilter("Ordenar por", getSortList()),
-        )
+    override fun getFilterList() = FilterList(
+        SortByFilter("Ordenar por", getSortList()),
+    )
 
-    private fun getSortList() =
-        arrayOf(
-            Pair("Popularidad", "popular"),
-            Pair("Recientes", "latest"),
-        )
+    private fun getSortList() = arrayOf(
+        Pair("Popularidad", "popular"),
+        Pair("Recientes", "latest"),
+    )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 

@@ -36,17 +36,16 @@ object ProjectSukiFilters {
     @Suppress("UNUSED_PARAMETER")
     fun headersSequence(preferences: ProjectSukiPreferences): Sequence<Filter.Header> = sequenceOf()
 
-    fun filtersSequence(preferences: ProjectSukiPreferences): Sequence<Filter<*>> =
-        sequence {
-            addFilter(SearchModeFilter(preferences.defaultSearchMode()))
-            yield(Filter.Separator())
-            yield(Filter.Header("All filters below will only work in Full Site mode."))
-            addFilter(Origin())
-            addFilter(Status())
-            yield(Filter.Separator())
-            addFilter(Author())
-            addFilter(Artist())
-        }
+    fun filtersSequence(preferences: ProjectSukiPreferences): Sequence<Filter<*>> = sequence {
+        addFilter(SearchModeFilter(preferences.defaultSearchMode()))
+        yield(Filter.Separator())
+        yield(Filter.Header("All filters below will only work in Full Site mode."))
+        addFilter(Origin())
+        addFilter(Status())
+        yield(Filter.Separator())
+        addFilter(Author())
+        addFilter(Artist())
+    }
 
     @Suppress("UNUSED_PARAMETER")
     fun footersSequence(preferences: ProjectSukiPreferences): Sequence<Filter.Header> = sequenceOf()

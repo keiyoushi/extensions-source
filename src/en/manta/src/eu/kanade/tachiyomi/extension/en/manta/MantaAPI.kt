@@ -58,11 +58,10 @@ data class Episode(
     val timestamp: Long
         get() = createdAt.timestamp
 
-    override fun toString() =
-        buildString {
-            append(data?.title ?: "Episode $ord")
-            if (lockData.isLocked) append(" \uD83D\uDD12")
-        }
+    override fun toString() = buildString {
+        append(data?.title ?: "Episode $ord")
+        if (lockData.isLocked) append(" \uD83D\uDD12")
+    }
 }
 
 @Serializable

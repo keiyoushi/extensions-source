@@ -97,10 +97,9 @@ class TsukiMangas : HttpSource() {
             .build()
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -134,16 +133,15 @@ class TsukiMangas : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client
-                .newCall(GET("$apiUrl/mangas/$id", headers))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client
+            .newCall(GET("$apiUrl/mangas/$id", headers))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
         val details = mangaDetailsParse(response)
@@ -186,31 +184,29 @@ class TsukiMangas : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val mangaDto = response.parseAs<CompleteMangaDto>()
-            url = "/obra" + mangaDto.entryPath
-            thumbnail_url = baseUrl + mangaDto.imagePath
-            title = mangaDto.title
-            artist = mangaDto.staff
-            genre = mangaDto.genres.joinToString { it.genre }
-            status = parseStatus(mangaDto.status.orEmpty())
-            description =
-                buildString {
-                    mangaDto.synopsis?.also { append("$it\n\n") }
-                    if (mangaDto.titles.isNotEmpty()) {
-                        append("Títulos alternativos: ${mangaDto.titles.joinToString { it.title }}")
-                    }
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val mangaDto = response.parseAs<CompleteMangaDto>()
+        url = "/obra" + mangaDto.entryPath
+        thumbnail_url = baseUrl + mangaDto.imagePath
+        title = mangaDto.title
+        artist = mangaDto.staff
+        genre = mangaDto.genres.joinToString { it.genre }
+        status = parseStatus(mangaDto.status.orEmpty())
+        description =
+            buildString {
+                mangaDto.synopsis?.also { append("$it\n\n") }
+                if (mangaDto.titles.isNotEmpty()) {
+                    append("Títulos alternativos: ${mangaDto.titles.joinToString { it.title }}")
                 }
-        }
+            }
+    }
 
-    private fun parseStatus(status: String) =
-        when (status) {
-            "Ativo" -> SManga.ONGOING
-            "Completo" -> SManga.COMPLETED
-            "Hiato" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String) = when (status) {
+        "Ativo" -> SManga.ONGOING
+        "Completo" -> SManga.COMPLETED
+        "Hiato" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
@@ -278,19 +274,18 @@ class TsukiMangas : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            try {
-                json.decodeFromStream(it.body.byteStream())
-            } catch (_: Exception) {
-                throw Exception(
-                    """
-                    Contéudo protegido ou foi removido.
-                    Faça o login na WebView e tente novamente
-                    """.trimIndent(),
-                )
-            }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        try {
+            json.decodeFromStream(it.body.byteStream())
+        } catch (_: Exception) {
+            throw Exception(
+                """
+                Contéudo protegido ou foi removido.
+                Faça o login na WebView e tente novamente
+                """.trimIndent(),
+            )
         }
+    }
 
     private fun HttpUrl.Builder.addIfNotBlank(
         query: String,
@@ -302,18 +297,16 @@ class TsukiMangas : HttpSource() {
 
     private fun String.getMangaId() = substringAfter("/obra/").substringBefore("/")
 
-    private fun String.toDate(): Long =
-        runCatching { DATE_FORMATTER.parse(trim())?.time }
-            .getOrNull() ?: 0L
+    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(trim())?.time }
+        .getOrNull() ?: 0L
 
     private val pageNumberRegex = Regex("""(\d+)\.(png|jpg|jpeg|gif|webp)$""")
 
-    private fun String.extractPageNumber() =
-        pageNumberRegex
-            .find(substringBefore("?"))
-            ?.groupValues
-            ?.get(1)
-            ?.toInt() ?: 0
+    private fun String.extractPageNumber() = pageNumberRegex
+        .find(substringBefore("?"))
+        ?.groupValues
+        ?.get(1)
+        ?.toInt() ?: 0
 
     /**
      * This may sound stupid (because it is), but a similar approach exists

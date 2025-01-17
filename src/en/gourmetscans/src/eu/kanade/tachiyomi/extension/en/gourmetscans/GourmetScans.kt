@@ -111,8 +111,7 @@ class GourmetScans :
 
     // Chapters
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            url = this.url.substringBefore("?style=list")
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        url = this.url.substringBefore("?style=list")
+    }
 }

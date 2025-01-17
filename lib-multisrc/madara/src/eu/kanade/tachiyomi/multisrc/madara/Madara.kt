@@ -44,10 +44,9 @@ abstract class Madara(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     protected val xhrHeaders by lazy {
         headersBuilder()
@@ -139,12 +138,11 @@ abstract class Madara(
         }
     }
 
-    protected fun useLoadMoreRequest(): Boolean =
-        when (useLoadMoreRequest) {
-            LoadMoreStrategy.Always -> true
-            LoadMoreStrategy.Never -> false
-            else -> loadMoreRequestDetected == LoadMoreDetection.True
-        }
+    protected fun useLoadMoreRequest(): Boolean = when (useLoadMoreRequest) {
+        LoadMoreStrategy.Always -> true
+        LoadMoreStrategy.Never -> false
+        else -> loadMoreRequestDetected == LoadMoreDetection.True
+    }
 
     // Popular Manga
 
@@ -184,19 +182,17 @@ abstract class Madara(
         return manga
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = true)
-        } else {
-            GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views", headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = true)
+    } else {
+        GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views", headers)
+    }
 
-    override fun popularMangaNextPageSelector(): String? =
-        if (useLoadMoreRequest()) {
-            "body:not(:has(.no-posts))"
-        } else {
-            "div.nav-previous, nav.navigation-ajax, a.nextpostslink"
-        }
+    override fun popularMangaNextPageSelector(): String? = if (useLoadMoreRequest()) {
+        "body:not(:has(.no-posts))"
+    } else {
+        "div.nav-previous, nav.navigation-ajax, a.nextpostslink"
+    }
 
     // Latest Updates
 
@@ -207,12 +203,11 @@ abstract class Madara(
         return popularMangaFromElement(element)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = false)
-        } else {
-            GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = false)
+    } else {
+        GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
+    }
 
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
@@ -272,23 +267,21 @@ abstract class Madara(
         return super.fetchSearchManga(page, query, filters)
     }
 
-    protected open fun searchPage(page: Int): String =
-        if (page == 1) {
-            ""
-        } else {
-            "page/$page/"
-        }
+    protected open fun searchPage(page: Int): String = if (page == 1) {
+        ""
+    } else {
+        "page/$page/"
+    }
 
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (useLoadMoreRequest()) {
-            searchLoadMoreRequest(page, query, filters)
-        } else {
-            searchRequest(page, query, filters)
-        }
+    ): Request = if (useLoadMoreRequest()) {
+        searchLoadMoreRequest(page, query, filters)
+    } else {
+        searchRequest(page, query, filters)
+    }
 
     protected open fun searchRequest(
         page: Int,
@@ -897,23 +890,21 @@ abstract class Madara(
 
     private fun String.containsIn(array: Array<String>): Boolean = this.lowercase() in array.map { it.lowercase() }
 
-    protected open fun imageFromElement(element: Element): String? =
-        when {
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
-            element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
-            else -> element.attr("abs:src")
-        }
+    protected open fun imageFromElement(element: Element): String? = when {
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
+        element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
+        element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
+        else -> element.attr("abs:src")
+    }
 
     /**
      *  Get the best image quality available from srcset
      */
-    private fun String.getSrcSetImage(): String? =
-        this
-            .split(" ")
-            .filter(URL_REGEX::matches)
-            .maxOfOrNull(String::toString)
+    private fun String.getSrcSetImage(): String? = this
+        .split(" ")
+        .filter(URL_REGEX::matches)
+        .maxOfOrNull(String::toString)
 
     /**
      * Set it to true if the source uses the new AJAX endpoint to
@@ -1013,12 +1004,11 @@ abstract class Madara(
     open fun parseChapterDate(date: String?): Long {
         date ?: return 0
 
-        fun SimpleDateFormat.tryParse(string: String): Long =
-            try {
-                parse(string)?.time ?: 0
-            } catch (_: ParseException) {
-                0
-            }
+        fun SimpleDateFormat.tryParse(string: String): Long = try {
+            parse(string)?.time ?: 0
+        } catch (_: ParseException) {
+            0
+        }
 
         return when {
             // Handle 'yesterday' and 'today', using midnight
@@ -1253,17 +1243,16 @@ abstract class Madara(
      *
      * @param document The search page document
      */
-    protected open fun parseGenres(document: Document): List<Genre> =
-        document
-            .selectFirst("div.checkbox-group")
-            ?.select("div.checkbox")
-            .orEmpty()
-            .map { li ->
-                Genre(
-                    li.selectFirst("label")!!.text(),
-                    li.selectFirst("input[type=checkbox]")!!.`val`(),
-                )
-            }
+    protected open fun parseGenres(document: Document): List<Genre> = document
+        .selectFirst("div.checkbox-group")
+        ?.select("div.checkbox")
+        .orEmpty()
+        .map { li ->
+            Genre(
+                li.selectFirst("label")!!.text(),
+                li.selectFirst("input[type=checkbox]")!!.`val`(),
+            )
+        }
 
     // https://stackoverflow.com/a/66614516
     protected fun String.decodeHex(): ByteArray {

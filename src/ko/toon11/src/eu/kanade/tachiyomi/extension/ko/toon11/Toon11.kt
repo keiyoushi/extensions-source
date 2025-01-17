@@ -45,58 +45,55 @@ class Toon11 : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotBlank()) {
-            val url =
-                "$baseUrl/bbs/search_stx.php"
-                    .toHttpUrl()
-                    .newBuilder()
-                    .apply {
-                        addQueryParameter("stx", query)
-                    }.build()
-            GET(url, headers)
-        } else {
-            var urlString = ""
-            var isOver = ""
-            var genre = ""
+    ): Request = if (query.isNotBlank()) {
+        val url =
+            "$baseUrl/bbs/search_stx.php"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("stx", query)
+                }.build()
+        GET(url, headers)
+    } else {
+        var urlString = ""
+        var isOver = ""
+        var genre = ""
 
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortFilter -> urlString = filter.selected
-                    is StatusFilter -> isOver = filter.selected
-                    is GenreFilter -> genre = filter.selected
-                    else -> {}
-                }
-            }
-
-            val url =
-                urlString
-                    .toHttpUrl()
-                    .newBuilder()
-                    .apply {
-                        addQueryParameter("is_over", isOver)
-                        if (page > 1) addQueryParameter("page", page.toString())
-                        if (genre.isNotEmpty()) addQueryParameter("sca", genre)
-                    }.build()
-
-            GET(url, headers)
-        }
-
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst(".homelist-title")!!.text()
-            thumbnail_url = element.selectFirst(".homelist-thumb")?.absUrl("data-mobile-image")
-        }
-
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst(".homelist-title")!!.text()
-            element.selectFirst(".homelist-thumb")?.also {
-                thumbnail_url = "https:" + it.attr("style").substringAfter("url('").substringBefore("')")
+        filters.forEach { filter ->
+            when (filter) {
+                is SortFilter -> urlString = filter.selected
+                is StatusFilter -> isOver = filter.selected
+                is GenreFilter -> genre = filter.selected
+                else -> {}
             }
         }
+
+        val url =
+            urlString
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("is_over", isOver)
+                    if (page > 1) addQueryParameter("page", page.toString())
+                    if (genre.isNotEmpty()) addQueryParameter("sca", genre)
+                }.build()
+
+        GET(url, headers)
+    }
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst(".homelist-title")!!.text()
+        thumbnail_url = element.selectFirst(".homelist-thumb")?.absUrl("data-mobile-image")
+    }
+
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst(".homelist-title")!!.text()
+        element.selectFirst(".homelist-thumb")?.also {
+            thumbnail_url = "https:" + it.attr("style").substringAfter("url('").substringBefore("')")
+        }
+    }
 
     override fun popularMangaNextPageSelector() = ".pg_end"
 
@@ -104,34 +101,31 @@ class Toon11 : ParsedHttpSource() {
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst(".homelist-title")!!.text()
-            val dataId = element.attr("data-id")
-            setUrlWithoutDomain("$baseUrl/bbs/board.php?bo_table=toons&stx=$title&is=$dataId")
-            element.selectFirst(".homelist-thumb")?.also {
-                thumbnail_url = "https:" + it.attr("style").substringAfter("url('").substringBefore("')")
-            }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst(".homelist-title")!!.text()
+        val dataId = element.attr("data-id")
+        setUrlWithoutDomain("$baseUrl/bbs/board.php?bo_table=toons&stx=$title&is=$dataId")
+        element.selectFirst(".homelist-thumb")?.also {
+            thumbnail_url = "https:" + it.attr("style").substringAfter("url('").substringBefore("')")
         }
+    }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.selectFirst("h2.title")!!.text()
-            thumbnail_url = document.selectFirst("img.banner")?.absUrl("src")
-            document.selectFirst("span:contains(분류) + span")?.also { status = parseStatus(it.text()) }
-            document.selectFirst("span:contains(작가) + span")?.also { author = it.text() }
-            document.selectFirst("span:contains(소개) + span")?.also { description = it.text() }
-            document.selectFirst("span:contains(장르) + span")?.also { genre = it.text().split(",").joinToString() }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h2.title")!!.text()
+        thumbnail_url = document.selectFirst("img.banner")?.absUrl("src")
+        document.selectFirst("span:contains(분류) + span")?.also { status = parseStatus(it.text()) }
+        document.selectFirst("span:contains(작가) + span")?.also { author = it.text() }
+        document.selectFirst("span:contains(소개) + span")?.also { description = it.text() }
+        document.selectFirst("span:contains(장르) + span")?.also { genre = it.text().split(",").joinToString() }
+    }
 
-    private fun parseStatus(element: String): Int =
-        when {
-            "완결" in element -> SManga.COMPLETED
-            "주간" in element || "월간" in element || "연재" in element || "격주" in element -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(element: String): Int = when {
+        "완결" in element -> SManga.COMPLETED
+        "주간" in element || "월간" in element || "연재" in element || "격주" in element -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
 
     private tailrec fun parseChapters(
         nextURL: String,
@@ -219,14 +213,13 @@ class Toon11 : ParsedHttpSource() {
 
     // Filters
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Note: can't combine search query with filters, status filter only has effect in 인기만화"),
-            Filter.Separator(),
-            SortFilter(getSortList, 0),
-            StatusFilter(getStatusList, 0),
-            GenreFilter(getGenreList, 0),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Note: can't combine search query with filters, status filter only has effect in 인기만화"),
+        Filter.Separator(),
+        SortFilter(getSortList, 0),
+        StatusFilter(getStatusList, 0),
+        GenreFilter(getGenreList, 0),
+    )
 
     class SelectFilterOption(
         val name: String,

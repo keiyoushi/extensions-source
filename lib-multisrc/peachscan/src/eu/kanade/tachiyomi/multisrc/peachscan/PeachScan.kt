@@ -51,14 +51,13 @@ abstract class PeachScan(
 
     override fun popularMangaSelector() = ".comics__all__box"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            val anchor = element.selectFirst(".titulo__comic__allcomics")!!
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        val anchor = element.selectFirst(".titulo__comic__allcomics")!!
 
-            setUrlWithoutDomain(anchor.attr("href"))
-            title = anchor.text()
-            thumbnail_url = element.selectFirst(".box-image img")?.attr("abs:src")
-        }
+        setUrlWithoutDomain(anchor.attr("href"))
+        title = anchor.text()
+        thumbnail_url = element.selectFirst(".box-image img")?.attr("abs:src")
+    }
 
     override fun popularMangaNextPageSelector() = null
 
@@ -66,12 +65,11 @@ abstract class PeachScan(
 
     override fun latestUpdatesSelector() = "div.comic:not(:has(a.box-image > p:contains(Novel)))"
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst(".titulo__comic")!!.text()
-            thumbnail_url = element.selectFirst(".comic__img")?.attr("abs:src")
-        }
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst(".titulo__comic")!!.text()
+        thumbnail_url = element.selectFirst(".comic__img")?.attr("abs:src")
+    }
 
     override fun latestUpdatesNextPageSelector() = null
 
@@ -122,33 +120,31 @@ abstract class PeachScan(
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
 
-            title = element.selectFirst("span")!!.text()
-            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-        }
+        title = element.selectFirst("span")!!.text()
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+    }
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst(".desc__titulo__comic")!!.text()
-            author = document.selectFirst(".sumario__specs__box:contains(Autor) + .sumario__specs__tipo")?.text()
-            genre = document.select("a[href*=pesquisar?category]").joinToString { it.text() }
-            status =
-                when (document.selectFirst(".sumario__specs__box:contains(Status) + .sumario__specs__tipo")?.text()) {
-                    "Em Lançamento" -> SManga.ONGOING
-                    "Finalizado" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            thumbnail_url = document.selectFirst(".sumario__img")?.attr("abs:src")
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst(".desc__titulo__comic")!!.text()
+        author = document.selectFirst(".sumario__specs__box:contains(Autor) + .sumario__specs__tipo")?.text()
+        genre = document.select("a[href*=pesquisar?category]").joinToString { it.text() }
+        status =
+            when (document.selectFirst(".sumario__specs__box:contains(Status) + .sumario__specs__tipo")?.text()) {
+                "Em Lançamento" -> SManga.ONGOING
+                "Finalizado" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        thumbnail_url = document.selectFirst(".sumario__img")?.attr("abs:src")
 
-            val category = document.selectFirst(".categoria__comic")?.text()
-            val synopsis = document.selectFirst(".sumario__sinopse__texto")?.text()
-            description = "Tipo: $category\n\n$synopsis"
-        }
+        val category = document.selectFirst(".categoria__comic")?.text()
+        val synopsis = document.selectFirst(".sumario__sinopse__texto")?.text()
+        description = "Tipo: $category\n\n$synopsis"
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -164,18 +160,17 @@ abstract class PeachScan(
 
     override fun chapterListSelector() = ".link__capitulos"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
 
-            name = element.selectFirst(".numero__capitulo")!!.text()
-            date_upload =
-                runCatching {
-                    val date = element.selectFirst(".data__lançamento")!!.text()
+        name = element.selectFirst(".numero__capitulo")!!.text()
+        date_upload =
+            runCatching {
+                val date = element.selectFirst(".data__lançamento")!!.text()
 
-                    dateFormat.parse(date)!!.time
-                }.getOrDefault(0L)
-        }
+                dateFormat.parse(date)!!.time
+            }.getOrDefault(0L)
+    }
 
     private val urlsRegex = """const\s+urls\s*=\s*\[(.*?)]\s*;""".toRegex()
 

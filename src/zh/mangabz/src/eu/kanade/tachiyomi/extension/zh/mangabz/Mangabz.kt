@@ -56,26 +56,23 @@ class Mangabz :
             else -> _baseUrl
         }
 
-    override fun headersBuilder() =
-        Headers
-            .Builder()
-            .add("Referer", _baseUrl)
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
+    override fun headersBuilder() = Headers
+        .Builder()
+        .add("Referer", _baseUrl)
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
 
-    private fun SManga.stripMirror() =
-        apply {
-            val old = url
-            url =
-                buildString(old.length) {
-                    append(old, 0, old.length - urlSuffix.length).append("bz/")
-                }
-        }
+    private fun SManga.stripMirror() = apply {
+        val old = url
+        url =
+            buildString(old.length) {
+                append(old, 0, old.length - urlSuffix.length).append("bz/")
+            }
+    }
 
-    private fun String.toMirror() =
-        buildString {
-            val old = this@toMirror // ...bz/
-            append(old, 0, old.length - 3).append(urlSuffix)
-        }
+    private fun String.toMirror() = buildString {
+        val old = this@toMirror // ...bz/
+        append(old, 0, old.length - 3).append(urlSuffix)
+    }
 
     override fun fetchSearchManga(
         page: Int,
@@ -106,10 +103,9 @@ class Mangabz :
             .map { MangasPage(listOf(mangaDetailsParse(it)), false) }
     }
 
-    override fun searchMangaParse(response: Response) =
-        super.searchMangaParse(response).apply {
-            for (manga in mangas) manga.stripMirror()
-        }
+    override fun searchMangaParse(response: Response) = super.searchMangaParse(response).apply {
+        for (manga in mangas) manga.stripMirror()
+    }
 
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url.toMirror(), headers)
 

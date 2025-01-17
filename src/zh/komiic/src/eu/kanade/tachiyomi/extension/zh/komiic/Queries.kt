@@ -1,9 +1,8 @@
 package eu.kanade.tachiyomi.extension.zh.komiic
 
-private fun buildQuery(queryAction: () -> String): String =
-    queryAction()
-        .trimIndent()
-        .replace("%", "$")
+private fun buildQuery(queryAction: () -> String): String = queryAction()
+    .trimIndent()
+    .replace("%", "$")
 
 val QUERY_HOT_COMICS: String =
     buildQuery {

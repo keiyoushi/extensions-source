@@ -134,17 +134,15 @@ class Hanime1 : ParsedHttpSource() {
 
     override fun searchMangaSelector() = "div#comics-search-tag-top-row + div div.comic-rows-videos-div"
 
-    private fun comicDivToManga(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            title = element.select("div.comic-rows-videos-title").text()
-            thumbnail_url = element.select("img").attr("data-srcset").extraSrc()
-        }
+    private fun comicDivToManga(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        title = element.select("div.comic-rows-videos-title").text()
+        thumbnail_url = element.select("img").attr("data-srcset").extraSrc()
+    }
 
     private fun String.extraSrc(): String = split(",").first()
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            SortFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+    )
 }

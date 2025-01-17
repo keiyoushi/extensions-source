@@ -105,22 +105,20 @@ class Honkaiimpact : ParsedHttpSource() {
         return jsonResult.map { jsonEl -> createChapter(jsonEl.jsonObject) }
     }
 
-    private fun createChapter(jsonObj: JsonObject) =
-        SChapter.create().apply {
-            name = jsonObj["title"]!!.jsonPrimitive.content
-            url = "/book/${jsonObj["bookid"]!!.jsonPrimitive.int}/${jsonObj["chapterid"]!!.jsonPrimitive.int}"
-            date_upload = parseDate(jsonObj["timestamp"]!!.jsonPrimitive.content)
-            chapter_number = jsonObj["chapterid"]!!.jsonPrimitive.float
-        }
+    private fun createChapter(jsonObj: JsonObject) = SChapter.create().apply {
+        name = jsonObj["title"]!!.jsonPrimitive.content
+        url = "/book/${jsonObj["bookid"]!!.jsonPrimitive.int}/${jsonObj["chapterid"]!!.jsonPrimitive.int}"
+        date_upload = parseDate(jsonObj["timestamp"]!!.jsonPrimitive.content)
+        chapter_number = jsonObj["chapterid"]!!.jsonPrimitive.float
+    }
 
     private fun parseDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0
 
     // Manga Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("img.lazy.comic_img").mapIndexed { i, el ->
-            Page(i, "", el.attr("data-original"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img.lazy.comic_img").mapIndexed { i, el ->
+        Page(i, "", el.attr("data-original"))
+    }
 
     override fun imageUrlParse(document: Document) = ""
 }

@@ -96,16 +96,15 @@ class Taiyo : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client
-                .newCall(GET("$baseUrl/media/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client
+            .newCall(GET("$baseUrl/media/$id"))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
         val details = mangaDetailsParse(response.asJsoup())
@@ -142,11 +141,10 @@ class Taiyo : ParsedHttpSource() {
         return POST("https://meilisearch.${baseUrl.substringAfterLast("/")}/multi-search", getApiHeaders(), requestBody)
     }
 
-    private fun getApiHeaders() =
-        headers
-            .newBuilder()
-            .set("Authorization", "Bearer $bearerToken")
-            .build()
+    private fun getApiHeaders() = headers
+        .newBuilder()
+        .set("Authorization", "Bearer $bearerToken")
+        .build()
 
     override fun searchMangaParse(response: Response): MangasPage {
         val obj = response.parseAs<SearchResultDto>()
@@ -173,41 +171,40 @@ class Taiyo : ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            setUrlWithoutDomain(document.location())
-            thumbnail_url = document.selectFirst("section:has(h2) img")?.getImageUrl()
-            title = document.selectFirst("p.media-title")!!.text()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        setUrlWithoutDomain(document.location())
+        thumbnail_url = document.selectFirst("section:has(h2) img")?.getImageUrl()
+        title = document.selectFirst("p.media-title")!!.text()
 
-            val additionalDataObj =
-                document.parseJsonFromDocument<AdditionalInfoDto> {
-                    substringBefore(",\\\"trackers\\\"") + "}"
-                }
+        val additionalDataObj =
+            document.parseJsonFromDocument<AdditionalInfoDto> {
+                substringBefore(",\\\"trackers\\\"") + "}"
+            }
 
-            genre = additionalDataObj?.genres?.joinToString { it.portugueseName }
-            status =
-                when (additionalDataObj?.status.orEmpty()) {
-                    "FINISHED" -> SManga.COMPLETED
-                    "RELEASING" -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
+        genre = additionalDataObj?.genres?.joinToString { it.portugueseName }
+        status =
+            when (additionalDataObj?.status.orEmpty()) {
+                "FINISHED" -> SManga.COMPLETED
+                "RELEASING" -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
 
-            description =
-                buildString {
-                    val synopsis =
-                        document.selectFirst("section > div.flex + div p")?.text()
-                            ?: additionalDataObj?.synopsis
-                    synopsis?.also { append("$it\n\n") }
+        description =
+            buildString {
+                val synopsis =
+                    document.selectFirst("section > div.flex + div p")?.text()
+                        ?: additionalDataObj?.synopsis
+                synopsis?.also { append("$it\n\n") }
 
-                    additionalDataObj?.titles?.takeIf { it.isNotEmpty() }?.run {
-                        append("Títulos alternativos:")
-                        forEach {
-                            val languageName = Locale(it.language.substringBefore("_")).displayLanguage
-                            append("\n\t$languageName: ${it.title}")
-                        }
+                additionalDataObj?.titles?.takeIf { it.isNotEmpty() }?.run {
+                    append("Títulos alternativos:")
+                    forEach {
+                        val languageName = Locale(it.language.substringBefore("_")).displayLanguage
+                        append("\n\t$languageName: ${it.title}")
                     }
                 }
-        }
+            }
+    }
 
     // ============================== Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -286,28 +283,25 @@ class Taiyo : ParsedHttpSource() {
     // ============================= Utilities ==============================
     private fun Element.getImageUrl() = absUrl("srcset").substringBefore(" ")
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream(it.body.byteStream())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
 
-    private fun String.toDate(): Long =
-        runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
+    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     private inline fun <reified T> Document.parseJsonFromDocument(
         itemName: String = "media",
         crossinline transformer: String.() -> String,
-    ): T? =
-        runCatching {
-            val script = selectFirst("script:containsData($itemName\\\\\":):containsData(\\\"6:\\[)")!!.data()
-            val obj =
-                script
-                    .substringAfter(",{\\\"$itemName\\\":")
-                    .run(transformer)
-                    .replace("\\", "")
-            json.decodeFromString<T>(obj)
-        }.onFailure { it.printStackTrace() }.getOrNull()
+    ): T? = runCatching {
+        val script = selectFirst("script:containsData($itemName\\\\\":):containsData(\\\"6:\\[)")!!.data()
+        val obj =
+            script
+                .substringAfter(",{\\\"$itemName\\\":")
+                .run(transformer)
+                .replace("\\", "")
+        json.decodeFromString<T>(obj)
+    }.onFailure { it.printStackTrace() }.getOrNull()
 
     // ============================= Authorization ========================
 
@@ -333,13 +327,12 @@ class Taiyo : ParsedHttpSource() {
         return chain.proceed(req)
     }
 
-    private fun getToken(): String =
-        fetchBearerToken().also {
-            preferences
-                .edit()
-                .putString(BEARER_TOKEN_PREF, it)
-                .apply()
-        }
+    private fun getToken(): String = fetchBearerToken().also {
+        preferences
+            .edit()
+            .putString(BEARER_TOKEN_PREF, it)
+            .apply()
+    }
 
     private fun fetchBearerToken(): String {
         val scripts =

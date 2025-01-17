@@ -137,20 +137,18 @@ open class RainOfSnow : ParsedHttpSource() {
         return super.pageListRequest(chapter)
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        mutableListOf<Page>().apply {
-            document.select("[style=display: block;] img").forEachIndexed { index, element ->
-                add(Page(index, "", element.attr("abs:data-src")))
-            }
+    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
+        document.select("[style=display: block;] img").forEachIndexed { index, element ->
+            add(Page(index, "", element.attr("abs:data-src")))
         }
+    }
 
     // Filters
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            AlbumTypeSelectFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        AlbumTypeSelectFilter(),
+    )
 
     private class AlbumTypeSelectFilter :
         UriPartFilter(

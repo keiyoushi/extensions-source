@@ -55,9 +55,8 @@ class CloneManga : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        fetchPopularManga(1)
-            .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
+    ): Observable<MangasPage> = fetchPopularManga(1)
+        .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
 
     override fun mangaDetailsParse(document: Document): SManga {
         // Populate with already fetched details

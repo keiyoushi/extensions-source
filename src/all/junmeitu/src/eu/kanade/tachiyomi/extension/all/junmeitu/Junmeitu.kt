@@ -141,17 +141,16 @@ class Junmeitu : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Header("NOTE: Filter are weird for this extension!"),
-            Filter.Separator(),
-            TagFilter(),
-            ModelFilter(),
-            GroupFilter(),
-            CategoryFilter(getCategoryFilter(), 0),
-            SortFilter(getSortFilter(), 0),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Header("NOTE: Filter are weird for this extension!"),
+        Filter.Separator(),
+        TagFilter(),
+        ModelFilter(),
+        GroupFilter(),
+        CategoryFilter(getCategoryFilter(), 0),
+        SortFilter(getSortFilter(), 0),
+    )
 
     class SelectFilterOption(
         val name: String,
@@ -192,19 +191,17 @@ class Junmeitu : ParsedHttpSource() {
         default: Int,
     ) : SelectFilter("Sort", options, default)
 
-    private fun getCategoryFilter() =
-        listOf(
-            SelectFilterOption("beauty", "6"),
-            SelectFilterOption("handsome", "5"),
-            SelectFilterOption("news", "30"),
-            SelectFilterOption("street", "32"),
-        )
+    private fun getCategoryFilter() = listOf(
+        SelectFilterOption("beauty", "6"),
+        SelectFilterOption("handsome", "5"),
+        SelectFilterOption("news", "30"),
+        SelectFilterOption("street", "32"),
+    )
 
-    private fun getSortFilter() =
-        listOf(
-            SelectFilterOption("default", "index"),
-            SelectFilterOption("hot"),
-        )
+    private fun getSortFilter() = listOf(
+        SelectFilterOption("default", "index"),
+        SelectFilterOption("hot"),
+    )
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 }

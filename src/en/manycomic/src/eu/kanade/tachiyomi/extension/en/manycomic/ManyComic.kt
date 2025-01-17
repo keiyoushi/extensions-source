@@ -56,21 +56,20 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
         return GET(url.build(), headers)
     }
 
-    override fun parseGenres(document: Document): List<Genre> =
-        document
-            .selectFirst(".manga-genres-class-name div.genres")
-            ?.select("li>a")
-            .orEmpty()
-            .map { a ->
-                Genre(
-                    name = a.ownText(),
-                    id =
-                        a
-                            .attr("abs:href")
-                            .removeSuffix("/")
-                            .substringAfterLast("/"),
-                )
-            }
+    override fun parseGenres(document: Document): List<Genre> = document
+        .selectFirst(".manga-genres-class-name div.genres")
+        ?.select("li>a")
+        .orEmpty()
+        .map { a ->
+            Genre(
+                name = a.ownText(),
+                id =
+                    a
+                        .attr("abs:href")
+                        .removeSuffix("/")
+                        .substringAfterLast("/"),
+            )
+        }
 
     override fun searchMangaSelector() = popularMangaSelector()
 

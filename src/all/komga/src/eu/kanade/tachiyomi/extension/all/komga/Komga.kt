@@ -89,10 +89,9 @@ open class Komga(
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
 
     override val client: OkHttpClient =
         network.client
@@ -109,25 +108,23 @@ open class Komga(
             }.dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
             .build()
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SeriesSort(Filter.Sort.Selection(1, true)),
-            ),
-        )
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SeriesSort(Filter.Sort.Selection(1, true)),
+        ),
+    )
 
     override fun popularMangaParse(response: Response): MangasPage = processSeriesPage(response, baseUrl)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SeriesSort(Filter.Sort.Selection(3, false)),
-            ),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SeriesSort(Filter.Sort.Selection(3, false)),
+        ),
+    )
 
     override fun latestUpdatesParse(response: Response): MangasPage = processSeriesPage(response, baseUrl)
 
@@ -201,12 +198,11 @@ open class Komga(
 
     override fun mangaDetailsRequest(manga: SManga) = GET(manga.url)
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        if (response.isFromReadList()) {
-            response.parseAs<ReadListDto>().toSManga(baseUrl)
-        } else {
-            response.parseAs<SeriesDto>().toSManga(baseUrl)
-        }
+    override fun mangaDetailsParse(response: Response): SManga = if (response.isFromReadList()) {
+        response.parseAs<ReadListDto>().toSManga(baseUrl)
+    } else {
+        response.parseAs<SeriesDto>().toSManga(baseUrl)
+    }
 
     private val chapterNameTemplate
         get() = preferences.getString(PREF_CHAPTER_NAME_TEMPLATE, PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)!!

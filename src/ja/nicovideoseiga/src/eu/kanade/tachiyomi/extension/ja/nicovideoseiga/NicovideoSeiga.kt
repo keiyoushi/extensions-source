@@ -62,30 +62,28 @@ class NicovideoSeiga : HttpSource() {
         )
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        // This is the only API call that doesn't use the API url
+    override fun popularMangaRequest(page: Int): Request = // This is the only API call that doesn't use the API url
         GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page", headers)
 
     // Parses the common manga entry object from the api
-    private fun parseMangaEntry(entry: Manga): SManga =
-        SManga.create().apply {
-            title = entry.meta.title
-            // The description is html. Simply using Jsoup to remove all the html tags
-            description = Jsoup.parse(entry.meta.description).wholeText()
-            // Although their API does contain individual author fields, they are arbitrary strings and we can't trust it conforms to a format
-            // Use display name instead which puts all of the people involved together
-            author = entry.meta.author
-            thumbnail_url = entry.meta.thumbnailUrl
-            // Store id only as we override the url down the chain
-            url = entry.id.toString()
-            status =
-                when (entry.meta.serialStatus) {
-                    "serial" -> SManga.ONGOING
-                    "concluded" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            initialized = true
-        }
+    private fun parseMangaEntry(entry: Manga): SManga = SManga.create().apply {
+        title = entry.meta.title
+        // The description is html. Simply using Jsoup to remove all the html tags
+        description = Jsoup.parse(entry.meta.description).wholeText()
+        // Although their API does contain individual author fields, they are arbitrary strings and we can't trust it conforms to a format
+        // Use display name instead which puts all of the people involved together
+        author = entry.meta.author
+        thumbnail_url = entry.meta.thumbnailUrl
+        // Store id only as we override the url down the chain
+        url = entry.id.toString()
+        status =
+            when (entry.meta.serialStatus) {
+                "serial" -> SManga.ONGOING
+                "concluded" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        initialized = true
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val r = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
@@ -146,49 +144,48 @@ class NicovideoSeiga : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/watch/mg${chapter.url}"
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client
-            .newCall(pageListRequest(chapter))
-            .asObservable()
-            .flatMap { response ->
-                // Nicovideo refuses to serve pages without login only if you are on desktop (Supposedly to provide danmaku)
-                // There's no login requirement on the mobile version of the website
-                when (response.code) {
-                    403 -> {
-                        // Check if the user is logged in
-                        // This is the account page. You get 302 if you are not logged in
-                        client
-                            .newBuilder()
-                            .followRedirects(false)
-                            .followSslRedirects(false)
-                            .build()
-                            .newCall(GET("https://www.nicovideo.jp/my"))
-                            .asObservable()
-                            .flatMap { login ->
-                                when (login.code) {
-                                    200 -> {
-                                        // User needs to purchase the chapter on the official mobile app
-                                        // Sidenote: Chapters can't be purchased on the site
-                                        // These paid chapters only show up on the mobile app and are straight up hidden on browsers! Why!?
-                                        // "Please buy from the official app"
-                                        Observable.error(SecurityException("公式アプリで購入してください"))
-                                    }
-
-                                    302 -> {
-                                        // User needs to login via WebView first before accessing the chapter
-                                        // "Please login via WebView first"
-                                        Observable.error(SecurityException("まず、WebViewでログインしてください"))
-                                    }
-
-                                    else -> Observable.error(Exception("HTTP error ${login.code}"))
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client
+        .newCall(pageListRequest(chapter))
+        .asObservable()
+        .flatMap { response ->
+            // Nicovideo refuses to serve pages without login only if you are on desktop (Supposedly to provide danmaku)
+            // There's no login requirement on the mobile version of the website
+            when (response.code) {
+                403 -> {
+                    // Check if the user is logged in
+                    // This is the account page. You get 302 if you are not logged in
+                    client
+                        .newBuilder()
+                        .followRedirects(false)
+                        .followSslRedirects(false)
+                        .build()
+                        .newCall(GET("https://www.nicovideo.jp/my"))
+                        .asObservable()
+                        .flatMap { login ->
+                            when (login.code) {
+                                200 -> {
+                                    // User needs to purchase the chapter on the official mobile app
+                                    // Sidenote: Chapters can't be purchased on the site
+                                    // These paid chapters only show up on the mobile app and are straight up hidden on browsers! Why!?
+                                    // "Please buy from the official app"
+                                    Observable.error(SecurityException("公式アプリで購入してください"))
                                 }
-                            }
-                    }
 
-                    200 -> Observable.just(pageListParse(response))
-                    else -> Observable.error(Exception("HTTP error ${response.code}"))
+                                302 -> {
+                                    // User needs to login via WebView first before accessing the chapter
+                                    // "Please login via WebView first"
+                                    Observable.error(SecurityException("まず、WebViewでログインしてください"))
+                                }
+
+                                else -> Observable.error(Exception("HTTP error ${login.code}"))
+                            }
+                        }
                 }
+
+                200 -> Observable.just(pageListParse(response))
+                else -> Observable.error(Exception("HTTP error ${response.code}"))
             }
+        }
 
     override fun pageListParse(response: Response): List<Page> {
         val r = json.decodeFromString<ApiResponse<Frame>>(response.body.string())
@@ -281,19 +278,18 @@ class NicovideoSeiga : HttpSource() {
      * Determine the image type by looking at specific bytes for magic numbers
      * This is also how Nicovideo does it
      */
-    private fun getImageType(image: ByteArray): String =
-        if (image[0].toInt() == -1 &&
-            image[1].toInt() == -40 &&
-            image[image.size - 2].toInt() == -1 &&
-            image[image.size - 1].toInt() == -39
-        ) {
-            "jpeg"
-        } else if (image[0].toInt() == -119 && image[1].toInt() == 80 && image[2].toInt() == 78 && image[3].toInt() == 71) {
-            "png"
-        } else if (image[0].toInt() == 71 && image[1].toInt() == 73 && image[2].toInt() == 70 && image[3].toInt() == 56) {
-            "gif"
-        } else {
-            // It defaults to null in the site, but it's a webp image
-            "webp"
-        }
+    private fun getImageType(image: ByteArray): String = if (image[0].toInt() == -1 &&
+        image[1].toInt() == -40 &&
+        image[image.size - 2].toInt() == -1 &&
+        image[image.size - 1].toInt() == -39
+    ) {
+        "jpeg"
+    } else if (image[0].toInt() == -119 && image[1].toInt() == 80 && image[2].toInt() == 78 && image[3].toInt() == 71) {
+        "png"
+    } else if (image[0].toInt() == 71 && image[1].toInt() == 73 && image[2].toInt() == 70 && image[3].toInt() == 56) {
+        "gif"
+    } else {
+        // It defaults to null in the site, but it's a webp image
+        "webp"
+    }
 }

@@ -38,16 +38,14 @@ class SunshineButterflyScans : HttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
-    private fun apiHeadersBuilder() =
-        headersBuilder().apply {
-            add("Accept", "*/*")
-            add("Host", baseUrl.toHttpUrl().host)
-        }
+    private fun apiHeadersBuilder() = headersBuilder().apply {
+        add("Accept", "*/*")
+        add("Host", baseUrl.toHttpUrl().host)
+    }
 
     private val apiHeaders by lazy { apiHeadersBuilder().build() }
 
@@ -150,11 +148,10 @@ class SunshineButterflyScans : HttpSource() {
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            StatusFilter(),
-            SortFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        StatusFilter(),
+        SortFilter(),
+    )
 
     open class UriPartFilter(
         displayName: String,
@@ -252,23 +249,22 @@ class SunshineButterflyScans : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        if (response.request.url.host
-                .contains("googleapis")
-        ) {
-            response
-                .parseAs<GoogleDriveResponseDto>()
-                .files
-                .sortedBy {
-                    it.name
-                }.mapIndexed { index, file ->
-                    Page(index, imageUrl = "https://lh3.googleusercontent.com/d/${file.id}=w${file.metadata.width}")
-                }
-        } else {
-            response.parseAs<ImgurResponseDto>().data.mapIndexed { index, data ->
-                Page(index, imageUrl = data.link)
+    override fun pageListParse(response: Response): List<Page> = if (response.request.url.host
+            .contains("googleapis")
+    ) {
+        response
+            .parseAs<GoogleDriveResponseDto>()
+            .files
+            .sortedBy {
+                it.name
+            }.mapIndexed { index, file ->
+                Page(index, imageUrl = "https://lh3.googleusercontent.com/d/${file.id}=w${file.metadata.width}")
             }
+    } else {
+        response.parseAs<ImgurResponseDto>().data.mapIndexed { index, data ->
+            Page(index, imageUrl = data.link)
         }
+    }
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders =

@@ -105,12 +105,11 @@ abstract class MangaThemesiaAlt(
         }
     }
 
-    protected fun getUrlMap(cached: Boolean = false): Map<String, String> =
-        if (cached && cachedValue == null) {
-            preferences.urlMapCache
-        } else {
-            runBlocking { getUrlMapInternal() }
-        }
+    protected fun getUrlMap(cached: Boolean = false): Map<String, String> = if (cached && cachedValue == null) {
+        preferences.urlMapCache
+    } else {
+        runBlocking { getUrlMapInternal() }
+    }
 
     // cache in preference for webview urls
     private var SharedPreferences.urlMapCache: Map<String, String>
@@ -134,19 +133,18 @@ abstract class MangaThemesiaAlt(
         return MangasPage(mangas, mp.hasNextPage)
     }
 
-    protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> =
-        onEach {
-            val slug =
-                it.url
-                    .removeSuffix("/")
-                    .substringAfterLast("/")
+    protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> = onEach {
+        val slug =
+            it.url
+                .removeSuffix("/")
+                .substringAfterLast("/")
 
-            val permaSlug =
-                slug
-                    .replaceFirst(slugRegex, "")
+        val permaSlug =
+            slug
+                .replaceFirst(slugRegex, "")
 
-            it.url = "$mangaUrlDirectory/$permaSlug/"
-        }
+        it.url = "$mangaUrlDirectory/$permaSlug/"
+    }
 
     protected open val slugRegex = Regex("""^(\d+-)""")
 

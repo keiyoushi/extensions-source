@@ -123,13 +123,12 @@ class KillSixBillionDemons : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.just(
-            fetchChapterListTR(
-                baseUrl + manga.url + pagesOrder,
-                mutableListOf(),
-            ).reversed(),
-        )
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        fetchChapterListTR(
+            baseUrl + manga.url + pagesOrder,
+            mutableListOf(),
+        ).reversed(),
+    )
 
     /**
      * Though this is recursive this will be optimized by the compiler into a for loop equivalent

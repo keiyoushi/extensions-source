@@ -31,11 +31,10 @@ abstract class ManhwaZ(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     protected val intl =
         Intl(
@@ -49,14 +48,13 @@ abstract class ManhwaZ(
 
     override fun popularMangaSelector() = "#slide-top > .item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst(".info-item a")!!.let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.selectFirst(".img-item img")?.imgAttr()
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".info-item a")!!.let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        thumbnail_url = element.selectFirst(".img-item img")?.imgAttr()
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -64,14 +62,13 @@ abstract class ManhwaZ(
 
     override fun latestUpdatesSelector() = ".page-item-detail"
 
-    override fun latestUpdatesFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst(".item-summary a")!!.let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.selectFirst(".item-thumb img")?.imgAttr()
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".item-summary a")!!.let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        thumbnail_url = element.selectFirst(".item-thumb img")?.imgAttr()
+    }
 
     override fun latestUpdatesNextPageSelector(): String? = "ul.pager a[rel=next]"
 
@@ -131,46 +128,43 @@ abstract class ManhwaZ(
     private val ongoingStatusList = listOf("ongoing", "đang ra")
     private val completedStatusList = listOf("completed", "hoàn thành")
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val statusText =
-                document
-                    .selectFirst("div.summary-heading:contains($mangaDetailsStatusHeading) + div.summary-content")
-                    ?.text()
-                    ?.lowercase()
-                    ?: ""
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val statusText =
+            document
+                .selectFirst("div.summary-heading:contains($mangaDetailsStatusHeading) + div.summary-content")
+                ?.text()
+                ?.lowercase()
+                ?: ""
 
-            title = document.selectFirst("div.post-title h1")!!.text()
-            author = document.selectFirst("div.summary-heading:contains($mangaDetailsAuthorHeading) + div.summary-content")?.text()
-            description = document.selectFirst("div.summary__content")?.text()
-            genre = document.select("div.genres-content a[rel=tag]").joinToString { it.text() }
-            status =
-                when {
-                    ongoingStatusList.contains(statusText) -> SManga.ONGOING
-                    completedStatusList.contains(statusText) -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            thumbnail_url = document.selectFirst("div.summary_image img")?.imgAttr()
-        }
+        title = document.selectFirst("div.post-title h1")!!.text()
+        author = document.selectFirst("div.summary-heading:contains($mangaDetailsAuthorHeading) + div.summary-content")?.text()
+        description = document.selectFirst("div.summary__content")?.text()
+        genre = document.select("div.genres-content a[rel=tag]").joinToString { it.text() }
+        status =
+            when {
+                ongoingStatusList.contains(statusText) -> SManga.ONGOING
+                completedStatusList.contains(statusText) -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        thumbnail_url = document.selectFirst("div.summary_image img")?.imgAttr()
+    }
 
     override fun chapterListSelector() = "li.wp-manga-chapter"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            element.selectFirst("a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                name = it.text()
-            }
-
-            element.selectFirst("span.chapter-release-date")?.text()?.let {
-                date_upload = parseRelativeDate(it)
-            }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        element.selectFirst("a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            name = it.text()
         }
 
-    override fun pageListParse(document: Document) =
-        document.select("div.page-break img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.imgAttr())
+        element.selectFirst("span.chapter-release-date")?.text()?.let {
+            date_upload = parseRelativeDate(it)
         }
+    }
+
+    override fun pageListParse(document: Document) = document.select("div.page-break img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.imgAttr())
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -300,12 +294,11 @@ abstract class ManhwaZ(
         return calendar.timeInMillis
     }
 
-    protected fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            else -> attr("abs:src")
-        }
+    protected fun Element.imgAttr(): String = when {
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        else -> attr("abs:src")
+    }
 }

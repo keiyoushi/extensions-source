@@ -26,12 +26,11 @@ class SapphireScan :
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            if (element.select("span.required-login").isNotEmpty()) {
-                name = "🔒 $name"
-            }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        if (element.select("span.required-login").isNotEmpty()) {
+            name = "🔒 $name"
         }
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val pageList = super.pageListParse(document)

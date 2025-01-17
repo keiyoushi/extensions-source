@@ -61,10 +61,9 @@ class MangaRaw :
 
     override fun popularMangaNextPageSelector() = ".nextpostslink"
 
-    override fun popularMangaFromElement(element: Element) =
-        super.popularMangaFromElement(element).apply {
-            if (needUrlSanitize) url = mangaSlugRegex.replaceFirst(url, "/")
-        }
+    override fun popularMangaFromElement(element: Element) = super.popularMangaFromElement(element).apply {
+        if (needUrlSanitize) url = mangaSlugRegex.replaceFirst(url, "/")
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -72,12 +71,11 @@ class MangaRaw :
         filters: FilterList,
     ) = GET("$baseUrl/?s=$query&page=$page", headers)
 
-    override fun Document.getSanitizedDetails(): Element =
-        selectFirst(selectors.detailsSelector)!!.apply {
-            val recommendClass = selectors.recommendClass
-            children().find { it.hasClass(recommendClass) }?.remove()
-            selectFirst(Evaluator.Class("list-scoll"))!!.remove()
-        }
+    override fun Document.getSanitizedDetails(): Element = selectFirst(selectors.detailsSelector)!!.apply {
+        val recommendClass = selectors.recommendClass
+        children().find { it.hasClass(recommendClass) }?.remove()
+        selectFirst(Evaluator.Class("list-scoll"))!!.remove()
+    }
 
     override fun chapterListSelector() = ".list-scoll a"
 

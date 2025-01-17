@@ -4,18 +4,17 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class MangaToonFactory : SourceFactory {
-    override fun createSources(): List<Source> =
-        listOf(
-            MangaToonZh(),
-            MangaToonEn(),
-            MangaToonId(),
-            MangaToonVi(),
-            MangaToonEs(),
-            MangaToonPt(),
-            MangaToonTh(),
-            MangaToonFr(),
-            MangaToonJa(),
-        )
+    override fun createSources(): List<Source> = listOf(
+        MangaToonZh(),
+        MangaToonEn(),
+        MangaToonId(),
+        MangaToonVi(),
+        MangaToonEs(),
+        MangaToonPt(),
+        MangaToonTh(),
+        MangaToonFr(),
+        MangaToonJa(),
+    )
 }
 
 class MangaToonZh : MangaToon("zh", "cn")

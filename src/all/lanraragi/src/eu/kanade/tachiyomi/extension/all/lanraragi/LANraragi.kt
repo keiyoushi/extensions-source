@@ -244,25 +244,23 @@ open class LANraragi(
         return MangasPage(archives, currentStart + lastResultCount < lastRecordsFiltered)
     }
 
-    private fun archiveToSManga(archive: Archive) =
-        SManga.create().apply {
-            url = "/reader?id=${archive.arcid}"
-            title = archive.title
-            description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
-            thumbnail_url = getThumbnailUri(archive.arcid)
-            genre = archive.tags?.replace(",", ", ")
-            artist = getArtist(archive.tags)
-            author = artist
-            status = SManga.COMPLETED
-        }
+    private fun archiveToSManga(archive: Archive) = SManga.create().apply {
+        url = "/reader?id=${archive.arcid}"
+        title = archive.title
+        description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
+        thumbnail_url = getThumbnailUri(archive.arcid)
+        genre = archive.tags?.replace(",", ", ")
+        artist = getArtist(archive.tags)
+        author = artist
+        status = SManga.COMPLETED
+    }
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            if (apiKey.isNotEmpty()) {
-                val apiKey64 = Base64.encodeToString(apiKey.toByteArray(), Base64.NO_WRAP)
-                add("Authorization", "Bearer $apiKey64")
-            }
+    override fun headersBuilder() = Headers.Builder().apply {
+        if (apiKey.isNotEmpty()) {
+            val apiKey64 = Base64.encodeToString(apiKey.toByteArray(), Base64.NO_WRAP)
+            add("Authorization", "Bearer $apiKey64")
         }
+    }
 
     private class DescendingOrder(
         overrideState: Boolean = false,
@@ -286,16 +284,15 @@ open class LANraragi(
         categories: Array<Pair<String?, String>>,
     ) : UriPartFilter("Category", categories)
 
-    override fun getFilterList() =
-        FilterList(
-            CategorySelect(getCategoryPairs(categories)),
-            Filter.Separator(),
-            DescendingOrder(),
-            NewArchivesOnly(),
-            UntaggedArchivesOnly(),
-            StartingPage(startingPageStats()),
-            SortByNamespace(),
-        )
+    override fun getFilterList() = FilterList(
+        CategorySelect(getCategoryPairs(categories)),
+        Filter.Separator(),
+        DescendingOrder(),
+        NewArchivesOnly(),
+        UntaggedArchivesOnly(),
+        StartingPage(startingPageStats()),
+        SortByNamespace(),
+    )
 
     private var categories = emptyList<Category>()
 
@@ -379,17 +376,16 @@ open class LANraragi(
         title: String,
         default: Boolean,
         summary: String = "",
-    ): androidx.preference.CheckBoxPreference =
-        androidx.preference.CheckBoxPreference(context).apply {
-            this.key = key
-            this.title = title
-            this.summary = summary
-            setDefaultValue(default)
+    ): androidx.preference.CheckBoxPreference = androidx.preference.CheckBoxPreference(context).apply {
+        this.key = key
+        this.title = title
+        this.summary = summary
+        setDefaultValue(default)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(this.key, newValue as Boolean).commit()
-            }
+        setOnPreferenceChangeListener { _, newValue ->
+            preferences.edit().putBoolean(this.key, newValue as Boolean).commit()
         }
+    }
 
     private fun androidx.preference.PreferenceScreen.editTextPreference(
         key: String,
@@ -398,38 +394,37 @@ open class LANraragi(
         summary: String,
         isPassword: Boolean = false,
         refreshSummary: Boolean = false,
-    ): androidx.preference.EditTextPreference =
-        androidx.preference.EditTextPreference(context).apply {
-            this.key = key
-            this.title = title
-            this.summary = summary
-            this.setDefaultValue(default)
+    ): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        this.key = key
+        this.title = title
+        this.summary = summary
+        this.setDefaultValue(default)
 
-            if (isPassword) {
-                setOnBindEditTextListener {
-                    it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                }
-            }
-
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val newString = newValue.toString()
-                    val res = preferences.edit().putString(this.key, newString).commit()
-
-                    if (refreshSummary) {
-                        this.apply {
-                            this.summary = newValue as String
-                        }
-                    }
-
-                    Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+        if (isPassword) {
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
         }
+
+        setOnPreferenceChangeListener { _, newValue ->
+            try {
+                val newString = newValue.toString()
+                val res = preferences.edit().putString(this.key, newString).commit()
+
+                if (refreshSummary) {
+                    this.apply {
+                        this.summary = newValue as String
+                    }
+                }
+
+                Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                res
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
 
     // Helper
     private fun getRandomID(query: String): String {
@@ -500,11 +495,10 @@ open class LANraragi(
     private tailrec fun getTopResponse(response: Response): Response =
         if (response.priorResponse == null) response else getTopResponse(response.priorResponse!!)
 
-    private fun getStart(response: Response): Int =
-        getTopResponse(response)
-            .request.url
-            .queryParameter("start")!!
-            .toInt()
+    private fun getStart(response: Response): Int = getTopResponse(response)
+        .request.url
+        .queryParameter("start")!!
+        .toInt()
 
     private fun getReaderId(url: String): String = Regex("""/reader\?id=(\w{40})""").find(url)?.groupValues?.get(1) ?: ""
 

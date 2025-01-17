@@ -31,10 +31,9 @@ class MangaStorm : ParsedHttpSource() {
                 filterInclude = listOf("chrome"),
             ).build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas?page=$page", headers)
 
@@ -42,12 +41,11 @@ class MangaStorm : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = ".page-link[rel=next]"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.select(".manga-ct-title").text()
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.select(".manga-ct-title").text()
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -92,27 +90,24 @@ class MangaStorm : ParsedHttpSource() {
 
     override fun chapterListSelector() = ".card-body a.btn-fixed-width"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            name = element.text()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        name = element.text()
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select("div.text-center .img-fluid")
-            .mapIndexed { idx, img ->
-                Page(idx, "", img.imgAttr())
-            }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select("div.text-center .img-fluid")
+        .mapIndexed { idx, img ->
+            Page(idx, "", img.imgAttr())
+        }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    private fun Element.imgAttr() =
-        when {
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr() = when {
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        else -> attr("abs:src")
+    }
 }

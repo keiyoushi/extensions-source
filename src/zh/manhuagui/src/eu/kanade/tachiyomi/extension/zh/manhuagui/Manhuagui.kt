@@ -256,16 +256,15 @@ class Manhuagui(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client
-                .newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client
+            .newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -309,14 +308,13 @@ class Manhuagui(
 
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun headersBuilder(): Headers.Builder =
-        super
-            .headersBuilder()
-            .set("Referer", baseUrl)
-            .set(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36",
-            ).set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+    override fun headersBuilder(): Headers.Builder = super
+        .headersBuilder()
+        .set("Referer", baseUrl)
+        .set(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36",
+        ).set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
 
     override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
 
@@ -608,16 +606,15 @@ class Manhuagui(
         open fun toUriPart() = pair[state].second
     }
 
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(),
-            LocaleFilter(),
-            GenreFilter(),
-            ReaderFilter(),
-            PublishDateFilter(),
-            FirstLetterFilter(),
-            StatusFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        LocaleFilter(),
+        GenreFilter(),
+        ReaderFilter(),
+        PublishDateFilter(),
+        FirstLetterFilter(),
+        StatusFilter(),
+    )
 
     private class SortFilter :
         UriPartFilter(

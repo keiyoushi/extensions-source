@@ -4,21 +4,20 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.Filter.Sort.Selection
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        SortFilter("Sort by", Selection(0, false), getSortsList),
-        SelectFilter("Per page", getLimits),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Tags", "tag"),
-        TextFilter("Artists", "artist"),
-        TextFilter("Magazines", "magazine"),
-        TextFilter("Publishers", "publisher"),
-        TextFilter("Parodies", "parody"),
-        TextFilter("Circles", "circle"),
-        TextFilter("Events", "event"),
-    )
+fun getFilters(): FilterList = FilterList(
+    SortFilter("Sort by", Selection(0, false), getSortsList),
+    SelectFilter("Per page", getLimits),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    TextFilter("Tags", "tag"),
+    TextFilter("Artists", "artist"),
+    TextFilter("Magazines", "magazine"),
+    TextFilter("Publishers", "publisher"),
+    TextFilter("Parodies", "parody"),
+    TextFilter("Circles", "circle"),
+    TextFilter("Events", "event"),
+)
 
 internal open class TextFilter(
     name: String,

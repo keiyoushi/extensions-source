@@ -137,14 +137,13 @@ class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
         val url: String,
     )
 
-    override fun getFilterList() =
-        FilterList(
-            OrderBy(),
-            Tags(tagsName),
-            GenreList(genreList),
-            Category(categoryList),
-            FiltersList(filtersList),
-        )
+    override fun getFilterList() = FilterList(
+        OrderBy(),
+        Tags(tagsName),
+        GenreList(genreList),
+        Category(categoryList),
+        FiltersList(filtersList),
+    )
 
     private val genreList =
         listOf(

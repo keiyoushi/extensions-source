@@ -102,12 +102,11 @@ abstract class Etoshore(
 
     override fun searchMangaNextPageSelector() = ".navigation .naviright:has(a)"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.attr("title")
-            thumbnail_url = element.selectFirst("img")?.let(::imageFromElement)
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.attr("title")
+        thumbnail_url = element.selectFirst("img")?.let(::imageFromElement)
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (filterList.isEmpty()) {
@@ -118,40 +117,37 @@ abstract class Etoshore(
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            description = document.selectFirst(".excerpt p")?.text()
-            document.selectFirst(".details-right-con img")?.let { thumbnail_url = imageFromElement(it) }
-            genre =
-                document
-                    .select("div.meta-item span.meta-title:contains(Genres) + span a")
-                    .joinToString { it.text() }
-            author =
-                document
-                    .selectFirst("div.meta-item span.meta-title:contains(Author) + span a")
-                    ?.text()
-            document.selectFirst(".status")?.text()?.let {
-                status = it.toMangaStatus()
-            }
-
-            setUrlWithoutDomain(document.location())
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text()
+        description = document.selectFirst(".excerpt p")?.text()
+        document.selectFirst(".details-right-con img")?.let { thumbnail_url = imageFromElement(it) }
+        genre =
+            document
+                .select("div.meta-item span.meta-title:contains(Genres) + span a")
+                .joinToString { it.text() }
+        author =
+            document
+                .selectFirst("div.meta-item span.meta-title:contains(Author) + span a")
+                ?.text()
+        document.selectFirst(".status")?.text()?.let {
+            status = it.toMangaStatus()
         }
 
-    protected open fun imageFromElement(element: Element): String? =
-        when {
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
-            element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
-            else -> element.attr("abs:src")
-        }
+        setUrlWithoutDomain(document.location())
+    }
 
-    protected open fun String.getSrcSetImage(): String? =
-        this
-            .split(" ")
-            .filter(URL_REGEX::matches)
-            .maxOfOrNull(String::toString)
+    protected open fun imageFromElement(element: Element): String? = when {
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
+        element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
+        element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
+        else -> element.attr("abs:src")
+    }
+
+    protected open fun String.getSrcSetImage(): String? = this
+        .split(" ")
+        .filter(URL_REGEX::matches)
+        .maxOfOrNull(String::toString)
 
     protected val completedStatusList: Array<String> =
         arrayOf(
@@ -176,24 +172,22 @@ abstract class Etoshore(
             "Discontinued",
         )
 
-    open fun String.toMangaStatus(): Int =
-        when {
-            containsIn(completedStatusList) -> SManga.COMPLETED
-            containsIn(ongoingStatusList) -> SManga.ONGOING
-            containsIn(hiatusStatusList) -> SManga.ON_HIATUS
-            containsIn(canceledStatusList) -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    open fun String.toMangaStatus(): Int = when {
+        containsIn(completedStatusList) -> SManga.COMPLETED
+        containsIn(ongoingStatusList) -> SManga.ONGOING
+        containsIn(hiatusStatusList) -> SManga.ON_HIATUS
+        containsIn(canceledStatusList) -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ============================
 
     override fun chapterListSelector() = ".chapter-list li a"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            name = element.selectFirst(".title")!!.text()
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst(".title")!!.text()
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     // ============================== Pages ===============================
 

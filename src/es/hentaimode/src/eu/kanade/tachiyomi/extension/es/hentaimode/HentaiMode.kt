@@ -38,12 +38,11 @@ class HentaiMode : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.row div[class*=\"book-list\"] > a"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            title = element.selectFirst(".book-description > p")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.selectFirst(".book-description > p")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
 
     override fun popularMangaNextPageSelector() = null
 
@@ -61,16 +60,15 @@ class HentaiMode : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client
-                .newCall(GET("$baseUrl/g/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client
+            .newCall(GET("$baseUrl/g/$id"))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -98,34 +96,32 @@ class HentaiMode : ParsedHttpSource() {
     // =========================== Manga Details ============================
     private val additionalInfos = listOf("Serie", "Tipo", "Personajes", "Idioma")
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            thumbnail_url = document.selectFirst("div#cover img")?.absUrl("src")
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            with(document.selectFirst("div#info-block > div#info")!!) {
-                title = selectFirst("h1")!!.text()
-                genre = getInfo("Categorías")
-                author = getInfo("Grupo")
-                artist = getInfo("Artista")
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        thumbnail_url = document.selectFirst("div#cover img")?.absUrl("src")
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        with(document.selectFirst("div#info-block > div#info")!!) {
+            title = selectFirst("h1")!!.text()
+            genre = getInfo("Categorías")
+            author = getInfo("Grupo")
+            artist = getInfo("Artista")
 
-                description =
-                    buildString {
-                        additionalInfos.forEach { info ->
-                            getInfo(info)?.also {
-                                append(info)
-                                append(": ")
-                                append(it)
-                            }
+            description =
+                buildString {
+                    additionalInfos.forEach { info ->
+                        getInfo(info)?.also {
+                            append(info)
+                            append(": ")
+                            append(it)
                         }
                     }
-            }
+                }
         }
+    }
 
-    private fun Element.getInfo(text: String): String? =
-        select("div.tag-container:containsOwn($text) a.tag")
-            .joinToString { it.text() }
-            .takeUnless(String::isBlank)
+    private fun Element.getInfo(text: String): String? = select("div.tag-container:containsOwn($text) a.tag")
+        .joinToString { it.text() }
+        .takeUnless(String::isBlank)
 
     // ============================== Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {

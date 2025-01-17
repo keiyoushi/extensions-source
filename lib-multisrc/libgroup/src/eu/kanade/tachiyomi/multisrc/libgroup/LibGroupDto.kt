@@ -47,12 +47,11 @@ class Constants(
     fun getServer(
         isServers: String?,
         siteId: Int,
-    ): ImageServer =
-        if (!isServers.isNullOrBlank() and (isServers != "auto")) {
-            imageServers.first { it.id == isServers && it.siteIds.contains(siteId) }
-        } else {
-            imageServers.first { it.siteIds.contains(siteId) }
-        }
+    ): ImageServer = if (!isServers.isNullOrBlank() and (isServers != "auto")) {
+        imageServers.first { it.id == isServers && it.siteIds.contains(siteId) }
+    } else {
+        imageServers.first { it.siteIds.contains(siteId) }
+    }
 
     fun getCategories(siteId: Int): List<IdLabelSiteType> = types.filter { it.siteIds.contains(siteId) }
 
@@ -95,12 +94,11 @@ class MangaShort(
         val default: String?,
     )
 
-    fun toSManga(isEng: String) =
-        SManga.create().apply {
-            title = getSelectedLanguage(isEng, rusName, engName, name)
-            thumbnail_url = cover.default.orEmpty()
-            url = "/$slugUrl"
-        }
+    fun toSManga(isEng: String) = SManga.create().apply {
+        title = getSelectedLanguage(isEng, rusName, engName, name)
+        thumbnail_url = cover.default.orEmpty()
+        url = "/$slugUrl"
+    }
 }
 
 @Serializable
@@ -138,66 +136,62 @@ class Manga(
         val votes: Int,
     )
 
-    fun toSManga(isEng: String): SManga =
-        SManga.create().apply {
-            title = getSelectedLanguage(isEng, rusName, engName, name)
-            thumbnail_url = cover.default
-            author = authors.joinToString { it.name }
-            artist = artists.joinToString { it.name }
-            status = parseStatus(isLicensed, scanlateStatus.label, this@Manga.status.label)
-            genre = type.label.ifBlank { "Манга" } + ", " + ageRestriction.label + ", " +
-                genres.joinToString { it.name.trim() } + ", " + tags.joinToString { it.name.trim() }
-            description = getOppositeLanguage(isEng, rusName, engName) + rating.average.parseAverage() + " " + rating.average +
-                " (голосов: " + rating.votes + ")\n" + otherNames.joinAltNames() + summary
-        }
+    fun toSManga(isEng: String): SManga = SManga.create().apply {
+        title = getSelectedLanguage(isEng, rusName, engName, name)
+        thumbnail_url = cover.default
+        author = authors.joinToString { it.name }
+        artist = artists.joinToString { it.name }
+        status = parseStatus(isLicensed, scanlateStatus.label, this@Manga.status.label)
+        genre = type.label.ifBlank { "Манга" } + ", " + ageRestriction.label + ", " +
+            genres.joinToString { it.name.trim() } + ", " + tags.joinToString { it.name.trim() }
+        description = getOppositeLanguage(isEng, rusName, engName) + rating.average.parseAverage() + " " + rating.average +
+            " (голосов: " + rating.votes + ")\n" + otherNames.joinAltNames() + summary
+    }
 
-    private fun Float.parseAverage(): String =
-        when {
-            this > 9.5 -> "★★★★★"
-            this > 8.5 -> "★★★★✬"
-            this > 7.5 -> "★★★★☆"
-            this > 6.5 -> "★★★✬☆"
-            this > 5.5 -> "★★★☆☆"
-            this > 4.5 -> "★★✬☆☆"
-            this > 3.5 -> "★★☆☆☆"
-            this > 2.5 -> "★✬☆☆☆"
-            this > 1.5 -> "★☆☆☆☆"
-            this > 0.5 -> "✬☆☆☆☆"
-            else -> "☆☆☆☆☆"
-        }
+    private fun Float.parseAverage(): String = when {
+        this > 9.5 -> "★★★★★"
+        this > 8.5 -> "★★★★✬"
+        this > 7.5 -> "★★★★☆"
+        this > 6.5 -> "★★★✬☆"
+        this > 5.5 -> "★★★☆☆"
+        this > 4.5 -> "★★✬☆☆"
+        this > 3.5 -> "★★☆☆☆"
+        this > 2.5 -> "★✬☆☆☆"
+        this > 1.5 -> "★☆☆☆☆"
+        this > 0.5 -> "✬☆☆☆☆"
+        else -> "☆☆☆☆☆"
+    }
 
     private fun parseStatus(
         isLicensed: Boolean,
         statusTranslate: String,
         statusTitle: String,
-    ): Int =
-        when {
-            isLicensed -> SManga.LICENSED
-            statusTranslate == "Завершён" &&
-                statusTitle == "Приостановлен" ||
-                statusTranslate == "Заморожен" ||
-                statusTranslate == "Заброшен" -> SManga.ON_HIATUS
-            statusTranslate == "Завершён" && statusTitle == "Выпуск прекращён" -> SManga.CANCELLED
-            statusTranslate == "Продолжается" -> SManga.ONGOING
-            statusTranslate == "Выходит" -> SManga.ONGOING
-            statusTranslate == "Завершён" -> SManga.COMPLETED
-            statusTranslate == "Вышло" -> SManga.PUBLISHING_FINISHED
-            else ->
-                when (statusTitle) {
-                    "Онгоинг" -> SManga.ONGOING
-                    "Анонс" -> SManga.ONGOING
-                    "Завершён" -> SManga.COMPLETED
-                    "Приостановлен" -> SManga.ON_HIATUS
-                    "Выпуск прекращён" -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-        }
+    ): Int = when {
+        isLicensed -> SManga.LICENSED
+        statusTranslate == "Завершён" &&
+            statusTitle == "Приостановлен" ||
+            statusTranslate == "Заморожен" ||
+            statusTranslate == "Заброшен" -> SManga.ON_HIATUS
+        statusTranslate == "Завершён" && statusTitle == "Выпуск прекращён" -> SManga.CANCELLED
+        statusTranslate == "Продолжается" -> SManga.ONGOING
+        statusTranslate == "Выходит" -> SManga.ONGOING
+        statusTranslate == "Завершён" -> SManga.COMPLETED
+        statusTranslate == "Вышло" -> SManga.PUBLISHING_FINISHED
+        else ->
+            when (statusTitle) {
+                "Онгоинг" -> SManga.ONGOING
+                "Анонс" -> SManga.ONGOING
+                "Завершён" -> SManga.COMPLETED
+                "Приостановлен" -> SManga.ON_HIATUS
+                "Выпуск прекращён" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+    }
 
-    private fun List<String>.joinAltNames(): String =
-        when {
-            this.isNotEmpty() -> "Альтернативные названия:\n" + this.joinToString(" / ") + "\n\n"
-            else -> ""
-        }
+    private fun List<String>.joinAltNames(): String = when {
+        this.isNotEmpty() -> "Альтернативные названия:\n" + this.joinToString(" / ") + "\n\n"
+        else -> ""
+    }
 }
 
 private fun getSelectedLanguage(
@@ -205,23 +199,21 @@ private fun getSelectedLanguage(
     rusName: String?,
     engName: String?,
     name: String,
-): String =
-    when {
-        isEng == "rus" && rusName.orEmpty().isNotEmpty() -> rusName!!
-        isEng == "eng" && engName.orEmpty().isNotEmpty() -> engName!!
-        else -> name
-    }
+): String = when {
+    isEng == "rus" && rusName.orEmpty().isNotEmpty() -> rusName!!
+    isEng == "eng" && engName.orEmpty().isNotEmpty() -> engName!!
+    else -> name
+}
 
 private fun getOppositeLanguage(
     isEng: String,
     rusName: String?,
     engName: String?,
-): String =
-    when {
-        isEng == "eng" && rusName.orEmpty().isNotEmpty() -> rusName + "\n"
-        isEng == "rus" && engName.orEmpty().isNotEmpty() -> engName + "\n"
-        else -> ""
-    }
+): String = when {
+    isEng == "eng" && rusName.orEmpty().isNotEmpty() -> rusName + "\n"
+    isEng == "rus" && engName.orEmpty().isNotEmpty() -> engName + "\n"
+    else -> ""
+}
 
 @Serializable
 class Chapter(
@@ -250,10 +242,9 @@ class Chapter(
         )
     }
 
-    private fun first(branchId: Int? = null): Branch? =
-        runCatching {
-            if (branchId != null) branches.first { it.branchId == branchId } else branches.first()
-        }.getOrNull()
+    private fun first(branchId: Int? = null): Branch? = runCatching {
+        if (branchId != null) branches.first { it.branchId == branchId } else branches.first()
+    }.getOrNull()
 
     private fun getTeamName(branchId: Int? = null): String? = runCatching { first(branchId)!!.teams.first().name }.getOrNull()
 
@@ -263,16 +254,15 @@ class Chapter(
         slugUrl: String,
         branchId: Int? = null,
         isScanUser: Boolean,
-    ): SChapter =
-        SChapter.create().apply {
-            val chapterName = "Том $volume. Глава $number"
-            name = if (this@Chapter.name.isNullOrBlank()) chapterName else "$chapterName - ${this@Chapter.name}"
-            val branchStr = if (branchId != null) "&branch_id=$branchId" else ""
-            url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"
-            scanlator = getTeamName(branchId) ?: if (isScanUser) getUserName(branchId) else null
-            date_upload = runCatching { LibGroup.simpleDateFormat.parse(first(branchId)!!.createdAt)!!.time }.getOrDefault(0L)
-            chapter_number = number.toFloat()
-        }
+    ): SChapter = SChapter.create().apply {
+        val chapterName = "Том $volume. Глава $number"
+        name = if (this@Chapter.name.isNullOrBlank()) chapterName else "$chapterName - ${this@Chapter.name}"
+        val branchStr = if (branchId != null) "&branch_id=$branchId" else ""
+        url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"
+        scanlator = getTeamName(branchId) ?: if (isScanUser) getUserName(branchId) else null
+        date_upload = runCatching { LibGroup.simpleDateFormat.parse(first(branchId)!!.createdAt)!!.time }.getOrDefault(0L)
+        chapter_number = number.toFloat()
+    }
 }
 
 fun List<Chapter>.getBranchCount(): Int = this.maxOf { chapter -> chapter.branches.size }

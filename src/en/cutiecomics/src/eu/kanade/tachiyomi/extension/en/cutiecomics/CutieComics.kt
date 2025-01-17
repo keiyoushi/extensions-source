@@ -40,14 +40,13 @@ class CutieComics : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "#dle-content > div.w25"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            with(element.selectFirst("strong.field-content > a")!!) {
-                title = ownText()
-                setUrlWithoutDomain(attr("href"))
-            }
-            thumbnail_url = element.selectFirst("a > img")?.absUrl("src")
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        with(element.selectFirst("strong.field-content > a")!!) {
+            title = ownText()
+            setUrlWithoutDomain(attr("href"))
         }
+        thumbnail_url = element.selectFirst("a > img")?.absUrl("src")
+    }
 
     override fun popularMangaNextPageSelector() = ".navigation > a > i.fa-angle-right"
 
@@ -65,16 +64,15 @@ class CutieComics : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client
-                .newCall(GET("$baseUrl/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client
+            .newCall(GET("$baseUrl/$id"))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
+    }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -110,15 +108,14 @@ class CutieComics : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
 
-            title = document.selectFirst("h1#page-title")!!.text()
-            thumbnail_url = document.selectFirst("div.galery > img")?.absUrl("src")
-            genre = document.select("h3.field-label ~ span").joinToString { it.text() }
-        }
+        title = document.selectFirst("h1#page-title")!!.text()
+        thumbnail_url = document.selectFirst("div.galery > img")?.absUrl("src")
+        genre = document.select("h3.field-label ~ span").joinToString { it.text() }
+    }
 
     // ============================== Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -137,10 +134,9 @@ class CutieComics : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.galery > img").mapIndexed { index, item ->
-            Page(index, imageUrl = item.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.galery > img").mapIndexed { index, item ->
+        Page(index, imageUrl = item.absUrl("src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

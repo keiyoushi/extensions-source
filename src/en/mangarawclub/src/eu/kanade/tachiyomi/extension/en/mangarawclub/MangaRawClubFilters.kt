@@ -3,19 +3,18 @@ package eu.kanade.tachiyomi.extension.en.mangarawclub
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        SelectFilter("Sort by", getSortsList),
-        GenreFilter("Genre", getGenres),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Tags"),
-        Filter.Separator(),
-        ChapterFilter("Minimum Chapter"),
-    )
+fun getFilters(): FilterList = FilterList(
+    Filter.Header("NOTE: Ignored if using text search!"),
+    Filter.Separator(),
+    SelectFilter("Sort by", getSortsList),
+    GenreFilter("Genre", getGenres),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    TextFilter("Tags"),
+    Filter.Separator(),
+    ChapterFilter("Minimum Chapter"),
+)
 
 internal class GenreFilter(
     name: String,

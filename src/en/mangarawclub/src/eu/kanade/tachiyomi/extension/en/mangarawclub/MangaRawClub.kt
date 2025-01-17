@@ -118,67 +118,65 @@ class MangaRawClub : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
     // Manga from Element
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst(".novel-title")!!.ownText()
-            thumbnail_url = element.select(".novel-cover img").attr("abs:data-src")
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst(".novel-title")!!.ownText()
+        thumbnail_url = element.select(".novel-cover img").attr("abs:data-src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
 
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
 
     override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            document.selectFirst(".novel-header") ?: throw Exception("Page not found")
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.selectFirst(".novel-header") ?: throw Exception("Page not found")
 
-            author =
+        author =
+            document
+                .selectFirst(".author a")
+                ?.attr("title")
+                ?.trim()
+                ?.takeIf { it.lowercase() != "updating" }
+
+        description =
+            buildString {
+                document.selectFirst(".description")?.ownText()?.substringAfter("Summary is")?.trim()?.let {
+                    append(it)
+                }
                 document
-                    .selectFirst(".author a")
-                    ?.attr("title")
+                    .selectFirst(
+                        ".alternative-title",
+                    )?.ownText()
                     ?.trim()
-                    ?.takeIf { it.lowercase() != "updating" }
-
-            description =
-                buildString {
-                    document.selectFirst(".description")?.ownText()?.substringAfter("Summary is")?.trim()?.let {
-                        append(it)
+                    ?.takeIf { it.isNotEmpty() && it.lowercase() != "updating" }
+                    ?.let {
+                        append("\n\nAlternative Name: ${it.trim()}")
                     }
-                    document
-                        .selectFirst(
-                            ".alternative-title",
-                        )?.ownText()
-                        ?.trim()
-                        ?.takeIf { it.isNotEmpty() && it.lowercase() != "updating" }
-                        ?.let {
-                            append("\n\nAlternative Name: ${it.trim()}")
-                        }
-                }
+            }
 
-            genre =
-                document.select(".categories a[href*=genre]").joinToString(", ") {
-                    it
-                        .ownText()
-                        .trim()
-                        .split(" ")
-                        .joinToString(" ") { word ->
-                            word.lowercase().replaceFirstChar { c -> c.uppercase() }
-                        }
-                }
+        genre =
+            document.select(".categories a[href*=genre]").joinToString(", ") {
+                it
+                    .ownText()
+                    .trim()
+                    .split(" ")
+                    .joinToString(" ") { word ->
+                        word.lowercase().replaceFirstChar { c -> c.uppercase() }
+                    }
+            }
 
-            status =
-                when {
-                    document.select("div.header-stats strong.completed").isNotEmpty() -> SManga.COMPLETED
-                    document.select("div.header-stats strong.ongoing").isNotEmpty() -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
+        status =
+            when {
+                document.select("div.header-stats strong.completed").isNotEmpty() -> SManga.COMPLETED
+                document.select("div.header-stats strong.ongoing").isNotEmpty() -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
 
-            thumbnail_url = document.selectFirst(".cover img")?.let { img ->
-                img.attr("data-src").takeIf { it.isNotEmpty() } ?: img.attr("src")
-            } ?: thumbnail_url
-        }
+        thumbnail_url = document.selectFirst(".cover img")?.let { img ->
+            img.attr("data-src").takeIf { it.isNotEmpty() } ?: img.attr("src")
+        } ?: thumbnail_url
+    }
 
     // Chapters
     override fun chapterListSelector() = "ul.chapter-list > li"
@@ -188,15 +186,14 @@ class MangaRawClub : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
 
-            val name = element.select(".chapter-title").text().removeSuffix("-eng-li")
-            this.name = "Chapter $name"
+        val name = element.select(".chapter-title").text().removeSuffix("-eng-li")
+        this.name = "Chapter $name"
 
-            date_upload = parseChapterDate(element.select(".chapter-update").attr("datetime"))
-        }
+        date_upload = parseChapterDate(element.select(".chapter-update").attr("datetime"))
+    }
 
     private fun parseChapterDate(string: String): Long {
         // "April 21, 2021, 4:05 p.m."
@@ -206,10 +203,9 @@ class MangaRawClub : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(".page-in img[onerror]").mapIndexed { i, it ->
-            Page(i, imageUrl = it.attr("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".page-in img[onerror]").mapIndexed { i, it ->
+        Page(i, imageUrl = it.attr("src"))
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

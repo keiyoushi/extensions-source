@@ -18,16 +18,14 @@ class MangaRawPlus : Madara("MANGARAW+", "https://mangarawx.net", "ja") {
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?s&post_type=wp-manga&m_orderby=latest", headers)
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        super.popularMangaFromElement(element).apply {
-            thumbnail_url = thumbnail_url?.replaceFirst("-193x278", "")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        thumbnail_url = thumbnail_url?.replaceFirst("-193x278", "")
+    }
 
-    override fun imageFromElement(element: Element): String? =
-        when {
-            element.hasAttr("data-src-img") -> element.absUrl("data-src-img")
-            else -> super.imageFromElement(element)
-        }
+    override fun imageFromElement(element: Element): String? = when {
+        element.hasAttr("data-src-img") -> element.absUrl("data-src-img")
+        else -> super.imageFromElement(element)
+    }
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders =

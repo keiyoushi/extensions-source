@@ -37,17 +37,15 @@ class MundoHentai : ParsedHttpSource() {
             .rateLimit(1, 2, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", baseUrl)
 
-    private fun genericMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("span.thumb-titulo").text()
-            thumbnail_url = element.select("img.attachment-post-thumbnail").attr("src")
-            setUrlWithoutDomain(element.select("a:has(span.thumb-imagem)").attr("href"))
-        }
+    private fun genericMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("span.thumb-titulo").text()
+        thumbnail_url = element.select("img.attachment-post-thumbnail").attr("src")
+        setUrlWithoutDomain(element.select("a:has(span.thumb-imagem)").attr("href"))
+    }
 
     // The source does not have a popular list page, so we use the Doujin list instead.
     override fun popularMangaRequest(page: Int): Request {
@@ -138,15 +136,14 @@ class MundoHentai : ParsedHttpSource() {
 
     override fun chapterListSelector(): String = "div.listaImagens div.galeriaTab"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val chapterId = element.attr("data-id")
-            val title = element.selectFirst("div.galeriaTabTitulo")?.text()
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val chapterId = element.attr("data-id")
+        val title = element.selectFirst("div.galeriaTabTitulo")?.text()
 
-            name = "Capítulo $chapterId" + (if (!title.isNullOrEmpty()) " - $title" else "")
-            chapter_number = chapterId.toFloatOrNull() ?: -1f
-            setUrlWithoutDomain("${element.ownerDocument()!!.location()}#$chapterId")
-        }
+        name = "Capítulo $chapterId" + (if (!title.isNullOrEmpty()) " - $title" else "")
+        chapter_number = chapterId.toFloatOrNull() ?: -1f
+        setUrlWithoutDomain("${element.ownerDocument()!!.location()}#$chapterId")
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val chapterId = document.location().substringAfterLast("#", "")
@@ -172,11 +169,10 @@ class MundoHentai : ParsedHttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Os filtros são ignorados na busca!"),
-            TagFilter(getTags()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Os filtros são ignorados na busca!"),
+        TagFilter(getTags()),
+    )
 
     data class Tag(
         val name: String,
@@ -189,37 +185,36 @@ class MundoHentai : ParsedHttpSource() {
         tags: Array<Tag>,
     ) : Filter.Select<Tag>("Tag", tags)
 
-    private fun getTags(): Array<Tag> =
-        arrayOf(
-            Tag("-- Selecione --", ""),
-            Tag("Ahegao", "ahegao"),
-            Tag("Anal", "anal"),
-            Tag("Biquíni", "biquini"),
-            Tag("Chubby", "chubby"),
-            Tag("Colegial", "colegial"),
-            Tag("Creampie", "creampie"),
-            Tag("Dark Skin", "dark-skin"),
-            Tag("Dupla Penetração", "dupla-penetracao"),
-            Tag("Espanhola", "espanhola"),
-            Tag("Exibicionismo", "exibicionismo"),
-            Tag("Footjob", "footjob"),
-            Tag("Furry", "furry"),
-            Tag("Futanari", "futanari"),
-            Tag("Grupal", "grupal"),
-            Tag("Incesto", "incesto"),
-            Tag("Lingerie", "lingerie"),
-            Tag("MILF", "milf"),
-            Tag("Maiô", "maio"),
-            Tag("Masturbação", "masturbacao"),
-            Tag("Netorare", "netorare"),
-            Tag("Oral", "oral"),
-            Tag("Peitinhos", "peitinhos"),
-            Tag("Preservativo", "preservativo"),
-            Tag("Professora", "professora"),
-            Tag("Sex Toys", "sex-toys"),
-            Tag("Tentáculos", "tentaculos"),
-            Tag("Yaoi", "yaoi"),
-        )
+    private fun getTags(): Array<Tag> = arrayOf(
+        Tag("-- Selecione --", ""),
+        Tag("Ahegao", "ahegao"),
+        Tag("Anal", "anal"),
+        Tag("Biquíni", "biquini"),
+        Tag("Chubby", "chubby"),
+        Tag("Colegial", "colegial"),
+        Tag("Creampie", "creampie"),
+        Tag("Dark Skin", "dark-skin"),
+        Tag("Dupla Penetração", "dupla-penetracao"),
+        Tag("Espanhola", "espanhola"),
+        Tag("Exibicionismo", "exibicionismo"),
+        Tag("Footjob", "footjob"),
+        Tag("Furry", "furry"),
+        Tag("Futanari", "futanari"),
+        Tag("Grupal", "grupal"),
+        Tag("Incesto", "incesto"),
+        Tag("Lingerie", "lingerie"),
+        Tag("MILF", "milf"),
+        Tag("Maiô", "maio"),
+        Tag("Masturbação", "masturbacao"),
+        Tag("Netorare", "netorare"),
+        Tag("Oral", "oral"),
+        Tag("Peitinhos", "peitinhos"),
+        Tag("Preservativo", "preservativo"),
+        Tag("Professora", "professora"),
+        Tag("Sex Toys", "sex-toys"),
+        Tag("Tentáculos", "tentaculos"),
+        Tag("Yaoi", "yaoi"),
+    )
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 

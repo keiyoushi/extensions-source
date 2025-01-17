@@ -45,10 +45,9 @@ abstract class MangaThemesia(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     protected val intl =
         Intl(
@@ -158,12 +157,11 @@ abstract class MangaThemesia(
 
     override fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx, .listo .bs .bsx"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            thumbnail_url = element.select("img").imgAttr()
-            title = element.select("a").attr("title")
-            setUrlWithoutDomain(element.select("a").attr("href"))
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.select("img").imgAttr()
+        title = element.select("a").attr("title")
+        setUrlWithoutDomain(element.select("a").attr("href"))
+    }
 
     override fun searchMangaNextPageSelector() = "div.pagination .next, div.hpage .r"
 
@@ -262,116 +260,114 @@ abstract class MangaThemesia(
 
     open val altNamePrefix = "${intl["alt_names_heading"]} "
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
-                title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
-                artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
-                author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
-                description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
-                // Add alternative name to manga description
-                val altName = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText().takeIf { it.isNullOrBlank().not() }
-                altName?.let {
-                    description = "$description\n\n$altNamePrefix$altName".trim()
-                }
-                val genres = seriesDetails.select(seriesGenreSelector).map { it.text() }.toMutableList()
-                // Add series type (manga/manhwa/manhua/other) to genre
-                seriesDetails
-                    .selectFirst(seriesTypeSelector)
-                    ?.ownText()
-                    .takeIf { it.isNullOrBlank().not() }
-                    ?.let { genres.add(it) }
-                genre =
-                    genres
-                        .map { genre ->
-                            genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
-                                if (char.isLowerCase()) {
-                                    char.titlecase(Locale.forLanguageTag(lang))
-                                } else {
-                                    char.toString()
-                                }
-                            }
-                        }.joinToString { it.trim() }
-
-                status = seriesDetails.selectFirst(seriesStatusSelector)?.text().parseStatus()
-                thumbnail_url = seriesDetails.select(seriesThumbnailSelector).imgAttr()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
+            title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
+            artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
+            author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
+            description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
+            // Add alternative name to manga description
+            val altName = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText().takeIf { it.isNullOrBlank().not() }
+            altName?.let {
+                description = "$description\n\n$altNamePrefix$altName".trim()
             }
+            val genres = seriesDetails.select(seriesGenreSelector).map { it.text() }.toMutableList()
+            // Add series type (manga/manhwa/manhua/other) to genre
+            seriesDetails
+                .selectFirst(seriesTypeSelector)
+                ?.ownText()
+                .takeIf { it.isNullOrBlank().not() }
+                ?.let { genres.add(it) }
+            genre =
+                genres
+                    .map { genre ->
+                        genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
+                            if (char.isLowerCase()) {
+                                char.titlecase(Locale.forLanguageTag(lang))
+                            } else {
+                                char.toString()
+                            }
+                        }
+                    }.joinToString { it.trim() }
+
+            status = seriesDetails.selectFirst(seriesStatusSelector)?.text().parseStatus()
+            thumbnail_url = seriesDetails.select(seriesThumbnailSelector).imgAttr()
         }
+    }
 
     protected fun String?.removeEmptyPlaceholder(): String? =
         if (this.isNullOrBlank() || this == "-" || this == "N/A" || this == "n/a") null else this
 
-    open fun String?.parseStatus(): Int =
-        when {
-            this == null -> SManga.UNKNOWN
+    open fun String?.parseStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
 
-            listOf(
-                "مستمرة",
-                "en curso",
-                "ongoing",
-                "on going",
-                "ativo",
-                "en cours",
-                "en cours de publication",
-                "đang tiến hành",
-                "em lançamento",
-                "онгоінг",
-                "publishing",
-                "devam ediyor",
-                "em andamento",
-                "in corso",
-                "güncel",
-                "berjalan",
-                "продолжается",
-                "updating",
-                "lançando",
-                "in arrivo",
-                "emision",
-                "en emision",
-                "مستمر",
-                "curso",
-                "en marcha",
-                "publicandose",
-                "publicando",
-                "连载中",
-                "devam etmekte",
-                "連載中",
-            ).any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
+        listOf(
+            "مستمرة",
+            "en curso",
+            "ongoing",
+            "on going",
+            "ativo",
+            "en cours",
+            "en cours de publication",
+            "đang tiến hành",
+            "em lançamento",
+            "онгоінг",
+            "publishing",
+            "devam ediyor",
+            "em andamento",
+            "in corso",
+            "güncel",
+            "berjalan",
+            "продолжается",
+            "updating",
+            "lançando",
+            "in arrivo",
+            "emision",
+            "en emision",
+            "مستمر",
+            "curso",
+            "en marcha",
+            "publicandose",
+            "publicando",
+            "连载中",
+            "devam etmekte",
+            "連載中",
+        ).any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
 
-            listOf(
-                "completed",
-                "completo",
-                "complété",
-                "fini",
-                "achevé",
-                "terminé",
-                "tamamlandı",
-                "đã hoàn thành",
-                "hoàn thành",
-                "مكتملة",
-                "завершено",
-                "finished",
-                "finalizado",
-                "completata",
-                "one-shot",
-                "bitti",
-                "tamat",
-                "completado",
-                "concluído",
-                "完結",
-                "concluido",
-                "已完结",
-                "bitmiş",
-            ).any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+        listOf(
+            "completed",
+            "completo",
+            "complété",
+            "fini",
+            "achevé",
+            "terminé",
+            "tamamlandı",
+            "đã hoàn thành",
+            "hoàn thành",
+            "مكتملة",
+            "завершено",
+            "finished",
+            "finalizado",
+            "completata",
+            "one-shot",
+            "bitti",
+            "tamat",
+            "completado",
+            "concluído",
+            "完結",
+            "concluido",
+            "已完结",
+            "bitmiş",
+        ).any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
 
-            listOf("canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné")
-                .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
+        listOf("canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
 
-            listOf("hiatus", "on hold", "pausado", "en espera", "en pause", "en attente", "hiato")
-                .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
+        listOf("hiatus", "on hold", "pausado", "en espera", "en pause", "en attente", "hiato")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
 
-            else -> SManga.UNKNOWN
-        }
+        else -> SManga.UNKNOWN
+    }
 
     // Chapter list
     override fun chapterListSelector() = "div.bxcl li, div.cl li, #chapterlist li, ul li:has(div.chbox):has(div.eph-num)"
@@ -398,13 +394,12 @@ abstract class MangaThemesia(
 
     private fun parseUpdatedOnDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH).parse(date)?.time ?: 0L
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            val urlElements = element.select("a")
-            setUrlWithoutDomain(urlElements.attr("href"))
-            name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first()!!.text() }
-            date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        val urlElements = element.select("a")
+        setUrlWithoutDomain(urlElements.attr("href"))
+        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first()!!.text() }
+        date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
+    }
 
     protected open fun String?.parseChapterDate(): Long {
         if (this == null) return 0
@@ -720,26 +715,23 @@ abstract class MangaThemesia(
         url: HttpUrl,
         n: Int,
         strict: Boolean = false,
-    ): Boolean =
-        url.pathSegments.size == n &&
-            url.pathSegments[n - 1].isNotEmpty() ||
-            (!strict && url.pathSegments.size == n + 1 && url.pathSegments[n].isEmpty())
+    ): Boolean = url.pathSegments.size == n &&
+        url.pathSegments[n - 1].isNotEmpty() ||
+        (!strict && url.pathSegments.size == n + 1 && url.pathSegments[n].isEmpty())
 
-    protected open fun parseGenres(document: Document): List<GenreData>? =
-        document.selectFirst("ul.genrez")?.select("li")?.map { li ->
-            GenreData(
-                li.selectFirst("label")!!.text(),
-                li.selectFirst("input[type=checkbox]")!!.attr("value"),
-            )
-        }
+    protected open fun parseGenres(document: Document): List<GenreData>? = document.selectFirst("ul.genrez")?.select("li")?.map { li ->
+        GenreData(
+            li.selectFirst("label")!!.text(),
+            li.selectFirst("input[type=checkbox]")!!.attr("value"),
+        )
+    }
 
-    protected open fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            else -> attr("abs:src")
-        }
+    protected open fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        else -> attr("abs:src")
+    }
 
     protected open fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 

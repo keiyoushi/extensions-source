@@ -150,11 +150,10 @@ internal class ThemesFilter(
     state: List<Genre>,
 ) : GenreGroup("Themes", "themes", state)
 
-internal fun getSortItems(): Array<Pair<String, String>> =
-    arrayOf(
-        Pair("Mới cập nhật", "last_update"),
-        Pair("Lượt xem", "views"),
-        Pair("Rating", "rating"),
-        Pair("Vote", "vote_c"),
-        Pair("Tên A-Z", "name"),
-    )
+internal fun getSortItems(): Array<Pair<String, String>> = arrayOf(
+    Pair("Mới cập nhật", "last_update"),
+    Pair("Lượt xem", "views"),
+    Pair("Rating", "rating"),
+    Pair("Vote", "vote_c"),
+    Pair("Tên A-Z", "name"),
+)

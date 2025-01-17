@@ -24,14 +24,13 @@ class MGKomik :
 
     override val mangaSubString = "komik"
 
-    override fun headersBuilder() =
-        super.headersBuilder().apply {
-            add("Sec-Fetch-Dest", "document")
-            add("Sec-Fetch-Mode", "navigate")
-            add("Sec-Fetch-Site", "same-origin")
-            add("Upgrade-Insecure-Requests", "1")
-            add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
-        }
+    override fun headersBuilder() = super.headersBuilder().apply {
+        add("Sec-Fetch-Dest", "document")
+        add("Sec-Fetch-Mode", "navigate")
+        add("Sec-Fetch-Site", "same-origin")
+        add("Upgrade-Insecure-Requests", "1")
+        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
+    }
 
     override val client =
         network.cloudflareClient
@@ -55,12 +54,11 @@ class MGKomik :
 
     // ================================== Latest =======================================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = false)
-        } else {
-            GET("$baseUrl/$mangaSubString/${searchPage(page)}", headers)
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = false)
+    } else {
+        GET("$baseUrl/$mangaSubString/${searchPage(page)}", headers)
+    }
 
     // ================================== Search =======================================
 

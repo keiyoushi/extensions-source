@@ -46,56 +46,54 @@ class DarthsDroids : HttpSource() {
     // If a book doesn’t have its own cast page, try source a fitting
     // profile picture from a different page. Avoid sourcing thumbnails
     // from a different website.
-    private fun dndThumbnailUrlForTitle(nthManga: Int): String =
-        when (nthManga) {
-            // The numbers are assigned in order of appearance of a book on the archive page.
-            0 -> "$baseUrl/cast/QuiGon.jpg" // D&D1
-            1 -> "$baseUrl/cast/Anakin2.jpg" // D&D2
-            2 -> "$baseUrl/cast/ObiWan3.jpg" // D&D3
-            3 -> "$baseUrl/cast/JarJar2.jpg" // JJ
-            4 -> "$baseUrl/cast/Leia4.jpg" // D&D4
-            5 -> "$baseUrl/cast/Han5.jpg" // D&D5
-            6 -> "$baseUrl/cast/Luke6.jpg" // D&D6
-            7 -> "$baseUrl/cast/Cassian.jpg" // R1
-            8 -> "$baseUrl/cast/C3PO4.jpg" // Muppets
-            9 -> "$baseUrl/cast/Finn7.jpg" // D&D7
-            10 -> "$baseUrl/cast/Han4.jpg" // Solo
-            11 -> "$baseUrl/cast/Hux8.jpg" // D&D8
-            // Just some nonsense fallback that screams »Star Wars« but is also so recognisably
-            // OT that one can understand it’s a mere fallback. Better thumbnails require an
-            // extension update.
-            else -> "$baseUrl/cast/Vader4.jpg"
-        }
+    private fun dndThumbnailUrlForTitle(nthManga: Int): String = when (nthManga) {
+        // The numbers are assigned in order of appearance of a book on the archive page.
+        0 -> "$baseUrl/cast/QuiGon.jpg" // D&D1
+        1 -> "$baseUrl/cast/Anakin2.jpg" // D&D2
+        2 -> "$baseUrl/cast/ObiWan3.jpg" // D&D3
+        3 -> "$baseUrl/cast/JarJar2.jpg" // JJ
+        4 -> "$baseUrl/cast/Leia4.jpg" // D&D4
+        5 -> "$baseUrl/cast/Han5.jpg" // D&D5
+        6 -> "$baseUrl/cast/Luke6.jpg" // D&D6
+        7 -> "$baseUrl/cast/Cassian.jpg" // R1
+        8 -> "$baseUrl/cast/C3PO4.jpg" // Muppets
+        9 -> "$baseUrl/cast/Finn7.jpg" // D&D7
+        10 -> "$baseUrl/cast/Han4.jpg" // Solo
+        11 -> "$baseUrl/cast/Hux8.jpg" // D&D8
+        // Just some nonsense fallback that screams »Star Wars« but is also so recognisably
+        // OT that one can understand it’s a mere fallback. Better thumbnails require an
+        // extension update.
+        else -> "$baseUrl/cast/Vader4.jpg"
+    }
 
     private fun dndManga(
         archiveUrl: String,
         mangaTitle: String,
         mangaStatus: Int,
         nthManga: Int,
-    ): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(archiveUrl)
-            thumbnail_url = dndThumbnailUrlForTitle(nthManga)
-            title = mangaTitle
-            author = "David Morgan-Mar & Co."
-            artist = "David Morgan-Mar & Co."
-            description =
-                """What if Star Wars as we know it didn't exist, but instead the
+    ): SManga = SManga.create().apply {
+        setUrlWithoutDomain(archiveUrl)
+        thumbnail_url = dndThumbnailUrlForTitle(nthManga)
+        title = mangaTitle
+        author = "David Morgan-Mar & Co."
+        artist = "David Morgan-Mar & Co."
+        description =
+            """What if Star Wars as we know it didn't exist, but instead the
             |plot of the movies was being made up on the spot by players of
             |a Tabletop Game?
             |
             |Well, for one, the results might actually make a lot more sense,
             |from an out-of-story point of view…
-                """.trimMargin()
-            genre = "Campaign Comic, Comedy, Space Opera, Science Fiction"
-            status = mangaStatus
-            update_strategy =
-                when (mangaStatus) {
-                    SManga.COMPLETED -> UpdateStrategy.ONLY_FETCH_ONCE
-                    else -> UpdateStrategy.ALWAYS_UPDATE
-                }
-            initialized = true
-        }
+            """.trimMargin()
+        genre = "Campaign Comic, Comedy, Space Opera, Science Fiction"
+        status = mangaStatus
+        update_strategy =
+            when (mangaStatus) {
+                SManga.COMPLETED -> UpdateStrategy.ONLY_FETCH_ONCE
+                else -> UpdateStrategy.ALWAYS_UPDATE
+            }
+        initialized = true
+    }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/archive.html", headers)
 
@@ -163,16 +161,15 @@ class DarthsDroids : HttpSource() {
     // Not efficient, but the simplest way for me to refresh.
     // We also can’t really use the `mangaDetailsRequest + mangaDetailsParse`
     // approach, for we actually expect one of the books’ `url`s to change.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        fetchPopularManga(0)
-            .map { mangasPage ->
-                mangasPage
-                    .mangas
-                    // Do not test for URL-equality, for the last book will always
-                    // eventually migrate its archive page from `/archive.html` to
-                    // its own page.
-                    .first { it.title == manga.title }
-            }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(0)
+        .map { mangasPage ->
+            mangasPage
+                .mangas
+                // Do not test for URL-equality, for the last book will always
+                // eventually migrate its archive page from `/archive.html` to
+                // its own page.
+                .first { it.title == manga.title }
+        }
 
     // This implementation here is needlessly complicated, for it has to automatically detect
     // whether we’re in a date-annotated archive, the main archive, or a dateless archive.

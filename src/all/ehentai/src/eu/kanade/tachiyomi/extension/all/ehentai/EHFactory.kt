@@ -4,26 +4,25 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class EHFactory : SourceFactory {
-    override fun createSources(): List<Source> =
-        listOf(
-            EHentaiJa(),
-            EHentaiEn(),
-            EHentaiZh(),
-            EHentaiNl(),
-            EHentaiFr(),
-            EHentaiDe(),
-            EHentaiHu(),
-            EHentaiIt(),
-            EHentaiKo(),
-            EHentaiPl(),
-            EHentaiPtBr(),
-            EHentaiRu(),
-            EHentaiEs(),
-            EHentaiTh(),
-            EHentaiVi(),
-            EHentaiNone(),
-            EHentaiOther(),
-        )
+    override fun createSources(): List<Source> = listOf(
+        EHentaiJa(),
+        EHentaiEn(),
+        EHentaiZh(),
+        EHentaiNl(),
+        EHentaiFr(),
+        EHentaiDe(),
+        EHentaiHu(),
+        EHentaiIt(),
+        EHentaiKo(),
+        EHentaiPl(),
+        EHentaiPtBr(),
+        EHentaiRu(),
+        EHentaiEs(),
+        EHentaiTh(),
+        EHentaiVi(),
+        EHentaiNone(),
+        EHentaiOther(),
+    )
 }
 
 class EHentaiJa : EHentai("ja", "japanese")

@@ -37,10 +37,9 @@ class Kiryuu : MangaThemesia("Kiryuu", "https://kiryuu.one", "id", dateFormat = 
             .build()
 
     // manga details
-    override fun mangaDetailsParse(document: Document) =
-        super.mangaDetailsParse(document).apply {
-            title = document.selectFirst(seriesThumbnailSelector)!!.attr("title")
-        }
+    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
+        title = document.selectFirst(seriesThumbnailSelector)!!.attr("title")
+    }
 
     override val hasProjectPage = true
 }

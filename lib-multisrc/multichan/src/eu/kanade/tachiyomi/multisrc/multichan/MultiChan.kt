@@ -33,10 +33,9 @@ abstract class MultiChan(
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        Headers.Builder().apply {
-            add("Referer", baseUrl)
-        }
+    override fun headersBuilder() = Headers.Builder().apply {
+        add("Referer", baseUrl)
+    }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mostfavorites?offset=${20 * (page - 1)}", headers)
 
@@ -118,12 +117,11 @@ abstract class MultiChan(
         return manga
     }
 
-    private fun parseStatus(element: String): Int =
-        when {
-            element.contains("перевод завершен") -> SManga.COMPLETED
-            element.contains("перевод продолжается") -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(element: String): Int = when {
+        element.contains("перевод завершен") -> SManga.COMPLETED
+        element.contains("перевод продолжается") -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = "table.table_cha tr:gt(1)"
 

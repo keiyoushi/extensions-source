@@ -212,58 +212,56 @@ abstract class MangaDex(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        when {
-            query.startsWith(MDConstants.prefixChSearch) ->
-                getMangaIdFromChapterId(query.removePrefix(MDConstants.prefixChSearch))
-                    .flatMap { mangaId ->
-                        super.fetchSearchManga(
-                            page = page,
-                            query = MDConstants.prefixIdSearch + mangaId,
-                            filters = filters,
-                        )
-                    }
-
-            query.startsWith(MDConstants.prefixUsrSearch) ->
-                client
-                    .newCall(
-                        request =
-                            searchMangaUploaderRequest(
-                                page = page,
-                                uploader = query.removePrefix(MDConstants.prefixUsrSearch),
-                            ),
-                    ).asObservableSuccess()
-                    .map { latestUpdatesParse(it) }
-
-            query.startsWith(MDConstants.prefixListSearch) ->
-                client
-                    .newCall(
-                        request =
-                            searchMangaListRequest(
-                                list = query.removePrefix(MDConstants.prefixListSearch),
-                            ),
-                    ).asObservableSuccess()
-                    .map { searchMangaListParse(it, page, filters) }
-
-            else -> super.fetchSearchManga(page, query.trim(), filters)
-        }
-
-    private fun getMangaIdFromChapterId(id: String): Observable<String> =
-        client
-            .newCall(GET("${MDConstants.apiChapterUrl}/$id", headers))
-            .asObservable()
-            .map { response ->
-                if (response.isSuccessful.not()) {
-                    throw Exception(helper.intl.format("unable_to_process_chapter_request", response.code))
+    ): Observable<MangasPage> = when {
+        query.startsWith(MDConstants.prefixChSearch) ->
+            getMangaIdFromChapterId(query.removePrefix(MDConstants.prefixChSearch))
+                .flatMap { mangaId ->
+                    super.fetchSearchManga(
+                        page = page,
+                        query = MDConstants.prefixIdSearch + mangaId,
+                        filters = filters,
+                    )
                 }
 
-                response
-                    .parseAs<ChapterDto>()
-                    .data!!
-                    .relationships
-                    .firstInstanceOrNull<MangaDataDto>()!!
-                    .id
+        query.startsWith(MDConstants.prefixUsrSearch) ->
+            client
+                .newCall(
+                    request =
+                        searchMangaUploaderRequest(
+                            page = page,
+                            uploader = query.removePrefix(MDConstants.prefixUsrSearch),
+                        ),
+                ).asObservableSuccess()
+                .map { latestUpdatesParse(it) }
+
+        query.startsWith(MDConstants.prefixListSearch) ->
+            client
+                .newCall(
+                    request =
+                        searchMangaListRequest(
+                            list = query.removePrefix(MDConstants.prefixListSearch),
+                        ),
+                ).asObservableSuccess()
+                .map { searchMangaListParse(it, page, filters) }
+
+        else -> super.fetchSearchManga(page, query.trim(), filters)
+    }
+
+    private fun getMangaIdFromChapterId(id: String): Observable<String> = client
+        .newCall(GET("${MDConstants.apiChapterUrl}/$id", headers))
+        .asObservable()
+        .map { response ->
+            if (response.isSuccessful.not()) {
+                throw Exception(helper.intl.format("unable_to_process_chapter_request", response.code))
             }
+
+            response
+                .parseAs<ChapterDto>()
+                .data!!
+                .relationships
+                .firstInstanceOrNull<MangaDataDto>()!!
+                .id
+        }
 
     override fun searchMangaRequest(
         page: Int,
@@ -896,10 +894,9 @@ abstract class MangaDex(
         value?.forEach { addQueryParameter(name, it) }
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            helper.json.decodeFromString(body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        helper.json.decodeFromString(body.string())
+    }
 
     private inline fun <reified T> List<*>.firstInstanceOrNull(): T? = firstOrNull { it is T } as? T?
 

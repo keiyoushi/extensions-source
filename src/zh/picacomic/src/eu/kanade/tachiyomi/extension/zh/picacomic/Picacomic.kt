@@ -278,10 +278,9 @@ class Picacomic :
         return POST(url, picaHeaders(url, "POST"), body)
     }
 
-    private fun hitBlocklist(comic: PicaSearchComic): Boolean =
-        ((comic.tags ?: (emptyList<String>() + comic.categories)))
-            .map(String::trim)
-            .any { it in blocklist }
+    private fun hitBlocklist(comic: PicaSearchComic): Boolean = ((comic.tags ?: (emptyList<String>() + comic.categories)))
+        .map(String::trim)
+        .any { it in blocklist }
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url
@@ -380,11 +379,10 @@ class Picacomic :
         return ret
     }
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET(
-            chapter.url + "/pages?page=1",
-            picaHeaders(chapter.url + "/pages?page=1"),
-        )
+    override fun pageListRequest(chapter: SChapter) = GET(
+        chapter.url + "/pages?page=1",
+        picaHeaders(chapter.url + "/pages?page=1"),
+    )
 
     override fun pageListParse(response: Response): List<Page> {
         val pages =
@@ -418,12 +416,11 @@ class Picacomic :
         TODO("Not yet implemented")
     }
 
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(),
-            CategoryFilter(),
-            RankFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        CategoryFilter(),
+        RankFilter(),
+    )
 
     private class SortFilter :
         UriPartFilter(

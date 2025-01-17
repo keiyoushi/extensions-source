@@ -48,12 +48,11 @@ class YushukeMangas : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "#semanal a.top-item"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst("h3")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h3")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     override fun popularMangaNextPageSelector() = null
 
@@ -122,54 +121,51 @@ class YushukeMangas : ParsedHttpSource() {
 
     override fun searchMangaSelector() = ".search-result-item"
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        if (response.request.url
-                .queryParameter("search")
-                .isNullOrBlank()
-        ) {
-            latestUpdatesParse(response)
-        } else {
-            super.searchMangaParse(response)
-        }
+    override fun searchMangaParse(response: Response): MangasPage = if (response.request.url
+            .queryParameter("search")
+            .isNullOrBlank()
+    ) {
+        latestUpdatesParse(response)
+    } else {
+        super.searchMangaParse(response)
+    }
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            title = element.selectFirst(".search-result-title")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            setUrlWithoutDomain(
-                element.attr("onclick").let {
-                    SEARCH_URL_REGEX
-                        .find(it)
-                        ?.groups
-                        ?.get(1)
-                        ?.value!!
-                },
-            )
-        }
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst(".search-result-title")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(
+            element.attr("onclick").let {
+                SEARCH_URL_REGEX
+                    .find(it)
+                    ?.groups
+                    ?.get(1)
+                    ?.value!!
+            },
+        )
+    }
 
     override fun searchMangaNextPageSelector() = null
 
     // ============================== Manga Details =========================
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            val details = document.selectFirst(".manga-banner .container")!!
-            title = details.selectFirst("h1")!!.text()
-            thumbnail_url = details.selectFirst("img")?.absUrl("src")
-            genre = details.select(".genre-tag").joinToString { it.text() }
-            description = details.selectFirst(".sinopse p")?.text()
-            details.selectFirst(".manga-meta > div")?.ownText()?.let {
-                status =
-                    when (it.lowercase()) {
-                        "em andamento" -> SManga.ONGOING
-                        "completo" -> SManga.COMPLETED
-                        "cancelado" -> SManga.CANCELLED
-                        "hiato" -> SManga.ON_HIATUS
-                        else -> SManga.UNKNOWN
-                    }
-            }
-            setUrlWithoutDomain(document.location())
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val details = document.selectFirst(".manga-banner .container")!!
+        title = details.selectFirst("h1")!!.text()
+        thumbnail_url = details.selectFirst("img")?.absUrl("src")
+        genre = details.select(".genre-tag").joinToString { it.text() }
+        description = details.selectFirst(".sinopse p")?.text()
+        details.selectFirst(".manga-meta > div")?.ownText()?.let {
+            status =
+                when (it.lowercase()) {
+                    "em andamento" -> SManga.ONGOING
+                    "completo" -> SManga.COMPLETED
+                    "cancelado" -> SManga.CANCELLED
+                    "hiato" -> SManga.ON_HIATUS
+                    else -> SManga.UNKNOWN
+                }
         }
+        setUrlWithoutDomain(document.location())
+    }
 
     private fun SManga.fetchMangaId(): String {
         val document = client.newCall(mangaDetailsRequest(this)).execute().asJsoup()
@@ -191,11 +187,10 @@ class YushukeMangas : ParsedHttpSource() {
 
     override fun chapterListSelector() = "a.chapter-item"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            name = element.selectFirst(".chapter-number")!!.text()
-            setUrlWithoutDomain(element.absUrl("href"))
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst(".chapter-number")!!.text()
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val mangaId = manga.fetchMangaId()
@@ -237,12 +232,11 @@ class YushukeMangas : ParsedHttpSource() {
 
     // ============================== Filters =============================
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            RadioFilter("Status", "status", statusList),
-            RadioFilter("Tipo", "tipo", typeList),
-            GenreFilter("Gêneros", "tags[]", genresList),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        RadioFilter("Status", "status", statusList),
+        RadioFilter("Tipo", "tipo", typeList),
+        GenreFilter("Gêneros", "tags[]", genresList),
+    )
 
     class RadioFilter(
         displayName: String,

@@ -196,101 +196,98 @@ class MangaBuff : ParsedHttpSource() {
 
     override fun searchMangaSelector() = ".cards .cards__item"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst(".cards__name")!!.text()
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst(".cards__name")!!.text()
 
-            val slug = "$baseUrl$url".toHttpUrl().pathSegments.last()
-            thumbnail_url = "$baseUrl/img/manga/posters/$slug.jpg"
-        }
+        val slug = "$baseUrl$url".toHttpUrl().pathSegments.last()
+        thumbnail_url = "$baseUrl/img/manga/posters/$slug.jpg"
+    }
 
     override fun searchMangaNextPageSelector() = ".pagination .pagination__button--active + li:not(:last-child)"
 
     // Details
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            title = document.selectFirst("h1, .manga__name, .manga-mobile__name")!!.text()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1, .manga__name, .manga-mobile__name")!!.text()
 
-            description =
-                buildString {
-                    document
-                        .selectFirst(".manga__description")
-                        ?.text()
-                        ?.also { append(it) }
-
-                    document // rating%
-                        .selectFirst(".manga__rating")
-                        ?.text()
-                        ?.toDoubleOrNull()
-                        ?.let { it / 10.0 }
-                        ?.also {
-                            if (isNotEmpty()) append("\n\n")
-                            append(String.format(Locale("ru"), "Рейтинг: %.0f%%", it * 100))
-                        }
-
-                    document // views
-                        .selectFirst(".manga__views")
-                        ?.text()
-                        ?.replace(" ", "")
-                        ?.toIntOrNull()
-                        ?.also {
-                            if (isNotEmpty()) append("\n\n")
-                            append(String.format(Locale("ru"), "Просмотров: %,d", it))
-                        }
-
-                    document // favorites
-                        .selectFirst(".manga")
-                        ?.attr("data-fav-count")
-                        ?.takeIf { it.isNotEmpty() }
-                        ?.toIntOrNull()
-                        ?.also {
-                            if (isNotEmpty()) append("\n\n")
-                            append(String.format(Locale("ru"), "Избранное: %,d", it))
-                        }
-
-                    document // alternative names
-                        .select(".manga__name-alt > span, .manga-mobile__name-alt > span")
-                        .eachText()
-                        .takeIf { it.isNotEmpty() }
-                        ?.also {
-                            if (isNotEmpty()) append("\n\n")
-                            append("Альтернативные названия:\n")
-                            append(it.joinToString("\n") { "• $it" })
-                        }
-                }
-
-            genre =
-                buildList {
-                    addAll(document.select(".manga__middle-links > a:not(:last-child)").eachText())
-                    addAll(document.select(".manga-mobile__info > a:not(:last-child)").eachText())
-                    addAll(document.select(".tags > .tags__item").eachText())
-                }.takeIf { it.isNotEmpty() }?.joinToString()
-
-            status =
+        description =
+            buildString {
                 document
-                    .select(".manga__middle-links > a:last-child, .manga-mobile__info > a:last-child")
-                    .text()
-                    .parseStatus()
+                    .selectFirst(".manga__description")
+                    ?.text()
+                    ?.also { append(it) }
 
-            thumbnail_url =
-                document
-                    .selectFirst(".manga__img img, img.manga-mobile__image")
-                    ?.absUrl("src")
-        }
+                document // rating%
+                    .selectFirst(".manga__rating")
+                    ?.text()
+                    ?.toDoubleOrNull()
+                    ?.let { it / 10.0 }
+                    ?.also {
+                        if (isNotEmpty()) append("\n\n")
+                        append(String.format(Locale("ru"), "Рейтинг: %.0f%%", it * 100))
+                    }
+
+                document // views
+                    .selectFirst(".manga__views")
+                    ?.text()
+                    ?.replace(" ", "")
+                    ?.toIntOrNull()
+                    ?.also {
+                        if (isNotEmpty()) append("\n\n")
+                        append(String.format(Locale("ru"), "Просмотров: %,d", it))
+                    }
+
+                document // favorites
+                    .selectFirst(".manga")
+                    ?.attr("data-fav-count")
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.toIntOrNull()
+                    ?.also {
+                        if (isNotEmpty()) append("\n\n")
+                        append(String.format(Locale("ru"), "Избранное: %,d", it))
+                    }
+
+                document // alternative names
+                    .select(".manga__name-alt > span, .manga-mobile__name-alt > span")
+                    .eachText()
+                    .takeIf { it.isNotEmpty() }
+                    ?.also {
+                        if (isNotEmpty()) append("\n\n")
+                        append("Альтернативные названия:\n")
+                        append(it.joinToString("\n") { "• $it" })
+                    }
+            }
+
+        genre =
+            buildList {
+                addAll(document.select(".manga__middle-links > a:not(:last-child)").eachText())
+                addAll(document.select(".manga-mobile__info > a:not(:last-child)").eachText())
+                addAll(document.select(".tags > .tags__item").eachText())
+            }.takeIf { it.isNotEmpty() }?.joinToString()
+
+        status =
+            document
+                .select(".manga__middle-links > a:last-child, .manga-mobile__info > a:last-child")
+                .text()
+                .parseStatus()
+
+        thumbnail_url =
+            document
+                .selectFirst(".manga__img img, img.manga-mobile__image")
+                ?.absUrl("src")
+    }
 
     // Chapters
     override fun chapterListSelector() = "a.chapters__item"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            name = element.select(".chapters__volume, .chapters__value, .chapters__name").text()
-            date_upload =
-                runCatching {
-                    dateFormat.parse(element.selectFirst(".chapters__add-date")!!.text())!!.time
-                }.getOrDefault(0L)
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        name = element.select(".chapters__volume, .chapters__value, .chapters__name").text()
+        date_upload =
+            runCatching {
+                dateFormat.parse(element.selectFirst(".chapters__add-date")!!.text())!!.time
+            }.getOrDefault(0L)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
@@ -328,41 +325,37 @@ class MangaBuff : ParsedHttpSource() {
     // Pages
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(".reader__pages img").mapIndexed { i, img ->
-            Page(i, document.location(), img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".reader__pages img").mapIndexed { i, img ->
+        Page(i, document.location(), img.imgAttr())
+    }
 
     // Other
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("ПРИМЕЧАНИЕ: Игнорируется, если используется поиск по тексту!"),
-            Filter.Separator(),
-            SortFilter(),
-            GenreFilter(),
-            TypeFilter(),
-            TagFilter(),
-            StatusFilter(),
-            AgeFilter(),
-            RatingFilter(),
-            YearFilter(),
-            ChapterCountFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("ПРИМЕЧАНИЕ: Игнорируется, если используется поиск по тексту!"),
+        Filter.Separator(),
+        SortFilter(),
+        GenreFilter(),
+        TypeFilter(),
+        TagFilter(),
+        StatusFilter(),
+        AgeFilter(),
+        RatingFilter(),
+        YearFilter(),
+        ChapterCountFilter(),
+    )
 
-    private fun String.parseStatus(): Int =
-        when (this.lowercase()) {
-            "завершен" -> SManga.COMPLETED
-            "продолжается" -> SManga.ONGOING
-            "заморожен" -> SManga.ON_HIATUS
-            "заброшен" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.parseStatus(): Int = when (this.lowercase()) {
+        "завершен" -> SManga.COMPLETED
+        "продолжается" -> SManga.ONGOING
+        "заморожен" -> SManga.ON_HIATUS
+        "заброшен" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-src") -> absUrl("data-src")
-            else -> absUrl("src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-src") -> absUrl("data-src")
+        else -> absUrl("src")
+    }
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 

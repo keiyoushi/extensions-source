@@ -239,28 +239,27 @@ class Pixiv(
 
     override fun getFilterList() = FilterList(PixivFilters())
 
-    private fun Sequence<PixivIllust>.toSManga() =
-        sequence<SManga> {
-            val seriesIdsSeen = mutableSetOf<String>()
+    private fun Sequence<PixivIllust>.toSManga() = sequence<SManga> {
+        val seriesIdsSeen = mutableSetOf<String>()
 
-            forEach { illust ->
-                val series = illust.series
+        forEach { illust ->
+            val series = illust.series
 
-                if (series == null) {
-                    val manga = SManga.create()
-                    manga.setUrlWithoutDomain("/artworks/${illust.id!!}")
-                    manga.title = illust.title ?: "(null)"
-                    manga.thumbnail_url = illust.url
-                    yield(manga)
-                } else if (seriesIdsSeen.add(series.id!!)) {
-                    val manga = SManga.create()
-                    manga.setUrlWithoutDomain("/user/${series.userId!!}/series/${series.id}")
-                    manga.title = series.title ?: "(null)"
-                    manga.thumbnail_url = series.coverImage ?: illust.url
-                    yield(manga)
-                }
+            if (series == null) {
+                val manga = SManga.create()
+                manga.setUrlWithoutDomain("/artworks/${illust.id!!}")
+                manga.title = illust.title ?: "(null)"
+                manga.thumbnail_url = illust.url
+                yield(manga)
+            } else if (seriesIdsSeen.add(series.id!!)) {
+                val manga = SManga.create()
+                manga.setUrlWithoutDomain("/user/${series.userId!!}/series/${series.id}")
+                manga.title = series.title ?: "(null)"
+                manga.thumbnail_url = series.coverImage ?: illust.url
+                yield(manga)
             }
         }
+    }
 
     private var latestMangaNextPage = 1
     private lateinit var latestMangaIterator: Iterator<SManga>

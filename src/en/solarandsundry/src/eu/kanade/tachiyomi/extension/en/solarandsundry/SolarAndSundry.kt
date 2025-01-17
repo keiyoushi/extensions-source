@@ -42,24 +42,22 @@ class SolarAndSundry : HttpSource() {
         val published_at: String,
     )
 
-    private fun createManga(): SManga =
-        SManga.create().apply {
-            title = "Solar and Sundry"
-            url = "/page"
-            author = "Ewan Breakey"
-            artist = author
-            status = SManga.ONGOING
-            description = "a sci-fi horror webcomic about life blooming against all odds"
-            thumbnail_url = "https://imagedelivery.net/zthi1l8fKrUGB5ig08mq-Q/de292ba7-f164-4f43-ec17-1876a7a44600/public"
-        }
+    private fun createManga(): SManga = SManga.create().apply {
+        title = "Solar and Sundry"
+        url = "/page"
+        author = "Ewan Breakey"
+        artist = author
+        status = SManga.ONGOING
+        description = "a sci-fi horror webcomic about life blooming against all odds"
+        thumbnail_url = "https://imagedelivery.net/zthi1l8fKrUGB5ig08mq-Q/de292ba7-f164-4f43-ec17-1876a7a44600/public"
+    }
 
     private val imgHeaders by lazy {
         headersBuilder().set("Accept", ACCEPT_IMAGE).build()
     }
 
-    private fun parseDate(dateStr: String): Long =
-        runCatching { DATE_FORMATTER.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
+    private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.parse(dateStr)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private val DATE_FORMATTER by lazy {

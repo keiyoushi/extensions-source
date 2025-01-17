@@ -52,12 +52,11 @@ class TruyenGG :
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat/trang-$page.html", headers)
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a.book_name")!!.attr("href"))
-            title = element.select("a.book_name").text()
-            thumbnail_url = element.selectFirst(".image-cover img")!!.attr("data-src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a.book_name")!!.attr("href"))
+        title = element.select("a.book_name").text()
+        thumbnail_url = element.selectFirst(".image-cover img")!!.attr("data-src")
+    }
 
     override fun latestUpdatesSelector() = ".list_item_home .item_home"
 
@@ -73,39 +72,35 @@ class TruyenGG :
 
     override fun chapterListSelector() = "ul.list_chap > li.item_chap"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            name = element.select("a").text()
-            date_upload = parseDate(element.select("span.cl99").text().trim())
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        name = element.select("a").text()
+        date_upload = parseDate(element.select("span.cl99").text().trim())
+    }
 
-    private fun parseDate(date: String): Long =
-        runCatching {
-            dateFormat.parse(date)?.time
-        }.getOrNull() ?: 0L
+    private fun parseDate(date: String): Long = runCatching {
+        dateFormat.parse(date)?.time
+    }.getOrNull() ?: 0L
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.select("h1[itemprop=name]").text()
-            author = document.selectFirst("p:contains(Tác Giả) + p")?.text()
-            genre = document.select("a.clblue").joinToString { it.text() }
-            description = document.select("div.story-detail-info").text().trim()
-            thumbnail_url = document.selectFirst(".thumbblock img")!!.attr("abs:src")
-            status =
-                when (document.select("p:contains(Trạng Thái) + p").text()) {
-                    "Đang Cập Nhật" -> SManga.ONGOING
-                    "Hoàn Thành" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
-
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(".content_detail img")
-            .mapIndexed { idx, it ->
-                Page(idx, imageUrl = it.attr("abs:src"))
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("h1[itemprop=name]").text()
+        author = document.selectFirst("p:contains(Tác Giả) + p")?.text()
+        genre = document.select("a.clblue").joinToString { it.text() }
+        description = document.select("div.story-detail-info").text().trim()
+        thumbnail_url = document.selectFirst(".thumbblock img")!!.attr("abs:src")
+        status =
+            when (document.select("p:contains(Trạng Thái) + p").text()) {
+                "Đang Cập Nhật" -> SManga.ONGOING
+                "Hoàn Thành" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
             }
+    }
+
+    override fun pageListParse(document: Document): List<Page> = document
+        .select(".content_detail img")
+        .mapIndexed { idx, it ->
+            Page(idx, imageUrl = it.attr("abs:src"))
+        }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -138,15 +133,14 @@ class TruyenGG :
 
     override fun searchMangaSelector() = latestUpdatesSelector()
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Không dùng chung với tìm kiếm bằng tên"),
-            CountryFilter(),
-            StatusFilter(),
-            ChapterCountFilter(),
-            SortByFilter(),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Không dùng chung với tìm kiếm bằng tên"),
+        CountryFilter(),
+        StatusFilter(),
+        ChapterCountFilter(),
+        SortByFilter(),
+        GenreList(getGenreList()),
+    )
 
     interface UriFilter {
         fun addToUri(builder: HttpUrl.Builder)
@@ -242,52 +236,51 @@ class TruyenGG :
         }
     }
 
-    private fun getGenreList() =
-        listOf(
-            Genre("Action", "37"),
-            Genre("Adventure", "38"),
-            Genre("Anime", "39"),
-            Genre("Cổ Đại", "40"),
-            Genre("Comedy", "41"),
-            Genre("Comic", "42"),
-            Genre("Detective", "43"),
-            Genre("Doujinshi", "44"),
-            Genre("Drama", "45"),
-            Genre("Ecchi", "80"),
-            Genre("Fantasy", "46"),
-            Genre("Gender Bender", "47"),
-            Genre("Harem", "78"),
-            Genre("Historical", "48"),
-            Genre("Horror", "49"),
-            Genre("Huyền Huyễn", "50"),
-            Genre("Isekai", "51"),
-            Genre("Josei", "52"),
-            Genre("Magic", "53"),
-            Genre("Manga", "81"),
-            Genre("Manhua", "54"),
-            Genre("Manhwa", "55"),
-            Genre("Martial Arts", "56"),
-            Genre("Mystery", "57"),
-            Genre("Ngôn Tình", "58"),
-            Genre("One shot", "59"),
-            Genre("Psychological", "60"),
-            Genre("Romance", "61"),
-            Genre("School Life", "62"),
-            Genre("Sci-fi", "63"),
-            Genre("Seinen", "64"),
-            Genre("Shoujo", "65"),
-            Genre("Shoujo Ai", "66"),
-            Genre("Shounen", "67"),
-            Genre("Shounen Ai", "68"),
-            Genre("Slice of life", "69"),
-            Genre("Sports", "70"),
-            Genre("Supernatural", "71"),
-            Genre("Tragedy", "72"),
-            Genre("Truyện Màu", "73"),
-            Genre("Webtoon", "74"),
-            Genre("Xuyên Không", "75"),
-            Genre("Yuri", "76"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Action", "37"),
+        Genre("Adventure", "38"),
+        Genre("Anime", "39"),
+        Genre("Cổ Đại", "40"),
+        Genre("Comedy", "41"),
+        Genre("Comic", "42"),
+        Genre("Detective", "43"),
+        Genre("Doujinshi", "44"),
+        Genre("Drama", "45"),
+        Genre("Ecchi", "80"),
+        Genre("Fantasy", "46"),
+        Genre("Gender Bender", "47"),
+        Genre("Harem", "78"),
+        Genre("Historical", "48"),
+        Genre("Horror", "49"),
+        Genre("Huyền Huyễn", "50"),
+        Genre("Isekai", "51"),
+        Genre("Josei", "52"),
+        Genre("Magic", "53"),
+        Genre("Manga", "81"),
+        Genre("Manhua", "54"),
+        Genre("Manhwa", "55"),
+        Genre("Martial Arts", "56"),
+        Genre("Mystery", "57"),
+        Genre("Ngôn Tình", "58"),
+        Genre("One shot", "59"),
+        Genre("Psychological", "60"),
+        Genre("Romance", "61"),
+        Genre("School Life", "62"),
+        Genre("Sci-fi", "63"),
+        Genre("Seinen", "64"),
+        Genre("Shoujo", "65"),
+        Genre("Shoujo Ai", "66"),
+        Genre("Shounen", "67"),
+        Genre("Shounen Ai", "68"),
+        Genre("Slice of life", "69"),
+        Genre("Sports", "70"),
+        Genre("Supernatural", "71"),
+        Genre("Tragedy", "72"),
+        Genre("Truyện Màu", "73"),
+        Genre("Webtoon", "74"),
+        Genre("Xuyên Không", "75"),
+        Genre("Yuri", "76"),
+    )
 
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)

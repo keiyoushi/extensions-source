@@ -79,59 +79,56 @@ class SelfManga : GroupLe("SelfManga", "https://selfmanga.live", "ru") {
         categories: List<Genre>,
     ) : Filter.Group<Genre>("Категории", categories)
 
-    override fun getFilterList() =
-        FilterList(
-            OrderBy(),
-            Category(getCategoryList()),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList() = FilterList(
+        OrderBy(),
+        Category(getCategoryList()),
+        GenreList(getGenreList()),
+    )
 
-    private fun getCategoryList() =
-        listOf(
-            Genre("Артбук", "el_5894"),
-            Genre("Веб", "el_2160"),
-            Genre("Журнал", "el_4983"),
-            Genre("Ранобэ", "el_5215"),
-            Genre("Сборник", "el_2157"),
-        )
+    private fun getCategoryList() = listOf(
+        Genre("Артбук", "el_5894"),
+        Genre("Веб", "el_2160"),
+        Genre("Журнал", "el_4983"),
+        Genre("Ранобэ", "el_5215"),
+        Genre("Сборник", "el_2157"),
+    )
 
-    private fun getGenreList() =
-        listOf(
-            Genre("боевик", "el_2155"),
-            Genre("боевые искусства", "el_2143"),
-            Genre("гарем", "el_2142"),
-            Genre("гендерная интрига", "el_2156"),
-            Genre("героическое фэнтези", "el_2146"),
-            Genre("детектив", "el_2152"),
-            Genre("дзёсэй", "el_2158"),
-            Genre("додзинси", "el_2141"),
-            Genre("драма", "el_2118"),
-            Genre("ёнкома", "el_2161"),
-            Genre("история", "el_2119"),
-            Genre("комедия", "el_2136"),
-            Genre("махо-сёдзё", "el_2147"),
-            Genre("мистика", "el_2132"),
-            Genre("научная фантастика", "el_2133"),
-            Genre("повседневность", "el_2135"),
-            Genre("постапокалиптика", "el_2151"),
-            Genre("приключения", "el_2130"),
-            Genre("психология", "el_2144"),
-            Genre("романтика", "el_2121"),
-            Genre("сверхъестественное", "el_2159"),
-            Genre("сёдзё", "el_2122"),
-            Genre("сёдзё-ай", "el_2128"),
-            Genre("сёнэн", "el_2134"),
-            Genre("сёнэн-ай", "el_2139"),
-            Genre("спорт", "el_2129"),
-            Genre("сэйнэн", "el_5838"),
-            Genre("трагедия", "el_2153"),
-            Genre("триллер", "el_2150"),
-            Genre("ужасы", "el_2125"),
-            Genre("фантастика", "el_2140"),
-            Genre("фэнтези", "el_2131"),
-            Genre("школа", "el_2127"),
-            Genre("этти", "el_4982"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("боевик", "el_2155"),
+        Genre("боевые искусства", "el_2143"),
+        Genre("гарем", "el_2142"),
+        Genre("гендерная интрига", "el_2156"),
+        Genre("героическое фэнтези", "el_2146"),
+        Genre("детектив", "el_2152"),
+        Genre("дзёсэй", "el_2158"),
+        Genre("додзинси", "el_2141"),
+        Genre("драма", "el_2118"),
+        Genre("ёнкома", "el_2161"),
+        Genre("история", "el_2119"),
+        Genre("комедия", "el_2136"),
+        Genre("махо-сёдзё", "el_2147"),
+        Genre("мистика", "el_2132"),
+        Genre("научная фантастика", "el_2133"),
+        Genre("повседневность", "el_2135"),
+        Genre("постапокалиптика", "el_2151"),
+        Genre("приключения", "el_2130"),
+        Genre("психология", "el_2144"),
+        Genre("романтика", "el_2121"),
+        Genre("сверхъестественное", "el_2159"),
+        Genre("сёдзё", "el_2122"),
+        Genre("сёдзё-ай", "el_2128"),
+        Genre("сёнэн", "el_2134"),
+        Genre("сёнэн-ай", "el_2139"),
+        Genre("спорт", "el_2129"),
+        Genre("сэйнэн", "el_5838"),
+        Genre("трагедия", "el_2153"),
+        Genre("триллер", "el_2150"),
+        Genre("ужасы", "el_2125"),
+        Genre("фантастика", "el_2140"),
+        Genre("фэнтези", "el_2131"),
+        Genre("школа", "el_2127"),
+        Genre("этти", "el_4982"),
+    )
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         super.setupPreferenceScreen(screen)

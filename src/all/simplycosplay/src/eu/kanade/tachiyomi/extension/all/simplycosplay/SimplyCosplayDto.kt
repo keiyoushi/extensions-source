@@ -23,13 +23,12 @@ data class BrowseItem(
     val type: String,
     val preview: Images,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            title = this@BrowseItem.title ?: ""
-            url = "/${type.lowercase().trim()}/new/$slug"
-            thumbnail_url = preview.urls.thumb.url
-            description = preview.publish_date?.let { "Date: $it" }
-        }
+    fun toSManga() = SManga.create().apply {
+        title = this@BrowseItem.title ?: ""
+        url = "/${type.lowercase().trim()}/new/$slug"
+        thumbnail_url = preview.urls.thumb.url
+        description = preview.publish_date?.let { "Date: $it" }
+    }
 }
 
 @Serializable
@@ -61,40 +60,39 @@ data class DetailsResponse(
     val tags: List<Tag>? = emptyList(),
     val image_count: Int? = null,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            title = this@DetailsResponse.title ?: ""
-            url = "/${type.lowercase().trim()}/new/$slug"
-            thumbnail_url = preview.urls.thumb.url
-            genre =
-                tags
-                    ?.mapNotNull { it ->
-                        it.name
-                            ?.trim()
-                            ?.split(" ")
-                            ?.let { genre ->
-                                genre.map {
-                                    it.replaceFirstChar { char ->
-                                        if (char.isLowerCase()) {
-                                            char.titlecase(
-                                                Locale.ROOT,
-                                            )
-                                        } else {
-                                            char.toString()
-                                        }
+    fun toSManga() = SManga.create().apply {
+        title = this@DetailsResponse.title ?: ""
+        url = "/${type.lowercase().trim()}/new/$slug"
+        thumbnail_url = preview.urls.thumb.url
+        genre =
+            tags
+                ?.mapNotNull { it ->
+                    it.name
+                        ?.trim()
+                        ?.split(" ")
+                        ?.let { genre ->
+                            genre.map {
+                                it.replaceFirstChar { char ->
+                                    if (char.isLowerCase()) {
+                                        char.titlecase(
+                                            Locale.ROOT,
+                                        )
+                                    } else {
+                                        char.toString()
                                     }
                                 }
-                            }?.joinToString(" ")
-                    }?.joinToString()
-            description =
-                buildString {
-                    append("Type: $type\n")
-                    image_count?.let { append("Images: $it\n") }
-                    preview.publish_date?.let { append("Date: $it\n") }
-                }
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            status = SManga.COMPLETED
-        }
+                            }
+                        }?.joinToString(" ")
+                }?.joinToString()
+        description =
+            buildString {
+                append("Type: $type\n")
+                image_count?.let { append("Images: $it\n") }
+                preview.publish_date?.let { append("Date: $it\n") }
+            }
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        status = SManga.COMPLETED
+    }
 }
 
 @Serializable

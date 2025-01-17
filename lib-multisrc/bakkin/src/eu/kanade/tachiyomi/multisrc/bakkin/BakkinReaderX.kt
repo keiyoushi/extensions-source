@@ -46,19 +46,18 @@ abstract class BakkinReaderX(
 
     private var seriesCache = emptyList<Series>()
 
-    private fun <R> observableSeries(block: (List<Series>) -> R) =
-        if (seriesCache.isNotEmpty()) {
-            rx.Observable.just(block(seriesCache))!!
-        } else {
-            client.newCall(GET(mainUrl, headers)).asObservableSuccess().map {
-                seriesCache =
-                    json
-                        .parseToJsonElement(it.body.string())
-                        .jsonObject.values
-                        .map(json::decodeFromJsonElement)
-                block(seriesCache)
-            }!!
-        }
+    private fun <R> observableSeries(block: (List<Series>) -> R) = if (seriesCache.isNotEmpty()) {
+        rx.Observable.just(block(seriesCache))!!
+    } else {
+        client.newCall(GET(mainUrl, headers)).asObservableSuccess().map {
+            seriesCache =
+                json
+                    .parseToJsonElement(it.body.string())
+                    .jsonObject.values
+                    .map(json::decodeFromJsonElement)
+            block(seriesCache)
+        }!!
+    }
 
     private fun List<Series>.search(query: String) = if (query.isBlank()) this else filter { it.toString().contains(query, true) }
 
@@ -82,46 +81,43 @@ abstract class BakkinReaderX(
             }.let { MangasPage(it, false) }
     }
 
-    override fun fetchMangaDetails(manga: SManga) =
-        observableSeries { series ->
-            series.first { it.dir == manga.url }.let {
-                SManga.create().apply {
-                    url = it.dir
-                    title = it.toString()
-                    thumbnail_url = baseUrl + it.cover
-                    initialized = true
-                    author = it.author
-                    status =
-                        when (it.status) {
-                            "Ongoing" -> SManga.ONGOING
-                            "Completed" -> SManga.COMPLETED
-                            else -> SManga.UNKNOWN
-                        }
-                }
+    override fun fetchMangaDetails(manga: SManga) = observableSeries { series ->
+        series.first { it.dir == manga.url }.let {
+            SManga.create().apply {
+                url = it.dir
+                title = it.toString()
+                thumbnail_url = baseUrl + it.cover
+                initialized = true
+                author = it.author
+                status =
+                    when (it.status) {
+                        "Ongoing" -> SManga.ONGOING
+                        "Completed" -> SManga.COMPLETED
+                        else -> SManga.UNKNOWN
+                    }
             }
         }
+    }
 
-    override fun fetchChapterList(manga: SManga) =
-        observableSeries { series ->
-            series
-                .first { it.dir == manga.url }
-                .map { chapter ->
-                    SChapter.create().apply {
-                        url = chapter.dir
-                        name = chapter.toString()
-                        chapter_number = chapter.number
-                        date_upload = 0L
-                    }
-                }.reversed()
-        }
+    override fun fetchChapterList(manga: SManga) = observableSeries { series ->
+        series
+            .first { it.dir == manga.url }
+            .map { chapter ->
+                SChapter.create().apply {
+                    url = chapter.dir
+                    name = chapter.toString()
+                    chapter_number = chapter.number
+                    date_upload = 0L
+                }
+            }.reversed()
+    }
 
-    override fun fetchPageList(chapter: SChapter) =
-        observableSeries { series ->
-            series
-                .flatten()
-                .first { it.dir == chapter.url }
-                .mapIndexed { idx, page -> Page(idx, "", baseUrl + page) }
-        }
+    override fun fetchPageList(chapter: SChapter) = observableSeries { series ->
+        series
+            .flatten()
+            .first { it.dir == chapter.url }
+            .mapIndexed { idx, page -> Page(idx, "", baseUrl + page) }
+    }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl#m=${manga.url}"
 

@@ -15,8 +15,7 @@ class ManhwaIndo :
     ) {
     override val hasProjectPage = true
 
-    override fun pageListParse(response: Response) =
-        super.pageListParse(response).distinctBy {
-            it.imageUrl!!
-        }
+    override fun pageListParse(response: Response) = super.pageListParse(response).distinctBy {
+        it.imageUrl!!
+    }
 }

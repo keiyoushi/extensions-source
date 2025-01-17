@@ -24,12 +24,11 @@ class MeowMeowComics :
 
     override fun chapterListRequest(manga: SManga): Request = xhrChaptersRequest(baseUrl + manga.url.removeSuffix("/"))
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response
-            .asJsoup()
-            .select("ul.main > li.parent,ul.main:not(:has(>li.parent))")
-            .sortedByDescending { it.selectFirst("a.has-child")?.text()?.toIntOrNull() ?: 0 }
-            .flatMap { season ->
-                season.select(chapterListSelector()).map(::chapterFromElement)
-            }
+    override fun chapterListParse(response: Response): List<SChapter> = response
+        .asJsoup()
+        .select("ul.main > li.parent,ul.main:not(:has(>li.parent))")
+        .sortedByDescending { it.selectFirst("a.has-child")?.text()?.toIntOrNull() ?: 0 }
+        .flatMap { season ->
+            season.select(chapterListSelector()).map(::chapterFromElement)
+        }
 }

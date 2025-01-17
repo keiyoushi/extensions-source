@@ -114,12 +114,11 @@ class ReleaseYearFilter :
 
 private val year = SimpleDateFormat("yyyy", Locale.ENGLISH)
 
-fun getFilters() =
-    FilterList(
-        NameMatchFilter(),
-        AuthorFilter(),
-        ArtistFilter(),
-        GenreFilter(),
-        CompletedSeriesFilter(),
-        ReleaseYearFilter(),
-    )
+fun getFilters() = FilterList(
+    NameMatchFilter(),
+    AuthorFilter(),
+    ArtistFilter(),
+    GenreFilter(),
+    CompletedSeriesFilter(),
+    ReleaseYearFilter(),
+)

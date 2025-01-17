@@ -45,14 +45,13 @@ data class PathMatchResult(
     val doesMatch: Boolean,
     val matchResults: List<MatchResult?>?,
 ) {
-    operator fun get(name: String): MatchGroup? =
-        matchResults?.firstNotNullOfOrNull {
-            it
-                ?.groups
-                // this throws if the group by "name" isn't found AND can return null too
-                ?.runCatching { get(name) }
-                ?.getOrNull()
-        }
+    operator fun get(name: String): MatchGroup? = matchResults?.firstNotNullOfOrNull {
+        it
+            ?.groups
+            // this throws if the group by "name" isn't found AND can return null too
+            ?.runCatching { get(name) }
+            ?.getOrNull()
+    }
 
     init {
         if (matchResults?.isEmpty() == true) {

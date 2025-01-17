@@ -54,14 +54,13 @@ class XoxoComics :
 
     override fun latestUpdatesSelector() = "li.row"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            element.select("h3 a").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.select("img").attr("data-original")
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("h3 a").let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        thumbnail_url = element.select("img").attr("data-original")
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -113,10 +112,9 @@ class XoxoComics :
         return chapters
     }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            date_upload = element.select("div.col-xs-3").text().toDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        date_upload = element.select("div.col-xs-3").text().toDate()
+    }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + "${chapter.url}/all")
 

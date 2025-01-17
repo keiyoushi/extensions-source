@@ -19,10 +19,9 @@ sealed class LabelGroup(
     values: List<Label>,
 ) : Filter.Group<Label>(name, values),
     QueryParam {
-    override fun encode(url: HttpUrl.Builder) =
-        state.filter { it.state }.forEach {
-            url.addQueryParameter(param, it.value)
-        }
+    override fun encode(url: HttpUrl.Builder) = state.filter { it.state }.forEach {
+        url.addQueryParameter(param, it.value)
+    }
 }
 
 class TypeFilter(

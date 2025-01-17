@@ -44,28 +44,25 @@ open class SimplyHentai(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
     }
 
-    override fun popularMangaRequest(page: Int) =
-        Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
-            appendQueryParameter("type", "language")
-            appendQueryParameter("page", page.toString())
-            GET(build().toString(), headers)
-        }
+    override fun popularMangaRequest(page: Int) = Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
+        appendQueryParameter("type", "language")
+        appendQueryParameter("page", page.toString())
+        GET(build().toString(), headers)
+    }
 
-    override fun popularMangaParse(response: Response) =
-        response.decode<SHList<SHDataAlbum>>().run {
-            MangasPage(
-                data.albums.map(SHObject::toSManga),
-                pagination.next != null,
-            )
-        }
+    override fun popularMangaParse(response: Response) = response.decode<SHList<SHDataAlbum>>().run {
+        MangasPage(
+            data.albums.map(SHObject::toSManga),
+            pagination.next != null,
+        )
+    }
 
-    override fun latestUpdatesRequest(page: Int) =
-        Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
-            appendQueryParameter("type", "language")
-            appendQueryParameter("page", page.toString())
-            appendQueryParameter("sort", "newest")
-            GET(build().toString(), headers)
-        }
+    override fun latestUpdatesRequest(page: Int) = Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
+        appendQueryParameter("type", "language")
+        appendQueryParameter("page", page.toString())
+        appendQueryParameter("sort", "newest")
+        GET(build().toString(), headers)
+    }
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -109,78 +106,71 @@ open class SimplyHentai(
         GET(build().toString(), headers)
     }
 
-    override fun searchMangaParse(response: Response) =
-        response.decode<SHList<List<SHWrapper>>>().run {
-            MangasPage(
-                data.map { it.`object`.toSManga() },
-                pagination.next != null,
-            )
-        }
+    override fun searchMangaParse(response: Response) = response.decode<SHList<List<SHWrapper>>>().run {
+        MangasPage(
+            data.map { it.`object`.toSManga() },
+            pagination.next != null,
+        )
+    }
 
     override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
 
-    override fun mangaDetailsParse(response: Response) =
-        SManga.create().apply {
-            val album = response.decode<SHAlbum>().data
-            url = album.path
-            title = album.title
-            description =
-                buildString {
-                    if (!album.description.isNullOrEmpty()) {
-                        append(album.description, "\n\n")
-                    }
-                    append("Series: ", album.series.title, "\n")
-                    album.characters.joinTo(this, prefix = "Characters: ") { it.title }
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val album = response.decode<SHAlbum>().data
+        url = album.path
+        title = album.title
+        description =
+            buildString {
+                if (!album.description.isNullOrEmpty()) {
+                    append(album.description, "\n\n")
                 }
-            thumbnail_url = album.preview.sizes.thumb
-            genre = album.tags.joinToString { it.title }
-            artist = album.artists.joinToString { it.title }
-            author = artist
-            initialized = true
-        }
+                append("Series: ", album.series.title, "\n")
+                album.characters.joinTo(this, prefix = "Characters: ") { it.title }
+            }
+        thumbnail_url = album.preview.sizes.thumb
+        genre = album.tags.joinToString { it.title }
+        artist = album.artists.joinToString { it.title }
+        author = artist
+        initialized = true
+    }
 
-    override fun chapterListRequest(manga: SManga) =
-        Uri.parse("$apiUrl/manga").buildUpon().run {
-            appendEncodedPath(manga.url.split('/')[2])
-            GET(build().toString(), headers)
-        }
+    override fun chapterListRequest(manga: SManga) = Uri.parse("$apiUrl/manga").buildUpon().run {
+        appendEncodedPath(manga.url.split('/')[2])
+        GET(build().toString(), headers)
+    }
 
-    override fun chapterListParse(response: Response) =
-        SChapter
-            .create()
-            .apply {
-                val album = response.decode<SHAlbum>().data
-                name = "Chapter"
-                url = "${album.path}/all-pages"
-                scanlator = album.translators.joinToString { it.title }
-                date_upload = dateFormat.parse(album.created_at)?.time ?: 0L
-            }.let(::listOf)
+    override fun chapterListParse(response: Response) = SChapter
+        .create()
+        .apply {
+            val album = response.decode<SHAlbum>().data
+            name = "Chapter"
+            url = "${album.path}/all-pages"
+            scanlator = album.translators.joinToString { it.title }
+            date_upload = dateFormat.parse(album.created_at)?.time ?: 0L
+        }.let(::listOf)
 
-    override fun pageListRequest(chapter: SChapter) =
-        Uri.parse("$apiUrl/manga").buildUpon().run {
-            appendEncodedPath(chapter.url.split('/')[2])
-            appendEncodedPath("pages")
-            GET(build().toString(), headers)
-        }
+    override fun pageListRequest(chapter: SChapter) = Uri.parse("$apiUrl/manga").buildUpon().run {
+        appendEncodedPath(chapter.url.split('/')[2])
+        appendEncodedPath("pages")
+        GET(build().toString(), headers)
+    }
 
-    override fun pageListParse(response: Response) =
-        response.decode<SHAlbumPages>().data.pages.map {
-            Page(it.page_num, "", it.sizes.full)
-        }
+    override fun pageListParse(response: Response) = response.decode<SHAlbumPages>().data.pages.map {
+        Page(it.page_num, "", it.sizes.full)
+    }
 
-    override fun getFilterList() =
-        FilterList(
-            SortFilter(),
-            SeriesFilter(),
-            Note("tags"),
-            TagsFilter(),
-            Note("artists"),
-            ArtistsFilter(),
-            Note("translators"),
-            TranslatorsFilter(),
-            Note("characters"),
-            CharactersFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        SeriesFilter(),
+        Note("tags"),
+        TagsFilter(),
+        Note("artists"),
+        ArtistsFilter(),
+        Note("translators"),
+        TranslatorsFilter(),
+        Note("characters"),
+        CharactersFilter(),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context)

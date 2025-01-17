@@ -8,12 +8,11 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 class MangaForFreeFactory : SourceFactory {
-    override fun createSources(): List<Source> =
-        listOf(
-            MangaForFreeEN(),
-            MangaForFreeKO(),
-            MangaForFreeALL(),
-        )
+    override fun createSources(): List<Source> = listOf(
+        MangaForFreeEN(),
+        MangaForFreeKO(),
+        MangaForFreeALL(),
+    )
 }
 
 class MangaForFreeEN : MangaForFree("MangaForFree.net", "https://mangaforfree.net", "en") {

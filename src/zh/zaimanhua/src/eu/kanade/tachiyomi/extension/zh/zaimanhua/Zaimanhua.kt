@@ -102,10 +102,9 @@ class Zaimanhua :
         return chain.proceed(authRequest)
     }
 
-    private fun Headers.Builder.setToken(token: String): Headers.Builder =
-        apply {
-            if (token.isNotBlank()) set("authorization", "Bearer $token")
-        }
+    private fun Headers.Builder.setToken(token: String): Headers.Builder = apply {
+        if (token.isNotBlank()) set("authorization", "Bearer $token")
+    }
 
     private var apiHeaders = headersBuilder().setToken(preferences.getString("TOKEN", "")!!).build()
 
@@ -219,30 +218,27 @@ class Zaimanhua :
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Popular
-    private fun rankApiUrl(): HttpUrl.Builder =
-        "$apiUrl/comic/rank/list"
-            .toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("tag_id", "0")
+    private fun rankApiUrl(): HttpUrl.Builder = "$apiUrl/comic/rank/list"
+        .toHttpUrl()
+        .newBuilder()
+        .addQueryParameter("tag_id", "0")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET(
-            rankApiUrl()
-                .apply {
-                    addQueryParameter("page", page.toString())
-                }.build(),
-            apiHeaders,
-        )
+    override fun popularMangaRequest(page: Int): Request = GET(
+        rankApiUrl()
+            .apply {
+                addQueryParameter("page", page.toString())
+            }.build(),
+        apiHeaders,
+    )
 
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     // Search
-    private fun searchApiUrl(): HttpUrl.Builder =
-        "$apiUrl/search/index"
-            .toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("source", "0")
-            .addQueryParameter("size", "20")
+    private fun searchApiUrl(): HttpUrl.Builder = "$apiUrl/search/index"
+        .toHttpUrl()
+        .newBuilder()
+        .addQueryParameter("source", "0")
+        .addQueryParameter("size", "20")
 
     override fun searchMangaRequest(
         page: Int,
@@ -269,15 +265,14 @@ class Zaimanhua :
         return GET(url, apiHeaders)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        if (response.request.url
-                .toString()
-                .startsWith("$apiUrl/comic/rank/list")
-        ) {
-            latestUpdatesParse(response)
-        } else {
-            response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
-        }
+    override fun searchMangaParse(response: Response): MangasPage = if (response.request.url
+            .toString()
+            .startsWith("$apiUrl/comic/rank/list")
+    ) {
+        latestUpdatesParse(response)
+    } else {
+        response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
+    }
 
     // Latest
     // "$apiUrl/comic/update/list/1/$page" is same content
@@ -291,10 +286,9 @@ class Zaimanhua :
         return MangasPage(mangas.map { it.toSManga() }, true)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            RankingGroup(),
-        )
+    override fun getFilterList() = FilterList(
+        RankingGroup(),
+    )
 
     companion object {
         val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()

@@ -66,11 +66,10 @@ class Ngomik : MangaThemesia("Ngomik", "https://ngomik.mom", "id", "/manga") {
         return GET(url.build())
     }
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("User-Agent", userAgent)
-            .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("User-Agent", userAgent)
+        .add("Referer", baseUrl)
 
     override val projectPageString = "/pj"
 

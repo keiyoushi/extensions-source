@@ -32,24 +32,22 @@ class MangaBTT : ParsedHttpSource() {
             .build()
     }
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(
-            page = page,
-            query = "",
-            filters =
-                FilterList(
-                    SortByFilter(default = 2),
-                    StatusFilter(default = 1),
-                    GenreFilter(default = 1),
-                ),
-        )
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page = page,
+        query = "",
+        filters =
+            FilterList(
+                SortByFilter(default = 2),
+                StatusFilter(default = 1),
+                GenreFilter(default = 1),
+            ),
+    )
 
     override fun popularMangaSelector(): String = searchMangaSelector()
 
@@ -59,17 +57,16 @@ class MangaBTT : ParsedHttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(
-            page = page,
-            query = "",
-            filters =
-                FilterList(
-                    SortByFilter(default = 8),
-                    StatusFilter(default = 1),
-                    GenreFilter(default = 1),
-                ),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page = page,
+        query = "",
+        filters =
+            FilterList(
+                SortByFilter(default = 8),
+                StatusFilter(default = 1),
+                GenreFilter(default = 1),
+            ),
+    )
 
     override fun latestUpdatesSelector(): String = searchMangaSelector()
 
@@ -108,61 +105,57 @@ class MangaBTT : ParsedHttpSource() {
 
     override fun searchMangaSelector(): String = ".items > .row > .item"
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst(".image img")?.imgAttr()
-            element.selectFirst("figcaption h3 a")!!.run {
-                title = text()
-                setUrlWithoutDomain(attr("abs:href"))
-            }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst(".image img")?.imgAttr()
+        element.selectFirst("figcaption h3 a")!!.run {
+            title = text()
+            setUrlWithoutDomain(attr("abs:href"))
         }
+    }
 
     override fun searchMangaNextPageSelector(): String = "ul.pagination > li.active + li:not(.disabled)"
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Ignored when using text search"),
-            Filter.Separator(),
-            GenreFilter(),
-            StatusFilter(),
-            SortByFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Ignored when using text search"),
+        Filter.Separator(),
+        GenreFilter(),
+        StatusFilter(),
+        SortByFilter(),
+    )
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            title = document.selectFirst("h1.title-detail")!!.text()
-            description =
-                document
-                    .selectFirst(".detail-content p")
-                    ?.text()
-                    ?.substringAfter("comic site. The Summary is ")
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1.title-detail")!!.text()
+        description =
+            document
+                .selectFirst(".detail-content p")
+                ?.text()
+                ?.substringAfter("comic site. The Summary is ")
 
-            document.selectFirst(".detail-info")?.run {
-                thumbnail_url = selectFirst("img")?.imgAttr()
-                status = selectFirst(".status p:not(.name)").parseStatus()
-                genre = select(".kind a").joinToString(", ") { it.text() }
-                author =
-                    selectFirst(".author p:not(.name)")?.text()?.takeUnless {
-                        it.equals("updating", true)
-                    }
-            }
+        document.selectFirst(".detail-info")?.run {
+            thumbnail_url = selectFirst("img")?.imgAttr()
+            status = selectFirst(".status p:not(.name)").parseStatus()
+            genre = select(".kind a").joinToString(", ") { it.text() }
+            author =
+                selectFirst(".author p:not(.name)")?.text()?.takeUnless {
+                    it.equals("updating", true)
+                }
         }
+    }
 
-    private fun Element?.parseStatus(): Int =
-        with(this?.text()) {
-            return when {
-                equals("ongoing", true) -> SManga.ONGOING
-                equals("Đang cập nhật", true) -> SManga.ONGOING
-                equals("completed", true) -> SManga.COMPLETED
-                equals("on-hold", true) -> SManga.ON_HIATUS
-                equals("canceled", true) -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
+    private fun Element?.parseStatus(): Int = with(this?.text()) {
+        return when {
+            equals("ongoing", true) -> SManga.ONGOING
+            equals("Đang cập nhật", true) -> SManga.ONGOING
+            equals("completed", true) -> SManga.COMPLETED
+            equals("on-hold", true) -> SManga.ON_HIATUS
+            equals("canceled", true) -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
         }
+    }
 
     // ============================== Chapters ==============================
 
@@ -188,16 +181,15 @@ class MangaBTT : ParsedHttpSource() {
 
     override fun chapterListSelector() = "ul > li:not(.heading)"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            element.selectFirst(".col-xs-4")?.also {
-                date_upload = it.text().parseRelativeDate()
-            }
-            element.selectFirst("a")!!.run {
-                name = text()
-                setUrlWithoutDomain(attr("abs:href"))
-            }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.selectFirst(".col-xs-4")?.also {
+            date_upload = it.text().parseRelativeDate()
         }
+        element.selectFirst("a")!!.run {
+            name = text()
+            setUrlWithoutDomain(attr("abs:href"))
+        }
+    }
 
     // From OppaiStream
     private fun String.parseRelativeDate(): Long {
@@ -254,15 +246,14 @@ class MangaBTT : ParsedHttpSource() {
 
     // =============================== Pages ================================
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(".reading-detail > .page-chapter")
-            .map { page ->
-                val img = page.selectFirst("img[data-index]")!!
-                val index = img.attr("data-index").toInt()
-                val url = img.imgAttr()
-                Page(index, imageUrl = url)
-            }.sortedBy { it.index }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select(".reading-detail > .page-chapter")
+        .map { page ->
+            val img = page.selectFirst("img[data-index]")!!
+            val index = img.attr("data-index").toInt()
+            val url = img.imgAttr()
+            Page(index, imageUrl = url)
+        }.sortedBy { it.index }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -279,10 +270,9 @@ class MangaBTT : ParsedHttpSource() {
 
     // ============================= Utilities ==============================
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        else -> attr("abs:src")
+    }
 }

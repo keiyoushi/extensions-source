@@ -34,11 +34,10 @@ class TerraHistoricus : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        fetchPopularManga(page).map { mangasPage ->
-            val mangas = mangasPage.mangas.filter { it.title.contains(query) }
-            MangasPage(mangas, false)
-        }
+    ): Observable<MangasPage> = fetchPopularManga(page).map { mangasPage ->
+        val mangas = mangasPage.mangas.filter { it.title.contains(query) }
+        MangasPage(mangas, false)
+    }
 
     override fun searchMangaRequest(
         page: Int,
@@ -51,11 +50,10 @@ class TerraHistoricus : HttpSource() {
     // navigate webview to webpage
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url.removePrefix("/api"), headers)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response -> mangaDetailsParse(response).apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response -> mangaDetailsParse(response).apply { initialized = true } }
 
     override fun mangaDetailsParse(response: Response) = response.parseAs<THComic>().toSManga()
 

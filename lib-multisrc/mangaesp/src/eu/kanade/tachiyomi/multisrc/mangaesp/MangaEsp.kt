@@ -54,10 +54,9 @@ abstract class MangaEsp(
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl$apiPath/topSerie", headers)
 
@@ -105,26 +104,24 @@ abstract class MangaEsp(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> =
-        if (comicsList.isEmpty()) {
-            client
-                .newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it, page, query, filters) }
-        } else {
-            Observable.just(parseComicsList(page, query, filters))
-        }
+    ): Observable<MangasPage> = if (comicsList.isEmpty()) {
+        client
+            .newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, page, query, filters) }
+    } else {
+        Observable.just(parseComicsList(page, query, filters))
+    }
 
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (useApiSearch) {
-            GET("$apiBaseUrl$apiPath/comics", headers)
-        } else {
-            GET("$baseUrl/comics", headers)
-        }
+    ): Request = if (useApiSearch) {
+        GET("$apiBaseUrl$apiPath/comics", headers)
+    } else {
+        GET("$baseUrl/comics", headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
@@ -237,19 +234,17 @@ abstract class MangaEsp(
         }
     }
 
-    override fun getFilterList() =
-        FilterList(
-            SortByFilter(intl["sort_by_filter_title"], getSortProperties()),
-            StatusFilter(intl["status_filter_title"], getStatusList()),
-        )
+    override fun getFilterList() = FilterList(
+        SortByFilter(intl["sort_by_filter_title"], getSortProperties()),
+        StatusFilter(intl["status_filter_title"], getStatusList()),
+    )
 
-    protected open fun getSortProperties(): List<SortProperty> =
-        listOf(
-            SortProperty(intl["sort_by_filter_name"], "name"),
-            SortProperty(intl["sort_by_filter_views"], "views"),
-            SortProperty(intl["sort_by_filter_updated"], "updated_at"),
-            SortProperty(intl["sort_by_filter_added"], "created_at"),
-        )
+    protected open fun getSortProperties(): List<SortProperty> = listOf(
+        SortProperty(intl["sort_by_filter_name"], "name"),
+        SortProperty(intl["sort_by_filter_views"], "views"),
+        SortProperty(intl["sort_by_filter_updated"], "updated_at"),
+        SortProperty(intl["sort_by_filter_added"], "created_at"),
+    )
 
     data class SortProperty(
         val name: String,
@@ -278,14 +273,13 @@ abstract class MangaEsp(
             statusList,
         )
 
-    protected open fun getStatusList() =
-        arrayOf(
-            Pair(intl["status_filter_all"], 0),
-            Pair(intl["status_filter_ongoing"], 1),
-            Pair(intl["status_filter_hiatus"], 2),
-            Pair(intl["status_filter_dropped"], 3),
-            Pair(intl["status_filter_completed"], 4),
-        )
+    protected open fun getStatusList() = arrayOf(
+        Pair(intl["status_filter_all"], 0),
+        Pair(intl["status_filter_ongoing"], 1),
+        Pair(intl["status_filter_hiatus"], 2),
+        Pair(intl["status_filter_dropped"], 3),
+        Pair(intl["status_filter_completed"], 4),
+    )
 
     private open class UriPartFilter(
         displayName: String,
@@ -298,13 +292,12 @@ abstract class MangaEsp(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    protected open fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            else -> attr("abs:src")
-        }
+    protected open fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        else -> attr("abs:src")
+    }
 
     fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 

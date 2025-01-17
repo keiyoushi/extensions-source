@@ -3,14 +3,13 @@ package eu.kanade.tachiyomi.extension.all.ninenineninehentai
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class AnimeHFactory : SourceFactory {
-    override fun createSources() =
-        listOf(
-            AnimeHAll(),
-            AnimeHEn(),
-            AnimeHJa(),
-            AnimeHZh(),
-            AnimeHEs(),
-        )
+    override fun createSources() = listOf(
+        AnimeHAll(),
+        AnimeHEn(),
+        AnimeHJa(),
+        AnimeHZh(),
+        AnimeHEs(),
+    )
 }
 
 class AnimeHAll : AnimeH("all") {

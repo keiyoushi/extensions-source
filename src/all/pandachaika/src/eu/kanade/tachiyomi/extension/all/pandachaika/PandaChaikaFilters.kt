@@ -4,27 +4,26 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.Filter.Sort.Selection
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList =
-    FilterList(
-        SortFilter("Sort by", Selection(0, false), getSortsList),
-        SelectFilter("Types", getTypes),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        Filter.Header("Use 'Male Tags' or 'Female Tags' for specific categories. 'Tags' searches all categories."),
-        TextFilter("Tags", ""),
-        TextFilter("Male Tags", "male"),
-        TextFilter("Female Tags", "female"),
-        TextFilter("Artists", "artist"),
-        TextFilter("Parodies", "parody"),
-        TextFilter("Characters", "character"),
-        Filter.Separator(),
-        TextFilter("Reason", "reason"),
-        TextFilter("Uploader", "reason"),
-        Filter.Separator(),
-        Filter.Header("Filter by pages, for example: (>20)"),
-        PageFilter("Pages"),
-    )
+fun getFilters(): FilterList = FilterList(
+    SortFilter("Sort by", Selection(0, false), getSortsList),
+    SelectFilter("Types", getTypes),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    Filter.Header("Use 'Male Tags' or 'Female Tags' for specific categories. 'Tags' searches all categories."),
+    TextFilter("Tags", ""),
+    TextFilter("Male Tags", "male"),
+    TextFilter("Female Tags", "female"),
+    TextFilter("Artists", "artist"),
+    TextFilter("Parodies", "parody"),
+    TextFilter("Characters", "character"),
+    Filter.Separator(),
+    TextFilter("Reason", "reason"),
+    TextFilter("Uploader", "reason"),
+    Filter.Separator(),
+    Filter.Header("Filter by pages, for example: (>20)"),
+    PageFilter("Pages"),
+)
 
 internal open class PageFilter(
     name: String,

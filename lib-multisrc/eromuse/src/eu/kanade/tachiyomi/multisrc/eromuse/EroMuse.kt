@@ -84,21 +84,19 @@ open class EroMuse(
 
     protected fun Element.imgAttr(): String = if (this.hasAttr("data-src")) this.attr("abs:data-src") else this.attr("abs:src")
 
-    private fun mangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            title = element.text()
-            thumbnail_url = element.select("img").firstOrNull()?.imgAttr()
-        }
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.text()
+        thumbnail_url = element.select("img").firstOrNull()?.imgAttr()
+    }
 
     protected fun getAlbumType(
         url: String,
         default: Int = AUTHOR,
-    ): Int =
-        albums
-            .filter { it.third != SEARCH_RESULTS_OR_BASE && url.contains(it.second, true) }
-            .getOrElse(0) { Triple(null, null, default) }
-            .third
+    ): Int = albums
+        .filter { it.third != SEARCH_RESULTS_OR_BASE && url.contains(it.second, true) }
+        .getOrElse(0) { Triple(null, null, default) }
+        .third
 
     protected fun parseManga(document: Document): MangasPage {
         fun internalParse(internalDocument: Document): List<SManga> {
@@ -285,26 +283,25 @@ open class EroMuse(
 
     // Details
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        SManga.create().apply {
-            with(response.asJsoup()) {
-                setUrlWithoutDomain(response.request.url.toString())
-                thumbnail_url = select("$albumSelector img").firstOrNull()?.imgAttr()
-                author =
-                    when (getAlbumType(url)) {
-                        AUTHOR -> {
-                            // eg. https://comics.8muses.com/comics/album/ShadBase-Comics/RickMorty
-                            // eg. https://comics.8muses.com/comics/album/Incase-Comics/Comic/Alfie
-                            select("div.top-menu-breadcrumb li:nth-child(2)").text()
-                        }
-                        VARIOUS_AUTHORS -> {
-                            // eg. https://comics.8muses.com/comics/album/Various-Authors/NLT-Media/A-Sunday-Schooling
-                            select("div.top-menu-breadcrumb li:nth-child(3)").text()
-                        }
-                        else -> null
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        with(response.asJsoup()) {
+            setUrlWithoutDomain(response.request.url.toString())
+            thumbnail_url = select("$albumSelector img").firstOrNull()?.imgAttr()
+            author =
+                when (getAlbumType(url)) {
+                    AUTHOR -> {
+                        // eg. https://comics.8muses.com/comics/album/ShadBase-Comics/RickMorty
+                        // eg. https://comics.8muses.com/comics/album/Incase-Comics/Comic/Alfie
+                        select("div.top-menu-breadcrumb li:nth-child(2)").text()
                     }
-            }
+                    VARIOUS_AUTHORS -> {
+                        // eg. https://comics.8muses.com/comics/album/Various-Authors/NLT-Media/A-Sunday-Schooling
+                        select("div.top-menu-breadcrumb li:nth-child(3)").text()
+                    }
+                    else -> null
+                }
         }
+    }
 
     // Chapters
 
@@ -393,13 +390,12 @@ open class EroMuse(
 
     // Filters
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Text search only combines with sort!"),
-            Filter.Separator(),
-            AlbumFilter(getAlbumList()),
-            SortFilter(getSortList()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Text search only combines with sort!"),
+        Filter.Separator(),
+        AlbumFilter(getAlbumList()),
+        SortFilter(getSortList()),
+    )
 
     protected class AlbumFilter(
         private val vals: Array<Triple<String, String, Int>>,
@@ -418,82 +414,81 @@ open class EroMuse(
         )
     }
 
-    protected open fun getAlbumList() =
-        arrayOf(
-            Triple("All Authors", "", SEARCH_RESULTS_OR_BASE),
-            Triple("Various Authors", "album/Various-Authors", VARIOUS_AUTHORS),
-            Triple("Fakku Comics", "album/Fakku-Comics", VARIOUS_AUTHORS),
-            Triple("Hentai and Manga English", "album/Hentai-and-Manga-English", VARIOUS_AUTHORS),
-            Triple("Fake Celebrities Sex Pictures", "album/Fake-Celebrities-Sex-Pictures", AUTHOR),
-            Triple("MilfToon Comics", "album/MilfToon-Comics", AUTHOR),
-            Triple("BE Story Club Comics", "album/BE-Story-Club-Comics", AUTHOR),
-            Triple("ShadBase Comics", "album/ShadBase-Comics", AUTHOR),
-            Triple("ZZZ Comics", "album/ZZZ-Comics", AUTHOR),
-            Triple("PalComix Comics", "album/PalComix-Comics", AUTHOR),
-            Triple("MCC Comics", "album/MCC-Comics", AUTHOR),
-            Triple("Expansionfan Comics", "album/Expansionfan-Comics", AUTHOR),
-            Triple("JAB Comics", "album/JAB-Comics", AUTHOR),
-            Triple("Giantess Fan Comics", "album/Giantess-Fan-Comics", AUTHOR),
-            Triple("Renderotica Comics", "album/Renderotica-Comics", AUTHOR),
-            Triple("IllustratedInterracial.com Comics", "album/IllustratedInterracial_com-Comics", AUTHOR),
-            Triple("Giantess Club Comics", "album/Giantess-Club-Comics", AUTHOR),
-            Triple("Innocent Dickgirls Comics", "album/Innocent-Dickgirls-Comics", AUTHOR),
-            Triple("Locofuria Comics", "album/Locofuria-Comics", AUTHOR),
-            Triple("PigKing - CrazyDad Comics", "album/PigKing-CrazyDad-Comics", AUTHOR),
-            Triple("Cartoon Reality Comics", "album/Cartoon-Reality-Comics", AUTHOR),
-            Triple("Affect3D Comics", "album/Affect3D-Comics", AUTHOR),
-            Triple("TG Comics", "album/TG-Comics", AUTHOR),
-            Triple("Melkormancin.com Comics", "album/Melkormancin_com-Comics", AUTHOR),
-            Triple("Seiren.com.br Comics", "album/Seiren_com_br-Comics", AUTHOR),
-            Triple("Tracy Scops Comics", "album/Tracy-Scops-Comics", AUTHOR),
-            Triple("Fred Perry Comics", "album/Fred-Perry-Comics", AUTHOR),
-            Triple("Witchking00 Comics", "album/Witchking00-Comics", AUTHOR),
-            Triple("8muses Comics", "album/8muses-Comics", AUTHOR),
-            Triple("KAOS Comics", "album/KAOS-Comics", AUTHOR),
-            Triple("Vaesark Comics", "album/Vaesark-Comics", AUTHOR),
-            Triple("Fansadox Comics", "album/Fansadox-Comics", AUTHOR),
-            Triple("DreamTales Comics", "album/DreamTales-Comics", AUTHOR),
-            Triple("Croc Comics", "album/Croc-Comics", AUTHOR),
-            Triple("Jay Marvel Comics", "album/Jay-Marvel-Comics", AUTHOR),
-            Triple("JohnPersons.com Comics", "album/JohnPersons_com-Comics", AUTHOR),
-            Triple("MuscleFan Comics", "album/MuscleFan-Comics", AUTHOR),
-            Triple("Taboolicious.xxx Comics", "album/Taboolicious_xxx-Comics", AUTHOR),
-            Triple("MongoBongo Comics", "album/MongoBongo-Comics", AUTHOR),
-            Triple("Slipshine Comics", "album/Slipshine-Comics", AUTHOR),
-            Triple("Everfire Comics", "album/Everfire-Comics", AUTHOR),
-            Triple("PrismGirls Comics", "album/PrismGirls-Comics", AUTHOR),
-            Triple("Abimboleb Comics", "album/Abimboleb-Comics", AUTHOR),
-            Triple("Y3DF - Your3DFantasy.com Comics", "album/Y3DF-Your3DFantasy_com-Comics", AUTHOR),
-            Triple("Grow Comics", "album/Grow-Comics", AUTHOR),
-            Triple("OkayOkayOKOk Comics", "album/OkayOkayOKOk-Comics", AUTHOR),
-            Triple("Tufos Comics", "album/Tufos-Comics", AUTHOR),
-            Triple("Cartoon Valley", "album/Cartoon-Valley", AUTHOR),
-            Triple("3DMonsterStories.com Comics", "album/3DMonsterStories_com-Comics", AUTHOR),
-            Triple("Kogeikun Comics", "album/Kogeikun-Comics", AUTHOR),
-            Triple("The Foxxx Comics", "album/The-Foxxx-Comics", AUTHOR),
-            Triple("Theme Collections", "album/Theme-Collections", AUTHOR),
-            Triple("Interracial-Comics", "album/Interracial-Comics", AUTHOR),
-            Triple("Expansion Comics", "album/Expansion-Comics", AUTHOR),
-            Triple("Moiarte Comics", "album/Moiarte-Comics", AUTHOR),
-            Triple("Incognitymous Comics", "album/Incognitymous-Comics", AUTHOR),
-            Triple("DizzyDills Comics", "album/DizzyDills-Comics", AUTHOR),
-            Triple("DukesHardcoreHoneys.com Comics", "album/DukesHardcoreHoneys_com-Comics", AUTHOR),
-            Triple("Stormfeder Comics", "album/Stormfeder-Comics", AUTHOR),
-            Triple("Bimbo Story Club Comics", "album/Bimbo-Story-Club-Comics", AUTHOR),
-            Triple("Smudge Comics", "album/Smudge-Comics", AUTHOR),
-            Triple("Dollproject Comics", "album/Dollproject-Comics", AUTHOR),
-            Triple("SuperHeroineComixxx", "album/SuperHeroineComixxx", AUTHOR),
-            Triple("Karmagik Comics", "album/Karmagik-Comics", AUTHOR),
-            Triple("Blacknwhite.com Comics", "album/Blacknwhite_com-Comics", AUTHOR),
-            Triple("ArtOfJaguar Comics", "album/ArtOfJaguar-Comics", AUTHOR),
-            Triple("Kirtu.com Comics", "album/Kirtu_com-Comics", AUTHOR),
-            Triple("UberMonkey Comics", "album/UberMonkey-Comics", AUTHOR),
-            Triple("DarkSoul3D Comics", "album/DarkSoul3D-Comics", AUTHOR),
-            Triple("Markydaysaid Comics", "album/Markydaysaid-Comics", AUTHOR),
-            Triple("Central Comics", "album/Central-Comics", AUTHOR),
-            Triple("Frozen Parody Comics", "album/Frozen-Parody-Comics", AUTHOR),
-            Triple("Blacknwhitecomics.com Comix", "album/Blacknwhitecomics_com-Comix", AUTHOR),
-        )
+    protected open fun getAlbumList() = arrayOf(
+        Triple("All Authors", "", SEARCH_RESULTS_OR_BASE),
+        Triple("Various Authors", "album/Various-Authors", VARIOUS_AUTHORS),
+        Triple("Fakku Comics", "album/Fakku-Comics", VARIOUS_AUTHORS),
+        Triple("Hentai and Manga English", "album/Hentai-and-Manga-English", VARIOUS_AUTHORS),
+        Triple("Fake Celebrities Sex Pictures", "album/Fake-Celebrities-Sex-Pictures", AUTHOR),
+        Triple("MilfToon Comics", "album/MilfToon-Comics", AUTHOR),
+        Triple("BE Story Club Comics", "album/BE-Story-Club-Comics", AUTHOR),
+        Triple("ShadBase Comics", "album/ShadBase-Comics", AUTHOR),
+        Triple("ZZZ Comics", "album/ZZZ-Comics", AUTHOR),
+        Triple("PalComix Comics", "album/PalComix-Comics", AUTHOR),
+        Triple("MCC Comics", "album/MCC-Comics", AUTHOR),
+        Triple("Expansionfan Comics", "album/Expansionfan-Comics", AUTHOR),
+        Triple("JAB Comics", "album/JAB-Comics", AUTHOR),
+        Triple("Giantess Fan Comics", "album/Giantess-Fan-Comics", AUTHOR),
+        Triple("Renderotica Comics", "album/Renderotica-Comics", AUTHOR),
+        Triple("IllustratedInterracial.com Comics", "album/IllustratedInterracial_com-Comics", AUTHOR),
+        Triple("Giantess Club Comics", "album/Giantess-Club-Comics", AUTHOR),
+        Triple("Innocent Dickgirls Comics", "album/Innocent-Dickgirls-Comics", AUTHOR),
+        Triple("Locofuria Comics", "album/Locofuria-Comics", AUTHOR),
+        Triple("PigKing - CrazyDad Comics", "album/PigKing-CrazyDad-Comics", AUTHOR),
+        Triple("Cartoon Reality Comics", "album/Cartoon-Reality-Comics", AUTHOR),
+        Triple("Affect3D Comics", "album/Affect3D-Comics", AUTHOR),
+        Triple("TG Comics", "album/TG-Comics", AUTHOR),
+        Triple("Melkormancin.com Comics", "album/Melkormancin_com-Comics", AUTHOR),
+        Triple("Seiren.com.br Comics", "album/Seiren_com_br-Comics", AUTHOR),
+        Triple("Tracy Scops Comics", "album/Tracy-Scops-Comics", AUTHOR),
+        Triple("Fred Perry Comics", "album/Fred-Perry-Comics", AUTHOR),
+        Triple("Witchking00 Comics", "album/Witchking00-Comics", AUTHOR),
+        Triple("8muses Comics", "album/8muses-Comics", AUTHOR),
+        Triple("KAOS Comics", "album/KAOS-Comics", AUTHOR),
+        Triple("Vaesark Comics", "album/Vaesark-Comics", AUTHOR),
+        Triple("Fansadox Comics", "album/Fansadox-Comics", AUTHOR),
+        Triple("DreamTales Comics", "album/DreamTales-Comics", AUTHOR),
+        Triple("Croc Comics", "album/Croc-Comics", AUTHOR),
+        Triple("Jay Marvel Comics", "album/Jay-Marvel-Comics", AUTHOR),
+        Triple("JohnPersons.com Comics", "album/JohnPersons_com-Comics", AUTHOR),
+        Triple("MuscleFan Comics", "album/MuscleFan-Comics", AUTHOR),
+        Triple("Taboolicious.xxx Comics", "album/Taboolicious_xxx-Comics", AUTHOR),
+        Triple("MongoBongo Comics", "album/MongoBongo-Comics", AUTHOR),
+        Triple("Slipshine Comics", "album/Slipshine-Comics", AUTHOR),
+        Triple("Everfire Comics", "album/Everfire-Comics", AUTHOR),
+        Triple("PrismGirls Comics", "album/PrismGirls-Comics", AUTHOR),
+        Triple("Abimboleb Comics", "album/Abimboleb-Comics", AUTHOR),
+        Triple("Y3DF - Your3DFantasy.com Comics", "album/Y3DF-Your3DFantasy_com-Comics", AUTHOR),
+        Triple("Grow Comics", "album/Grow-Comics", AUTHOR),
+        Triple("OkayOkayOKOk Comics", "album/OkayOkayOKOk-Comics", AUTHOR),
+        Triple("Tufos Comics", "album/Tufos-Comics", AUTHOR),
+        Triple("Cartoon Valley", "album/Cartoon-Valley", AUTHOR),
+        Triple("3DMonsterStories.com Comics", "album/3DMonsterStories_com-Comics", AUTHOR),
+        Triple("Kogeikun Comics", "album/Kogeikun-Comics", AUTHOR),
+        Triple("The Foxxx Comics", "album/The-Foxxx-Comics", AUTHOR),
+        Triple("Theme Collections", "album/Theme-Collections", AUTHOR),
+        Triple("Interracial-Comics", "album/Interracial-Comics", AUTHOR),
+        Triple("Expansion Comics", "album/Expansion-Comics", AUTHOR),
+        Triple("Moiarte Comics", "album/Moiarte-Comics", AUTHOR),
+        Triple("Incognitymous Comics", "album/Incognitymous-Comics", AUTHOR),
+        Triple("DizzyDills Comics", "album/DizzyDills-Comics", AUTHOR),
+        Triple("DukesHardcoreHoneys.com Comics", "album/DukesHardcoreHoneys_com-Comics", AUTHOR),
+        Triple("Stormfeder Comics", "album/Stormfeder-Comics", AUTHOR),
+        Triple("Bimbo Story Club Comics", "album/Bimbo-Story-Club-Comics", AUTHOR),
+        Triple("Smudge Comics", "album/Smudge-Comics", AUTHOR),
+        Triple("Dollproject Comics", "album/Dollproject-Comics", AUTHOR),
+        Triple("SuperHeroineComixxx", "album/SuperHeroineComixxx", AUTHOR),
+        Triple("Karmagik Comics", "album/Karmagik-Comics", AUTHOR),
+        Triple("Blacknwhite.com Comics", "album/Blacknwhite_com-Comics", AUTHOR),
+        Triple("ArtOfJaguar Comics", "album/ArtOfJaguar-Comics", AUTHOR),
+        Triple("Kirtu.com Comics", "album/Kirtu_com-Comics", AUTHOR),
+        Triple("UberMonkey Comics", "album/UberMonkey-Comics", AUTHOR),
+        Triple("DarkSoul3D Comics", "album/DarkSoul3D-Comics", AUTHOR),
+        Triple("Markydaysaid Comics", "album/Markydaysaid-Comics", AUTHOR),
+        Triple("Central Comics", "album/Central-Comics", AUTHOR),
+        Triple("Frozen Parody Comics", "album/Frozen-Parody-Comics", AUTHOR),
+        Triple("Blacknwhitecomics.com Comix", "album/Blacknwhitecomics_com-Comix", AUTHOR),
+    )
 
     protected class SortFilter(
         private val vals: Array<Pair<String, String>>,
@@ -507,11 +502,10 @@ open class EroMuse(
         fun toQueryValue() = vals[state].second
     }
 
-    protected open fun getSortList() =
-        arrayOf(
-            Pair("Views", ""),
-            Pair("Likes", "like"),
-            Pair("Date", "date"),
-            Pair("A-Z", "az"),
-        )
+    protected open fun getSortList() = arrayOf(
+        Pair("Views", ""),
+        Pair("Likes", "like"),
+        Pair("Date", "date"),
+        Pair("A-Z", "az"),
+    )
 }

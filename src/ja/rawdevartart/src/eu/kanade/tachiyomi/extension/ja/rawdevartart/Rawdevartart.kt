@@ -29,34 +29,31 @@ class Rawdevartart : HttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SortFilter(1),
-                GenreFilter(genres),
-            ),
-        )
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortFilter(1),
+            GenreFilter(genres),
+        ),
+    )
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SortFilter(0),
-                GenreFilter(genres),
-            ),
-        )
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortFilter(0),
+            GenreFilter(genres),
+        ),
+    )
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
@@ -117,13 +114,12 @@ class Rawdevartart : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("Filters are ignored when using text search."),
-            StatusFilter(),
-            SortFilter(),
-            GenreFilter(genres),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("Filters are ignored when using text search."),
+        StatusFilter(),
+        SortFilter(),
+        GenreFilter(genres),
+    )
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

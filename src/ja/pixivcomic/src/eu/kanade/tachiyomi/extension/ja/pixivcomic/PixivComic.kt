@@ -50,11 +50,10 @@ class PixivComic : HttpSource() {
             .addNetworkInterceptor(::tagInterceptor)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("X-Requested-With", "pixivcomic")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("X-Requested-With", "pixivcomic")
 
     override fun popularMangaRequest(page: Int): Request {
         if (page == 1) alreadyLoadedPopularMangaIds.clear()
@@ -313,11 +312,10 @@ class PixivComic : HttpSource() {
         return GET(page.imageUrl!!, header)
     }
 
-    private fun apiBuilder(): HttpUrl.Builder =
-        baseUrl
-            .toHttpUrl()
-            .newBuilder()
-            .addPathSegments("api/app")
+    private fun apiBuilder(): HttpUrl.Builder = baseUrl
+        .toHttpUrl()
+        .newBuilder()
+        .addPathSegments("api/app")
 
     companion object {
         private const val POPULAR_MANGA_COUNT_PER_PAGE = 30

@@ -17,13 +17,12 @@ class SearchManga(
     @SerialName("md_covers") val mdCovers: List<MDcovers> = emptyList(),
     @SerialName("cover_url") val cover: String? = null,
 ) {
-    fun toSManga() =
-        SManga.create().apply {
-            // appending # at end as part of migration from slug to hid
-            url = "/comic/$hid#"
-            title = this@SearchManga.title
-            thumbnail_url = parseCover(cover, mdCovers)
-        }
+    fun toSManga() = SManga.create().apply {
+        // appending # at end as part of migration from slug to hid
+        url = "/comic/$hid#"
+        title = this@SearchManga.title
+        thumbnail_url = parseCover(cover, mdCovers)
+    }
 }
 
 @Serializable
@@ -205,13 +204,12 @@ class Chapter(
     private val vol: String = "",
     @SerialName("group_name") val groups: List<String> = emptyList(),
 ) {
-    fun toSChapter(mangaUrl: String) =
-        SChapter.create().apply {
-            url = "$mangaUrl/$hid-chapter-$chap-$lang"
-            name = beautifyChapterName(vol, chap, title)
-            date_upload = createdAt.parseDate()
-            scanlator = groups.joinToString().takeUnless { it.isBlank() } ?: "Unknown"
-        }
+    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
+        url = "$mangaUrl/$hid-chapter-$chap-$lang"
+        name = beautifyChapterName(vol, chap, title)
+        date_upload = createdAt.parseDate()
+        scanlator = groups.joinToString().takeUnless { it.isBlank() } ?: "Unknown"
+    }
 }
 
 @Serializable

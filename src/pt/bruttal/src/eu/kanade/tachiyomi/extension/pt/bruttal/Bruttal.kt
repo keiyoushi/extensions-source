@@ -35,11 +35,10 @@ class Bruttal : HttpSource() {
             .rateLimit(1, 2, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers
-            .Builder()
-            .add("Referer", "$baseUrl/bruttal/")
-            .add("User-Agent", USER_AGENT)
+    override fun headersBuilder(): Headers.Builder = Headers
+        .Builder()
+        .add("Referer", "$baseUrl/bruttal/")
+        .add("User-Agent", USER_AGENT)
 
     private val json: Json by injectLazy()
 
@@ -102,13 +101,12 @@ class Bruttal : HttpSource() {
     }
 
     // Workaround to allow "Open in browser" use the real URL.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client
-            .newCall(mangaDetailsApiRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client
+        .newCall(mangaDetailsApiRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
     private fun mangaDetailsApiRequest(manga: SManga): Request {
         val newHeaders =
@@ -209,10 +207,9 @@ class Bruttal : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromString(body.string())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(body.string())
+    }
 
     companion object {
         const val BRUTTAL_URL = "https://originals.omelete.com.br/bruttal"

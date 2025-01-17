@@ -19,8 +19,7 @@ class Manganato : MangaBox("Manganato", "https://manganato.com", "en", SimpleDat
 
     override fun searchMangaSelector() = "div.search-story-item, div.content-genres-item"
 
-    override fun getAdvancedGenreFilters(): List<AdvGenre> =
-        getGenreFilters()
-            .drop(1)
-            .map { AdvGenre(it.first, it.second) }
+    override fun getAdvancedGenreFilters(): List<AdvGenre> = getGenreFilters()
+        .drop(1)
+        .map { AdvGenre(it.first, it.second) }
 }

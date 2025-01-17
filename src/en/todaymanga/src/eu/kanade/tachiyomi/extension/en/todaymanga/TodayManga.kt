@@ -37,10 +37,9 @@ open class TodayManga : ParsedHttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 
@@ -50,12 +49,11 @@ open class TodayManga : ParsedHttpSource() {
 
     override fun popularMangaSelector(): String = "section div.serie"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("abs:href"))
-            thumbnail_url = element.selectFirst("img")!!.imgAttr()
-            title = element.selectFirst("h2")!!.text()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("abs:href"))
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
+        title = element.selectFirst("h2")!!.text()
+    }
 
     override fun popularMangaNextPageSelector(): String = ".pagination > ul > li.active + li:has(a)"
 
@@ -65,14 +63,13 @@ open class TodayManga : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = "ul.series > li"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        SManga.create().apply {
-            with(element.selectFirst("a[title][href]")!!) {
-                setUrlWithoutDomain(attr("abs:href"))
-                title = attr("title")
-            }
-            thumbnail_url = element.selectFirst("img")!!.imgAttr()
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        with(element.selectFirst("a[title][href]")!!) {
+            setUrlWithoutDomain(attr("abs:href"))
+            title = attr("title")
         }
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
+    }
 
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
@@ -143,14 +140,13 @@ open class TodayManga : ParsedHttpSource() {
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Ignored when using text search"),
-            Filter.Header("NOTE: Only one filter will be applied!"),
-            Filter.Separator(),
-            CategoryFilter(),
-            GenreFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Ignored when using text search"),
+        Filter.Header("NOTE: Only one filter will be applied!"),
+        Filter.Separator(),
+        CategoryFilter(),
+        GenreFilter(),
+    )
 
     class CategoryFilter :
         UriPartFilter(
@@ -218,40 +214,38 @@ open class TodayManga : ParsedHttpSource() {
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            with(document.selectFirst(".serie")!!) {
-                title = selectFirst("h1")!!.text()
-                thumbnail_url = selectFirst("img")!!.imgAttr()
-                genre = select(".serie-info-head .tags > .tag-item").joinToString { it.text() }
-                author = select(".authors a").joinToString { it.text() }
-                status = selectFirst("li:contains(status) span").parseStatus()
-            }
-
-            description =
-                buildString {
-                    val summary = document.selectFirst(".serie-summary")!!
-                    summary.childNodes().forEach { node ->
-                        if (node is TextNode) {
-                            append(node.text())
-                        }
-                        if (node.nodeName() == "br") {
-                            appendLine()
-                        }
-                    }
-                    summary.selectFirst("div[style]")?.also {
-                        append("\n\n")
-                        append(it.text())
-                    }
-                }.trim()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        with(document.selectFirst(".serie")!!) {
+            title = selectFirst("h1")!!.text()
+            thumbnail_url = selectFirst("img")!!.imgAttr()
+            genre = select(".serie-info-head .tags > .tag-item").joinToString { it.text() }
+            author = select(".authors a").joinToString { it.text() }
+            status = selectFirst("li:contains(status) span").parseStatus()
         }
 
-    private fun Element?.parseStatus(): Int =
-        when (this?.text()?.lowercase()) {
-            "complete" -> SManga.COMPLETED
-            "on going" -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+        description =
+            buildString {
+                val summary = document.selectFirst(".serie-summary")!!
+                summary.childNodes().forEach { node ->
+                    if (node is TextNode) {
+                        append(node.text())
+                    }
+                    if (node.nodeName() == "br") {
+                        appendLine()
+                    }
+                }
+                summary.selectFirst("div[style]")?.also {
+                    append("\n\n")
+                    append(it.text())
+                }
+            }.trim()
+    }
+
+    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+        "complete" -> SManga.COMPLETED
+        "on going" -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ==============================
 
@@ -267,30 +261,28 @@ open class TodayManga : ParsedHttpSource() {
 
     override fun chapterListSelector() = "ul.chapters-list > li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            with(element.selectFirst("a")!!) {
-                name = text()
-                setUrlWithoutDomain(attr("abs:href"))
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        with(element.selectFirst("a")!!) {
+            name = text()
+            setUrlWithoutDomain(attr("abs:href"))
+        }
+
+        val dateText = element.selectFirst(".subtitle")?.text()
+        date_upload =
+            if (dateText == null) {
+                0L
+            } else if (dateText.contains("ago")) {
+                dateText.parseRelativeDate()
+            } else {
+                parseDate(dateText)
             }
+    }
 
-            val dateText = element.selectFirst(".subtitle")?.text()
-            date_upload =
-                if (dateText == null) {
-                    0L
-                } else if (dateText.contains("ago")) {
-                    dateText.parseRelativeDate()
-                } else {
-                    parseDate(dateText)
-                }
-        }
-
-    private fun parseDate(dateStr: String): Long =
-        try {
-            dateFormat.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseDate(dateStr: String): Long = try {
+        dateFormat.parse(dateStr)!!.time
+    } catch (_: ParseException) {
+        0L
+    }
 
     // From OppaiStream
     private fun String.parseRelativeDate(): Long {
@@ -325,14 +317,13 @@ open class TodayManga : ParsedHttpSource() {
 
     // =============================== Pages ================================
 
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(".chapter-content > img[data-index]")
-            .map { img ->
-                val index = img.attr("data-index").toInt()
-                val url = img.imgAttr()
-                Page(index, imageUrl = url)
-            }.sortedBy { it.index }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select(".chapter-content > img[data-index]")
+        .map { img ->
+            val index = img.attr("data-index").toInt()
+            val url = img.imgAttr()
+            Page(index, imageUrl = url)
+        }.sortedBy { it.index }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -348,20 +339,18 @@ open class TodayManga : ParsedHttpSource() {
 
     // ============================= Utilities ==============================
 
-    private fun String.addPage(page: Int): HttpUrl =
-        this
-            .toHttpUrl()
-            .newBuilder()
-            .apply {
-                if (page > 1) {
-                    addQueryParameter("page", page.toString())
-                }
-            }.build()
+    private fun String.addPage(page: Int): HttpUrl = this
+        .toHttpUrl()
+        .newBuilder()
+        .apply {
+            if (page > 1) {
+                addQueryParameter("page", page.toString())
+            }
+        }.build()
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        else -> attr("abs:src")
+    }
 }

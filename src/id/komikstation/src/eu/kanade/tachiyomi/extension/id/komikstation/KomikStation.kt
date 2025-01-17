@@ -21,14 +21,13 @@ class KomikStation : MangaThemesia("Komik Station", "https://komikstation.co", "
     override val seriesTypeSelector = ".tsinfo .imptdt:has(a[href*=\"type\"]) a"
     override val seriesStatusSelector = ".tsinfo .imptdt:first-child i"
 
-    override fun String?.parseStatus(): Int =
-        when {
-            this == null -> SManga.UNKNOWN
-            listOf("ongoing", "berjalan").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
-            this.contains("hiatus", ignoreCase = true) -> SManga.ON_HIATUS
-            this.contains("tamat", ignoreCase = true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    override fun String?.parseStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
+        listOf("ongoing", "berjalan").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
+        this.contains("hiatus", ignoreCase = true) -> SManga.ON_HIATUS
+        this.contains("tamat", ignoreCase = true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override val projectPageString = "/project-list"
 

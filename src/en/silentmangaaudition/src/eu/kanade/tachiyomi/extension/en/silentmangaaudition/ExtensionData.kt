@@ -8,16 +8,15 @@ data class SmaEntry(
     val chapterListUrl: String,
     val thumbnailUrl: String,
 ) {
-    fun toSManga(index: Int): SManga =
-        SManga.create().apply {
-            title = name
-            author = "Various artists"
-            status = SManga.COMPLETED
-            description = "The theme is… " + name.substringAfter(" ") + "."
-            thumbnail_url = thumbnailUrl
-            url = "${this@SmaEntry.url},$chapterListUrl,$index"
-            initialized = true
-        }
+    fun toSManga(index: Int): SManga = SManga.create().apply {
+        title = name
+        author = "Various artists"
+        status = SManga.COMPLETED
+        description = "The theme is… " + name.substringAfter(" ") + "."
+        thumbnail_url = thumbnailUrl
+        url = "${this@SmaEntry.url},$chapterListUrl,$index"
+        initialized = true
+    }
 }
 
 val SMA_ENTRIES =

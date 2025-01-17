@@ -46,10 +46,9 @@ class MangaScans : ParsedHttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -118,14 +117,13 @@ class MangaScans : ParsedHttpSource() {
 
     override fun popularMangaSelector(): String = "aside div > article"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            thumbnail_url = element.selectFirst("img")!!.imgAttr()
-            with(element.selectFirst("a:has(h3)")!!) {
-                setUrlWithoutDomain(attr("abs:href"))
-                title = text()
-            }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")!!.imgAttr()
+        with(element.selectFirst("a:has(h3)")!!) {
+            setUrlWithoutDomain(attr("abs:href"))
+            title = text()
         }
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -186,39 +184,36 @@ class MangaScans : ParsedHttpSource() {
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            TypeFilter(),
-            GenreFilter(),
-            StatusFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        TypeFilter(),
+        GenreFilter(),
+        StatusFilter(),
+    )
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            thumbnail_url = document.selectFirst("picture img")!!.imgAttr()
-            with(document.selectFirst(".manga-info")!!) {
-                title = selectFirst("h1.page-heading")!!.text()
-                author = selectFirst("ul > li:has(span:contains(Authors))")?.ownText()
-                genre = select("ul > li:has(span:contains(Genres)) a").joinToString { it.text() }
-                status = selectFirst(".text-info").parseStatus()
-                description =
-                    selectFirst("#manga-description")
-                        ?.text()
-                        ?.split(".")
-                        ?.filterNot { it.contains("MangaTop") }
-                        ?.joinToString(".")
-                        ?.trim()
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = document.selectFirst("picture img")!!.imgAttr()
+        with(document.selectFirst(".manga-info")!!) {
+            title = selectFirst("h1.page-heading")!!.text()
+            author = selectFirst("ul > li:has(span:contains(Authors))")?.ownText()
+            genre = select("ul > li:has(span:contains(Genres)) a").joinToString { it.text() }
+            status = selectFirst(".text-info").parseStatus()
+            description =
+                selectFirst("#manga-description")
+                    ?.text()
+                    ?.split(".")
+                    ?.filterNot { it.contains("MangaTop") }
+                    ?.joinToString(".")
+                    ?.trim()
         }
+    }
 
-    private fun Element?.parseStatus(): Int =
-        when (this?.text()?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // ============================== Chapters ==============================
 
@@ -265,25 +260,23 @@ class MangaScans : ParsedHttpSource() {
 
     override fun chapterListSelector() = "li"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            element.selectFirst(".text-muted")?.also {
-                date_upload = it.text().parseDate()
-            }
-            name = element.selectFirst("span:not(.text-muted)")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.selectFirst(".text-muted")?.also {
+            date_upload = it.text().parseDate()
         }
+        name = element.selectFirst("span:not(.text-muted)")!!.text()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+    }
 
-    private fun String.parseDate(): Long =
-        if (this.contains("ago")) {
-            this.parseRelativeDate()
-        } else {
-            try {
-                dateFormat.parse(this)!!.time
-            } catch (_: ParseException) {
-                0L
-            }
+    private fun String.parseDate(): Long = if (this.contains("ago")) {
+        this.parseRelativeDate()
+    } else {
+        try {
+            dateFormat.parse(this)!!.time
+        } catch (_: ParseException) {
+            0L
         }
+    }
 
     private fun String.parseRelativeDate(): Long {
         val now =
@@ -353,10 +346,9 @@ class MangaScans : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<PageListResponse>().data.resources.map {
-            Page(it.name, imageUrl = it.thumb)
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListResponse>().data.resources.map {
+        Page(it.name, imageUrl = it.thumb)
+    }
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
@@ -382,23 +374,20 @@ class MangaScans : ParsedHttpSource() {
             ?: throw IOException("Failed to update token")
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use {
-            json.decodeFromStream(it.body.byteStream())
-        }
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromStream(it.body.byteStream())
+    }
 
-    private fun apiHeadersBuilder() =
-        headersBuilder().apply {
-            add("Accept", "*/*")
-            add("Host", baseUrl.toHttpUrl().host)
-            add("Origin", baseUrl)
-            add("X-Requested-With", "XMLHttpRequest")
-        }
+    private fun apiHeadersBuilder() = headersBuilder().apply {
+        add("Accept", "*/*")
+        add("Host", baseUrl.toHttpUrl().host)
+        add("Origin", baseUrl)
+        add("X-Requested-With", "XMLHttpRequest")
+    }
 
-    private fun Element.imgAttr(): String =
-        when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        else -> attr("abs:src")
+    }
 }

@@ -27,10 +27,9 @@ abstract class Masonry(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() =
-        super
-            .headersBuilder()
-            .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super
+        .headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val url =
@@ -52,14 +51,13 @@ abstract class Masonry(
 
     override fun popularMangaNextPageSelector() = ".pagination-a li.next"
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst("a")!!.also {
-                setUrlWithoutDomain(it.absUrl("href"))
-                title = it.attr("title")
-            }
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst("a")!!.also {
+            setUrlWithoutDomain(it.absUrl("href"))
+            title = it.attr("title")
         }
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/updates/sort/newest/mpage/$page/", headers)
 
@@ -75,52 +73,51 @@ abstract class Masonry(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request =
-        if (query.isNotEmpty()) {
-            val url =
-                "$baseUrl/search/post/"
-                    .toHttpUrl()
-                    .newBuilder()
-                    .addPathSegment(query.trim())
-                    .addEncodedPathSegments("mpage/$page/")
-                    .build()
+    ): Request = if (query.isNotEmpty()) {
+        val url =
+            "$baseUrl/search/post/"
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment(query.trim())
+                .addEncodedPathSegments("mpage/$page/")
+                .build()
 
-            GET(url, headers)
-        } else {
-            val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
-            val sortFilter = filters.filterIsInstance<SortFilter>().first()
+        GET(url, headers)
+    } else {
+        val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
+        val sortFilter = filters.filterIsInstance<SortFilter>().first()
 
-            val url =
-                baseUrl
-                    .toHttpUrl()
-                    .newBuilder()
-                    .apply {
-                        if (tagFilter == null || tagFilter.selected == "") {
-                            addPathSegment("updates")
-                            sortFilter.getUriPartIfNeeded("search").also {
-                                if (it.isBlank()) {
-                                    addEncodedPathSegments("page/$page/")
-                                } else {
-                                    addEncodedPathSegments(it)
-                                    addEncodedPathSegments("mpage/$page/")
-                                }
-                            }
-                        } else {
-                            addPathSegment("tag")
-                            addPathSegment(tagFilter.selected)
-                            sortFilter.getUriPartIfNeeded("tag").also {
-                                if (it.isBlank()) {
-                                    addEncodedPathSegments("page/$page/")
-                                } else {
-                                    addEncodedPathSegments(it)
-                                    addEncodedPathSegments("mpage/$page/")
-                                }
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    if (tagFilter == null || tagFilter.selected == "") {
+                        addPathSegment("updates")
+                        sortFilter.getUriPartIfNeeded("search").also {
+                            if (it.isBlank()) {
+                                addEncodedPathSegments("page/$page/")
+                            } else {
+                                addEncodedPathSegments(it)
+                                addEncodedPathSegments("mpage/$page/")
                             }
                         }
-                    }.build()
+                    } else {
+                        addPathSegment("tag")
+                        addPathSegment(tagFilter.selected)
+                        sortFilter.getUriPartIfNeeded("tag").also {
+                            if (it.isBlank()) {
+                                addEncodedPathSegments("page/$page/")
+                            } else {
+                                addEncodedPathSegments(it)
+                                addEncodedPathSegments("mpage/$page/")
+                            }
+                        }
+                    }
+                }.build()
 
-            GET(url, headers)
-        }
+        GET(url, headers)
+    }
 
     private var tags = emptyList<Pair<String, String>>()
     private var tagsFetchAttempt = 0
@@ -176,27 +173,25 @@ abstract class Masonry(
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            document.selectFirst("p.link-btn")?.run {
-                artist = select("a[href*=/model/]").eachText().joinToString()
-                genre = select("a[href*=/tag/]").eachText().joinToString()
-                author = selectFirst("a")?.text()
-            }
-            description = document.selectFirst("#content > p")?.text()
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.selectFirst("p.link-btn")?.run {
+            artist = select("a[href*=/model/]").eachText().joinToString()
+            genre = select("a[href*=/tag/]").eachText().joinToString()
+            author = selectFirst("a")?.text()
         }
+        description = document.selectFirst("#content > p")?.text()
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = "Gallery"
-                    url = manga.url
-                },
-            ),
-        )
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                name = "Gallery"
+                url = manga.url
+            },
+        ),
+    )
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
@@ -209,12 +204,11 @@ abstract class Masonry(
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    protected fun Element.imgAttr(): String? =
-        when {
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            else -> attr("abs:src")
-        }
+    protected fun Element.imgAttr(): String? = when {
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        else -> attr("abs:src")
+    }
 }

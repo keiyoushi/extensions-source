@@ -44,19 +44,18 @@ class ClownCorps :
             .addInterceptor(TextInterceptor())
             .build()
 
-    private fun getManga() =
-        SManga.create().apply {
-            title = name
-            artist = CREATOR
-            author = CREATOR
-            status = SManga.ONGOING
-            initialized = true
-            // Image and description from: https://clowncorps.net/about/
-            thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
-            description = "Clown Corps is a comic about crime-fighting clowns.\n" +
-                "It's pronounced \"core.\" Like marine corps."
-            url = "/comic"
-        }
+    private fun getManga() = SManga.create().apply {
+        title = name
+        artist = CREATOR
+        author = CREATOR
+        status = SManga.ONGOING
+        initialized = true
+        // Image and description from: https://clowncorps.net/about/
+        thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
+        description = "Clown Corps is a comic about crime-fighting clowns.\n" +
+            "It's pronounced \"core.\" Like marine corps."
+        url = "/comic"
+    }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(getManga()), hasNextPage = false))
 
@@ -131,12 +130,11 @@ class ClownCorps :
         }
     }
 
-    private fun parseDate(dateStr: String): Long =
-        try {
-            dateFormat.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseDate(dateStr: String): Long = try {
+        dateFormat.parse(dateStr)!!.time
+    } catch (_: ParseException) {
+        0L
+    }
 
     private val dateFormat by lazy {
         SimpleDateFormat("MMMM dd, yyyy hh:mm aa", Locale.ENGLISH)

@@ -16,19 +16,17 @@ class IsekaiScanTop :
         "https://isekaiscan.top",
         "en",
     ) {
-    override fun popularMangaRequest(page: Int): Request =
-        GET(
-            url = "$baseUrl/popular-manga?page=$page",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
+    override fun popularMangaRequest(page: Int): Request = GET(
+        url = "$baseUrl/popular-manga?page=$page",
+        headers = headers,
+        cache = CacheControl.FORCE_NETWORK,
+    )
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET(
-            url = "$baseUrl/latest-manga?page=$page",
-            headers = headers,
-            cache = CacheControl.FORCE_NETWORK,
-        )
+    override fun latestUpdatesRequest(page: Int): Request = GET(
+        url = "$baseUrl/latest-manga?page=$page",
+        headers = headers,
+        cache = CacheControl.FORCE_NETWORK,
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()

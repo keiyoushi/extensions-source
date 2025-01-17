@@ -26,11 +26,10 @@ class MangaKings :
     override val seriesStatusSelector = ".tsinfo .imptdt:contains(Durum) i"
     override val seriesTypeSelector = ".tsinfo .imptdt:contains(Türü) a"
 
-    override fun String?.parseStatus() =
-        when {
-            this == null -> SManga.UNKNOWN
-            contains("Devam Ediyor", true) -> SManga.ONGOING
-            contains("Tamamlandı", true) || contains("bitti", true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    override fun String?.parseStatus() = when {
+        this == null -> SManga.UNKNOWN
+        contains("Devam Ediyor", true) -> SManga.ONGOING
+        contains("Tamamlandı", true) || contains("bitti", true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 }

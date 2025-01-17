@@ -119,19 +119,18 @@ class MangaSwat :
         return POST("$baseUrl/ajax-request", xhrHeaders, formBody)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        json
-            .decodeFromString<MoreMangaHomeDto>(response.body.string())
-            .html
-            .toResponseBody("text/html".toMediaType())
-            .let { response.newBuilder().body(it).build() }
-            .let { super.latestUpdatesParse(it) }
-            .let { page ->
-                MangasPage(
-                    mangas = page.mangas,
-                    hasNextPage = page.mangas.size >= 24, // info not present
-                )
-            }
+    override fun latestUpdatesParse(response: Response): MangasPage = json
+        .decodeFromString<MoreMangaHomeDto>(response.body.string())
+        .html
+        .toResponseBody("text/html".toMediaType())
+        .let { response.newBuilder().body(it).build() }
+        .let { super.latestUpdatesParse(it) }
+        .let { page ->
+            MangasPage(
+                mangas = page.mangas,
+                hasNextPage = page.mangas.size >= 24, // info not present
+            )
+        }
 
     override fun searchMangaRequest(
         page: Int,
@@ -194,13 +193,12 @@ class MangaSwat :
 
     override fun chapterListSelector() = "div.bxcl li, ul div:has(span.lchx)"
 
-    override fun chapterFromElement(element: Element) =
-        SChapter.create().apply {
-            val urlElements = element.select("a")
-            setUrlWithoutDomain(urlElements.attr("href"))
-            name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.last()!!.text() }
-            date_upload = element.selectFirst(".chapter-date")?.text().parseChapterDate()
-        }
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        val urlElements = element.select("a")
+        setUrlWithoutDomain(urlElements.attr("href"))
+        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.last()!!.text() }
+        date_upload = element.selectFirst(".chapter-date")?.text().parseChapterDate()
+    }
 
     @Serializable
     class TSReader(

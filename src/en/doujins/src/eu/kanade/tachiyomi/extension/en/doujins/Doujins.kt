@@ -37,48 +37,46 @@ class Doujins : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        listOf(
-            SChapter.create().apply {
-                val element = response.asJsoup()
-                name = "Chapter"
-                scanlator =
-                    element
-                        .select("div.folder-message:contains(Translated)")
-                        .text()
-                        .substringAfter("by:")
-                        .trim()
-                setUrlWithoutDomain(response.request.url.toString())
+    override fun chapterListParse(response: Response): List<SChapter> = listOf(
+        SChapter.create().apply {
+            val element = response.asJsoup()
+            name = "Chapter"
+            scanlator =
+                element
+                    .select("div.folder-message:contains(Translated)")
+                    .text()
+                    .substringAfter("by:")
+                    .trim()
+            setUrlWithoutDomain(response.request.url.toString())
 
-                val dateAndPageCountString = element.select(".text-md-right.text-sm-left > .folder-message").text()
+            val dateAndPageCountString = element.select(".text-md-right.text-sm-left > .folder-message").text()
 
-                val date = dateAndPageCountString.substringBefore(" • ")
-                for (dateFormat in MANGA_DETAILS_DATE_FORMAT) {
-                    if (date_upload == 0L) {
-                        date_upload = dateFormat.parseOrNull(date)?.time ?: 0L
-                    } else {
-                        break
-                    }
+            val date = dateAndPageCountString.substringBefore(" • ")
+            for (dateFormat in MANGA_DETAILS_DATE_FORMAT) {
+                if (date_upload == 0L) {
+                    date_upload = dateFormat.parseOrNull(date)?.time ?: 0L
+                } else {
+                    break
                 }
-            },
-        )
+            }
+        },
+    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        MangasPage(
-            json.decodeFromString<JsonObject>(response.body.string())["folders"]!!.jsonArray.map {
-                SManga.create().apply {
-                    setUrlWithoutDomain(it.jsonObject["link"]!!.jsonPrimitive.content)
-                    title = it.jsonObject["name"]!!.jsonPrimitive.content
-                    artist = it.jsonObject["artistList"]!!.jsonPrimitive.content
-                    author = artist
-                    genre = it.jsonObject["tags"]!!.jsonArray.joinToString(", ") { it.jsonObject["tag"]!!.jsonPrimitive.content }
-                    thumbnail_url = it.jsonObject["thumbnail2"]!!.jsonPrimitive.content
-                }
-            },
-            true,
-        )
+    override fun latestUpdatesParse(response: Response): MangasPage = MangasPage(
+        json.decodeFromString<JsonObject>(response.body.string())["folders"]!!.jsonArray.map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.jsonObject["link"]!!.jsonPrimitive.content)
+                title = it.jsonObject["name"]!!.jsonPrimitive.content
+                artist = it.jsonObject["artistList"]!!.jsonPrimitive.content
+                author = artist
+                genre = it.jsonObject["tags"]!!.jsonArray.joinToString(", ") { it.jsonObject["tag"]!!.jsonPrimitive.content }
+                thumbnail_url = it.jsonObject["thumbnail2"]!!.jsonPrimitive.content
+            }
+        },
+        true,
+    )
 
     private fun getLatestPageUrl(page: Int): String {
         val endDate =
@@ -182,19 +180,18 @@ class Doujins : HttpSource() {
         )
     }
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Text search ignores series and period filters"),
-            Filter.Separator(),
-            Filter.Header("Series filter overrides period filter"),
-            SeriesFilter(),
-            Filter.Separator(),
-            Filter.Header("Period filter only applies at initial page"),
-            PopularityPeriodFilter(),
-            Filter.Separator(),
-            Filter.Header("Sort only works with text search and series filter"),
-            SortFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Text search ignores series and period filters"),
+        Filter.Separator(),
+        Filter.Header("Series filter overrides period filter"),
+        SeriesFilter(),
+        Filter.Separator(),
+        Filter.Header("Period filter only applies at initial page"),
+        PopularityPeriodFilter(),
+        Filter.Separator(),
+        Filter.Header("Sort only works with text search and series filter"),
+        SortFilter(),
+    )
 
     private class SeriesFilter :
         UriPartFilter(
@@ -256,12 +253,11 @@ class Doujins : HttpSource() {
         fun toUriPart() = vals[state].second
     }
 
-    private fun SimpleDateFormat.parseOrNull(string: String): Date? =
-        try {
-            parse(string)
-        } catch (e: ParseException) {
-            null
-        }
+    private fun SimpleDateFormat.parseOrNull(string: String): Date? = try {
+        parse(string)
+    } catch (e: ParseException) {
+        null
+    }
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 

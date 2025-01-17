@@ -46,13 +46,12 @@ class TruyenQQ : ParsedHttpSource() {
     // Selector trả về array các manga (chọn cả ảnh cx được tí nữa parse)
     override fun popularMangaSelector(): String = "ul.grid > li"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            val anchor = element.selectFirst(".book_info .qtip a")!!
-            setUrlWithoutDomain(anchor.attr("href"))
-            title = anchor.text()
-            thumbnail_url = element.selectFirst(".book_avatar img")?.attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        val anchor = element.selectFirst(".book_info .qtip a")!!
+        setUrlWithoutDomain(anchor.attr("href"))
+        title = anchor.text()
+        thumbnail_url = element.selectFirst(".book_avatar img")?.attr("abs:src")
+    }
 
     // Selector của nút trang kế tiếp
     override fun popularMangaNextPageSelector(): String = ".page_redirect > a:nth-last-child(2) > p:not(.active)"
@@ -97,22 +96,21 @@ class TruyenQQ : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        SManga.create().apply {
-            val info = document.selectFirst(".list-info")!!
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val info = document.selectFirst(".list-info")!!
 
-            title = document.select("h1").text()
-            author = info.select(".org").joinToString { it.text() }
-            genre = document.select(".list01 li").joinToString { it.text() }
-            description = document.select(".story-detail-info").textWithLinebreaks()
-            thumbnail_url = document.selectFirst("img[itemprop=image]")?.attr("abs:src")
-            status =
-                when (info.select(".status > p:last-child").text()) {
-                    "Đang Cập Nhật" -> SManga.ONGOING
-                    "Hoàn Thành" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-        }
+        title = document.select("h1").text()
+        author = info.select(".org").joinToString { it.text() }
+        genre = document.select(".list01 li").joinToString { it.text() }
+        description = document.select(".story-detail-info").textWithLinebreaks()
+        thumbnail_url = document.selectFirst("img[itemprop=image]")?.attr("abs:src")
+        status =
+            when (info.select(".status > p:last-child").text()) {
+                "Đang Cập Nhật" -> SManga.ONGOING
+                "Hoàn Thành" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+    }
 
     private fun Elements.textWithLinebreaks(): String {
         this.select("p").prepend("\\n")
@@ -123,44 +121,39 @@ class TruyenQQ : ParsedHttpSource() {
     // Chapters
     override fun chapterListSelector(): String = "div.works-chapter-list div.works-chapter-item"
 
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            name = element.select("a").text().trim()
-            date_upload = parseDate(element.select(".time-chap").text())
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        name = element.select("a").text().trim()
+        date_upload = parseDate(element.select(".time-chap").text())
+    }
 
-    private fun parseDate(date: String): Long =
-        runCatching {
-            dateFormat.parse(date)?.time
-        }.getOrNull() ?: 0L
+    private fun parseDate(date: String): Long = runCatching {
+        dateFormat.parse(date)?.time
+    }.getOrNull() ?: 0L
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        super
-            .pageListRequest(chapter)
-            .newBuilder()
-            .cacheControl(CacheControl.FORCE_NETWORK)
-            .build()
+    override fun pageListRequest(chapter: SChapter): Request = super
+        .pageListRequest(chapter)
+        .newBuilder()
+        .cacheControl(CacheControl.FORCE_NETWORK)
+        .build()
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> =
-        document
-            .select(".page-chapter img")
-            .mapIndexed { idx, it ->
-                Page(idx, imageUrl = it.attr("abs:src"))
-            }
+    override fun pageListParse(document: Document): List<Page> = document
+        .select(".page-chapter img")
+        .mapIndexed { idx, it ->
+            Page(idx, imageUrl = it.attr("abs:src"))
+        }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            Filter.Header("Không dùng chung với tìm kiếm bằng tên"),
-            CountryFilter(),
-            StatusFilter(),
-            ChapterCountFilter(),
-            SortByFilter(),
-            GenreList(getGenreList()),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Không dùng chung với tìm kiếm bằng tên"),
+        CountryFilter(),
+        StatusFilter(),
+        ChapterCountFilter(),
+        SortByFilter(),
+        GenreList(getGenreList()),
+    )
 
     interface UriFilter {
         fun addToUri(builder: HttpUrl.Builder)
@@ -257,52 +250,51 @@ class TruyenQQ : ParsedHttpSource() {
     }
 
     // console.log([...document.querySelectorAll(".genre-item")].map(e => `Genre("${e.innerText}", "${e.querySelector("span").dataset.id}")`).join(",\n"))
-    private fun getGenreList() =
-        listOf(
-            Genre("Action", "26"),
-            Genre("Adventure", "27"),
-            Genre("Anime", "62"),
-            Genre("Chuyển Sinh", "91"),
-            Genre("Cổ Đại", "90"),
-            Genre("Comedy", "28"),
-            Genre("Comic", "60"),
-            Genre("Demons", "99"),
-            Genre("Detective", "100"),
-            Genre("Doujinshi", "96"),
-            Genre("Drama", "29"),
-            Genre("Fantasy", "30"),
-            Genre("Gender Bender", "45"),
-            Genre("Harem", "47"),
-            Genre("Historical", "51"),
-            Genre("Horror", "44"),
-            Genre("Huyền Huyễn", "468"),
-            Genre("Isekai", "85"),
-            Genre("Josei", "54"),
-            Genre("Mafia", "69"),
-            Genre("Magic", "58"),
-            Genre("Manhua", "35"),
-            Genre("Manhwa", "49"),
-            Genre("Martial Arts", "41"),
-            Genre("Military", "101"),
-            Genre("Mystery", "39"),
-            Genre("Ngôn Tình", "87"),
-            Genre("One shot", "95"),
-            Genre("Psychological", "40"),
-            Genre("Romance", "36"),
-            Genre("School Life", "37"),
-            Genre("Sci-fi", "43"),
-            Genre("Seinen", "42"),
-            Genre("Shoujo", "38"),
-            Genre("Shoujo Ai", "98"),
-            Genre("Shounen", "31"),
-            Genre("Shounen Ai", "86"),
-            Genre("Slice of life", "46"),
-            Genre("Sports", "57"),
-            Genre("Supernatural", "32"),
-            Genre("Tragedy", "52"),
-            Genre("Trọng Sinh", "82"),
-            Genre("Truyện Màu", "92"),
-            Genre("Webtoon", "55"),
-            Genre("Xuyên Không", "88"),
-        )
+    private fun getGenreList() = listOf(
+        Genre("Action", "26"),
+        Genre("Adventure", "27"),
+        Genre("Anime", "62"),
+        Genre("Chuyển Sinh", "91"),
+        Genre("Cổ Đại", "90"),
+        Genre("Comedy", "28"),
+        Genre("Comic", "60"),
+        Genre("Demons", "99"),
+        Genre("Detective", "100"),
+        Genre("Doujinshi", "96"),
+        Genre("Drama", "29"),
+        Genre("Fantasy", "30"),
+        Genre("Gender Bender", "45"),
+        Genre("Harem", "47"),
+        Genre("Historical", "51"),
+        Genre("Horror", "44"),
+        Genre("Huyền Huyễn", "468"),
+        Genre("Isekai", "85"),
+        Genre("Josei", "54"),
+        Genre("Mafia", "69"),
+        Genre("Magic", "58"),
+        Genre("Manhua", "35"),
+        Genre("Manhwa", "49"),
+        Genre("Martial Arts", "41"),
+        Genre("Military", "101"),
+        Genre("Mystery", "39"),
+        Genre("Ngôn Tình", "87"),
+        Genre("One shot", "95"),
+        Genre("Psychological", "40"),
+        Genre("Romance", "36"),
+        Genre("School Life", "37"),
+        Genre("Sci-fi", "43"),
+        Genre("Seinen", "42"),
+        Genre("Shoujo", "38"),
+        Genre("Shoujo Ai", "98"),
+        Genre("Shounen", "31"),
+        Genre("Shounen Ai", "86"),
+        Genre("Slice of life", "46"),
+        Genre("Sports", "57"),
+        Genre("Supernatural", "32"),
+        Genre("Tragedy", "52"),
+        Genre("Trọng Sinh", "82"),
+        Genre("Truyện Màu", "92"),
+        Genre("Webtoon", "55"),
+        Genre("Xuyên Không", "88"),
+    )
 }

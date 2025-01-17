@@ -21,22 +21,21 @@ data class MangaDto(
 ) {
     val cleanUrl get() = url.removePathPrefix()
 
-    fun toSManga() =
-        SManga.create().apply {
-            url = cleanUrl
-            title = Entities.unescape(name)
-            author = Entities.unescape(this@MangaDto.author)
-            description = Entities.unescape(content)
-            genre = tags.joinToString()
-            status =
-                when {
-                    '连' in serialize || isUpdating(addtime) -> SManga.ONGOING
-                    '完' in serialize -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            thumbnail_url = "$pic#$id"
-            initialized = true
-        }
+    fun toSManga() = SManga.create().apply {
+        url = cleanUrl
+        title = Entities.unescape(name)
+        author = Entities.unescape(this@MangaDto.author)
+        description = Entities.unescape(content)
+        genre = tags.joinToString()
+        status =
+            when {
+                '连' in serialize || isUpdating(addtime) -> SManga.ONGOING
+                '完' in serialize -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        thumbnail_url = "$pic#$id"
+        initialized = true
+    }
 
     companion object {
         private val dateFormat by lazy { getDateFormat() }
@@ -54,12 +53,11 @@ class ChapterDto(
     private val name: String,
     private val link: String,
 ) {
-    fun toSChapter(date: Long) =
-        SChapter.create().apply {
-            url = link.removePathPrefix()
-            name = Entities.unescape(this@ChapterDto.name)
-            date_upload = date
-        }
+    fun toSChapter(date: Long) = SChapter.create().apply {
+        url = link.removePathPrefix()
+        name = Entities.unescape(this@ChapterDto.name)
+        date_upload = date
+    }
 }
 
 @Serializable
