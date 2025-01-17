@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -37,7 +38,6 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
-import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -63,23 +63,21 @@ class SussyToons : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    private var _apiUrlCache: String? = null
-
     private var apiUrl: String
-        get() = _apiUrlCache ?: preferences.prefApiUrl.also { _apiUrlCache = it }
-        set(value) { _apiUrlCache = value }
+        get() = preferences.getString(API_BASE_URL_PREF, defaultApiUrl)!!
+        set(value) = preferences.edit().putString(API_BASE_URL_PREF, value).apply()
+
+    private var chapterScriptUrl: String
+        get() = preferences.getString(CHAPTER_SCRIPT_URL_PREF, "")!!
+        set(value) = preferences.edit().putString(CHAPTER_SCRIPT_URL_PREF, value).apply()
+
+    private var pageScriptUrl: String
+        get() = preferences.getString(PAGE_SCRIPT_URL_PREF, "")!!
+        set(value) = preferences.edit().putString(PAGE_SCRIPT_URL_PREF, value).apply()
 
     override val baseUrl: String get() = when {
         isCi -> defaultBaseUrl
-        else -> preferences.prefBaseUrl
-    }
-
-    private val SharedPreferences.prefBaseUrl: String get() = getString(BASE_URL_PREF, defaultBaseUrl)!!
-    private val SharedPreferences.prefApiUrl: String get() = getString(API_BASE_URL_PREF, defaultApiUrl)!!
-    private fun SharedPreferences.prefApiUrlUpSet(url: String): String {
-        edit().putString(API_BASE_URL_PREF, url)
-            .apply()
-        return url
+        else -> preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
     }
 
     private val defaultBaseUrl: String = "https://www.sussytoons.site"
@@ -213,10 +211,10 @@ class SussyToons : HttpSource(), ConfigurableSource {
         }
     }
 
-    private var pageUrl: String? = null
+    private var pageUrlSegment: String? = null
 
     override fun pageListParse(response: Response): List<Page> {
-        pageUrl = pageUrl ?: findPageUrl(response)
+        pageUrlSegment = pageUrlSegment ?: findPageUrlSegment(response)
         val chapterPageId = response.request.url.pathSegments.last()
 
         val chapterUrl = response.request.url.fragment
@@ -224,7 +222,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
             ?: throw Exception("Não foi possivel carregar as páginas")
 
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addEncodedPathSegments(pageUrl!!)
+            .addEncodedPathSegments(pageUrlSegment!!)
             .addPathSegment(chapterPageId)
             .fragment(
                 "$chapterPagePrefix${"$baseUrl$chapterUrl"}",
@@ -254,16 +252,23 @@ class SussyToons : HttpSource(), ConfigurableSource {
     /**
      * Get the “dynamic” path segment of the chapter page
      */
-    private fun findPageUrl(response: Response): String {
-        val document = response.asJsoup()
-        val scriptUrl = document.select("script[src]")
-            .map { it.absUrl("src") }
-            .firstOrNull { it.contains("app/capitulo", ignoreCase = true) }
-            ?: throw IOException("Não foi possivel encontrar a URL da página")
+    private fun findPageUrlSegment(response: Response): String {
+        val scriptUrls = when {
+            pageScriptUrl.isNotBlank() -> listOf(pageScriptUrl to headers)
+            else -> emptyList()
+        }
 
-        return client.newCall(GET(scriptUrl, headers)).execute().use {
-            pageUrlRegex.find(it.body.string())?.groups?.get(1)?.value?.toPathSegment()
-        } ?: throw IOException("Não foi possivel extrair a URL da página")
+        val script = loadJsScript(
+            urls = scriptUrls,
+            doRequest = { client.newCall(it).execute() },
+            pattern = pageUrlRegex,
+            fallback = { fetchAllNextJsScriptUrls(response.request) },
+        )
+
+        pageScriptUrl = script.url
+
+        return pageUrlRegex.find(script.body)?.groups?.get(2)?.value?.toPathSegment()
+            ?: throw IOException("Não foi encontrar o caminho das páginas")
     }
 
     override fun imageUrlParse(response: Response): String = ""
@@ -285,15 +290,11 @@ class SussyToons : HttpSource(), ConfigurableSource {
         val request = chain.request()
         val response: Response = try {
             chain.proceed(request)
-        } catch (ex: SocketTimeoutException) {
-            chain.createTimeoutResponse(request)
+        } catch (ex: Exception) {
+            chain.createBadGatewayResponse(request)
         }
 
-        if (request.url.toString().contains(apiUrl).not()) {
-            return response
-        }
-
-        if (response.isSuccessful) {
+        if (response.isSuccessful || request.url.toString().contains(apiUrl).not()) {
             return response
         }
 
@@ -308,9 +309,13 @@ class SussyToons : HttpSource(), ConfigurableSource {
                 .url(url)
                 .build()
 
-            return chain.proceed(newRequest).takeIf(Response::isSuccessful).also {
-                apiUrl = preferences.prefApiUrlUpSet(urlCandidate)
-            } ?: return@forEach
+            val localResponse = chain.proceed(newRequest)
+            if (localResponse.isSuccessful.not()) {
+                localResponse.close()
+                return@forEach
+            }
+            apiUrl = urlCandidate
+            return localResponse
         }
 
         throw IOException(
@@ -320,7 +325,8 @@ class SussyToons : HttpSource(), ConfigurableSource {
             },
         )
     }
-    private fun Interceptor.Chain.createTimeoutResponse(request: Request): Response {
+
+    private fun Interceptor.Chain.createBadGatewayResponse(request: Request): Response {
         return Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
@@ -366,20 +372,43 @@ class SussyToons : HttpSource(), ConfigurableSource {
             }?.substringAfter(mangaPagePrefix)
             ?: return chain.proceed(request)
 
-        val document = chain.proceed(GET(mangaUrl, headers)).asJsoup()
-
-        val scriptUrl = document.select("script[src]")
-            .map { it.absUrl("src") }
-            .firstOrNull { it.contains("app/obra", ignoreCase = true) }
-            ?: throw IOException("Não foi possivel encontrar a URL do capitulo")
-
-        chapterUrl = chain.proceed(GET(scriptUrl, headers)).use { response ->
-            response.body.string().let {
-                chapterUrlRegex.find(it)?.groups?.get(1)?.value?.toPathSegment()
-            } ?: throw IOException("Não foi possivel extrair a URL do capitulo")
+        val scriptUrls = when {
+            chapterScriptUrl.isNotBlank() -> listOf(chapterScriptUrl to headers)
+            else -> emptyList()
         }
 
+        val script = loadJsScript(
+            urls = scriptUrls,
+            doRequest = chain::proceed,
+            pattern = chapterUrlRegex,
+            fallback = { fetchAllNextJsScriptUrls(GET(mangaUrl, headers)) },
+        )
+
+        chapterScriptUrl = script.url
+
+        chapterUrl = chapterUrlRegex.find(script.body)?.groups?.get(1)?.value?.toPathSegment()
+            ?: throw IOException("Não foi possivel extrair a URL do capitulo")
+
         return chain.proceed(request)
+    }
+
+    private fun loadJsScript(
+        urls: List<Pair<String, Headers>>,
+        doRequest: (request: Request) -> Response,
+        pattern: Regex,
+        fallback: (() -> List<Pair<String, Headers>>)? = null,
+    ): Script {
+        val script = urls.map { pair ->
+            val request = GET(pair.first, pair.second)
+            Script(
+                url = request.url.toString(),
+                body = doRequest(request).use { response -> response.body.string() },
+            )
+        }.firstOrNull { pattern.containsMatchIn(it.body) }
+
+        return script ?: fallback?.let { urlList ->
+            loadJsScript(urlList(), doRequest = doRequest, pattern = pattern)
+        } ?: throw IOException("Não foi possivel encontrar a URL do capitulo")
     }
 
     private fun imageLocation(chain: Interceptor.Chain): Response {
@@ -438,16 +467,76 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun fetchChapterPagesHeaders(baseRequest: Request, originRequest: Request): Request {
+        fun WebResourceRequest.isOriginRequest() =
+            originRequest.url.toString().equals(this.url.toString(), ignoreCase = true)
+
+        chapterPageHeaders = handlingWithWebResourceRequest(
+            baseRequest,
+            initial = headersBuilder(),
+            stopCondition = { _, _, resource ->
+                resource.isOriginRequest() && resource.method.equals("GET", true)
+            },
+            fold = { headers, _, resource ->
+                headers.apply {
+                    if (resource.isOriginRequest().not() || resource.method.equals("GET", true).not()) {
+                        return@apply
+                    }
+                    fill(resource.requestHeaders)
+                }
+            },
+        ).build()
+
+        return originRequest.newBuilder()
+            .headers(chapterPageHeaders!!)
+            .build()
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun fetchAllNextJsScriptUrls(baseRequest: Request): List<Pair<String, Headers>> {
+        fun WebResourceRequest.isNextJSUrl() = this.url.toString().contains("_next", ignoreCase = true) &&
+            this.url.toString().contains(".js", ignoreCase = true)
+
+        return handlingWithWebResourceRequest(
+            baseRequest,
+            initial = mutableListOf(),
+            stopCondition = { urls, _, _ ->
+                val minUrlsAvailable = 24
+                urls.size > minUrlsAvailable
+            },
+            fold = { urls, base, resource ->
+                urls.apply {
+                    if (resource.isNextJSUrl().not()) {
+                        return@apply
+                    }
+                    val headers = base.headers.newBuilder().apply {
+                        fill(resource.requestHeaders)
+                    }
+                    add(resource.url.toString() to headers.build())
+                }
+            },
+        )
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun <T> handlingWithWebResourceRequest(
+        baseRequest: Request,
+        initial: T,
+        stopCondition: (T, Request, WebResourceRequest) -> Boolean,
+        fold: (T, Request, WebResourceRequest) -> T,
+    ): T {
         val latch = CountDownLatch(1)
-        val headers = originRequest.headers.newBuilder()
         var webView: WebView? = null
         val looper = Handler(Looper.getMainLooper())
+        var state = initial
         looper.post {
             webView = WebView(Injekt.get<Application>())
             webView?.let {
                 with(it.settings) {
                     javaScriptEnabled = true
-                    blockNetworkImage = true
+                    domStorageEnabled = true
+                    useWideViewPort = true
+                    loadWithOverviewMode = true
+                    cacheMode = WebSettings.LOAD_DEFAULT
                 }
             }
             webView?.webViewClient = object : WebViewClient() {
@@ -455,23 +544,14 @@ class SussyToons : HttpSource(), ConfigurableSource {
                     view: WebView?,
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
-                    val ignore = listOf(".css", "google", "fonts", "ads")
-                    val url = request.url.toString()
-                    if (ignore.any { url.contains(it, ignoreCase = true) }) {
-                        return emptyResource()
-                    }
-                    if (request.isOriginRequest() && request.method.equals("GET", true)) {
-                        headers.fill(request.requestHeaders)
+                    state = fold(state, baseRequest, request)
+                    if (stopCondition(state, baseRequest, request)) {
                         latch.countDown()
                     }
                     return super.shouldInterceptRequest(view, request)
                 }
-                private fun WebResourceRequest.isOriginRequest() =
-                    originRequest.url.toString().equals(this.url.toString(), ignoreCase = true)
-
-                private fun emptyResource() = WebResourceResponse(null, null, null)
             }
-            webView?.loadUrl(baseRequest.url.toString(), headers.build().toMap())
+            webView?.loadUrl(baseRequest.url.toString(), baseRequest.headers.toMap())
         }
 
         latch.await(client.readTimeoutMillis.toLong(), TimeUnit.MILLISECONDS)
@@ -482,12 +562,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
                 destroy()
             }
         }
-
-        chapterPageHeaders = headers.build()
-
-        return originRequest.newBuilder()
-            .headers(chapterPageHeaders!!)
-            .build()
+        return state
     }
 
     private fun Headers.Builder.fill(from: Map<String, String>): Headers.Builder {
@@ -540,6 +615,11 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     // ============================= Utilities ====================================
 
+    class Script(
+        val url: String,
+        val body: String,
+    )
+
     private fun MangaDto.toSManga(): SManga {
         val sManga = SManga.create().apply {
             title = name
@@ -552,7 +632,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
             setUrlWithoutDomain(mangaUrl.toString())
         }
 
-        Jsoup.parseBodyFragment(description).let { sManga.description = it.text() }
+        description?.let { Jsoup.parseBodyFragment(it).let { sManga.description = it.text() } }
         sManga.status = status.toStatus()
 
         return sManga
@@ -592,8 +672,11 @@ class SussyToons : HttpSource(), ConfigurableSource {
         private const val API_BASE_URL_PREF_TITLE = "Editar URL da API da fonte"
         private const val API_DEFAULT_BASE_URL_PREF = "defaultApiUrl"
 
-        val chapterUrlRegex = """push\("([^"]*capitulo[^"]*)/?"\.concat""".toRegex()
-        val pageUrlRegex = """\.get\("([^"]*capitulo[^(/?")]*)/?"\.concat""".toRegex()
+        private const val CHAPTER_SCRIPT_URL_PREF = "chapterScriptUrl"
+        private const val PAGE_SCRIPT_URL_PREF = "pageScriptUrl"
+
+        val chapterUrlRegex = """push\("([^"]*capitulo[^"]*)\/?"\.concat""".toRegex()
+        val pageUrlRegex = """\.(get|post)\("([^"]*capitulo[^"]*)\/?"\.concat""".toRegex()
 
         val apiUrlRegex = """(?<=production",)(.*?)(?=;function)""".toRegex()
         val urlRegex = """https?://[\w\-]+(\.[\w\-]+)+[/#?]?.*$""".toRegex()
