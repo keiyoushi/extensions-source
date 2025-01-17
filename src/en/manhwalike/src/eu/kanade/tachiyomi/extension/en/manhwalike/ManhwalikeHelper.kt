@@ -36,7 +36,7 @@ object ManhwalikeHelper {
 
     fun String?.toDate(): Long =
         try {
-            dateFormat.parse(this).time
+            this?.let { dateFormat.parse(it)!!.time } ?: 0L
         } catch (_: Exception) {
             0L
         }

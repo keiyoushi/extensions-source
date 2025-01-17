@@ -182,7 +182,7 @@ class Beauty3600000 : ParsedHttpSource() {
 
     private fun getDate(str: String): Long =
         try {
-            DATE_FORMAT.parse(str).time
+            DATE_FORMAT.parse(str)!!.time
         } catch (e: ParseException) {
             0L
         }

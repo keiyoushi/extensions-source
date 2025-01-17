@@ -22,6 +22,7 @@ import org.jsoup.Jsoup
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.ceil
@@ -207,7 +208,7 @@ class ComicsKingdom(
         var chapterData = getChapterList(mangaName, pageNum)
         var chapterNum = 0.0F
 
-        while (chapterData != null) {
+        while (true) {
             val list =
                 chapterData.map {
                     chapterNum += 0.01F
@@ -220,7 +221,11 @@ class ComicsKingdom(
                                     addQueryParameter("slug", it.link.substringAfter(baseUrl))
                                 }.toString(),
                         )
-                        date_upload = dateFormat.parse(it.date).time
+                        date_upload = try {
+                            dateFormat.parse(it.date)!!.time
+                        } catch (_: ParseException) {
+                            0L
+                        }
                         name = it.date.substringBefore("T")
                     }
                 }
@@ -233,7 +238,7 @@ class ComicsKingdom(
             pageNum++
             try {
                 chapterData = getChapterList(mangaName, pageNum)
-            } catch (exception: Exception) {
+            } catch (_: Exception) {
                 if (chapters.isNotEmpty()) {
                     return chapters
                 }
@@ -255,10 +260,8 @@ class ComicsKingdom(
                     addQueryParameter("page", page.toString())
                 }.build()
 
-        val call = client.newCall(GET(url, headers)).execute()
-        val body = call.body.string()
-        call.close()
-        return json.decodeFromString<List<Chapter>>(body)
+        val response = client.newCall(GET(url, headers)).execute()
+        return json.decodeFromString<List<Chapter>>(response.body.string())
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

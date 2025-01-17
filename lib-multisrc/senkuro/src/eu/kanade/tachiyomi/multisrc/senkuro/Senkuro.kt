@@ -259,7 +259,8 @@ abstract class Senkuro(
                         getFormatList().filter { formats.orEmpty().contains(it.slug) }.joinToString { it.name } + ", " +
                         genres?.joinToString { git -> git.titles.find { it.lang == "RU" }!!.content } + ", " +
                         tags?.joinToString { tit -> tit.titles.find { it.lang == "RU" }!!.content }
-                ).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim().capitalize() }
+                ).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim()
+                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() } }
         }
     }
 
@@ -392,7 +393,7 @@ abstract class Senkuro(
                             genre.titles
                                 .find { it.lang == "RU" }!!
                                 .content
-                                .capitalize(),
+                                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
                             genre.slug,
                         )
                     }
@@ -403,7 +404,7 @@ abstract class Senkuro(
                         tag.titles
                             .find { it.lang == "RU" }!!
                             .content
-                            .capitalize(),
+                            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
                         tag.slug,
                     )
                 }

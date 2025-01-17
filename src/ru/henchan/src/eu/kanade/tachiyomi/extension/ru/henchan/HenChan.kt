@@ -183,9 +183,9 @@ class HenChan :
             chap.chapter_number = 1F
 
             val date =
-                document.select("div.row4_right b")?.text()?.let {
+                document.select("div.row4_right b").text().let {
                     SimpleDateFormat("dd MMMM yyyy", Locale("ru")).parse(it)?.time ?: 0
-                } ?: 0
+                }
             chap.date_upload = date
             return listOf(chap)
         }
@@ -279,7 +279,8 @@ class HenChan :
 
     private class Genre(
         val id: String,
-        @SuppressLint("DefaultLocale") name: String = id.replace('_', ' ').capitalize(),
+        name: String = id.replace('_', ' ')
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
     ) : Filter.TriState(name)
 
     private class GenreList(

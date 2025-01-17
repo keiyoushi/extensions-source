@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.network.POST
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.internal.EMPTY_HEADERS
 
 class MangamoAuth(
     private val helper: MangamoHelper,
@@ -60,8 +59,7 @@ class MangamoAuth(
                 .newCall(
                     POST(
                         "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${MangamoConstants.FIREBASE_API_KEY}",
-                        EMPTY_HEADERS,
-                        "{\"token\":\"$customToken\",\"returnSecureToken\":true}".toRequestBody(),
+                        body = "{\"token\":\"$customToken\",\"returnSecureToken\":true}".toRequestBody(),
                     ),
                 ).execute()
 
@@ -110,8 +108,7 @@ class MangamoAuth(
                     .newCall(
                         POST(
                             "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${MangamoConstants.FIREBASE_API_KEY}",
-                            EMPTY_HEADERS,
-                            "{\"returnSecureToken\":true}".toRequestBody(),
+                            body = "{\"returnSecureToken\":true}".toRequestBody(),
                         ),
                     ).execute()
 

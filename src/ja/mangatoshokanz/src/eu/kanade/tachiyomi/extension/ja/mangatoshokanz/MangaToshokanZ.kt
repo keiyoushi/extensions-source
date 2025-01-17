@@ -42,7 +42,7 @@ class MangaToshokanZ : HttpSource() {
     }
 
     private val serial by lazy {
-        getSerial()
+        getSerialFromJs()
     }
 
     private var isR18 = false
@@ -328,7 +328,7 @@ class MangaToshokanZ : HttpSource() {
             }?.value ?: throw Exception("Fail to retrieve ticket from cookie")
     }
 
-    private fun getSerial(): String {
+    private fun getSerialFromJs(): String {
         val url =
             virgoBuilder()
                 .addPathSegment("app.js")

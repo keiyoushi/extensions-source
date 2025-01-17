@@ -30,13 +30,13 @@ import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.internal.http.HTTP_BAD_GATEWAY
 import org.jsoup.Jsoup
 import org.jsoup.select.Elements
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
+import java.net.HttpURLConnection.HTTP_BAD_GATEWAY
 import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util.Locale

@@ -39,7 +39,7 @@ class AscalonScans : MangaThemesia("AscalonScans", "https://ascalonscans.com", "
         return chain.proceed(request)
     }
 
-    private tailrec fun fetchToken(
+    private fun fetchToken(
         chain: Interceptor.Chain,
         attempt: Int = 0,
     ): String {

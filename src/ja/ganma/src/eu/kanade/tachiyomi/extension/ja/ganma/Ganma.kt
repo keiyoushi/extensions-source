@@ -75,7 +75,7 @@ class Ganma : HttpSource() {
     // navigate Webview to web page
     override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/${manga.url.alias()}", headers)
 
-    protected open fun realMangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/1.0/magazines/web/${manga.url.alias()}", headers)
+    private fun realMangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/1.0/magazines/web/${manga.url.alias()}", headers)
 
     override fun chapterListRequest(manga: SManga) = realMangaDetailsRequest(manga)
 
@@ -87,7 +87,7 @@ class Ganma : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Magazine>().toSMangaDetails()
 
-    protected open fun List<SChapter>.sortedDescending() = this.asReversed()
+    private fun List<SChapter>.sortedDescending() = this.asReversed()
 
     override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<Magazine>().getSChapterList().sortedDescending()
 
@@ -99,7 +99,7 @@ class Ganma : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/1.0/magazines/web/${chapter.url.alias()}", headers)
 
-    protected open fun pageListParse(
+    private fun pageListParse(
         chapter: SChapter,
         response: Response,
     ): List<Page> {
@@ -108,18 +108,18 @@ class Ganma : HttpSource() {
         return manga.items.find { it.id == chapterId }!!.toPageList()
     }
 
-    final override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    protected open class TypeFilter : Filter.Select<String>("Type", arrayOf("Popular", "Completed"))
+    class TypeFilter : Filter.Select<String>("Type", arrayOf("Popular", "Completed"))
 
     override fun getFilterList() = FilterList(TypeFilter())
 
-    protected inline fun <reified T> Response.parseAs(): T =
+    private inline fun <reified T> Response.parseAs(): T =
         use {
             json.decodeFromStream<Result<T>>(it.body.byteStream()).root
         }
 
-    val json: Json by injectLazy()
+    private val json: Json by injectLazy()
 }

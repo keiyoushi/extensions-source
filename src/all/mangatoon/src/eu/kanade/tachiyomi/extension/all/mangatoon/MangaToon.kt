@@ -120,7 +120,7 @@ open class MangaToon(
                     .select("div.detail-tags-info span")
                     .text()
                     .split("/")
-                    .map { it.capitalize(locale) }
+                    .map { it.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() } }
                     .sorted()
                     .joinToString { it.trim() }
             status =

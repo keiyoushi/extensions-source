@@ -124,7 +124,7 @@ class Tojimangas : ParsedHttpSource() {
             0L
         }
 
-    protected open fun parseRelativeDate(date: String): Long {
+    private fun parseRelativeDate(date: String): Long {
         val number = DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
 
